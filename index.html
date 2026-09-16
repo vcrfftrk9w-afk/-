@@ -60,6 +60,7 @@
   <p>WASD — движение &nbsp;|&nbsp; Пробел — прыжок &nbsp;|&nbsp; Shift — бежать</p>
   <p>ЛКМ — сломать блок &nbsp;|&nbsp; ПКМ — поставить блок &nbsp;|&nbsp; 1-8 — выбор блока</p>
   <p>Колёсико мыши — прокрутка блоков</p>
+  <p style="opacity:0.7">Если курсор не блокируется — зажми ЛКМ и води мышью, чтобы осмотреться</p>
   <div class="hint">Нажми, чтобы начать игру</div>
 </div>
 
@@ -162,6 +163,7 @@
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.domElement.tabIndex = 0;
   document.body.appendChild(renderer.domElement);
 
   const hemi = new THREE.HemisphereLight(0xffffff, 0x556b2f, 0.9);
@@ -462,22 +464,36 @@
     if (document.pointerLockElement) selectSlot(selectedSlot + (e.deltaY > 0 ? 1 : -1));
   });
 
+  // Pointer Lock isn't always granted (e.g. inside a sandboxed embed), so the
+  // game must still be playable without it: start on click regardless, and
+  // fall back to click-and-drag looking when the cursor can't be locked.
   const overlay = document.getElementById('overlay');
-  overlay.addEventListener('click', () => {
-    renderer.domElement.requestPointerLock();
-  });
-  document.addEventListener('pointerlockchange', () => {
-    const locked = document.pointerLockElement === renderer.domElement;
-    overlay.style.display = locked ? 'none' : 'flex';
-  });
+  let dragging = false;
+  let dragTotal = 0;
 
-  document.addEventListener('mousemove', e => {
-    if (document.pointerLockElement !== renderer.domElement) return;
-    const sens = 0.0022;
-    player.yaw -= e.movementX * sens;
-    player.pitch -= e.movementY * sens;
+  function startGame() {
+    overlay.style.display = 'none';
+    renderer.domElement.focus();
+    const p = renderer.domElement.requestPointerLock();
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  }
+  overlay.addEventListener('click', startGame);
+
+  function applyLook(dx, dy) {
+    const sens = document.pointerLockElement === renderer.domElement ? 0.0022 : 0.0035;
+    player.yaw -= dx * sens;
+    player.pitch -= dy * sens;
     const lim = Math.PI / 2 - 0.01;
     player.pitch = Math.max(-lim, Math.min(lim, player.pitch));
+  }
+
+  document.addEventListener('mousemove', e => {
+    if (document.pointerLockElement === renderer.domElement) {
+      applyLook(e.movementX, e.movementY);
+    } else if (dragging) {
+      applyLook(e.movementX, e.movementY);
+      dragTotal += Math.abs(e.movementX) + Math.abs(e.movementY);
+    }
   });
 
   function raycastBlock() {
@@ -503,19 +519,35 @@
   }
 
   renderer.domElement.addEventListener('mousedown', e => {
-    if (document.pointerLockElement !== renderer.domElement) return;
-    const hit = raycastBlock();
-    if (!hit) return;
+    if (overlay.style.display !== 'none') startGame();
     if (e.button === 0) {
-      setBlock(hit.block.x, hit.block.y, hit.block.z, BLOCK.AIR);
-    } else if (e.button === 2) {
-      const p = hit.place;
-      // avoid placing inside player
-      const px = Math.floor(player.pos.x), pz = Math.floor(player.pos.z);
-      const py0 = Math.floor(player.pos.y), py1 = Math.floor(player.pos.y - PLAYER_HEIGHT + 0.1);
-      if (!(p.x === px && p.z === pz && (p.y === py0 || p.y === py1))) {
-        setBlock(p.x, p.y, p.z, HOTBAR_BLOCKS[selectedSlot]);
+      dragging = true;
+      dragTotal = 0;
+      if (!document.pointerLockElement) {
+        const p = renderer.domElement.requestPointerLock();
+        if (p && typeof p.catch === 'function') p.catch(() => {});
       }
+    } else if (e.button === 2) {
+      const hit = raycastBlock();
+      if (hit) {
+        const p = hit.place;
+        // avoid placing inside player
+        const px = Math.floor(player.pos.x), pz = Math.floor(player.pos.z);
+        const py0 = Math.floor(player.pos.y), py1 = Math.floor(player.pos.y - PLAYER_HEIGHT + 0.1);
+        if (!(p.x === px && p.z === pz && (p.y === py0 || p.y === py1))) {
+          setBlock(p.x, p.y, p.z, HOTBAR_BLOCKS[selectedSlot]);
+        }
+      }
+    }
+  });
+  window.addEventListener('mouseup', e => {
+    if (e.button !== 0 || !dragging) return;
+    dragging = false;
+    // a click without much movement breaks the targeted block;
+    // a drag was just looking around, so it doesn't break anything
+    if (dragTotal < 6) {
+      const hit = raycastBlock();
+      if (hit) setBlock(hit.block.x, hit.block.y, hit.block.z, BLOCK.AIR);
     }
   });
   renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());

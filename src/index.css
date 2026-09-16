@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: radial-gradient(
+      ellipse 80% 60% at 20% -10%,
+      rgba(254, 44, 85, 0.12),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 80% 60% at 90% 0%,
+      rgba(37, 244, 238, 0.1),
+      transparent 60%
+    ),
+    #0a0a0d;
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(254, 44, 85, 0.35);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a35;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a48;
+}
+
+.glass {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.02)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #fe2c55, #7c3aed 45%, #25f4ee);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.shimmer-bg {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.5s linear infinite;
+}

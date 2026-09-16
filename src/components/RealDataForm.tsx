@@ -1,10 +1,49 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Info, ArrowRight, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Info,
+  ArrowRight,
+  Loader2,
+  Download,
+  AlertTriangle,
+  CheckCircle2,
+} from "lucide-react";
 import { NICHES } from "@/lib/niches";
 import { Niche } from "@/lib/niches";
 import { parseCount } from "@/lib/format";
 import { RealProfileInput, RealVideoEntry } from "@/lib/realAnalysis";
+
+interface ImportedVideo {
+  id: string;
+  postedAt: string | null;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  topic: string;
+}
+
+interface ImportResponse {
+  username: string;
+  nickname: string;
+  followers: number;
+  videos: ImportedVideo[];
+  warnings: string[];
+}
+
+interface ImportErrorBody {
+  error: { code: string; message: string };
+}
+
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 interface VideoRowDraft {
   id: string;
@@ -70,7 +109,69 @@ export default function RealDataForm({
   );
   const [error, setError] = useState<string | null>(null);
 
+  const [importStatus, setImportStatus] = useState<"idle" | "loading" | "success" | "error">(
+    "idle",
+  );
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+
   const validRowCount = rows.filter((r) => r.postedAt && parseCount(r.views) > 0).length;
+
+  async function handleAutoImport() {
+    const clean = username.trim().replace(/^@/, "");
+    if (!clean) {
+      setImportStatus("error");
+      setImportMessage("Сначала укажи юзернейм TikTok");
+      return;
+    }
+    setImportStatus("loading");
+    setImportMessage(null);
+    setImportWarnings([]);
+
+    try {
+      const res = await fetch(`/api/tiktok-import/${encodeURIComponent(clean)}?limit=10`);
+      const body = await res.json().catch(() => null);
+
+      if (!res.ok || !body || "error" in body) {
+        const errBody = body as ImportErrorBody | null;
+        setImportStatus("error");
+        setImportMessage(
+          errBody?.error?.message ||
+            "Не удалось связаться с сервисом импорта. Убедись, что запущен backend (npm run dev:full), или заполни данные вручную",
+        );
+        return;
+      }
+
+      const data = body as ImportResponse;
+      setUsername(data.username);
+      setFollowers(String(data.followers));
+      if (data.videos.length > 0) {
+        setRows(
+          data.videos.map((v) => ({
+            id: v.id,
+            postedAt: toDatetimeLocal(v.postedAt),
+            views: v.views ? String(v.views) : "",
+            likes: v.likes ? String(v.likes) : "",
+            comments: v.comments ? String(v.comments) : "",
+            shares: v.shares ? String(v.shares) : "",
+            topic: v.topic || "",
+          })),
+        );
+      }
+      setImportWarnings(data.warnings || []);
+      setImportStatus("success");
+      setImportMessage(
+        data.videos.length > 0
+          ? `Импортировано видео: ${data.videos.length}. Проверь цифры ниже и нажми «${submitLabel}»`
+          : "Профиль найден, но статистику видео получить не удалось — заполни видео вручную ниже",
+      );
+    } catch {
+      setImportStatus("error");
+      setImportMessage(
+        "Не удалось связаться с сервисом импорта. Убедись, что запущен backend (npm run dev:full), или заполни данные вручную",
+      );
+    }
+  }
 
   function updateRow(id: string, patch: Partial<VideoRowDraft>) {
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -165,6 +266,62 @@ export default function RealDataForm({
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-glow/60 focus:bg-white/[0.07] transition-colors"
           />
         </div>
+      </div>
+
+      <div className="rounded-xl border border-cyan-glow/25 bg-cyan-glow/[0.04] p-3.5">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-sm font-semibold flex items-center gap-1.5">
+              <Download size={15} className="text-cyan-glow" /> Автоматический импорт
+            </p>
+            <p className="text-xs text-ink-muted mt-0.5 max-w-md">
+              Попробуем сами забрать подписчиков и последние видео с твоей
+              публичной страницы TikTok. Экспериментально — TikTok может
+              блокировать автозапросы, тогда просто заполни поля вручную.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleAutoImport}
+            disabled={importStatus === "loading"}
+            className="shrink-0 inline-flex items-center gap-2 bg-white/10 hover:bg-white/15 rounded-xl px-4 py-2.5 text-xs font-semibold transition-colors disabled:opacity-60"
+          >
+            {importStatus === "loading" ? (
+              <>
+                <Loader2 size={14} className="animate-spin" /> Импортируем...
+              </>
+            ) : (
+              <>
+                <Download size={14} /> Импортировать по юзернейму
+              </>
+            )}
+          </button>
+        </div>
+
+        {importMessage && (
+          <div
+            className={`mt-3 flex items-start gap-2 text-xs ${
+              importStatus === "error" ? "text-critical" : "text-good"
+            }`}
+          >
+            {importStatus === "error" ? (
+              <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+            ) : (
+              <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
+            )}
+            <span>{importMessage}</span>
+          </div>
+        )}
+        {importWarnings.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {importWarnings.map((w, i) => (
+              <li key={i} className="text-[11px] text-ink-muted flex gap-1.5">
+                <span className="shrink-0">·</span>
+                {w}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div>

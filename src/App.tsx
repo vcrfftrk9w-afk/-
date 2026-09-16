@@ -6,6 +6,7 @@ import Trends from "@/pages/Trends";
 import Ideas from "@/pages/Ideas";
 import Roadmap from "@/pages/Roadmap";
 import Guide from "@/pages/Guide";
+import UpdateData from "@/pages/UpdateData";
 import AppShell from "@/components/layout/AppShell";
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/ideas" element={<Ideas />} />
           <Route path="/roadmap" element={<Roadmap />} />
           <Route path="/guide" element={<Guide />} />
+          <Route path="/update-data" element={<UpdateData />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

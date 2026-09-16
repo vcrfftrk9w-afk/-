@@ -15,6 +15,14 @@ export default function MetricBars({ metrics }: { metrics: Metric[] }) {
               <div className="flex items-center gap-2 text-sm">
                 <Icon size={15} className="text-ink-muted" />
                 <span className="font-medium">{m.label}</span>
+                {m.estimated && (
+                  <span
+                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white/5 text-ink-muted"
+                    title="Нельзя измерить напрямую по доступным данным — это оценка-прокси"
+                  >
+                    оценка
+                  </span>
+                )}
               </div>
               <span className="text-xs font-semibold tabular-nums" style={{ color }}>
                 {m.value}

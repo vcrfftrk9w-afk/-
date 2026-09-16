@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Users, Eye, Heart, CalendarDays, Sparkles, Rocket } from "lucide-react";
+import { Users, Eye, Heart, CalendarDays, Sparkles, Rocket, AlertTriangle, BadgeCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAppStore } from "@/store/useAppStore";
 import PageHeader from "@/components/ui/PageHeader";
@@ -23,6 +23,8 @@ export default function Dashboard() {
     { icon: CalendarDays, label: "Постов в неделю", value: profile.postsPerWeek, suffix: "" },
   ];
 
+  const isReal = profile.dataMode === "real";
+  const hasFollowerHistory = isReal ? profile.projectedDaysTo.length > 0 : true;
   const monthDeltaPct = Math.round(
     ((profile.followers - profile.followersLastMonth) / Math.max(profile.followersLastMonth, 1)) * 100,
   );
@@ -43,6 +45,23 @@ export default function Dashboard() {
         }
       />
 
+      {isReal ? (
+        <div className="flex items-center gap-2 mb-6 text-xs font-medium text-good bg-good/10 rounded-xl px-3.5 py-2.5 w-fit">
+          <BadgeCheck size={15} />
+          Анализ построен по твоим реальным данным — без случайных чисел
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-6 text-xs font-medium text-warning bg-warning/10 rounded-xl px-3.5 py-2.5">
+          <span className="flex items-center gap-2">
+            <AlertTriangle size={15} />
+            Это демо-данные для примера — не твоя реальная статистика
+          </span>
+          <Link to="/update-data" className="underline hover:opacity-80 shrink-0">
+            Подключить реальные данные →
+          </Link>
+        </div>
+      )}
+
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         {stats.map((s, i) => (
           <Card key={s.label} delay={i * 0.05}>
@@ -50,7 +69,7 @@ export default function Dashboard() {
               <div className="h-9 w-9 rounded-lg bg-white/5 flex items-center justify-center text-cyan-glow">
                 <s.icon size={17} />
               </div>
-              {s.label === "Подписчики" && (
+              {s.label === "Подписчики" && hasFollowerHistory && (
                 <span
                   className={`text-xs font-semibold ${monthDeltaPct >= 0 ? "text-good" : "text-critical"}`}
                 >
@@ -96,16 +115,37 @@ export default function Dashboard() {
         </Card>
 
         <Card className="lg:col-span-2" delay={0.15}>
-          <p className="text-sm font-semibold mb-4">Метрики контента</p>
+          <p className="text-sm font-semibold mb-1">Метрики контента</p>
+          {isReal && profile.metrics.some((m) => m.estimated) && (
+            <p className="text-xs text-ink-muted mb-4">
+              Метрики с пометкой «оценка» нельзя измерить напрямую (TikTok не
+              показывает это публично) — они посчитаны по прокси-формуле от
+              твоих реальных цифр. Добавь темы/хэштеги к видео в{" "}
+              <Link to="/update-data" className="text-cyan-glow underline">
+                форме данных
+              </Link>{" "}
+              для более точного результата.
+            </p>
+          )}
+          {!isReal && <div className="mb-4" />}
           <MetricBars metrics={profile.metrics} />
         </Card>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4 mb-6">
         <Card delay={0.2}>
-          <p className="text-sm font-semibold mb-1">Рост подписчиков</p>
-          <p className="text-xs text-ink-muted mb-4">Последние 10 недель</p>
-          <GrowthLineChart data={profile.growthHistory} />
+          <p className="text-sm font-semibold mb-1">
+            {isReal ? "Просмотры по видео" : "Рост подписчиков"}
+          </p>
+          <p className="text-xs text-ink-muted mb-4">
+            {isReal
+              ? "Хронологически, по видео, которые ты указал(а)"
+              : "Последние 10 недель"}
+          </p>
+          <GrowthLineChart
+            data={profile.growthHistory}
+            unitLabel={isReal ? "просмотров" : "подписчиков"}
+          />
         </Card>
         <Card delay={0.25}>
           <p className="text-sm font-semibold mb-1">Лучшее время для публикаций</p>

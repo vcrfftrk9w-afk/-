@@ -38,6 +38,7 @@ export default function PostingHeatmap({
               {SLOT_ORDER.map((slot) => {
                 const cell = data.find((d) => d.day === day && d.slot === slot);
                 if (!cell) return <div key={slot} />;
+                const hasData = cell.sampleCount === undefined || cell.sampleCount > 0;
                 const isBest = bestSlot.day === day && bestSlot.slot === slot;
                 return (
                   <button
@@ -46,11 +47,18 @@ export default function PostingHeatmap({
                     onMouseLeave={() => setHover(null)}
                     className="relative aspect-square rounded-md transition-transform hover:scale-110"
                     style={{
-                      background: colorFor(cell.value),
+                      background: hasData ? colorFor(cell.value) : "rgba(255,255,255,0.04)",
+                      backgroundImage: hasData
+                        ? undefined
+                        : "repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0 3px, transparent 3px 6px)",
                       outline: isBest ? `2px solid ${CHART.status.good}` : undefined,
                       outlineOffset: isBest ? 1 : undefined,
                     }}
-                    aria-label={`${day} ${slot}: вовлечённость ${cell.value}`}
+                    aria-label={
+                      hasData
+                        ? `${day} ${slot}: вовлечённость ${cell.value}`
+                        : `${day} ${slot}: нет данных`
+                    }
                   >
                     {isBest && (
                       <span className="absolute -top-1.5 -right-1.5 text-[10px]">⭐</span>
@@ -73,7 +81,11 @@ export default function PostingHeatmap({
         </div>
         {hover ? (
           <p className="text-xs font-medium">
-            {hover.day}, {hover.slot} — {hover.value}/100
+            {hover.sampleCount === 0
+              ? `${hover.day}, ${hover.slot} — нет опубликованных видео`
+              : `${hover.day}, ${hover.slot} — ${hover.value}/100${
+                  hover.sampleCount ? ` (по ${hover.sampleCount} вид.)` : ""
+                }`}
           </p>
         ) : (
           <p className="text-xs text-good font-medium">

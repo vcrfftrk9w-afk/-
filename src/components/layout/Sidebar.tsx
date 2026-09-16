@@ -8,6 +8,7 @@ import {
   BookOpen,
   Sparkles,
   LogOut,
+  RefreshCcw,
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { getNiche } from "@/lib/niches";
@@ -49,6 +50,24 @@ export default function Sidebar() {
           </p>
         </div>
       </div>
+
+      {profile && (
+        <div
+          className={`mb-6 flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[11px] font-medium ${
+            profile.dataMode === "real"
+              ? "bg-good/10 text-good"
+              : "bg-warning/10 text-warning"
+          }`}
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            {profile.dataMode === "real" ? "Реальные данные" : "Демо-режим"}
+          </span>
+          <NavLink to="/update-data" className="hover:opacity-80" aria-label="Обновить данные">
+            <RefreshCcw size={13} />
+          </NavLink>
+        </div>
+      )}
 
       <nav className="flex flex-col gap-1 flex-1">
         {NAV_ITEMS.map((item) => (

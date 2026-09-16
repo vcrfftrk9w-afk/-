@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Niche } from "@/lib/niches";
 import { analyzeProfile, ProfileStats } from "@/lib/analysis";
+import { analyzeRealProfile, RealProfileInput } from "@/lib/realAnalysis";
 import { VideoIdea } from "@/lib/ideas";
 
 interface AppState {
@@ -9,11 +10,13 @@ interface AppState {
   niche: Niche | null;
   connected: boolean;
   profile: ProfileStats | null;
+  lastRealInput: RealProfileInput | null;
   completedTasks: string[];
   savedIdeas: VideoIdea[];
   ideaVariantSeed: number;
 
   connect: (username: string, niche: Niche) => void;
+  connectReal: (input: RealProfileInput) => void;
   disconnect: () => void;
   toggleTask: (taskId: string) => void;
   saveIdea: (idea: VideoIdea) => void;
@@ -28,6 +31,7 @@ export const useAppStore = create<AppState>()(
       niche: null,
       connected: false,
       profile: null,
+      lastRealInput: null,
       completedTasks: [],
       savedIdeas: [],
       ideaVariantSeed: 0,
@@ -42,12 +46,24 @@ export const useAppStore = create<AppState>()(
         });
       },
 
+      connectReal: (input) => {
+        const profile = analyzeRealProfile(input);
+        set({
+          username: profile.username,
+          niche: input.niche,
+          connected: true,
+          profile,
+          lastRealInput: input,
+        });
+      },
+
       disconnect: () =>
         set({
           username: "",
           niche: null,
           connected: false,
           profile: null,
+          lastRealInput: null,
           completedTasks: [],
           savedIdeas: [],
           ideaVariantSeed: 0,

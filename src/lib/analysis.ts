@@ -14,6 +14,10 @@ export interface Metric {
   label: string;
   value: number; // 0-100
   icon: string;
+  // true when this metric can't be measured from the data we have and is a
+  // heuristic proxy instead (only relevant in "real" data mode — demo mode
+  // is synthetic end to end, so it doesn't use this flag)
+  estimated?: boolean;
 }
 
 export interface ContentPillar {
@@ -26,6 +30,9 @@ export interface HeatCell {
   day: string;
   slot: string;
   value: number; // 0-100 engagement intensity
+  // number of real videos backing this cell (real mode only); demo mode
+  // leaves this undefined and always renders as if it had data
+  sampleCount?: number;
 }
 
 export interface GrowthPoint {
@@ -36,6 +43,7 @@ export interface GrowthPoint {
 export interface ProfileStats {
   username: string;
   niche: Niche;
+  dataMode: "demo" | "real";
   followers: number;
   followersLastMonth: number;
   avgViews: number;
@@ -54,7 +62,7 @@ export interface ProfileStats {
   projectedDaysTo: { milestone: number; days: number }[];
 }
 
-const METRIC_META: Record<MetricKey, { label: string; icon: string }> = {
+export const METRIC_META: Record<MetricKey, { label: string; icon: string }> = {
   engagement: { label: "Вовлечённость", icon: "Heart" },
   consistency: { label: "Регулярность публикаций", icon: "CalendarClock" },
   hook: { label: "Сила хука (первые 3 сек)", icon: "Zap" },
@@ -63,8 +71,50 @@ const METRIC_META: Record<MetricKey, { label: string; icon: string }> = {
   hashtags: { label: "Стратегия хэштегов", icon: "Hash" },
 };
 
-const DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-const SLOTS = ["06–10", "10–14", "14–18", "18–22", "22–02"];
+export const DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+export const SLOTS = ["06–10", "10–14", "14–18", "18–22", "22–02"];
+
+export const METRIC_WEIGHTS: Record<MetricKey, number> = {
+  engagement: 0.28,
+  consistency: 0.16,
+  hook: 0.22,
+  trendUsage: 0.14,
+  retention: 0.14,
+  hashtags: 0.06,
+};
+
+export function clamp(v: number, min = 0, max = 100) {
+  return Math.max(min, Math.min(max, v));
+}
+
+export function computeGrowthScoreAndTier(metrics: Metric[]): {
+  growthScore: number;
+  tier: ProfileStats["tier"];
+} {
+  const growthScore = Math.round(
+    metrics.reduce((sum, m) => sum + m.value * METRIC_WEIGHTS[m.key], 0),
+  );
+  const tier: ProfileStats["tier"] =
+    growthScore >= 80
+      ? "Про"
+      : growthScore >= 60
+        ? "Уверенный"
+        : growthScore >= 40
+          ? "Растущий"
+          : "Новичок";
+  return { growthScore, tier };
+}
+
+export function pickWeakStrong(metrics: Metric[]): {
+  weakPoints: Metric[];
+  strongPoints: Metric[];
+} {
+  const sorted = [...metrics].sort((a, b) => a.value - b.value);
+  return {
+    weakPoints: sorted.slice(0, 3),
+    strongPoints: [...metrics].sort((a, b) => b.value - a.value).slice(0, 2),
+  };
+}
 
 export function analyzeProfile(username: string, niche: Niche): ProfileStats {
   const clean = username.trim().replace(/^@/, "").toLowerCase() || "creator";
@@ -101,31 +151,8 @@ export function analyzeProfile(username: string, niche: Niche): ProfileStats {
     }),
   );
 
-  const weights: Record<MetricKey, number> = {
-    engagement: 0.28,
-    consistency: 0.16,
-    hook: 0.22,
-    trendUsage: 0.14,
-    retention: 0.14,
-    hashtags: 0.06,
-  };
-
-  const growthScore = Math.round(
-    metrics.reduce((sum, m) => sum + m.value * weights[m.key], 0),
-  );
-
-  const tier: ProfileStats["tier"] =
-    growthScore >= 80
-      ? "Про"
-      : growthScore >= 60
-        ? "Уверенный"
-        : growthScore >= 40
-          ? "Растущий"
-          : "Новичок";
-
-  const sorted = [...metrics].sort((a, b) => a.value - b.value);
-  const weakPoints = sorted.slice(0, 3);
-  const strongPoints = [...metrics].sort((a, b) => b.value - a.value).slice(0, 2);
+  const { growthScore, tier } = computeGrowthScoreAndTier(metrics);
+  const { weakPoints, strongPoints } = pickWeakStrong(metrics);
 
   const nicheInfo = getNiche(niche);
   const rawShares = nicheInfo.pillars.map(() => randFloat(rng, 8, 40, 0));
@@ -177,6 +204,7 @@ export function analyzeProfile(username: string, niche: Niche): ProfileStats {
   return {
     username: clean,
     niche,
+    dataMode: "demo",
     followers,
     followersLastMonth,
     avgViews,
@@ -194,10 +222,6 @@ export function analyzeProfile(username: string, niche: Niche): ProfileStats {
     growthHistory,
     projectedDaysTo,
   };
-}
-
-function clamp(v: number, min = 0, max = 100) {
-  return Math.max(min, Math.min(max, v));
 }
 
 export const COACH_ADVICE: Record<MetricKey, { title: string; tips: string[] }> = {

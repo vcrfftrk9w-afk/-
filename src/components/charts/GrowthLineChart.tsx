@@ -3,13 +3,20 @@ import { motion } from "framer-motion";
 import { GrowthPoint } from "@/lib/analysis";
 import { CHART } from "@/lib/chartColors";
 
-export default function GrowthLineChart({ data }: { data: GrowthPoint[] }) {
+export default function GrowthLineChart({
+  data,
+  unitLabel = "подписчиков",
+}: {
+  data: GrowthPoint[];
+  unitLabel?: string;
+}) {
   const width = 600;
   const height = 220;
   const padding = { top: 16, right: 16, bottom: 28, left: 44 };
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const { points, maxV, minV } = useMemo(() => {
+    if (data.length < 2) return { points: [], maxV: 0, minV: 0 };
     const values = data.map((d) => d.followers);
     const maxV = Math.max(...values);
     const minV = Math.min(...values);
@@ -23,6 +30,15 @@ export default function GrowthLineChart({ data }: { data: GrowthPoint[] }) {
     });
     return { points, maxV, minV };
   }, [data]);
+
+  if (points.length < 2) {
+    return (
+      <div className="h-[220px] flex flex-col items-center justify-center text-center gap-1.5 text-ink-muted">
+        <p className="text-sm font-medium">Недостаточно данных для графика</p>
+        <p className="text-xs">Добавь ещё видео с датами публикации</p>
+      </div>
+    );
+  }
 
   const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
   const areaPath = `${path} L${points[points.length - 1].x},${height - padding.bottom} L${points[0].x},${height - padding.bottom} Z`;
@@ -150,7 +166,9 @@ export default function GrowthLineChart({ data }: { data: GrowthPoint[] }) {
           }}
         >
           <p className="text-ink-muted">{hovered.label}</p>
-          <p className="font-bold tabular-nums">{hovered.followers.toLocaleString("ru-RU")} подписчиков</p>
+          <p className="font-bold tabular-nums">
+            {hovered.followers.toLocaleString("ru-RU")} {unitLabel}
+          </p>
         </div>
       )}
     </div>

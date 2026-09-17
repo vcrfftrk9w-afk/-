@@ -184,7 +184,7 @@ body::before {
   opacity: 0.65;
 }
 
-.grid { display: grid; gap: 16px; }
+.grid { display: grid; gap: 16px; align-items: start; }
 .grid-dash { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
 .grid-adhd { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 .grid-stats { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }

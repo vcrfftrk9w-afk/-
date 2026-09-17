@@ -270,6 +270,32 @@ Screens.tasks = (() => {
   let filter = 'active';
   let view = 'list';
   const expandedTasks = new Set();
+  const REPEAT_LABEL = { daily: 'каждый день', weekdays: 'по будням', weekly: 'каждую неделю' };
+
+  /* следующая дата повторяющейся задачи */
+  function nextRepeatDate(repeat, fromISO) {
+    const base = fromISO ? new Date(fromISO) : new Date();
+    base.setHours(12, 0, 0, 0);
+    if (repeat === 'weekly') base.setDate(base.getDate() + 7);
+    else if (repeat === 'weekdays') {
+      do { base.setDate(base.getDate() + 1); } while (base.getDay() === 0 || base.getDay() === 6);
+    } else base.setDate(base.getDate() + 1);
+    return State.dateKey(base);
+  }
+
+  /* после выполнения повторяющаяся задача возвращается на следующий срок */
+  function respawn(task) {
+    if (!task.repeat) return;
+    const nextDue = nextRepeatDate(task.repeat, task.due);
+    State.s.tasks.unshift({
+      id: State.uid(), title: task.title, category: task.category, priority: task.priority,
+      xp: task.xp, skill: task.skill, urgent: task.urgent, done: false, rewarded: false,
+      createdAt: Date.now(), doneAt: null, goalId: task.goalId || null,
+      due: nextDue, repeat: task.repeat,
+      subtasks: (task.subtasks || []).map((st) => ({ id: State.uid(), text: st.text, done: false })),
+    });
+    UI.toast(`Повтор: вернётся ${UI.dateLabel(nextDue)} 🔁`, 'default', '🔁');
+  }
 
   function bind() {
     Screens.helpers.fillSelect($('#task-category'), Data.CATEGORIES.map((c) => ({ value: c.id, label: `${c.emoji} ${c.name}` })), 'work');
@@ -280,7 +306,10 @@ Screens.tasks = (() => {
       const input = $('#task-title');
       const title = input.value.trim();
       if (!title) return;
-      add(title, $('#task-category').value, $('#task-priority').value, $('#task-urgent').checked, { due: $('#task-due').value || null });
+      add(title, $('#task-category').value, $('#task-priority').value, $('#task-urgent').checked, {
+        due: $('#task-due').value || null,
+        repeat: $('#task-repeat').value || null,
+      });
       input.value = '';
       $('#task-due').value = '';
       $('#task-urgent').checked = false;
@@ -306,7 +335,7 @@ Screens.tasks = (() => {
     State.s.tasks.unshift({
       id: State.uid(), title, category: c.id, priority: p.id, xp: p.xp, skill: c.skill,
       urgent: !!urgent, done: false, rewarded: false, createdAt: Date.now(), doneAt: null,
-      goalId: extra.goalId || null, due: extra.due || null, subtasks: [],
+      goalId: extra.goalId || null, due: extra.due || null, repeat: extra.repeat || null, subtasks: [],
     });
     Sound.sfx('click');
     UI.toast('Задача добавлена', 'success', '📝');
@@ -342,6 +371,7 @@ Screens.tasks = (() => {
         const bonus = State.addXP(10, skill);
         UI.toast(`Дедлайн закрыт вовремя! +${bonus} XP сверху`, 'level', '📅');
       }
+      respawn(task);
       Sound.sfx('success');
       FX.vibrate([12, 40, 18]);
       FX.confettiFrom(sourceEl, task.priority === 'boss' ? 70 : 34, { power: task.priority === 'boss' ? 12 : 9 });
@@ -392,6 +422,7 @@ Screens.tasks = (() => {
             ${skill ? `<span class="task-skill" style="color:${skill.color}">${skill.emoji}</span>` : ''}
             ${subs.length ? `<span class="task-steps">шаги ${doneSubs}/${subs.length}</span>` : ''}
             ${due ? `<span class="task-due ${due.cls}">📅 ${UI.esc(due.label)}</span>` : ''}
+            ${t.repeat ? `<span class="task-repeat">🔁 ${REPEAT_LABEL[t.repeat] || 'повтор'}</span>` : ''}
           </div>
           ${subs.length ? `<div class="task-substrip"><i style="width:${(doneSubs / subs.length) * 100}%"></i></div>` : ''}
         </div>
@@ -650,6 +681,72 @@ Screens.habits = (() => {
     State.commit();
   }
 
+  /* подробная карточка привычки: 30 дней, рекорды, переименование */
+  function detail(h) {
+    const days = 35;
+    const cells = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const key = State.daysAgoKey(i);
+      cells.push({ key, done: !!h.history[key], today: i === 0 });
+    }
+    const total = Object.keys(h.history).length;
+    const last30 = cells.filter((c) => c.done).length;
+    const streak = State.habitStreak(h);
+
+    // самый длинный отрезок за всю историю
+    let best = 0, run = 0;
+    const keys = Object.keys(h.history).sort();
+    let prev = null;
+    keys.forEach((k) => {
+      if (prev && State.daysBetween(prev, k) === 1) run += 1; else run = 1;
+      best = Math.max(best, run);
+      prev = k;
+    });
+
+    Sound.sfx('click');
+    const body = UI.sheet(`
+      <div class="habit-detail">
+        <div class="habit-detail-head">
+          <span class="habit-detail-emoji">${UI.esc(h.emoji)}</span>
+          <div>
+            <h2>${UI.esc(h.name)}</h2>
+            <p class="muted small">${(Data.skillById(h.skill) || Data.SKILLS[0]).name}</p>
+          </div>
+        </div>
+        <div class="habit-stats">
+          <div><b>${streak}</b><small>сейчас подряд</small></div>
+          <div><b>${best}</b><small>рекорд</small></div>
+          <div><b>${last30}/35</b><small>за 5 недель</small></div>
+          <div><b>${total}</b><small>всего отметок</small></div>
+        </div>
+        <div class="habit-grid">
+          ${cells.map((c) => `<i class="hcell${c.done ? ' on' : ''}${c.today ? ' now' : ''}" data-key="${c.key}" title="${UI.dateLabel(c.key)}"></i>`).join('')}
+        </div>
+        <p class="muted small">Нажми на клетку, чтобы отметить или снять день.</p>
+        <label class="field"><span>Название</span><input id="habit-rename" type="text" maxlength="60" value="${UI.esc(h.name)}"></label>
+        <div class="row">
+          <input id="habit-reemoji" class="emoji-input" type="text" maxlength="4" value="${UI.esc(h.emoji)}">
+          <button class="btn btn-primary grow" id="habit-save">Сохранить</button>
+        </div>
+      </div>`, { wide: true });
+
+    body.querySelectorAll('.hcell').forEach((cell) => cell.addEventListener('click', () => {
+      const key = cell.dataset.key;
+      toggleDay(h, key, cell);
+      cell.classList.toggle('on', !!h.history[key]);
+    }));
+    body.querySelector('#habit-save').addEventListener('click', () => {
+      const name = body.querySelector('#habit-rename').value.trim();
+      const emoji = body.querySelector('#habit-reemoji').value.trim();
+      if (name) h.name = name;
+      if (emoji) h.emoji = emoji;
+      UI.closeModal('#sheet-modal');
+      Sound.sfx('check');
+      UI.toast('Привычка обновлена', 'success', '🌱');
+      State.commit();
+    });
+  }
+
   function render() {
     const root = $('#habit-list');
     root.innerHTML = '';
@@ -687,13 +784,14 @@ Screens.habits = (() => {
         daysRoot.appendChild(btn);
       }
       el.querySelector('.habit-del').addEventListener('click', () => remove(h));
+      el.querySelector('.habit-main').addEventListener('click', () => detail(h));
       root.appendChild(el);
     });
 
     $('#habit-empty').classList.toggle('hidden', State.s.habits.length > 0);
   }
 
-  return { bind, render, add };
+  return { bind, render, add, detail };
 })();
 
 /* =========================================================

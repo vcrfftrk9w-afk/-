@@ -296,6 +296,12 @@
         <select id="task-category"></select>
         <select id="task-priority"></select>
         <input id="task-due" type="date" title="Дедлайн (не обязателен)">
+        <select id="task-repeat" title="Повтор">
+          <option value="">Без повтора</option>
+          <option value="daily">🔁 Каждый день</option>
+          <option value="weekdays">🔁 По будням</option>
+          <option value="weekly">🔁 Каждую неделю</option>
+        </select>
         <label class="check-inline" title="Срочная — горит дедлайн">
           <input type="checkbox" id="task-urgent"><span>🔥 Срочно</span>
         </label>
@@ -311,7 +317,15 @@
         <div class="matrix-cell" data-q="drop"><h4>🌿 Не срочно, не важно<small>можно отпустить</small></h4><ul class="task-list" data-list="drop"></ul></div>
       </div>
 
-      <p id="task-empty" class="empty-hint hidden">Список пуст. Разбей слона на кусочки и начни с одного шага 🐘</p>
+      <div id="task-empty" class="empty-state hidden">
+        <div class="empty-emoji">🦥</div>
+        <h3>Задач пока нет</h3>
+        <p class="muted">Начни с одной крошечной — даже «открыть документ» считается. Мозгу нужен первый шаг, а не идеальный план.</p>
+        <div class="row-center">
+          <button class="btn btn-primary" data-empty="task">Добавить задачу</button>
+          <button class="btn btn-ghost" data-empty="unstuck">Дай микро-шаг</button>
+        </div>
+      </div>
     </section>
 
     <!-- ==================== СДВГ-РЕЖИМ ==================== -->
@@ -426,7 +440,10 @@
             <button class="btn btn-primary" type="submit">↓</button>
           </form>
           <ul id="dump-list" class="dump-list"></ul>
-          <p id="dump-empty" class="empty-hint hidden">Голова пустая — это хорошо 🧘</p>
+          <div id="dump-empty" class="empty-state compact hidden">
+            <div class="empty-emoji">🧘</div>
+            <p class="muted">Голова пустая — это хорошо. Появится мысль — сбрось её сюда, чтобы не крутилась.</p>
+          </div>
         </div>
 
         <div class="card">
@@ -494,7 +511,12 @@
       </form>
       <div class="chips-row" id="habit-templates"></div>
       <div id="habit-list" class="habit-list"></div>
-      <p id="habit-empty" class="empty-hint hidden">Привычек пока нет. Начни с одной, самой маленькой 🌱</p>
+      <div id="habit-empty" class="empty-state hidden">
+        <div class="empty-emoji">🌱</div>
+        <h3>Привычек пока нет</h3>
+        <p class="muted">Одна привычка, которую легко сделать в плохой день, полезнее пяти идеальных. Возьми шаблон выше или придумай свою.</p>
+        <button class="btn btn-primary" data-empty="habit">Добавить привычку</button>
+      </div>
     </section>
 
     <!-- ==================== ЦЕЛИ ==================== -->
@@ -507,7 +529,12 @@
         <button type="submit" class="btn btn-primary">➕ Поставить цель</button>
       </form>
       <div id="goal-list" class="goal-list"></div>
-      <p id="goal-empty" class="empty-hint hidden">Целей пока нет. Куда ты хочешь прийти через 90 дней? 🎯</p>
+      <div id="goal-empty" class="empty-state hidden">
+        <div class="empty-emoji">🎯</div>
+        <h3>Целей пока нет</h3>
+        <p class="muted">Куда ты хочешь прийти через 90 дней? Сформулируй одним предложением — шаги добавим потом.</p>
+        <button class="btn btn-primary" data-empty="goal">Поставить цель</button>
+      </div>
     </section>
 
     <!-- ==================== КУРС ==================== -->
@@ -716,7 +743,11 @@
         <option value="xl">Очень крупный</option>
       </select>
     </label>
-    <button class="btn btn-primary btn-block" id="settings-close">Готово</button>
+    <div class="row wrap" style="margin-top:14px">
+      <button class="btn btn-ghost btn-sm" id="shortcuts-btn">⌨️ Горячие клавиши</button>
+      <button class="btn btn-ghost btn-sm hidden" id="install-btn">📲 Установить приложение</button>
+    </div>
+    <button class="btn btn-primary btn-block" id="settings-close" style="margin-top:12px">Готово</button>
   </div>
 </div>
 

@@ -589,3 +589,35 @@
   content: '!';
   margin-left: 6px; color: var(--danger); font-weight: 900;
 }
+
+/* ---------- пустые состояния ---------- */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center; padding: 34px 20px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  margin-top: 14px;
+  animation: fade-in 0.4s ease;
+}
+.empty-state.compact { padding: 20px 14px; margin-top: 10px; border-style: dashed; }
+.empty-state h3 { margin: 0; }
+.empty-state p { max-width: 42ch; margin: 0 0 6px; font-size: 0.88rem; }
+.empty-emoji {
+  font-size: 2.6rem;
+  animation: idle-bob 3.2s ease-in-out infinite;
+}
+.empty-state.compact .empty-emoji { font-size: 1.8rem; }
+
+/* ---------- справка по клавишам ---------- */
+.keys-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; text-align: left; }
+.keys-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 12px; border-radius: 10px; background: var(--surface-2);
+  font-size: 0.86rem;
+}
+.keys-row kbd { font-size: 0.74rem; padding: 3px 8px; }
+.task-repeat {
+  padding: 1px 7px; border-radius: 999px; font-weight: 700; font-size: 0.68rem;
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-soft);
+}

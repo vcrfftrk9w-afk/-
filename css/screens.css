@@ -875,3 +875,30 @@
   position: absolute; top: 8px; right: 8px;
   font-size: 0.6rem; font-weight: 800; color: var(--accent2);
 }
+
+/* ==================== КАРТОЧКА ПРИВЫЧКИ ==================== */
+.habit-main { cursor: pointer; border-radius: var(--radius-sm); transition: background var(--t-fast); }
+.habit-main:hover { background: var(--surface-2); }
+.habit-detail-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.habit-detail-emoji { font-size: 2.6rem; }
+.habit-detail-head h2 { margin: 0; }
+.habit-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+.habit-stats > div {
+  text-align: center; padding: 11px 4px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.habit-stats b { display: block; font-family: var(--font-display); font-size: 1.3rem; color: var(--accent3); }
+.habit-stats small { font-size: 0.64rem; color: var(--text-muted); }
+.habit-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
+  margin-bottom: 10px;
+}
+.hcell {
+  aspect-ratio: 1; border-radius: 7px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border);
+  transition: all var(--t-fast);
+}
+.hcell:hover { transform: scale(1.12); border-color: var(--accent2); }
+.hcell.on { background: linear-gradient(140deg, var(--success), #15803d); border-color: transparent; }
+.hcell.now { box-shadow: 0 0 0 2px var(--accent); }
+@media (max-width: 560px) { .habit-stats { grid-template-columns: repeat(2, 1fr); } }

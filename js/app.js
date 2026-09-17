@@ -361,6 +361,7 @@ const App = (() => {
       else if (k === 'f' || k === 'а') { Screens.focus.toggleTimer(); }
       else if (k === 'h' || k === 'р') { Screens.focus.enterHyperfocus(); }
       else if (k === 'q' || k === 'й') { e.preventDefault(); openCapture(); }
+      else if (e.key === '?' || (e.shiftKey && e.key === '/')) { e.preventDefault(); showShortcuts(); }
       else if (k === 'm' || k === 'ь') { Music.toggle(State.s.music.station); Screens.music.render(); }
       else if (e.key === 'Escape') {
         if (!$('#hyperfocus').classList.contains('hidden')) $('#hf-exit').click();
@@ -471,6 +472,75 @@ const App = (() => {
     $('#levelup-close').addEventListener('click', () => UI.closeModal('#levelup-modal'));
     $('#millionaire-close').addEventListener('click', () => UI.closeModal('#millionaire-modal'));
     $$('.modal').forEach((m) => m.addEventListener('click', (e) => { if (e.target === m) UI.closeModal(m); }));
+  }
+
+  /* ---------- кнопки в пустых состояниях ---------- */
+  function bindEmptyStates() {
+    const actions = {
+      task: () => { go('tasks'); setTimeout(() => $('#task-title').focus(), 150); },
+      habit: () => { go('habits'); setTimeout(() => $('#habit-title').focus(), 150); },
+      goal: () => { go('goals'); setTimeout(() => $('#goal-title').focus(), 150); },
+      unstuck: () => { go('dashboard'); setTimeout(() => $('#unstuck-btn').click(), 220); },
+    };
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-empty]');
+      if (!btn) return;
+      const fn = actions[btn.dataset.empty];
+      if (fn) { Sound.sfx('click'); fn(); }
+    });
+  }
+
+  /* ---------- установка как приложение (PWA) ---------- */
+  let installEvent = null;
+  function bindInstall() {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      installEvent = e;
+      $('#install-btn').classList.remove('hidden');
+      if (!State.s.installOffered) {
+        State.s.installOffered = true;
+        State.save();
+        setTimeout(() => UI.toast('Приложение можно установить на устройство — в настройках', 'default', '📲'), 4000);
+      }
+    });
+    $('#install-btn').addEventListener('click', async () => {
+      if (!installEvent) return;
+      installEvent.prompt();
+      const res = await installEvent.userChoice.catch(() => null);
+      if (res && res.outcome === 'accepted') {
+        UI.toast('Установлено! Теперь работает и офлайн', 'success', '📲');
+        FX.confetti(window.innerWidth / 2, window.innerHeight / 3, 60);
+      }
+      installEvent = null;
+      $('#install-btn').classList.add('hidden');
+    });
+  }
+
+  /* ---------- справка по горячим клавишам ---------- */
+  const SHORTCUTS = [
+    ['Разделы по номерам', '1 … 9'],
+    ['Поиск и команды', 'Ctrl + K'],
+    ['Новая задача', 'N'],
+    ['Быстрый захват мысли', 'Q'],
+    ['Старт / пауза фокус-таймера', 'F'],
+    ['Режим гиперфокуса', 'H'],
+    ['Музыка вкл/выкл', 'M'],
+    ['Закрыть окно', 'Esc'],
+    ['Эта справка', '?'],
+  ];
+
+  function showShortcuts() {
+    Sound.sfx('click');
+    UI.sheet(`
+      <h2>⌨️ Горячие клавиши</h2>
+      <p class="muted small">Работают, когда курсор не в поле ввода.</p>
+      <div class="keys-grid">
+        ${SHORTCUTS.map(([name, key]) => `
+          <div class="keys-row">
+            <span>${UI.esc(name)}</span>
+            <span>${key.split(' ').map((k) => (k === '+' || k === '…' ? k : `<kbd>${UI.esc(k)}</kbd>`)).join(' ')}</span>
+          </div>`).join('')}
+      </div>`);
   }
 
   /* ---------- быстрый захват мысли ---------- */
@@ -587,7 +657,10 @@ const App = (() => {
     Screens.review.bind();
     bindCapture();
     bindPresence();
+    bindEmptyStates();
+    bindInstall();
     Palette.bind();
+    $('#shortcuts-btn').addEventListener('click', () => { UI.closeModal('#settings-modal'); setTimeout(showShortcuts, 200); });
 
     paintIcons();
     $$('.tab-btn').forEach((b) => b.addEventListener('click', () => {

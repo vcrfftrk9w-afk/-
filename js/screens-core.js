@@ -88,6 +88,8 @@ Screens.dashboard = (() => {
 
     $$('[data-goto]').forEach((b) => b.addEventListener('click', () => App.go(b.dataset.goto)));
 
+    $('#dash-customize').addEventListener('click', customize);
+
     $('#focus-goal-start').addEventListener('click', () => {
       App.go('adhd');
       setTimeout(() => Screens.focus.startIfIdle(), 260);
@@ -108,6 +110,52 @@ Screens.dashboard = (() => {
         State.commit();
       }));
     });
+  }
+
+  /* какие карточки показывать на главной */
+  const CARDS = [
+    { id: 'hero', name: 'Персонаж и уровень' },
+    { id: 'next', name: 'Что дальше' },
+    { id: 'quests', name: 'Квесты дня' },
+    { id: 'quickadd', name: 'Быстрая задача и микро-шаг' },
+    { id: 'today', name: 'Задачи на сегодня' },
+    { id: 'focusgoal', name: 'Фокус сегодня' },
+    { id: 'mood', name: 'Состояние дня' },
+    { id: 'routines', name: 'Рутины дня' },
+    { id: 'skills', name: 'Навыки' },
+    { id: 'quote', name: 'Цитата' },
+    { id: 'streak', name: 'Серия' },
+  ];
+
+  function applyCards() {
+    const hidden = State.s.hiddenCards || {};
+    CARDS.forEach((c) => {
+      const el = document.querySelector(`[data-card="${c.id}"]`);
+      if (el) el.classList.toggle('hidden', !!hidden[c.id]);
+    });
+  }
+
+  function customize() {
+    Sound.sfx('click');
+    const hidden = State.s.hiddenCards || {};
+    const body = UI.sheet(`
+      <h2>⚙️ Настроить главную</h2>
+      <p class="muted small">Убери то, чем не пользуешься — меньше визуального шума, проще начать.</p>
+      <div class="cards-config">
+        ${CARDS.map((c) => `
+          <label class="switch-row">
+            <span>${UI.esc(c.name)}</span>
+            <input type="checkbox" data-card-toggle="${c.id}" ${hidden[c.id] ? '' : 'checked'}>
+          </label>`).join('')}
+      </div>`, { wide: true });
+
+    body.querySelectorAll('[data-card-toggle]').forEach((cb) => cb.addEventListener('change', () => {
+      State.s.hiddenCards = State.s.hiddenCards || {};
+      State.s.hiddenCards[cb.dataset.cardToggle] = !cb.checked;
+      applyCards();
+      Sound.sfx('pop');
+      State.save();
+    }));
   }
 
   function renderFocusGoal() {
@@ -242,6 +290,9 @@ Screens.dashboard = (() => {
           <div class="skill-name">${sk.name} <b>ур. ${p.level}</b></div>
           <div class="skill-bar"><i style="width:${p.pct}%; background:${sk.color}"></i></div>
         </div>`;
+      el.style.cursor = 'pointer';
+      el.title = 'Что качает этот навык';
+      el.addEventListener('click', () => skillDetail(sk));
       list.appendChild(el);
     });
 
@@ -274,6 +325,37 @@ Screens.dashboard = (() => {
     svg.innerHTML = `${grid}${axes}<polygon points="${poly.join(' ')}" class="radar-shape"/>${labels}`;
   }
 
+  /* что качает конкретный навык */
+  const SKILL_SOURCES = {
+    discipline: ['задачи категорий «Работа», «Дом», «Другое»', 'фокус-сессии', 'шаги разбитых задач', 'рутины дня', 'ежедневные квесты'],
+    mind: ['задачи категории «Учёба»', 'уроки курса', 'brain dump и журнал отвлечений', 'недельные итоги'],
+    money: ['задачи категории «Деньги»', 'уроки про капитал'],
+    health: ['задачи категории «Здоровье»', 'привычки здоровья', 'дыхательные паузы', 'отметка состояния дня'],
+    creative: ['задачи категории «Творчество»'],
+    social: ['задачи категории «Люди»'],
+  };
+
+  function skillDetail(sk) {
+    const p = State.skillProgress(sk.id);
+    Sound.sfx('click');
+    UI.sheet(`
+      <div class="skill-detail">
+        <div class="skill-detail-head">
+          <span class="skill-detail-emoji">${sk.emoji}</span>
+          <div>
+            <h2>${UI.esc(sk.name)}</h2>
+            <p class="muted small">Уровень <b>${p.level}</b> · ${p.xp} из ${p.need} XP до следующего</p>
+          </div>
+        </div>
+        <div class="skill-bar big"><i style="width:${p.pct}%; background:${sk.color}"></i></div>
+        <h4 style="margin-top:16px">Что его качает</h4>
+        <ul class="skill-sources">
+          ${(SKILL_SOURCES[sk.id] || []).map((x) => `<li>${UI.esc(x)}</li>`).join('')}
+        </ul>
+        <p class="muted small">Опыт навыка начисляется вместе с обычным XP — просто делай то, что относится к этой сфере.</p>
+      </div>`);
+  }
+
   function renderStreak() {
     const s = State.s;
     UI.countUp($('#streak-number'), s.streak);
@@ -303,6 +385,7 @@ Screens.dashboard = (() => {
     renderSkills();
     renderStreak();
     renderFocusGoal();
+    applyCards();
     Advisor.renderNext();
     Screens.routines.render();
     Screens.tasks.renderToday();

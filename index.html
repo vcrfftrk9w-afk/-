@@ -175,9 +175,12 @@
 
     <!-- ==================== ГЛАВНАЯ ==================== -->
     <section id="tab-dashboard" class="tab-panel active">
+      <div class="dash-toolbar">
+        <button class="link-btn" id="dash-customize">⚙️ Настроить главную</button>
+      </div>
       <div class="grid grid-dash">
 
-        <div class="card hero-card tilt span-2">
+        <div class="card hero-card tilt span-2" data-card="hero">
           <div class="hero-left">
             <div class="hero-avatar-wrap">
               <div class="hero-ring"></div>
@@ -205,7 +208,7 @@
           </div>
         </div>
 
-        <div class="card next-card tilt">
+        <div class="card next-card tilt" data-card="next">
           <div class="card-head">
             <h3>🧭 Что дальше</h3>
             <button class="link-btn" id="next-refresh">другое</button>
@@ -213,7 +216,7 @@
           <div id="next-action" class="next-action"></div>
         </div>
 
-        <div class="card quest-card tilt">
+        <div class="card quest-card tilt" data-card="quests">
           <div class="card-head">
             <h3>📜 Квесты дня</h3>
             <span class="badge" id="quest-counter">0/3</span>
@@ -221,7 +224,7 @@
           <div id="quest-list" class="quest-list"></div>
         </div>
 
-        <div class="card quickadd-card tilt">
+        <div class="card quickadd-card tilt" data-card="quickadd">
           <h3>⚡ Быстрая задача</h3>
           <form id="quick-form" class="stack-form">
             <input id="quick-input" type="text" placeholder="Что нужно сделать?" maxlength="90" autocomplete="off" required>
@@ -236,7 +239,7 @@
           <p id="unstuck-result" class="unstuck-result"></p>
         </div>
 
-        <div class="card today-card tilt">
+        <div class="card today-card tilt" data-card="today">
           <div class="card-head">
             <h3>📋 На сегодня</h3>
             <button class="link-btn" data-goto="tasks">все задачи →</button>
@@ -245,7 +248,7 @@
           <p id="dash-empty" class="empty-hint hidden">Пусто. Добавь задачу — ленивец ждёт 🦥</p>
         </div>
 
-        <div class="card focus-goal-card tilt">
+        <div class="card focus-goal-card tilt" data-card="focusgoal">
           <div class="card-head">
             <h3>⏱️ Фокус сегодня</h3>
             <button class="link-btn" id="focus-goal-edit">цель</button>
@@ -269,7 +272,7 @@
           </div>
         </div>
 
-        <div class="card mood-card tilt">
+        <div class="card mood-card tilt" data-card="mood">
           <h3>🙂 Состояние дня</h3>
           <div id="mood-row" class="mood-row"></div>
           <div class="energy-row">
@@ -281,7 +284,7 @@
           <button id="mood-save" class="btn btn-primary btn-block">Сохранить день</button>
         </div>
 
-        <div class="card routine-card tilt">
+        <div class="card routine-card tilt" data-card="routines">
           <div class="card-head">
             <h3>🌅 Рутины дня</h3>
             <div class="filter-row" id="routine-switch">
@@ -297,7 +300,7 @@
           </form>
         </div>
 
-        <div class="card skills-card tilt">
+        <div class="card skills-card tilt" data-card="skills">
           <h3>🧬 Навыки</h3>
           <div class="skills-wrap">
             <svg id="skills-radar" viewBox="0 0 220 220" class="radar"></svg>
@@ -305,13 +308,13 @@
           </div>
         </div>
 
-        <div class="card quote-card tilt">
+        <div class="card quote-card tilt" data-card="quote">
           <div class="quote-mark">“</div>
           <p id="quote-text" class="quote-text">Загрузка мотивации…</p>
           <button id="quote-next" class="btn btn-ghost btn-sm">Следующая мысль ✨</button>
         </div>
 
-        <div class="card streak-card tilt">
+        <div class="card streak-card tilt" data-card="streak">
           <h3>🔥 Серия</h3>
           <div class="streak-big"><span id="streak-number">0</span><small>дней подряд</small></div>
           <div id="streak-week" class="streak-week"></div>

@@ -335,8 +335,10 @@ const Sound = (() => {
       const end = Math.max(start + 1, Math.min(maxBin, Math.floor(Math.pow(maxBin, (i + 1) / count))));
       let sum = 0;
       for (let j = start; j < end; j++) sum += data[j];
-      const v = sum / (end - start) / 255;
-      out.push(Math.min(1, v * (1 + i * 0.22)));   // компенсация затухания верхов
+      let v = sum / (end - start) / 255;
+      v = Math.max(0, v - 0.06) / 0.94;            // отсекаем шумовой пол
+      v *= 1 + i * 0.14;                            // лёгкая компенсация затухания верхов
+      out.push(Math.min(1, Math.pow(v, 1.15)));     // мягкая кривая, чтобы полосы не упирались
     }
     return out;
   }

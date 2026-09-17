@@ -247,6 +247,41 @@ Screens.focus = (() => {
     const pct = isFlow ? ((T.elapsed % 3600) / 3600) * 100 : (T.total ? ((T.total - T.remaining) / T.total) * 100 : 0);
     $('#hf-bar').style.width = pct + '%';
     $('#hf-toggle').innerHTML = T.running ? '⏸️ Пауза' : '▶️ Продолжить';
+
+    const st = Music.station;
+    $('#hf-station').textContent = Music.playing ? `${st.emoji} ${st.name} · ${Music.bpm} BPM` : 'музыка выключена';
+    $('#hf-music-toggle').innerHTML = Icons.get(Music.playing ? 'pause' : 'play', { size: 16 });
+    $('#hf-music-next').innerHTML = Icons.get('shuffle', { size: 16 });
+  }
+
+  /* аудио-визуализатор внутри гиперфокуса */
+  let hfVisRAF = null;
+  function startHfVis() {
+    const wrap = $('#hf-vis');
+    if (!wrap) return;
+    if (!wrap.dataset.built) {
+      wrap.innerHTML = Array.from({ length: 28 }, () => '<i></i>').join('');
+      wrap.dataset.built = '1';
+    }
+    if (hfVisRAF) return;
+    const bars = $$('#hf-vis i');
+    let t = 0;
+    const loop = () => {
+      t += 0.08;
+      const levels = Sound.levels(bars.length);
+      bars.forEach((bar, i) => {
+        const h = levels
+          ? 6 + Math.min(1, levels[i] * 1.05) * 94
+          : 6 + (Math.sin(t + i * 0.45) * 0.5 + 0.5) * 16;
+        bar.style.height = h + '%';
+      });
+      hfVisRAF = requestAnimationFrame(loop);
+    };
+    loop();
+  }
+  function stopHfVis() {
+    if (hfVisRAF) cancelAnimationFrame(hfVisRAF);
+    hfVisRAF = null;
   }
 
   function enterHyperfocus() {
@@ -257,6 +292,7 @@ Screens.focus = (() => {
     State.s.totals.hyperfocus += 1;
     if (!T.running) start();
     Sound.sfx('whoosh');
+    startHfVis();
     State.commit();
     renderHyperfocus();
   }
@@ -264,7 +300,27 @@ Screens.focus = (() => {
   function exitHyperfocus() {
     $('#hyperfocus').classList.add('hidden');
     document.body.classList.remove('modal-lock');
+    stopHfVis();
     Sound.sfx('click');
+    renderHud();
+  }
+
+  /* завершить сессию досрочно и засчитать отработанные минуты */
+  function finishEarly() {
+    const m = modeData();
+    const isFlow = m.focus === 0 && T.phase === 'focus';
+    const minutes = isFlow ? Math.floor(T.elapsed / 60) : Math.floor((T.total - T.remaining) / 60);
+    pause();
+    if (minutes >= 1) {
+      awardFocus(minutes);
+    } else {
+      UI.toast('Меньше минуты — не считается 🙂', 'warn');
+    }
+    T.phase = 'focus';
+    T.elapsed = 0;
+    T.remaining = m.focus * 60;
+    T.total = m.focus * 60;
+    renderTimer();
   }
 
   /* ================= МИКШЕР ================= */
@@ -363,7 +419,7 @@ Screens.focus = (() => {
       const levels = Sound.levels(bars.length);
       bars.forEach((bar, i) => {
         let h;
-        if (levels) h = 8 + Math.min(1, levels[i] * 1.6) * 92;
+        if (levels) h = 8 + Math.min(1, levels[i] * 1.05) * 92;
         else h = 6 + (Math.sin(t + i * 0.5) * 0.5 + 0.5) * 10;
         bar.style.height = h + '%';
       });
@@ -666,6 +722,14 @@ Screens.focus = (() => {
     if (hud) hud.addEventListener('click', () => { App.go('adhd'); Sound.sfx('click'); });
     $('#hf-exit').addEventListener('click', exitHyperfocus);
     $('#hf-toggle').addEventListener('click', () => { T.running ? pause() : start(); renderHyperfocus(); });
+    $('#hf-done').addEventListener('click', () => { finishEarly(); exitHyperfocus(); });
+    $('#hf-music-toggle').addEventListener('click', () => { Music.toggle(State.s.music.station); Screens.music.render(); renderHyperfocus(); });
+    $('#hf-music-next').addEventListener('click', () => {
+      Music.reseed();
+      if (!Music.playing) Music.play(State.s.music.station);
+      Screens.music.render();
+      renderHyperfocus();
+    });
 
     $('#dump-form').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -746,7 +810,8 @@ Screens.focus = (() => {
   function onLeave() { stopVisualizer(); renderHud(); }
 
   return {
-    bind, render, onEnter, onLeave, setTask, enterHyperfocus, renderHud,
+    bind, render, onEnter, onLeave, setTask, enterHyperfocus, renderHud, finishEarly,
+    startIfIdle: () => { if (!T.running) start(); },
     toggleTimer: () => (T.running ? pause() : start()),
     get running() { return T.running; },
   };

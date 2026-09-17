@@ -279,6 +279,24 @@ const App = (() => {
 
   function showLevelUp(info) {
     const stage = State.stage();
+
+    // сначала показываем закрытый сундук — награда открывается по клику
+    const chest = $('#levelup-chest');
+    const reveal = ['#levelup-emoji', '#levelup-heading', '.levelup-title', '#levelup-desc', '#levelup-rewards', '#levelup-close'];
+    chest.classList.remove('hidden', 'opening');
+    reveal.forEach((sel) => $(sel).classList.add('hidden'));
+    chest.onclick = () => {
+      chest.classList.add('opening');
+      Sound.sfx('fanfare');
+      FX.confetti(window.innerWidth / 2, window.innerHeight / 2.2, 120, { power: 13 });
+      FX.coinRain(28);
+      FX.vibrate([30, 50, 30, 50, 60]);
+      setTimeout(() => {
+        chest.classList.add('hidden');
+        reveal.forEach((sel) => $(sel).classList.remove('hidden'));
+      }, 520);
+    };
+
     $('#levelup-emoji').textContent = stage.emoji;
     $('#levelup-heading').textContent = info.newStage ? 'Эволюция!' : 'Новый уровень!';
     $('#levelup-title').textContent = stage.title;

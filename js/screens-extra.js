@@ -138,7 +138,7 @@ Screens.music = (() => {
       t += 0.12;
       const levels = Music.playing ? Sound.levels(bars.length) : null;
       bars.forEach((bar, i) => {
-        const h = levels ? 10 + Math.min(1, levels[i] * 1.8) * 90 : 8 + (Math.sin(t + i * 0.7) * 0.5 + 0.5) * 6;
+        const h = levels ? 10 + Math.min(1, levels[i] * 1.05) * 90 : 8 + (Math.sin(t + i * 0.7) * 0.5 + 0.5) * 6;
         bar.style.height = h + '%';
       });
       visRAF = requestAnimationFrame(loop);

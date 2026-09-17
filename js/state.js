@@ -66,6 +66,7 @@ const State = (() => {
         posture: { on: false, every: 30 },
       },
       a11y: { font: 'default', scale: 'md', contrast: false },
+      focusGoal: 60,
       weeklyReviews: {},
       achievements: {},
 

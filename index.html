@@ -221,6 +221,30 @@
           <p id="dash-empty" class="empty-hint hidden">Пусто. Добавь задачу — ленивец ждёт 🦥</p>
         </div>
 
+        <div class="card focus-goal-card tilt">
+          <div class="card-head">
+            <h3>⏱️ Фокус сегодня</h3>
+            <button class="link-btn" id="focus-goal-edit">цель</button>
+          </div>
+          <div class="focus-goal-body">
+            <div class="goal-ring-wrap">
+              <svg class="goal-ring" viewBox="0 0 120 120">
+                <circle class="goal-ring-bg" cx="60" cy="60" r="50"></circle>
+                <circle class="goal-ring-fg" id="focus-goal-ring" cx="60" cy="60" r="50"></circle>
+              </svg>
+              <div class="goal-ring-center">
+                <b id="focus-goal-min">0</b>
+                <small id="focus-goal-target">из 60 мин</small>
+              </div>
+            </div>
+            <div class="focus-goal-side">
+              <p class="muted small" id="focus-goal-task">Задача не выбрана</p>
+              <button class="btn btn-primary btn-block" id="focus-goal-start">▶️ Начать сессию</button>
+              <p class="muted small" id="focus-goal-hint">Неделя: <b id="focus-week">0</b> мин</p>
+            </div>
+          </div>
+        </div>
+
         <div class="card mood-card tilt">
           <h3>🙂 Состояние дня</h3>
           <div id="mood-row" class="mood-row"></div>
@@ -690,10 +714,18 @@
     <div id="hf-time" class="hf-time">25:00</div>
     <div class="hf-bar"><i id="hf-bar"></i></div>
     <p id="hf-msg" class="hf-msg">Дыши. Ты в потоке.</p>
+    <div class="hf-vis" id="hf-vis" aria-hidden="true"></div>
+    <div class="hf-music">
+      <button id="hf-music-toggle" class="hf-music-btn" title="Музыка"></button>
+      <span id="hf-station" class="hf-station">музыка выключена</span>
+      <button id="hf-music-next" class="hf-music-btn" title="Новый трек"></button>
+    </div>
     <div class="row-center">
       <button id="hf-toggle" class="btn btn-primary btn-lg">⏸️ Пауза</button>
+      <button id="hf-done" class="btn btn-accent btn-lg">✅ Завершить</button>
       <button id="hf-exit" class="btn btn-ghost btn-lg">Выйти</button>
     </div>
+    <p class="hf-hint muted small">Esc — выйти · всё остальное подождёт</p>
   </div>
 </div>
 
@@ -702,12 +734,16 @@
   <div class="modal-card levelup-card">
     <div class="levelup-burst"></div>
     <div class="levelup-rays"></div>
-    <div id="levelup-emoji" class="levelup-emoji">🦥</div>
-    <h2 id="levelup-heading">Новый уровень!</h2>
-    <p class="levelup-title">Ты теперь <strong id="levelup-title">—</strong></p>
-    <p class="muted" id="levelup-desc"></p>
-    <div class="levelup-rewards" id="levelup-rewards"></div>
-    <button class="btn btn-primary btn-lg" id="levelup-close">Дальше 🚀</button>
+    <button id="levelup-chest" class="levelup-chest" title="Открыть">
+      <span class="chest-emoji">🎁</span>
+      <span class="chest-hint">нажми, чтобы открыть</span>
+    </button>
+    <div id="levelup-emoji" class="levelup-emoji hidden">🦥</div>
+    <h2 id="levelup-heading" class="hidden">Новый уровень!</h2>
+    <p class="levelup-title hidden">Ты теперь <strong id="levelup-title">—</strong></p>
+    <p class="muted hidden" id="levelup-desc"></p>
+    <div class="levelup-rewards hidden" id="levelup-rewards"></div>
+    <button class="btn btn-primary btn-lg hidden" id="levelup-close">Дальше 🚀</button>
   </div>
 </div>
 

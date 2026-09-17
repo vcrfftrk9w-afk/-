@@ -902,3 +902,80 @@
 .hcell.on { background: linear-gradient(140deg, var(--success), #15803d); border-color: transparent; }
 .hcell.now { box-shadow: 0 0 0 2px var(--accent); }
 @media (max-width: 560px) { .habit-stats { grid-template-columns: repeat(2, 1fr); } }
+
+/* ==================== ГИПЕРФОКУС: МУЗЫКА И ВИЗУАЛИЗАЦИЯ ==================== */
+.hf-vis {
+  display: flex; align-items: flex-end; justify-content: center; gap: 3px;
+  height: 46px; margin: 4px auto 14px; max-width: 420px; opacity: 0.85;
+}
+.hf-vis i {
+  width: 5px; height: 8%; border-radius: 3px;
+  background: linear-gradient(180deg, var(--accent2), var(--accent));
+  transition: height 0.1s ease;
+}
+.hf-music {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 7px 14px; margin-bottom: 18px;
+  border-radius: 999px; border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface-solid) 70%, transparent);
+}
+.hf-music-btn {
+  width: 30px; height: 30px; display: grid; place-items: center;
+  border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text);
+  transition: transform var(--t-fast), border-color var(--t-fast);
+}
+.hf-music-btn:hover { transform: scale(1.12); border-color: var(--accent2); }
+.hf-station { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); }
+.hf-hint { margin-top: 16px; opacity: 0.6; }
+
+/* ==================== ЦЕЛЬ ПО ФОКУСУ ==================== */
+.focus-goal-body { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.goal-ring-wrap { position: relative; width: 120px; height: 120px; flex: 0 0 auto; }
+.goal-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+.goal-ring-bg { fill: none; stroke: color-mix(in srgb, var(--border-strong) 70%, transparent); stroke-width: 9; }
+.goal-ring-fg {
+  fill: none; stroke: var(--accent2); stroke-width: 9; stroke-linecap: round;
+  transition: stroke-dashoffset var(--t-slow), stroke var(--t-med);
+}
+.goal-ring-fg.done { stroke: var(--success); }
+.goal-ring-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1px;
+}
+.goal-ring-center b { font-family: var(--font-display); font-size: 1.8rem; line-height: 1; }
+.goal-ring-center small { font-size: 0.64rem; color: var(--text-muted); }
+.focus-goal-side { flex: 1; min-width: 160px; display: flex; flex-direction: column; gap: 9px; }
+
+/* ==================== СУНДУК ПРИ ПОВЫШЕНИИ УРОВНЯ ==================== */
+.levelup-chest {
+  position: relative; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  margin: 12px auto 4px; padding: 18px 26px;
+  background: none; border: none; color: var(--text);
+}
+.chest-emoji {
+  font-size: 4.6rem;
+  animation: chest-shake 1.5s ease-in-out infinite;
+  filter: drop-shadow(0 12px 26px color-mix(in srgb, var(--accent3) 55%, transparent));
+}
+.chest-hint {
+  font-size: 0.76rem; font-weight: 700; color: var(--text-muted);
+  animation: glow-breathe 2s ease-in-out infinite;
+}
+.levelup-chest.opening .chest-emoji { animation: chest-burst 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) forwards; }
+.levelup-chest.opening .chest-hint { opacity: 0; }
+.levelup-chest:hover .chest-emoji { transform: scale(1.06); }
+
+@keyframes chest-shake {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  12% { transform: rotate(-7deg) scale(1.03); }
+  24% { transform: rotate(7deg) scale(1.03); }
+  36% { transform: rotate(-4deg) scale(1.01); }
+  48% { transform: rotate(0deg) scale(1); }
+}
+@keyframes chest-burst {
+  0% { transform: scale(1); opacity: 1; }
+  45% { transform: scale(1.5) rotate(8deg); opacity: 1; }
+  100% { transform: scale(2.6) rotate(-6deg); opacity: 0; }
+}

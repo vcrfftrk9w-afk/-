@@ -87,6 +87,52 @@ Screens.dashboard = (() => {
     });
 
     $$('[data-goto]').forEach((b) => b.addEventListener('click', () => App.go(b.dataset.goto)));
+
+    $('#focus-goal-start').addEventListener('click', () => {
+      App.go('adhd');
+      setTimeout(() => Screens.focus.startIfIdle(), 260);
+    });
+
+    $('#focus-goal-edit').addEventListener('click', async () => {
+      const body = UI.sheet(`
+        <h2>⏱️ Дневная цель по фокусу</h2>
+        <p class="muted small">Сколько минут сосредоточенной работы ты хочешь набирать за день? Лучше поставить меньше и выполнять.</p>
+        <div class="chips-row" id="goal-presets">
+          ${[25, 50, 90, 120, 180].map((m) => `<button class="chip${State.s.focusGoal === m ? ' active' : ''}" data-goal="${m}">${m} мин</button>`).join('')}
+        </div>`);
+      body.querySelectorAll('[data-goal]').forEach((b) => b.addEventListener('click', () => {
+        State.s.focusGoal = Number(b.dataset.goal);
+        UI.closeModal('#sheet-modal');
+        Sound.sfx('check');
+        UI.toast(`Цель: ${b.dataset.goal} минут в день`, 'success', '⏱️');
+        State.commit();
+      }));
+    });
+  }
+
+  function renderFocusGoal() {
+    const s = State.s;
+    const goal = s.focusGoal || 60;
+    const today = s.dailyFocusMinutes[State.todayKey()] || 0;
+    const pct = Math.min(1, today / goal);
+    const C = 2 * Math.PI * 50;
+    const ring = $('#focus-goal-ring');
+    ring.style.strokeDasharray = C;
+    ring.style.strokeDashoffset = C * (1 - pct);
+    ring.classList.toggle('done', pct >= 1);
+    UI.countUp($('#focus-goal-min'), today);
+    $('#focus-goal-target').textContent = `из ${goal} мин`;
+
+    let week = 0;
+    for (let i = 0; i < 7; i++) week += s.dailyFocusMinutes[State.daysAgoKey(i)] || 0;
+    $('#focus-week').textContent = week;
+
+    const task = s.tasks.find((t) => t.id === App.focusTask && !t.done)
+      || s.tasks.find((t) => !t.done);
+    $('#focus-goal-task').innerHTML = task
+      ? `Сейчас в работе: <b>${UI.esc(task.title)}</b>`
+      : 'Задача не выбрана — можно просто побыть в фокусе';
+    $('#focus-goal-hint').classList.toggle('hidden', week === 0);
   }
 
   function showQuote() {
@@ -254,6 +300,7 @@ Screens.dashboard = (() => {
     renderMood();
     renderSkills();
     renderStreak();
+    renderFocusGoal();
     Screens.routines.render();
     Screens.tasks.renderToday();
     if (!$('#quote-text').dataset.ready) { showQuote(); $('#quote-text').dataset.ready = '1'; }

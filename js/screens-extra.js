@@ -121,7 +121,7 @@ Screens.music = (() => {
     $('#music-now').textContent = playing ? `${st.emoji} ${st.name}` : 'выключено';
 
     $('#mini-station').textContent = `${st.emoji} ${st.name}`;
-    $('#mini-play').textContent = playing ? '⏸️' : '▶️';
+    $('#mini-play').innerHTML = Icons.get(playing ? 'pause' : 'play', { size: 16 });
     $('#mini-player').classList.toggle('playing', playing);
 
     const sleepLeft = Music.sleepLeft();

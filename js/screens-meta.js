@@ -92,7 +92,7 @@ Screens.lessons = (() => {
     $('#lesson-progress').textContent = `${read} / ${total}`;
   }
 
-  return { render, bind: () => {} };
+  return { render, bind: () => {}, openById: (id) => { const l = Data.lessonById(id); if (l) openLesson(l); } };
 })();
 
 /* =========================================================

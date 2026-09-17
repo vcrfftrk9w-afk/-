@@ -13,7 +13,7 @@ const App = (() => {
   function applyTheme() {
     document.body.setAttribute('data-theme', State.s.theme);
     const btn = $('#theme-toggle');
-    if (btn) btn.textContent = State.s.theme === 'dark' ? '🌙' : '☀️';
+    if (btn && typeof Icons !== 'undefined') btn.innerHTML = Icons.get(State.s.theme === 'dark' ? 'moon' : 'sun', { size: 19 });
   }
   function applyPalette() { document.body.setAttribute('data-palette', State.s.palette || 'violet'); }
   function applyMode() {
@@ -32,6 +32,127 @@ const App = (() => {
   }
   function applyAll() { applyTheme(); applyPalette(); applyMode(); applyMotion(); applyA11y(); }
 
+  /* ---------- иконки интерфейса ---------- */
+  function paintIcons() {
+    $$('.tab-btn').forEach((b) => {
+      const holder = b.querySelector('.tab-ico');
+      if (holder && !holder.dataset.icon) {
+        holder.innerHTML = Icons.get(b.dataset.icon, { size: 21 });
+        holder.dataset.icon = b.dataset.icon;
+      }
+    });
+    const set = (sel, name, size = 19) => {
+      const el = $(sel);
+      if (el) el.innerHTML = Icons.get(name, { size });
+    };
+    set('#cmd-btn', 'search');
+    set('#palette-ico', 'search', 18);
+    set('#settings-btn', 'settings');
+    set('#mini-next', 'shuffle', 16);
+    set('#mini-open', 'sliders', 16);
+    paintThemeIcon();
+    paintMiniPlayIcon();
+  }
+  function paintThemeIcon() {
+    const btn = $('#theme-toggle');
+    if (btn) btn.innerHTML = Icons.get(State.s.theme === 'dark' ? 'moon' : 'sun', { size: 19 });
+  }
+  function paintMiniPlayIcon() {
+    const btn = $('#mini-play');
+    if (btn) btn.innerHTML = Icons.get(typeof Music !== 'undefined' && Music.playing ? 'pause' : 'play', { size: 16 });
+  }
+
+  /* ---------- индикатор активной вкладки ---------- */
+  function moveIndicator() {
+    const bar = $('#tabbar');
+    const ind = $('#tab-indicator');
+    if (!bar || !ind) return;
+    const active = bar.querySelector('.tab-btn.active');
+    if (!active || active.offsetParent === null) { ind.classList.remove('ready'); return; }
+    const mobile = window.matchMedia('(max-width: 760px)').matches;
+    if (mobile) {
+      ind.style.width = `${active.offsetWidth * 0.5}px`;
+      ind.style.transform = `translateX(${active.offsetLeft + active.offsetWidth * 0.25}px)`;
+    } else {
+      ind.style.width = `${active.offsetWidth}px`;
+      ind.style.transform = `translateX(${active.offsetLeft - bar.scrollLeft}px)`;
+    }
+    ind.classList.add('ready');
+  }
+
+  /* ---------- счётчики на вкладках ---------- */
+  function renderBadges() {
+    const s = State.s;
+    const set = (tab, value, dot) => {
+      const btn = $$('.tab-btn').find((b) => b.dataset.tab === tab);
+      if (!btn) return;
+      const badge = btn.querySelector('.tab-badge');
+      if (!badge) return;
+      const show = dot ? !!value : value > 0;
+      badge.classList.toggle('hidden', !show);
+      badge.classList.toggle('dot', !!dot);
+      if (!dot && show) badge.textContent = value > 99 ? '99+' : String(value);
+    };
+
+    const quests = State.todayQuests();
+    set('dashboard', quests.filter((q) => !s.quests.done[q.id]).length);
+    set('tasks', s.tasks.filter((t) => !t.done).length);
+    set('habits', s.habits.filter((h) => !h.history[State.todayKey()]).length);
+    const affordable = Data.ASSETS.some((a, i) => {
+      const prev = i === 0 ? 1 : State.assetLevel(Data.ASSETS[i - 1].id);
+      return (i === 0 || prev > 0) && s.coins >= State.assetCost(a.id);
+    });
+    set('empire', affordable, true);
+    const unseen = State.unlockedAchievements() - (s.seenAchievements || 0);
+    set('rewards', Math.max(0, unseen));
+
+    // на мобильном скрытые вкладки складываем в кнопку «Ещё»
+    const more = $('#tab-more');
+    if (more) {
+      const hidden = ['goals', 'lessons', 'empire', 'rewards', 'stats'];
+      let total = 0;
+      hidden.forEach((tab) => {
+        const btn = $$('.tab-btn').find((b) => b.dataset.tab === tab);
+        const badge = btn && btn.querySelector('.tab-badge');
+        if (badge && !badge.classList.contains('hidden')) {
+          total += badge.classList.contains('dot') ? 1 : (parseInt(badge.textContent, 10) || 1);
+        }
+      });
+      const badge = more.querySelector('.tab-badge');
+      badge.classList.toggle('hidden', total === 0);
+      badge.classList.add('dot');
+    }
+  }
+
+  /* ---------- лист «Ещё» (мобильная навигация) ---------- */
+  const OVERFLOW = [
+    { tab: 'goals', icon: 'goals', name: 'Цели', desc: 'Большие цели и шаги к ним' },
+    { tab: 'lessons', icon: 'lessons', name: 'Курс', desc: '24 урока по СДВГ, фокусу и деньгам' },
+    { tab: 'empire', icon: 'empire', name: 'Империя', desc: 'Активы и пассивный доход' },
+    { tab: 'rewards', icon: 'rewards', name: 'Награды', desc: 'Достижения, бустеры, темы' },
+    { tab: 'stats', icon: 'stats', name: 'Статистика', desc: 'Графики, тепловая карта, итоги' },
+  ];
+
+  function openMoreSheet() {
+    Sound.sfx('click');
+    const body = UI.sheet(`
+      <h2>Ещё разделы</h2>
+      <div class="more-grid">
+        ${OVERFLOW.map((o) => `
+          <button class="more-item" data-tab="${o.tab}">
+            <span class="more-ico">${Icons.get(o.icon, { size: 22 })}</span>
+            <span class="more-text">
+              <b>${UI.esc(o.name)}</b>
+              <small>${UI.esc(o.desc)}</small>
+            </span>
+          </button>`).join('')}
+      </div>`);
+    body.querySelectorAll('.more-item').forEach((b) => b.addEventListener('click', () => {
+      UI.closeModal('#sheet-modal');
+      go(b.dataset.tab);
+    }));
+  }
+
   /* ---------- шапка ---------- */
   function renderHeader() {
     const s = State.s;
@@ -48,6 +169,7 @@ const App = (() => {
     const passive = State.passivePerMin() * State.activityMultiplier();
     $('#stat-passive').textContent = UI.fmtSmart(passive);
     $('#passive-pill').classList.toggle('hidden', State.passivePerMin() <= 0);
+    renderBadges();
     renderBooster();
   }
 
@@ -83,7 +205,18 @@ const App = (() => {
     if (!screenByTab[tab]) return;
     if (currentTab === 'adhd' && tab !== 'adhd') Screens.focus.onLeave();
     currentTab = tab;
+
+    if (tab === 'rewards') State.s.seenAchievements = State.unlockedAchievements();
+
     $$('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    const more = $('#tab-more');
+    if (more) {
+      const inOverflow = OVERFLOW.some((o) => o.tab === tab);
+      more.classList.toggle('active', inOverflow);
+      const item = OVERFLOW.find((o) => o.tab === tab);
+      more.querySelector('.tab-ico').innerHTML = Icons.get(inOverflow ? item.icon : 'more', { size: 21 });
+      more.querySelector('em').textContent = inOverflow ? item.name : 'Ещё';
+    }
     $$('.tab-panel').forEach((p) => {
       const active = p.id === `tab-${tab}`;
       p.classList.toggle('active', active);
@@ -97,7 +230,12 @@ const App = (() => {
     if (tab === 'adhd') Screens.focus.onEnter();
     UI.initTilt();
     const btn = $$('.tab-btn').find((b) => b.dataset.tab === tab);
-    if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'center', behavior: State.s.reduceMotion ? 'auto' : 'smooth' });
+    if (btn && btn.offsetParent !== null && btn.scrollIntoView) {
+      btn.scrollIntoView({ block: 'nearest', inline: 'center', behavior: State.s.reduceMotion ? 'auto' : 'smooth' });
+    }
+    requestAnimationFrame(moveIndicator);
+    setTimeout(moveIndicator, 320);
+    window.scrollTo({ top: 0, behavior: State.s.reduceMotion ? 'auto' : 'smooth' });
   }
 
   function renderActive() {
@@ -313,6 +451,7 @@ const App = (() => {
     $('#theme-toggle').addEventListener('click', () => {
       State.s.theme = State.s.theme === 'dark' ? 'light' : 'dark';
       applyTheme();
+      paintThemeIcon();
       Sound.sfx('click');
       State.save();
     });
@@ -447,8 +586,21 @@ const App = (() => {
     Screens.review.bind();
     bindCapture();
     bindPresence();
+    Palette.bind();
 
-    $$('.tab-btn').forEach((b) => b.addEventListener('click', () => { go(b.dataset.tab); Sound.sfx('click'); }));
+    paintIcons();
+    $$('.tab-btn').forEach((b) => b.addEventListener('click', () => {
+      if (b.id === 'tab-more') {
+        const inOverflow = OVERFLOW.some((o) => o.tab === currentTab);
+        if (inOverflow) { openMoreSheet(); return; }
+        openMoreSheet();
+        return;
+      }
+      go(b.dataset.tab);
+      Sound.sfx('click');
+    }));
+    window.addEventListener('resize', moveIndicator);
+    $('#tabbar').addEventListener('scroll', moveIndicator, { passive: true });
 
     State.tickPassive();
     startTicks();
@@ -470,7 +622,7 @@ const App = (() => {
     }, 850);
   }
 
-  return { init, go, applyAll, applyPalette, renderHeader, renderActive, focusTask: null };
+  return { init, go, applyAll, applyPalette, renderHeader, renderActive, openCapture, moveIndicator, paintMiniPlayIcon, focusTask: null };
 })();
 
 document.addEventListener('DOMContentLoaded', App.init);

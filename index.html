@@ -135,21 +135,24 @@
         <span class="mode-track"><span class="mode-thumb"></span></span>
         <span id="mode-label">Обычный</span>
       </button>
-      <button id="theme-toggle" class="icon-btn" title="Тема">🌙</button>
-      <button id="settings-btn" class="icon-btn" title="Настройки">⚙️</button>
+      <button id="cmd-btn" class="icon-btn" title="Поиск и команды (Ctrl+K)" aria-label="Поиск и команды"></button>
+      <button id="theme-toggle" class="icon-btn" title="Тема" aria-label="Переключить тему"></button>
+      <button id="settings-btn" class="icon-btn" title="Настройки" aria-label="Настройки"></button>
     </div>
   </header>
 
-  <nav class="tabbar" id="tabbar">
-    <button class="tab-btn active" data-tab="dashboard"><span>🏠</span><em>Главная</em></button>
-    <button class="tab-btn" data-tab="tasks"><span>✅</span><em>Задачи</em></button>
-    <button class="tab-btn tab-accent" data-tab="adhd"><span>⚡</span><em>СДВГ-режим</em></button>
-    <button class="tab-btn" data-tab="habits"><span>🔥</span><em>Привычки</em></button>
-    <button class="tab-btn" data-tab="goals"><span>🎯</span><em>Цели</em></button>
-    <button class="tab-btn" data-tab="lessons"><span>📚</span><em>Курс</em></button>
-    <button class="tab-btn" data-tab="empire"><span>🏦</span><em>Империя</em></button>
-    <button class="tab-btn" data-tab="rewards"><span>🏆</span><em>Награды</em></button>
-    <button class="tab-btn" data-tab="stats"><span>📊</span><em>Статистика</em></button>
+  <nav class="tabbar" id="tabbar" aria-label="Разделы">
+    <span class="tab-indicator" id="tab-indicator" aria-hidden="true"></span>
+    <button class="tab-btn active" data-tab="dashboard" data-icon="home"><span class="tab-ico"></span><em>Главная</em><i class="tab-badge hidden"></i></button>
+    <button class="tab-btn" data-tab="tasks" data-icon="tasks"><span class="tab-ico"></span><em>Задачи</em><i class="tab-badge hidden"></i></button>
+    <button class="tab-btn tab-accent" data-tab="adhd" data-icon="focus"><span class="tab-ico"></span><em>Фокус</em><i class="tab-badge hidden"></i></button>
+    <button class="tab-btn" data-tab="habits" data-icon="habits"><span class="tab-ico"></span><em>Привычки</em><i class="tab-badge hidden"></i></button>
+    <button class="tab-btn tab-overflow" data-tab="goals" data-icon="goals"><span class="tab-ico"></span><em>Цели</em><i class="tab-badge hidden"></i></button>
+    <button class="tab-btn tab-overflow" data-tab="lessons" data-icon="lessons"><span class="tab-ico"></span><em>Курс</em><i class="tab-badge hidden"></i></button>
+    <button class="tab-btn tab-overflow" data-tab="empire" data-icon="empire"><span class="tab-ico"></span><em>Империя</em><i class="tab-badge hidden"></i></button>
+    <button class="tab-btn tab-overflow" data-tab="rewards" data-icon="rewards"><span class="tab-ico"></span><em>Награды</em><i class="tab-badge hidden"></i></button>
+    <button class="tab-btn tab-overflow" data-tab="stats" data-icon="stats"><span class="tab-ico"></span><em>Статистика</em><i class="tab-badge hidden"></i></button>
+    <button class="tab-btn tab-more" id="tab-more" data-icon="more"><span class="tab-ico"></span><em>Ещё</em><i class="tab-badge hidden"></i></button>
   </nav>
 
   <main class="content">
@@ -623,15 +626,15 @@
   </main>
 
   <div id="mini-player" class="mini-player">
-    <button id="mini-play" class="mini-btn" title="Играть/пауза">▶️</button>
+    <button id="mini-play" class="mini-btn" title="Играть/пауза" aria-label="Играть или пауза"></button>
     <div class="mini-info">
       <div class="mini-station" id="mini-station">🎧 Lo-fi Chill</div>
       <div class="mini-sub" id="mini-sub">музыка выключена</div>
     </div>
     <div class="mini-vis" id="mini-vis"></div>
-    <button id="mini-next" class="mini-btn" title="Новый трек">🎲</button>
+    <button id="mini-next" class="mini-btn" title="Новый трек" aria-label="Новый трек"></button>
     <input id="mini-volume" class="mini-volume" type="range" min="0" max="100" value="50" title="Громкость">
-    <button id="mini-open" class="mini-btn" title="Все станции">🎛️</button>
+    <button id="mini-open" class="mini-btn" title="Все станции" aria-label="Все станции"></button>
   </div>
 
   <footer class="app-footer">
@@ -704,6 +707,22 @@
   </div>
 </div>
 
+<div id="palette-modal" class="modal palette-modal hidden">
+  <div class="modal-card palette-card">
+    <div class="palette-search">
+      <span class="palette-ico" id="palette-ico"></span>
+      <input id="palette-input" type="text" placeholder="Что сделать? Раздел, задача, урок, станция…" autocomplete="off" spellcheck="false">
+      <kbd>Esc</kbd>
+    </div>
+    <div id="palette-results" class="palette-results"></div>
+    <div class="palette-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> выбор</span>
+      <span><kbd>↵</kbd> выполнить</span>
+      <span><kbd>Ctrl</kbd>+<kbd>K</kbd> открыть</span>
+    </div>
+  </div>
+</div>
+
 <div id="capture-modal" class="modal hidden">
   <div class="modal-card">
     <h2>⚡ Быстрый захват</h2>
@@ -725,6 +744,7 @@
   </div>
 </div>
 
+<script src="js/icons.js"></script>
 <script src="js/data.js"></script>
 <script src="js/state.js"></script>
 <script src="js/audio.js"></script>
@@ -735,6 +755,7 @@
 <script src="js/screens-focus.js"></script>
 <script src="js/screens-meta.js"></script>
 <script src="js/screens-extra.js"></script>
+<script src="js/palette.js"></script>
 <script src="js/app.js"></script>
 <!-- ==================== BODY-END ==================== -->
 </body>

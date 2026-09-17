@@ -636,6 +636,9 @@
   .stat-pills { order: 3; width: 100%; justify-content: flex-start; margin-left: 0; }
   /* шапка перестаёт «липнуть», иначе она перекрывает вкладки при переносе пилюль */
   .topbar { position: static; }
+}
+/* планшеты: вкладки ещё сверху, но шапка уже не липкая */
+@media (max-width: 900px) and (min-width: 761px) {
   .tabbar { top: env(safe-area-inset-top, 0px); }
 }
 @media (max-width: 640px) {
@@ -803,3 +806,31 @@
 /* ==================== БЫСТРЫЙ ЗАХВАТ ==================== */
 #capture-modal .modal-card { max-width: 480px; }
 #capture-input { font-size: 1.05rem; padding: 14px; }
+
+/* ==================== ЛИСТ «ЕЩЁ» ==================== */
+.more-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.more-item {
+  display: flex; align-items: center; gap: 13px;
+  padding: 13px 14px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text); text-align: left;
+  transition: all var(--t-fast);
+}
+.more-item:hover { transform: translateX(4px); border-color: var(--accent2); }
+.more-ico {
+  width: 42px; height: 42px; flex: 0 0 42px;
+  display: grid; place-items: center; border-radius: 13px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 28%, transparent), color-mix(in srgb, var(--accent2) 20%, transparent));
+  color: var(--accent2);
+}
+.more-text { display: flex; flex-direction: column; gap: 2px; }
+.more-text b { font-size: 0.92rem; }
+.more-text small { color: var(--text-muted); font-size: 0.74rem; }
+
+/* отступ под нижнюю навигацию на мобильных */
+@media (max-width: 760px) {
+  .content { padding-bottom: 96px; }
+  .app-footer { display: none; }
+  .mini-player { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+  .hyperfocus { z-index: 3000; }
+}

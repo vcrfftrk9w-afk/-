@@ -57,6 +57,16 @@ const State = (() => {
       boosters: { xpUntil: 0, coinUntil: 0, streakSaves: 0 },
       business: { assets: {}, invested: 0, lastTick: Date.now(), millionaireAt: null },
       soundMix: {},
+      music: { station: 'lofi', volume: 0.5, autoWithTimer: true, sleepMinutes: 0 },
+      routines: { morning: [], evening: [], done: {} },
+      reminders: {
+        water: { on: false, every: 60 },
+        move: { on: false, every: 45 },
+        eyes: { on: false, every: 20 },
+        posture: { on: false, every: 30 },
+      },
+      a11y: { font: 'default', scale: 'md', contrast: false },
+      weeklyReviews: {},
       achievements: {},
 
       totals: {
@@ -64,7 +74,8 @@ const State = (() => {
         coinsEarned: 0, xpEarned: 0, passiveEarned: 0, breakdownsUsed: 0,
         breathingSessions: 0, rewardsBought: 0, dumpCount: 0, distractionCount: 0,
         rouletteSpins: 0, questsDone: 0, hyperfocus: 0, perfectHabitDays: 0,
-        nightTasks: 0, earlyTasks: 0, lessonsRead: 0,
+        nightTasks: 0, earlyTasks: 0, lessonsRead: 0, musicMinutes: 0,
+        returns: 0, routinesDone: 0, reviewsDone: 0,
       },
 
       dailyTaskCounts: {},
@@ -98,6 +109,7 @@ const State = (() => {
       s = defaults();
     }
     ensureSkills();
+    ensureRoutines();
     return s;
   }
 
@@ -107,6 +119,23 @@ const State = (() => {
 
   function ensureSkills() {
     Data.SKILLS.forEach((sk) => { if (!s.skills[sk.id]) s.skills[sk.id] = { xp: 0 }; });
+  }
+
+  function ensureRoutines() {
+    if (!s.routines.morning.length && !s.routines.evening.length && !s.routines.seeded) {
+      s.routines.morning = Data.ROUTINE_DEFAULTS.morning.map((text) => ({ id: uid(), text }));
+      s.routines.evening = Data.ROUTINE_DEFAULTS.evening.map((text) => ({ id: uid(), text }));
+      s.routines.seeded = true;
+    }
+  }
+
+  /* сколько пунктов рутины отмечено сегодня */
+  function routineProgress(kind, dateKeyStr) {
+    const key = dateKeyStr || todayKey();
+    const day = s.routines.done[key] || {};
+    const items = s.routines[kind] || [];
+    const done = items.filter((i) => day[i.id]).length;
+    return { done, total: items.length, pct: items.length ? (done / items.length) * 100 : 0 };
   }
 
   /* ---------- события ---------- */
@@ -357,7 +386,7 @@ const State = (() => {
     skillLevel, skillProgress, skillNeed,
     registerActivity, habitStreak,
     assetLevel, assetCost, passivePerMin, activityMultiplier, netWorth, tickPassive, buyAsset,
-    ensureQuests, todayQuests, bumpQuest,
+    ensureQuests, todayQuests, bumpQuest, ensureRoutines, routineProgress,
     checkAchievements, unlockedAchievements, paletteUnlocked,
     reset, replace,
   };

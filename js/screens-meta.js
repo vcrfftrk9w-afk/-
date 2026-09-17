@@ -508,6 +508,7 @@ Screens.stats = (() => {
     renderHours();
     renderSkillBars();
     renderNumbers();
+    Screens.review.render();
   }
 
   return { bind, render };

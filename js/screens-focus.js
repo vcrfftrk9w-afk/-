@@ -74,7 +74,7 @@ Screens.focus = (() => {
 
     $('#timer-start').disabled = T.running;
     $('#timer-pause').disabled = !T.running;
-    $('#timer-start').innerHTML = T.remaining < T.total || T.elapsed > 0 ? '▶️ Продолжить' : '▶️ Старт';
+    $('#timer-start').innerHTML = T.remaining < T.total || T.elapsed > 0 ? '▶️ Дальше' : '▶️ Старт';
 
     const today = State.todayKey();
     UI.countUp($('#focus-today'), State.s.dailyFocusMinutes[today] || 0);
@@ -101,6 +101,7 @@ Screens.focus = (() => {
     Sound.sfx('start');
     FX.vibrate(20);
     companion(T.phase === 'focus' ? 'Погнали! Первые 2 минуты — самые важные 🚀' : 'Перерыв. Встань и потянись 🧘');
+    if (T.phase === 'focus') Screens.music.autoStart();
     T.interval = setInterval(tick, 1000);
     T.msgInterval = setInterval(() => companion(), 60000);
     requestNotifyPermission();
@@ -712,6 +713,8 @@ Screens.focus = (() => {
     renderRoulette();
     renderBreakdowns();
     renderDistractions();
+    Screens.music.render();
+    Screens.reminders.render();
   }
 
   function onEnter() { startVisualizer(); }

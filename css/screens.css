@@ -174,7 +174,7 @@
 .timer-cycles { font-size: 0.78rem; color: var(--accent3); font-weight: 800; }
 .focus-side { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 10px; }
 .timer-controls { display: flex; gap: 8px; flex-wrap: wrap; }
-.timer-controls .btn { flex: 1; min-width: 96px; }
+.timer-controls .btn { flex: 1 1 90px; min-width: 0; white-space: nowrap; }
 .companion-msg {
   margin: 0; text-align: center; font-weight: 700; font-size: 0.85rem;
   color: var(--accent2); min-height: 2.4em; transition: opacity 0.25s ease;
@@ -647,9 +647,159 @@
   .hero-right { min-width: 0; width: 100%; }
   .timer-wrap { width: 196px; height: 196px; }
   #timer-time { font-size: 2.1rem; }
+  .timer-controls .btn { padding-inline: 10px; font-size: 0.86rem; }
   .habit-days { width: 100%; justify-content: space-between; }
   .habit-day { width: auto; flex: 1; }
   .empire-head { flex-direction: column; text-align: center; }
   .char-stats { grid-template-columns: repeat(2, 1fr); }
   .bubble-wrap { grid-template-columns: repeat(6, 1fr); }
 }
+
+/* ==================== МУЗЫКА ==================== */
+.station-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; margin: 12px 0; }
+.station {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  padding: 13px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1.5px solid var(--border); color: var(--text);
+  text-align: left; position: relative; overflow: hidden;
+  transition: all var(--t-fast);
+}
+.station:hover { transform: translateY(-3px); border-color: var(--accent2); }
+.station.active {
+  border-color: var(--accent);
+  background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 24%, transparent), color-mix(in srgb, var(--accent2) 14%, transparent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.station-emoji { font-size: 1.5rem; }
+.station.active .station-emoji { animation: idle-bob 2.2s ease-in-out infinite; }
+.station-name { font-weight: 800; font-size: 0.88rem; }
+.station-desc { font-size: 0.72rem; color: var(--text-muted); line-height: 1.3; }
+.station-bpm {
+  position: absolute; top: 10px; right: 12px;
+  font-size: 0.64rem; font-weight: 800; color: var(--accent3);
+  letter-spacing: 0.04em;
+}
+.music-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.music-vol { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 150px; }
+.music-vol input { flex: 1; }
+.music-extra { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; align-items: end; }
+.music-extra .field span b { color: var(--accent3); }
+
+/* мини-плеер */
+.mini-player {
+  position: fixed; z-index: 800;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; gap: 10px;
+  width: min(94vw, 560px);
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-solid) 92%, transparent);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  transition: box-shadow var(--t-med), border-color var(--t-med);
+}
+.mini-player.playing {
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  box-shadow: 0 10px 40px -12px var(--accent);
+}
+.mini-btn {
+  width: 34px; height: 34px; flex: 0 0 34px;
+  display: grid; place-items: center;
+  border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font-size: 0.9rem;
+  transition: transform var(--t-fast), border-color var(--t-fast);
+}
+.mini-btn:hover { transform: scale(1.1); border-color: var(--accent2); }
+.mini-info { flex: 1; min-width: 0; }
+.mini-station { font-weight: 800; font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-sub { font-size: 0.68rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-vis { display: flex; align-items: flex-end; gap: 2px; height: 22px; flex: 0 0 auto; }
+.mini-vis i { width: 3px; height: 8%; border-radius: 3px; background: linear-gradient(180deg, var(--accent2), var(--accent)); transition: height 0.12s ease; }
+.mini-volume { width: 74px; flex: 0 0 74px; }
+.app-footer { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+
+@media (max-width: 640px) {
+  .mini-vis, .mini-volume { display: none; }
+  .mini-player { width: calc(100vw - 24px); }
+}
+
+/* ==================== РУТИНЫ ДНЯ ==================== */
+.routine-progress {
+  position: relative; height: 8px; border-radius: 8px; margin-bottom: 12px;
+  background: color-mix(in srgb, var(--border-strong) 65%, transparent); overflow: hidden;
+}
+.routine-progress > i {
+  display: block; height: 100%; width: 0; border-radius: 8px;
+  background: linear-gradient(90deg, var(--accent3), var(--accent));
+  transition: width var(--t-slow);
+}
+.routine-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
+.routine-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 11px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  transition: all var(--t-fast);
+  animation: item-in 0.3s ease;
+}
+.routine-item.done { border-color: color-mix(in srgb, var(--success) 45%, transparent); }
+.routine-item.done .routine-text { text-decoration: line-through; opacity: 0.55; }
+.routine-check {
+  width: 24px; height: 24px; flex: 0 0 24px;
+  border-radius: 8px; border: 2px solid var(--accent);
+  background: none; color: transparent;
+  display: grid; place-items: center; font-weight: 900; font-size: 0.8rem;
+  transition: all var(--t-fast);
+}
+.routine-check:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.routine-item.done .routine-check {
+  background: linear-gradient(135deg, var(--success), #16a34a);
+  border-color: transparent; color: #fff;
+  animation: check-pop 0.35s ease;
+}
+.routine-text { flex: 1; min-width: 0; font-size: 0.86rem; }
+
+/* ==================== НАПОМИНАЛКИ ==================== */
+.reminder-list { display: flex; flex-direction: column; gap: 9px; margin-top: 10px; }
+.reminder-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  transition: border-color var(--t-fast);
+}
+.reminder-row.on { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.reminder-emoji { font-size: 1.3rem; }
+.reminder-name { font-weight: 800; font-size: 0.85rem; }
+.reminder-every { flex: 0 0 auto; }
+.switch-mini { position: relative; width: 40px; height: 22px; flex: 0 0 40px; cursor: pointer; }
+.switch-mini input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch-mini span {
+  position: absolute; inset: 0; border-radius: 999px;
+  background: var(--border-strong); transition: background var(--t-med);
+  pointer-events: none;
+}
+.switch-mini span::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  transition: transform var(--t-med);
+}
+.switch-mini input:checked + span { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+.switch-mini input:checked + span::after { transform: translateX(18px); }
+
+/* ==================== ИТОГИ НЕДЕЛИ ==================== */
+.review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.review-cell {
+  text-align: center; padding: 14px 8px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.review-emoji { font-size: 1.2rem; }
+.review-cell b { display: block; font-family: var(--font-display); font-size: 1.5rem; color: var(--accent); }
+.review-cell small { display: block; font-size: 0.68rem; color: var(--text-muted); margin-bottom: 4px; }
+.trend { font-size: 0.72rem; font-weight: 800; }
+.trend.up { color: var(--success); }
+.trend.down { color: var(--danger); }
+
+/* ==================== БЫСТРЫЙ ЗАХВАТ ==================== */
+#capture-modal .modal-card { max-width: 480px; }
+#capture-input { font-size: 1.05rem; padding: 14px; }

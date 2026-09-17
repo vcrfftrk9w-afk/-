@@ -261,6 +261,13 @@ const Data = (() => {
     { id: 'quest_10', emoji: '📜', name: 'Квестолов', desc: 'Выполни 10 ежедневных квестов', xp: 60, coins: 50, cond: (s) => s.totals.questsDone >= 10 },
     { id: 'night_owl', emoji: '🦉', name: 'Ночная сова', desc: 'Закрой задачу после полуночи', xp: 25, coins: 20, cond: (s) => s.totals.nightTasks >= 1 },
     { id: 'early_bird', emoji: '🐦', name: 'Ранняя пташка', desc: 'Закрой задачу до 7 утра', xp: 25, coins: 20, cond: (s) => s.totals.earlyTasks >= 1 },
+    // музыка, рутины, возвращения
+    { id: 'music_60', emoji: '🎵', name: 'Саундтрек работы', desc: '60 минут под музыку приложения', xp: 30, coins: 25, cond: (s) => (s.totals.musicMinutes || 0) >= 60 },
+    { id: 'music_600', emoji: '🎼', name: 'Свой плейлист', desc: '600 минут под музыку', xp: 120, coins: 100, cond: (s) => (s.totals.musicMinutes || 0) >= 600 },
+    { id: 'routine_first', emoji: '🌅', name: 'Ритуал начат', desc: 'Закрой первую рутину дня полностью', xp: 25, coins: 20, cond: (s) => (s.totals.routinesDone || 0) >= 1 },
+    { id: 'routine_20', emoji: '🗓️', name: 'Система дня', desc: '20 закрытых рутин', xp: 90, coins: 80, cond: (s) => (s.totals.routinesDone || 0) >= 20 },
+    { id: 'returns_10', emoji: '🔄', name: 'Возвращенец', desc: '10 возвращений к фокусу после отвлечения', xp: 40, coins: 30, cond: (s) => (s.totals.returns || 0) >= 10 },
+    { id: 'review_4', emoji: '📋', name: 'Ретроспектива', desc: '4 недельных итога', xp: 80, coins: 60, cond: (s) => (s.totals.reviewsDone || 0) >= 4 },
   ];
 
   /* ---------- ШАБЛОНЫ ДЕКОМПОЗИЦИИ ---------- */
@@ -523,6 +530,30 @@ const Data = (() => {
     },
   ];
 
+  /* ---------- РУТИНЫ ДНЯ ---------- */
+  const ROUTINE_DEFAULTS = {
+    morning: [
+      'Стакан воды сразу после подъёма',
+      'Размяться 5 минут / выйти на свет',
+      'Выбрать 1 главную задачу дня',
+      'Первые 30 минут без ленты и чатов',
+    ],
+    evening: [
+      'Закрыть рабочие вкладки и дела',
+      'Выписать 3 задачи на завтра',
+      'Отметить состояние дня',
+      'Экраны в сторону за 30 минут до сна',
+    ],
+  };
+
+  /* ---------- ИНТЕРВАЛЬНЫЕ НАПОМИНАНИЯ ---------- */
+  const REMINDERS = [
+    { id: 'water', emoji: '💧', name: 'Пить воду', text: 'Стакан воды — мозг на 75% из неё', options: [30, 45, 60, 90] },
+    { id: 'move', emoji: '🚶', name: 'Размяться', text: 'Встань и подвигайся пару минут', options: [30, 45, 60, 90] },
+    { id: 'eyes', emoji: '👀', name: 'Глаза', text: 'Посмотри вдаль 20 секунд', options: [20, 30, 45, 60] },
+    { id: 'posture', emoji: '🧍', name: 'Осанка', text: 'Выпрямись, плечи назад, вдох', options: [20, 30, 45, 60] },
+  ];
+
   /* ---------- ШАБЛОНЫ ПРИВЫЧЕК ---------- */
   const HABIT_TEMPLATES = [
     { emoji: '💧', name: 'Пить воду', skill: 'health' },
@@ -539,7 +570,7 @@ const Data = (() => {
     SKILLS, CATEGORIES, PRIORITIES, EVOLUTION, PALETTES, ASSETS, MILLIONAIRE_GOAL,
     SOUND_LAYERS, SOUND_PRESETS, TIMER_MODES, BREATHING, QUOTES, MICRO_STEPS,
     COMPANION_MSGS, QUEST_POOL, ACHIEVEMENTS, BREAKDOWN_TEMPLATES, MOODS, BOOSTERS,
-    TRACKS, LESSONS, HABIT_TEMPLATES,
+    TRACKS, LESSONS, HABIT_TEMPLATES, ROUTINE_DEFAULTS, REMINDERS,
     skillById: (id) => SKILLS.find((s) => s.id === id),
     categoryById: (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[CATEGORIES.length - 1],
     priorityById: (id) => PRIORITIES.find((p) => p.id === id) || PRIORITIES[1],

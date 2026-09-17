@@ -24,7 +24,13 @@ const App = (() => {
     if (toggle) toggle.setAttribute('aria-pressed', String(State.s.mode === 'adhd'));
   }
   function applyMotion() { document.body.setAttribute('data-reduce-motion', String(!!State.s.reduceMotion)); }
-  function applyAll() { applyTheme(); applyPalette(); applyMode(); applyMotion(); }
+  function applyA11y() {
+    const a = State.s.a11y || {};
+    document.body.setAttribute('data-font', a.font || 'default');
+    document.body.setAttribute('data-scale', a.scale || 'md');
+    document.body.setAttribute('data-contrast', String(!!a.contrast));
+  }
+  function applyAll() { applyTheme(); applyPalette(); applyMode(); applyMotion(); applyA11y(); }
 
   /* ---------- шапка ---------- */
   function renderHeader() {
@@ -173,6 +179,12 @@ const App = (() => {
       }
     }, 900);
 
+    // напоминалки
+    setInterval(() => Screens.reminders.tick(), 30000);
+
+    // обновление подписи мини-плеера (таймер сна)
+    setInterval(() => { if (Music.playing) Screens.music.render(); }, 15000);
+
     // смена дня
     setInterval(() => {
       if (State.s.lastSeenDate && State.s.lastSeenDate !== State.todayKey()) dailyCheckIn();
@@ -209,6 +221,8 @@ const App = (() => {
       if (k === 'n' || k === 'т') { go('tasks'); setTimeout(() => $('#task-title').focus(), 120); }
       else if (k === 'f' || k === 'а') { Screens.focus.toggleTimer(); }
       else if (k === 'h' || k === 'р') { Screens.focus.enterHyperfocus(); }
+      else if (k === 'q' || k === 'й') { e.preventDefault(); openCapture(); }
+      else if (k === 'm' || k === 'ь') { Music.toggle(State.s.music.station); Screens.music.render(); }
       else if (e.key === 'Escape') {
         if (!$('#hyperfocus').classList.contains('hidden')) $('#hf-exit').click();
         $$('.modal:not(.hidden)').forEach((m) => UI.closeModal(m));
@@ -271,6 +285,9 @@ const App = (() => {
       $('#setting-haptics').checked = !!s.haptics;
       $('#setting-reduce').checked = !!s.reduceMotion;
       $('#setting-notify').checked = !!s.notifications;
+      $('#setting-font').checked = (s.a11y && s.a11y.font) === 'lexend';
+      $('#setting-contrast').checked = !!(s.a11y && s.a11y.contrast);
+      $('#setting-scale').value = (s.a11y && s.a11y.scale) || 'md';
       UI.openModal('#settings-modal');
     });
     $('#settings-close').addEventListener('click', () => UI.closeModal('#settings-modal'));
@@ -288,6 +305,10 @@ const App = (() => {
       }
       State.save();
     });
+
+    $('#setting-font').addEventListener('change', (e) => { State.s.a11y.font = e.target.checked ? 'lexend' : 'default'; applyA11y(); State.save(); });
+    $('#setting-contrast').addEventListener('change', (e) => { State.s.a11y.contrast = e.target.checked; applyA11y(); State.save(); });
+    $('#setting-scale').addEventListener('change', (e) => { State.s.a11y.scale = e.target.value; applyA11y(); State.save(); });
 
     $('#theme-toggle').addEventListener('click', () => {
       State.s.theme = State.s.theme === 'dark' ? 'light' : 'dark';
@@ -310,6 +331,35 @@ const App = (() => {
     $('#levelup-close').addEventListener('click', () => UI.closeModal('#levelup-modal'));
     $('#millionaire-close').addEventListener('click', () => UI.closeModal('#millionaire-modal'));
     $$('.modal').forEach((m) => m.addEventListener('click', (e) => { if (e.target === m) UI.closeModal(m); }));
+  }
+
+  /* ---------- быстрый захват мысли ---------- */
+  function openCapture() {
+    UI.openModal('#capture-modal');
+    setTimeout(() => $('#capture-input').focus(), 80);
+  }
+
+  function bindCapture() {
+    const save = (toDump) => {
+      const input = $('#capture-input');
+      const text = input.value.trim();
+      if (!text) return;
+      if (toDump) {
+        State.s.brainDump.unshift({ id: State.uid(), text, createdAt: Date.now() });
+        State.s.totals.dumpCount += 1;
+        State.addXP(3, 'mind');
+        State.bumpQuest('dump', 1);
+        UI.toast('В brain dump 🧠', 'success', '🧠');
+      } else {
+        Screens.tasks.add(text, 'other', 'mid', false);
+      }
+      input.value = '';
+      UI.closeModal('#capture-modal');
+      Sound.sfx('pop');
+      State.commit();
+    };
+    $('#capture-form').addEventListener('submit', (e) => { e.preventDefault(); save(false); });
+    $('#capture-dump').addEventListener('click', () => save(true));
   }
 
   function showCharacter() {
@@ -335,6 +385,26 @@ const App = (() => {
             <small>${e.level}</small>
           </div>`).join('')}</div>
       </div>`, { wide: true });
+  }
+
+  /* ---------- уход и возвращение во время фокуса ---------- */
+  let leftAt = 0;
+  function bindPresence() {
+    document.addEventListener('visibilitychange', () => {
+      if (!Screens.focus.running) return;
+      if (document.hidden) {
+        leftAt = Date.now();
+      } else if (leftAt) {
+        const away = Math.round((Date.now() - leftAt) / 1000);
+        leftAt = 0;
+        if (away >= 20) {
+          State.s.totals.returns = (State.s.totals.returns || 0) + 1;
+          State.addXP(4, 'discipline');
+          UI.toast('С возвращением! Отвлечься — норм, вернуться — сила 💪', 'success', '🔄');
+          State.commit();
+        }
+      }
+    });
   }
 
   /* ---------- первый жест: восстановить звук ---------- */
@@ -372,6 +442,11 @@ const App = (() => {
     Screens.focus.bind();
     Screens.rewards.bind();
     Screens.stats.bind();
+    Screens.routines.bind();
+    Screens.music.bind();
+    Screens.review.bind();
+    bindCapture();
+    bindPresence();
 
     $$('.tab-btn').forEach((b) => b.addEventListener('click', () => { go(b.dataset.tab); Sound.sfx('click'); }));
 

@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Baloo+2:wght@500;600;700;800&family=Lexend:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/components.css">
 <link rel="stylesheet" href="css/screens.css">
@@ -230,6 +230,22 @@
           <button id="mood-save" class="btn btn-primary btn-block">Сохранить день</button>
         </div>
 
+        <div class="card routine-card tilt">
+          <div class="card-head">
+            <h3>🌅 Рутины дня</h3>
+            <div class="filter-row" id="routine-switch">
+              <button class="chip active" data-routine="morning">Утро</button>
+              <button class="chip" data-routine="evening">Вечер</button>
+            </div>
+          </div>
+          <div class="routine-progress"><i id="routine-bar"></i><span class="shine"></span></div>
+          <div id="routine-list" class="routine-list"></div>
+          <form id="routine-add" class="row">
+            <input id="routine-input" class="grow" type="text" placeholder="Добавить пункт…" maxlength="70">
+            <button class="btn btn-ghost btn-sm" type="submit">+</button>
+          </form>
+        </div>
+
         <div class="card skills-card tilt">
           <h3>🧬 Навыки</h3>
           <div class="skills-wrap">
@@ -339,6 +355,48 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <div class="card music-card span-2">
+          <div class="card-head">
+            <h3>🎵 Музыка для работы</h3>
+            <span class="badge" id="music-now">выключено</span>
+          </div>
+          <p class="muted small">Живая музыка генерируется прямо в браузере: каждый запуск — новый трек, ничего не скачивается.</p>
+          <div id="station-grid" class="station-grid"></div>
+          <div class="music-controls">
+            <button id="music-play" class="btn btn-primary">▶️ Включить</button>
+            <button id="music-next" class="btn btn-ghost">🎲 Новый трек</button>
+            <label class="music-vol">
+              <span>🔊</span>
+              <input id="music-volume" type="range" min="0" max="100" value="50">
+            </label>
+          </div>
+          <div class="music-extra">
+            <label class="field compact">
+              <span>Темп: <b id="music-bpm-val">74</b> BPM</span>
+              <input id="music-bpm" type="range" min="40" max="130" value="74">
+            </label>
+            <label class="field compact">
+              <span>Таймер сна</span>
+              <select id="music-sleep">
+                <option value="0">выключен</option>
+                <option value="15">15 минут</option>
+                <option value="30">30 минут</option>
+                <option value="45">45 минут</option>
+                <option value="60">60 минут</option>
+              </select>
+            </label>
+            <label class="check-inline">
+              <input type="checkbox" id="music-auto"><span>Включать вместе с фокус-таймером</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="card reminder-card">
+          <h3>🔔 Напоминалки</h3>
+          <p class="muted small">Мягкие подсказки о теле, пока голова в работе.</p>
+          <div id="reminder-list" class="reminder-list"></div>
         </div>
 
         <div class="card mixer-card span-2">
@@ -541,6 +599,14 @@
           <h3>🏅 Рекорды</h3>
           <div id="stat-numbers" class="stats-numbers"></div>
         </div>
+        <div class="card span-2">
+          <div class="card-head">
+            <h3>📋 Итоги недели</h3>
+            <button id="review-save" class="btn btn-primary btn-sm">Подвести итоги</button>
+          </div>
+          <div id="weekly-review" class="weekly-review"></div>
+        </div>
+
         <div class="card">
           <h3>💾 Данные</h3>
           <p class="muted small">Прогресс хранится локально в этом браузере. Делай бэкапы.</p>
@@ -556,8 +622,20 @@
 
   </main>
 
+  <div id="mini-player" class="mini-player">
+    <button id="mini-play" class="mini-btn" title="Играть/пауза">▶️</button>
+    <div class="mini-info">
+      <div class="mini-station" id="mini-station">🎧 Lo-fi Chill</div>
+      <div class="mini-sub" id="mini-sub">музыка выключена</div>
+    </div>
+    <div class="mini-vis" id="mini-vis"></div>
+    <button id="mini-next" class="mini-btn" title="Новый трек">🎲</button>
+    <input id="mini-volume" class="mini-volume" type="range" min="0" max="100" value="50" title="Громкость">
+    <button id="mini-open" class="mini-btn" title="Все станции">🎛️</button>
+  </div>
+
   <footer class="app-footer">
-    <span class="muted small">Клавиши: <kbd>1</kbd>–<kbd>9</kbd> вкладки · <kbd>N</kbd> задача · <kbd>F</kbd> фокус · <kbd>H</kbd> гиперфокус</span>
+    <span class="muted small">Клавиши: <kbd>1</kbd>–<kbd>9</kbd> вкладки · <kbd>N</kbd> задача · <kbd>F</kbd> фокус · <kbd>H</kbd> гиперфокус · <kbd>Q</kbd> захват мысли · <kbd>M</kbd> музыка</span>
   </footer>
 </div>
 
@@ -611,7 +689,32 @@
     <label class="switch-row"><span>📳 Вибрация</span><input type="checkbox" id="setting-haptics"></label>
     <label class="switch-row"><span>🎬 Меньше анимаций</span><input type="checkbox" id="setting-reduce"></label>
     <label class="switch-row"><span>🔕 Уведомления о конце сессии</span><input type="checkbox" id="setting-notify"></label>
+    <label class="switch-row"><span>🔤 Читаемый шрифт (Lexend)</span><input type="checkbox" id="setting-font"></label>
+    <label class="switch-row"><span>🌗 Высокий контраст</span><input type="checkbox" id="setting-contrast"></label>
+    <label class="field">
+      <span>Размер текста</span>
+      <select id="setting-scale">
+        <option value="sm">Мелкий</option>
+        <option value="md">Обычный</option>
+        <option value="lg">Крупный</option>
+        <option value="xl">Очень крупный</option>
+      </select>
+    </label>
     <button class="btn btn-primary btn-block" id="settings-close">Готово</button>
+  </div>
+</div>
+
+<div id="capture-modal" class="modal hidden">
+  <div class="modal-card">
+    <h2>⚡ Быстрый захват</h2>
+    <p class="muted small">Мысль в голове → сюда. Разберёшь позже.</p>
+    <form id="capture-form">
+      <input id="capture-input" type="text" maxlength="110" placeholder="Что пришло в голову?" autocomplete="off">
+      <div class="row-center" style="margin-top:14px">
+        <button type="submit" class="btn btn-primary">✅ В задачи</button>
+        <button type="button" id="capture-dump" class="btn btn-ghost">🧠 В brain dump</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -625,11 +728,13 @@
 <script src="js/data.js"></script>
 <script src="js/state.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/music.js"></script>
 <script src="js/fx.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/screens-core.js"></script>
 <script src="js/screens-focus.js"></script>
 <script src="js/screens-meta.js"></script>
+<script src="js/screens-extra.js"></script>
 <script src="js/app.js"></script>
 <!-- ==================== BODY-END ==================== -->
 </body>

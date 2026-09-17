@@ -13,6 +13,7 @@ const Sound = (() => {
   let brownBuf = null;
   const layers = {};      // id -> { gain, nodes[], timers[] }
   let masterVolume = 0.6;
+  let externalActive = false;  // играет ли что-то ещё через общую шину (музыка)
 
   function ready() {
     if (!ctx) {
@@ -22,7 +23,7 @@ const Sound = (() => {
       master = ctx.createGain();
       master.gain.value = masterVolume;
       analyser = ctx.createAnalyser();
-      analyser.fftSize = 128;
+      analyser.fftSize = 512;
       sfxGain = ctx.createGain();
       sfxGain.gain.value = 0.3;
       master.connect(analyser);
@@ -272,6 +273,16 @@ const Sound = (() => {
 
   function activeLayers() { return Object.keys(layers); }
 
+  /* доступ к контексту и отдельная шина для музыкального движка */
+  function context() { return ready() ? ctx : null; }
+  function createBus(volume = 1) {
+    if (!ready()) return null;
+    const g = ctx.createGain();
+    g.gain.value = volume;
+    g.connect(analyser);
+    return g;
+  }
+
   /* ---------- SFX ---------- */
   const PATTERNS = {
     click: [[430, 0.05, 'sine', 0.25]],
@@ -310,19 +321,25 @@ const Sound = (() => {
   }
 
   /* ---------- данные для визуализатора ---------- */
+  function setExternalActive(v) { externalActive = !!v; }
+
   function levels(count) {
-    if (!analyser || !Object.keys(layers).length) return null;
+    if (!analyser || (!Object.keys(layers).length && !externalActive)) return null;
     const data = new Uint8Array(analyser.frequencyBinCount);
     analyser.getByteFrequencyData(data);
-    const step = Math.max(1, Math.floor(data.length / count));
+    // логарифмические полосы: низы не съедают всю картинку, верхи слышно
+    const maxBin = Math.floor(data.length * 0.62);
     const out = [];
     for (let i = 0; i < count; i++) {
+      const start = Math.min(maxBin - 1, Math.floor(Math.pow(maxBin, i / count)));
+      const end = Math.max(start + 1, Math.min(maxBin, Math.floor(Math.pow(maxBin, (i + 1) / count))));
       let sum = 0;
-      for (let j = 0; j < step; j++) sum += data[i * step + j] || 0;
-      out.push(sum / step / 255);
+      for (let j = start; j < end; j++) sum += data[j];
+      const v = sum / (end - start) / 255;
+      out.push(Math.min(1, v * (1 + i * 0.22)));   // компенсация затухания верхов
     }
     return out;
   }
 
-  return { ready, setLayer, applyMix, stopAll, setMasterVolume, activeLayers, sfx, levels };
+  return { ready, setLayer, applyMix, stopAll, setMasterVolume, activeLayers, sfx, levels, context, createBus, setExternalActive };
 })();

@@ -254,6 +254,7 @@ Screens.dashboard = (() => {
     renderMood();
     renderSkills();
     renderStreak();
+    Screens.routines.render();
     Screens.tasks.renderToday();
     if (!$('#quote-text').dataset.ready) { showQuote(); $('#quote-text').dataset.ready = '1'; }
   }

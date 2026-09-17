@@ -316,3 +316,25 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
   .content { padding: 14px 14px 30px; }
   .grid { gap: 12px; }
 }
+
+/* ---------- доступность: шрифт, размер, контраст ---------- */
+[data-font="lexend"] {
+  --font-ui: 'Lexend', system-ui, sans-serif;
+  --font-display: 'Lexend', system-ui, sans-serif;
+  letter-spacing: 0.01em;
+}
+[data-scale="sm"] { font-size: 13.5px; }
+[data-scale="md"] { font-size: 15px; }
+[data-scale="lg"] { font-size: 17px; }
+[data-scale="xl"] { font-size: 19.5px; }
+
+[data-contrast="true"] {
+  --surface: var(--surface-solid);
+  --surface-2: color-mix(in srgb, var(--surface-solid) 82%, var(--text));
+  --border: color-mix(in srgb, var(--text) 38%, transparent);
+  --border-strong: color-mix(in srgb, var(--text) 60%, transparent);
+  --text-muted: color-mix(in srgb, var(--text) 78%, transparent);
+  --glass-blur: 0px;
+}
+[data-contrast="true"] .bg-aurora { opacity: 0.25; }
+[data-contrast="true"] .card { box-shadow: none; }

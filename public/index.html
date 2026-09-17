@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Smart AI Assistant</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="dot" id="statusDot" title="Checking connection…"></span>
+        <span>Smart AI Assistant</span>
+      </div>
+      <button id="clearBtn" class="ghost-btn" title="Start a new chat">New chat</button>
+    </header>
+
+    <main id="chat" class="chat" aria-live="polite">
+      <div class="empty-state" id="emptyState">
+        <h1>Ask me anything</h1>
+        <p>Answers stream in real time. If something goes wrong, you'll get a clear message and a retry button — never a silent failure.</p>
+      </div>
+    </main>
+
+    <form id="composer" class="composer">
+      <textarea
+        id="input"
+        placeholder="Message the assistant…"
+        rows="1"
+        maxlength="8000"
+        autofocus
+      ></textarea>
+      <button id="sendBtn" type="submit" aria-label="Send">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 20l16-8L4 4v6l10 2-10 2z" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </form>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

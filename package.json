@@ -1,0 +1,19 @@
+{
+  "name": "smart-ai-assistant",
+  "version": "1.0.0",
+  "description": "A resilient AI chat assistant powered by the Claude API, with automatic retries, model fallback and streaming responses.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "express": "^4.21.1",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

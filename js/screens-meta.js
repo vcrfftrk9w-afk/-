@@ -481,6 +481,28 @@ Screens.stats = (() => {
     });
   }
 
+  function renderSessionLog() {
+    const log = State.s.focusLog || [];
+    const root = $('#session-log');
+    if (!log.length) {
+      root.innerHTML = '<p class="empty-hint">Сессий пока нет. Первая — самая важная.</p>';
+      $('#session-avg').textContent = '—';
+      return;
+    }
+    const avg = Math.round(log.reduce((a, x) => a + x.minutes, 0) / log.length);
+    $('#session-avg').textContent = `в среднем ${avg} мин`;
+
+    const modeName = (id) => (Data.TIMER_MODES.find((m) => m.id === id) || {}).name || 'сессия';
+    root.innerHTML = log.slice(0, 8).map((x) => `
+      <div class="session-row">
+        <span class="session-min">${x.minutes}<small>мин</small></span>
+        <span class="session-body">
+          <b>${UI.esc(x.task || 'Без конкретной задачи')}</b>
+          <small>${UI.esc(modeName(x.mode))} · ${UI.timeAgo(x.at)}</small>
+        </span>
+      </div>`).join('');
+  }
+
   function renderNumbers() {
     const s = State.s;
     const items = [
@@ -518,6 +540,8 @@ Screens.stats = (() => {
     renderMood();
     renderHours();
     renderSkillBars();
+    renderSessionLog();
+    Advisor.renderInsights();
     renderNumbers();
     Screens.review.render();
   }

@@ -338,3 +338,20 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 }
 [data-contrast="true"] .bg-aurora { opacity: 0.25; }
 [data-contrast="true"] .card { box-shadow: none; }
+
+/* витрина возможностей в онбординге */
+.ob-features { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 16px 0; }
+.ob-feature {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  padding: 13px 12px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  text-align: left;
+  animation: card-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ob-feature:nth-child(2) { animation-delay: 0.07s; }
+.ob-feature:nth-child(3) { animation-delay: 0.14s; }
+.ob-feature:nth-child(4) { animation-delay: 0.21s; }
+.ob-feature span { font-size: 1.5rem; }
+.ob-feature b { font-size: 0.86rem; }
+.ob-feature small { font-size: 0.7rem; color: var(--text-muted); line-height: 1.35; }
+@media (max-width: 480px) { .ob-features { grid-template-columns: 1fr; } }

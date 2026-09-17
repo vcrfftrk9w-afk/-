@@ -621,3 +621,7 @@
   padding: 1px 7px; border-radius: 999px; font-weight: 700; font-size: 0.68rem;
   background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-soft);
 }
+.task-rename {
+  width: 100%; padding: 4px 8px; font-size: 0.92rem; font-weight: 700;
+  border-radius: 8px; border: 1.5px solid var(--accent); background: var(--surface-solid);
+}

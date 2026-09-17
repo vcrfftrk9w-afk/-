@@ -979,3 +979,49 @@
   45% { transform: scale(1.5) rotate(8deg); opacity: 1; }
   100% { transform: scale(2.6) rotate(-6deg); opacity: 0; }
 }
+
+/* ==================== ЖУРНАЛ СЕССИЙ ==================== */
+.session-log { display: flex; flex-direction: column; gap: 7px; }
+.session-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 11px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  animation: item-in 0.3s ease;
+}
+.session-min {
+  flex: 0 0 auto; min-width: 48px; text-align: center;
+  font-family: var(--font-display); font-size: 1.2rem; font-weight: 800; color: var(--accent3);
+  display: flex; flex-direction: column; line-height: 1;
+}
+.session-min small { font-size: 0.58rem; color: var(--text-muted); font-family: var(--font-ui); }
+.session-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.session-body b { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-body small { font-size: 0.7rem; color: var(--text-muted); }
+
+/* ==================== ЧТО ДАЛЬШЕ ==================== */
+.next-card {
+  background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 16%, var(--surface)), var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.next-action { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.next-emoji {
+  width: 52px; height: 52px; flex: 0 0 52px;
+  display: grid; place-items: center; border-radius: 16px; font-size: 1.7rem;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  animation: idle-bob 3s ease-in-out infinite;
+}
+.next-body { flex: 1; min-width: 150px; }
+.next-body b { font-size: 0.98rem; display: block; margin-bottom: 3px; }
+.next-body p { margin: 0; }
+.next-go { flex: 0 0 auto; }
+
+/* ==================== НАБЛЮДЕНИЯ ==================== */
+.insights { display: flex; flex-direction: column; gap: 9px; }
+.insight-row {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.insight-row span { font-size: 1.1rem; }
+.insight-row p { margin: 0; font-size: 0.84rem; line-height: 1.45; }
+.insight-row b { color: var(--accent3); }

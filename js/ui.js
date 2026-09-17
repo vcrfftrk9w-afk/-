@@ -32,6 +32,17 @@ const UI = (() => {
     if (n >= 100000) return fmtShort(n);
     return fmt(n);
   }
+  /* склонение существительных: 1 день, 2 дня, 5 дней */
+  function plural(n, one, few, many) {
+    const abs = Math.abs(Math.round(n));
+    const mod10 = abs % 10;
+    const mod100 = abs % 100;
+    if (mod10 === 1 && mod100 !== 11) return one;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+    return many;
+  }
+  const plur = (n, one, few, many) => `${fmt(n)} ${plural(n, one, few, many)}`;
+
   function fmtMin(n) {
     const h = Math.floor(n / 60), m = Math.round(n % 60);
     return h > 0 ? `${h} ч ${m} мин` : `${m} мин`;
@@ -199,7 +210,7 @@ const UI = (() => {
   const WEEKDAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
   return {
-    $, $$, esc, fmt, fmtShort, fmtSmart, fmtMin, countUp, toast, openModal, closeModal,
+    $, $$, esc, fmt, fmtShort, fmtSmart, fmtMin, plural, plur, countUp, toast, openModal, closeModal,
     sheet, confirm, initTilt, initRipple, node, timeAgo, hhmm, dateLabel, WEEKDAYS, preserveFocus,
   };
 })();

@@ -277,6 +277,8 @@ Screens.dashboard = (() => {
   function renderStreak() {
     const s = State.s;
     UI.countUp($('#streak-number'), s.streak);
+    const streakLabel = document.querySelector('.streak-big small');
+    if (streakLabel) streakLabel.textContent = `${UI.plural(s.streak, 'день', 'дня', 'дней')} подряд`;
     const week = $('#streak-week');
     week.innerHTML = '';
     for (let i = 6; i >= 0; i--) {
@@ -301,6 +303,7 @@ Screens.dashboard = (() => {
     renderSkills();
     renderStreak();
     renderFocusGoal();
+    Advisor.renderNext();
     Screens.routines.render();
     Screens.tasks.renderToday();
     if (!$('#quote-text').dataset.ready) { showQuote(); $('#quote-text').dataset.ready = '1'; }
@@ -497,6 +500,11 @@ Screens.tasks = (() => {
     li.querySelector('.task-check').addEventListener('click', (e) => complete(t, e.currentTarget));
     li.querySelector('.task-del').addEventListener('click', () => remove(t.id, li));
     li.querySelector('.task-focus').addEventListener('click', () => focusOn(t));
+
+    // двойной клик по названию — переименование на месте
+    const titleEl = li.querySelector('.task-title');
+    titleEl.title = 'Двойной клик — переименовать';
+    titleEl.addEventListener('dblclick', () => startRename(t, titleEl));
     li.querySelector('.task-expand').addEventListener('click', () => {
       if (expandedTasks.has(t.id)) expandedTasks.delete(t.id);
       else expandedTasks.add(t.id);
@@ -530,6 +538,37 @@ Screens.tasks = (() => {
       li.querySelector('.sub-template').addEventListener('click', () => applyTemplate(t));
     }
     return li;
+  }
+
+  /* ---------- переименование на месте ---------- */
+  function startRename(task, el) {
+    if (el.querySelector('input')) return;
+    const original = task.title;
+    el.innerHTML = '';
+    const input = document.createElement('input');
+    input.className = 'task-rename';
+    input.value = original;
+    input.maxLength = 110;
+    el.appendChild(input);
+    input.focus();
+    input.setSelectionRange(original.length, original.length);
+
+    const finish = (save) => {
+      const value = input.value.trim();
+      if (save && value && value !== original) {
+        task.title = value;
+        Sound.sfx('check');
+        UI.toast('Задача переименована', 'success', '✏️');
+      }
+      State.commit();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+      e.stopPropagation();
+    });
+    input.addEventListener('blur', () => finish(true));
+    input.addEventListener('click', (e) => e.stopPropagation());
   }
 
   /* ---------- подзадачи ---------- */
@@ -577,10 +616,10 @@ Screens.tasks = (() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const due = new Date(t.due); due.setHours(0, 0, 0, 0);
     const days = Math.round((due - today) / 86400000);
-    if (days < 0) return { days, label: days === -1 ? 'просрочено вчера' : `просрочено на ${-days} дн.`, cls: 'overdue' };
+    if (days < 0) return { days, label: days === -1 ? 'просрочено вчера' : `просрочено на ${UI.plur(-days, 'день', 'дня', 'дней')}`, cls: 'overdue' };
     if (days === 0) return { days, label: 'сегодня', cls: 'today' };
     if (days === 1) return { days, label: 'завтра', cls: 'soon' };
-    if (days <= 7) return { days, label: `через ${days} дн.`, cls: 'soon' };
+    if (days <= 7) return { days, label: `через ${UI.plur(days, 'день', 'дня', 'дней')}`, cls: 'soon' };
     return { days, label: UI.dateLabel(t.due), cls: '' };
   }
 
@@ -810,7 +849,7 @@ Screens.habits = (() => {
           <div class="habit-info">
             <div class="habit-name">${UI.esc(h.name)}</div>
             <div class="habit-sub">
-              <span class="habit-streak">🔥 ${streak} дн.</span>
+              <span class="habit-streak">🔥 ${UI.plur(streak, 'день', 'дня', 'дней')}</span>
               <span class="muted small">всего ${total}</span>
               <span class="skill-tag" style="color:${skill.color}">${skill.emoji} ${skill.name}</span>
             </div>
@@ -927,8 +966,8 @@ Screens.goals = (() => {
           <div class="grow">
             <div class="goal-title">${UI.esc(g.title)}</div>
             <div class="goal-meta">
-              ${g.deadline ? `<span class="${dl < 0 ? 'overdue' : ''}">📅 ${dl >= 0 ? `осталось ${dl} дн.` : `просрочено на ${-dl} дн.`}</span>` : '<span class="muted">без дедлайна</span>'}
-              <span>${done}/${g.milestones.length} шагов</span>
+              ${g.deadline ? `<span class="${dl < 0 ? 'overdue' : ''}">📅 ${dl >= 0 ? `осталось ${UI.plur(dl, 'день', 'дня', 'дней')}` : `просрочено на ${UI.plur(-dl, 'день', 'дня', 'дней')}`}</span>` : '<span class="muted">без дедлайна</span>'}
+              <span>${done}/${g.milestones.length} ${UI.plural(g.milestones.length, 'шаг', 'шага', 'шагов')}</span>
               ${g.done ? '<span class="tag-done">готово</span>' : ''}
             </div>
           </div>

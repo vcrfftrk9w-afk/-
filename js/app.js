@@ -678,6 +678,7 @@ const App = (() => {
     bindEmptyStates();
     bindInstall();
     Palette.bind();
+    Advisor.bind();
     $('#shortcuts-btn').addEventListener('click', () => { UI.closeModal('#settings-modal'); setTimeout(showShortcuts, 200); });
 
     paintIcons();

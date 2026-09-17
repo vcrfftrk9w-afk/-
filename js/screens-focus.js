@@ -180,6 +180,14 @@ Screens.focus = (() => {
     State.bumpQuest('focusMinutes', minutes);
     T.cycles += 1;
 
+    const task = s.tasks.find((t) => t.id === T.taskId);
+    s.focusLog = s.focusLog || [];
+    s.focusLog.unshift({
+      at: Date.now(), minutes, mode: T.mode,
+      task: task ? task.title : null,
+    });
+    s.focusLog = s.focusLog.slice(0, 200);
+
     Sound.sfx('fanfare');
     FX.vibrate([30, 60, 30]);
     FX.confetti(window.innerWidth / 2, window.innerHeight / 2.4, 90, { power: 12 });

@@ -67,6 +67,7 @@ const State = (() => {
       },
       a11y: { font: 'default', scale: 'md', contrast: false },
       focusGoal: 60,
+      focusLog: [],
       weeklyReviews: {},
       achievements: {},
 

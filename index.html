@@ -37,7 +37,7 @@
 <!-- ==================== ОНБОРДИНГ ==================== -->
 <div id="onboarding" class="onboarding hidden">
   <div class="onboarding-card">
-    <div class="onboarding-steps"><i class="active"></i><i></i><i></i></div>
+    <div class="onboarding-steps"><i class="active"></i><i></i><i></i><i></i></div>
 
     <section class="ob-step active" data-step="0">
       <div class="ob-emoji">🦥</div>
@@ -73,6 +73,22 @@
     </section>
 
     <section class="ob-step" data-step="2">
+      <div class="ob-emoji">🎁</div>
+      <h1>Что внутри</h1>
+      <p class="muted">Четыре вещи, ради которых это приложение вообще существует.</p>
+      <div class="ob-features">
+        <div class="ob-feature"><span>🎧</span><b>Живая музыка</b><small>7 станций, которые пишутся прямо в браузере</small></div>
+        <div class="ob-feature"><span>⏱️</span><b>Фокус-таймер</b><small>5 режимов, гиперфокус и визуальный диск времени</small></div>
+        <div class="ob-feature"><span>🏦</span><b>Бизнес-империя</b><small>задачи превращаются в пассивный доход</small></div>
+        <div class="ob-feature"><span>📚</span><b>Курс из 24 уроков</b><small>СДВГ, фокус, деньги, энергия</small></div>
+      </div>
+      <div class="row-end">
+        <button class="btn btn-ghost" data-ob-prev>← Назад</button>
+        <button class="btn btn-primary" data-ob-next>Дальше →</button>
+      </div>
+    </section>
+
+    <section class="ob-step" data-step="3">
       <div class="ob-emoji">🎯</div>
       <h1>Первая цель</h1>
       <p class="muted">Что ты хочешь изменить в ближайшие 3 месяца? Можно пропустить и добавить позже.</p>
@@ -187,6 +203,14 @@
               <div><b id="mini-ach">0</b><small>достижений</small></div>
             </div>
           </div>
+        </div>
+
+        <div class="card next-card tilt">
+          <div class="card-head">
+            <h3>🧭 Что дальше</h3>
+            <button class="link-btn" id="next-refresh">другое</button>
+          </div>
+          <div id="next-action" class="next-action"></div>
         </div>
 
         <div class="card quest-card tilt">
@@ -648,9 +672,22 @@
           <div id="chart-hours" class="hour-chart"></div>
         </div>
         <div class="card">
+          <h3>💡 Наблюдения</h3>
+          <div id="insights" class="insights"></div>
+        </div>
+
+        <div class="card">
           <h3>🧬 Навыки</h3>
           <div id="skill-bars" class="skill-bars"></div>
         </div>
+        <div class="card">
+          <div class="card-head">
+            <h3>🎧 Последние сессии</h3>
+            <span class="badge" id="session-avg">—</span>
+          </div>
+          <div id="session-log" class="session-log"></div>
+        </div>
+
         <div class="card">
           <h3>🏅 Рекорды</h3>
           <div id="stat-numbers" class="stats-numbers"></div>
@@ -835,6 +872,7 @@
 <script src="js/screens-focus.js"></script>
 <script src="js/screens-meta.js"></script>
 <script src="js/screens-extra.js"></script>
+<script src="js/advisor.js"></script>
 <script src="js/palette.js"></script>
 <script src="js/app.js"></script>
 <!-- ==================== BODY-END ==================== -->

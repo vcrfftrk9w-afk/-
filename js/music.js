@@ -121,10 +121,10 @@ const Music = (() => {
     delayNode.connect(delayFb).connect(delayNode);
     delayNode.connect(delayWet).connect(bus);
 
-    padBus = ctx.createGain(); padBus.gain.value = 1; padBus.connect(bus);
-    bassBus = ctx.createGain(); bassBus.gain.value = 1; bassBus.connect(bus);
-    drumBus = ctx.createGain(); drumBus.gain.value = 1; drumBus.connect(bus);
-    plucksBus = ctx.createGain(); plucksBus.gain.value = 1;
+    padBus = ctx.createGain(); padBus.gain.value = partMix.pad; padBus.connect(bus);
+    bassBus = ctx.createGain(); bassBus.gain.value = partMix.bass; bassBus.connect(bus);
+    drumBus = ctx.createGain(); drumBus.gain.value = partMix.drums; drumBus.connect(bus);
+    plucksBus = ctx.createGain(); plucksBus.gain.value = partMix.melody;
     plucksBus.connect(bus);
     plucksBus.connect(delayNode);
     return true;
@@ -525,6 +525,24 @@ const Music = (() => {
     notify();
   }
 
+  /* громкость отдельных партий: drums / bass / melody / pad */
+  const PARTS = ['drums', 'bass', 'melody', 'pad'];
+  const partMix = { drums: 1, bass: 1, melody: 1, pad: 1 };
+
+  function setPart(part, v) {
+    if (!PARTS.includes(part)) return;
+    partMix[part] = Math.max(0, Math.min(1.5, v));
+    if (!bus) return;
+    const target = { drums: drumBus, bass: bassBus, melody: plucksBus, pad: padBus }[part];
+    if (target) target.gain.setTargetAtTime(partMix[part], ctx.currentTime, 0.08);
+  }
+
+  function applyParts() {
+    PARTS.forEach((p) => setPart(p, partMix[p]));
+  }
+
+  function getParts() { return { ...partMix }; }
+
   function setVolume(v) {
     volume = Math.max(0, Math.min(1, v));
     if (bus && playing) {
@@ -568,6 +586,7 @@ const Music = (() => {
   return {
     STATIONS,
     play, stop, toggle, setStation, reseed, setVolume, setBpm, setSleep, sleepLeft, onChange,
+    setPart, getParts, applyParts, PARTS,
     get playing() { return playing; },
     get stationId() { return stationId; },
     get station() { return station(); },

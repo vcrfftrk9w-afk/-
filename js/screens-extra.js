@@ -96,6 +96,31 @@ Screens.music = (() => {
       }, 200);
     });
 
+    // микшер партий
+    const PART_META = [
+      { id: 'drums', emoji: '🥁', name: 'Ударные' },
+      { id: 'bass', emoji: '🎸', name: 'Бас' },
+      { id: 'melody', emoji: '🎹', name: 'Мелодия' },
+      { id: 'pad', emoji: '🌫️', name: 'Пэд' },
+    ];
+    const mixRoot = $('#part-mix');
+    const saved = State.s.music.parts || {};
+    mixRoot.innerHTML = PART_META.map((p) => `
+      <label class="part-row" data-part="${p.id}">
+        <span class="part-name">${p.emoji} ${p.name}</span>
+        <input type="range" min="0" max="120" value="${Math.round((saved[p.id] != null ? saved[p.id] : 1) * 100)}">
+      </label>`).join('');
+    mixRoot.addEventListener('input', (e) => {
+      const row = e.target.closest('[data-part]');
+      if (!row) return;
+      const v = Number(e.target.value) / 100;
+      State.s.music.parts = State.s.music.parts || {};
+      State.s.music.parts[row.dataset.part] = v;
+      Music.setPart(row.dataset.part, v);
+    });
+    mixRoot.addEventListener('change', () => State.save());
+    PART_META.forEach((p) => Music.setPart(p.id, saved[p.id] != null ? saved[p.id] : 1));
+
     $('#mini-vis').innerHTML = Array.from({ length: 10 }, () => '<i></i>').join('');
 
     Music.onChange(render);

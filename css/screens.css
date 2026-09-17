@@ -1065,3 +1065,7 @@
 .skill-bar.big { height: 10px; }
 .skill-sources { margin: 8px 0 12px; padding-left: 20px; }
 .skill-sources li { font-size: 0.86rem; margin-bottom: 5px; }
+.quiet-row { margin-top: 12px; border-top: 1px solid var(--border); border-bottom: none; }
+.quiet-row small { display: block; font-weight: 500; }
+#quiet-times { margin-top: 6px; }
+#quiet-times input { text-align: center; }

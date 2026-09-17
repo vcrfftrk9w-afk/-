@@ -438,6 +438,7 @@
           <div class="music-controls">
             <button id="music-play" class="btn btn-primary">▶️ Включить</button>
             <button id="music-next" class="btn btn-ghost">🎲 Новый трек</button>
+            <button id="music-suggest" class="btn btn-ghost">🪄 Подобрать</button>
             <label class="music-vol">
               <span>🔊</span>
               <input id="music-volume" type="range" min="0" max="100" value="50">
@@ -469,6 +470,14 @@
           <h3>🔔 Напоминалки</h3>
           <p class="muted small">Мягкие подсказки о теле, пока голова в работе.</p>
           <div id="reminder-list" class="reminder-list"></div>
+          <label class="switch-row quiet-row">
+            <span>🌙 Тихие часы <small class="muted" id="quiet-label">22:00 – 8:00</small></span>
+            <input type="checkbox" id="quiet-toggle">
+          </label>
+          <div class="row" id="quiet-times">
+            <label class="field compact grow"><span>с</span><input id="quiet-from" type="number" min="0" max="23" value="22"></label>
+            <label class="field compact grow"><span>до</span><input id="quiet-to" type="number" min="0" max="23" value="8"></label>
+          </div>
         </div>
 
         <div class="card mixer-card span-2">

@@ -39,6 +39,20 @@ Screens.music = (() => {
       render();
     });
 
+    $('#music-suggest').addEventListener('click', () => {
+      const id = suggestStation();
+      const st = Music.STATIONS.find((x) => x.id === id);
+      State.s.music.station = id;
+      Music.setStation(id);
+      Music.setBpm(null);
+      $('#music-bpm').value = st.bpm;
+      $('#music-bpm-val').textContent = st.bpm;
+      Sound.sfx('quest');
+      UI.toast(`Подобрано: ${st.name}`, 'success', st.emoji);
+      State.save();
+      render();
+    });
+
     $('#music-play').addEventListener('click', () => {
       Music.toggle(State.s.music.station);
       render();
@@ -136,6 +150,18 @@ Screens.music = (() => {
     startVisualizer();
   }
 
+  /* станция под время суток и текущее занятие */
+  function suggestStation() {
+    const h = new Date().getHours();
+    if (Screens.focus.running) return h >= 22 || h < 6 ? 'deep' : 'lofi';
+    if (h < 6) return 'sleep';
+    if (h < 10) return 'energy';
+    if (h < 14) return 'lofi';
+    if (h < 18) return 'jazz';
+    if (h < 22) return 'piano';
+    return 'sleep';
+  }
+
   function render() {
     if (!built) return;
     const st = currentStation();
@@ -178,7 +204,7 @@ Screens.music = (() => {
     render();
   }
 
-  return { bind, render, autoStart };
+  return { bind, render, autoStart, suggestStation };
 })();
 
 /* =========================================================
@@ -315,6 +341,32 @@ Screens.reminders = (() => {
       built = true;
     }
 
+    // тихие часы
+    const q = s.quiet || { on: false, from: 22, to: 8 };
+    const qt = document.getElementById('quiet-toggle');
+    if (qt && !qt.dataset.bound) {
+      qt.dataset.bound = '1';
+      qt.addEventListener('change', (e) => {
+        State.s.quiet.on = e.target.checked;
+        UI.toast(e.target.checked ? 'Напоминания будут молчать ночью' : 'Тихие часы выключены', 'default', '🌙');
+        State.commit();
+      });
+      ['from', 'to'].forEach((k) => {
+        const el = document.getElementById('quiet-' + k);
+        el.addEventListener('change', () => {
+          State.s.quiet[k] = Math.max(0, Math.min(23, Number(el.value) || 0));
+          State.commit();
+        });
+      });
+    }
+    if (qt) {
+      qt.checked = !!q.on;
+      document.getElementById('quiet-from').value = q.from;
+      document.getElementById('quiet-to').value = q.to;
+      document.getElementById('quiet-label').textContent = `${q.from}:00 – ${q.to}:00`;
+      document.getElementById('quiet-times').classList.toggle('hidden', !q.on);
+    }
+
     Data.REMINDERS.forEach((r) => {
       const row = root.querySelector(`[data-rem="${r.id}"]`);
       if (!row) return;
@@ -326,8 +378,17 @@ Screens.reminders = (() => {
   }
 
   /* проверка раз в полминуты из app.js */
+  /* тихие часы: в это время напоминания молчат */
+  function isQuiet() {
+    const q = State.s.quiet;
+    if (!q || !q.on) return false;
+    const h = new Date().getHours();
+    return q.from > q.to ? (h >= q.from || h < q.to) : (h >= q.from && h < q.to);
+  }
+
   function tick() {
     const s = State.s;
+    if (isQuiet()) return;
     const now = Date.now();
     Data.REMINDERS.forEach((r) => {
       const cfg = s.reminders[r.id];
@@ -346,7 +407,7 @@ Screens.reminders = (() => {
     });
   }
 
-  return { render, tick, bind: () => {} };
+  return { render, tick, isQuiet, bind: () => {} };
 })();
 
 /* =========================================================

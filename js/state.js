@@ -67,6 +67,8 @@ const State = (() => {
       },
       a11y: { font: 'default', scale: 'md', contrast: false },
       focusGoal: 60,
+      quiet: { on: false, from: 22, to: 8 },
+      customTimer: { focus: 30, break: 7 },
       sfxVolume: 0.3,
       focusLog: [],
       weeklyReviews: {},

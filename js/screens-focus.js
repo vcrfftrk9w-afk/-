@@ -24,7 +24,35 @@ Screens.focus = (() => {
   let breathing = { active: false, timer: null, cycles: 0, technique: 'calm' };
 
   /* ================= ТАЙМЕР ================= */
-  function modeData() { return Data.TIMER_MODES.find((m) => m.id === T.mode) || Data.TIMER_MODES[0]; }
+  function modeData() {
+    const m = Data.TIMER_MODES.find((x) => x.id === T.mode) || Data.TIMER_MODES[0];
+    if (m.id === 'custom') {
+      const c = State.s.customTimer || {};
+      return { ...m, focus: c.focus || m.focus, break: c.break || m.break };
+    }
+    return m;
+  }
+
+  /* настройка своего интервала */
+  function askCustom() {
+    const c = State.s.customTimer || { focus: 30, break: 7 };
+    const body = UI.sheet(`
+      <h2>⏱️ Свой интервал</h2>
+      <p class="muted small">Подбери ритм под себя: короткие заходы для трудных дней, длинные — когда идёт.</p>
+      <label class="field"><span>Работа, минут</span><input id="custom-focus" type="number" min="1" max="180" value="${c.focus}"></label>
+      <label class="field"><span>Перерыв, минут</span><input id="custom-break" type="number" min="1" max="60" value="${c.break}"></label>
+      <button class="btn btn-primary btn-block" id="custom-save">Применить</button>`);
+    body.querySelector('#custom-save').addEventListener('click', () => {
+      const focus = Math.max(1, Math.min(180, Number(body.querySelector('#custom-focus').value) || 30));
+      const brk = Math.max(1, Math.min(60, Number(body.querySelector('#custom-break').value) || 7));
+      State.s.customTimer = { focus, break: brk };
+      UI.closeModal('#sheet-modal');
+      Sound.sfx('check');
+      UI.toast(`Свой режим: ${focus}/${brk}`, 'success', '⏱️');
+      setMode('custom');
+      State.commit();
+    });
+  }
 
   function setMode(id) {
     if (T.running) { UI.toast('Сначала останови таймер', 'warn', '⏸️'); $('#timer-mode').value = T.mode; return; }
@@ -717,7 +745,10 @@ Screens.focus = (() => {
     Screens.helpers.fillSelect($('#timer-mode'), Data.TIMER_MODES.map((m) => ({
       value: m.id, label: m.focus ? `${m.name} · ${m.focus}/${m.break}` : `${m.name} · счёт вверх`,
     })), 'pomodoro');
-    $('#timer-mode').addEventListener('change', (e) => setMode(e.target.value));
+    $('#timer-mode').addEventListener('change', (e) => {
+      if (e.target.value === 'custom') { askCustom(); return; }
+      setMode(e.target.value);
+    });
     $('#timer-mode').title = modeData().desc;
 
     $('#timer-start').addEventListener('click', start);
@@ -822,7 +853,7 @@ Screens.focus = (() => {
   function onLeave() { stopVisualizer(); renderHud(); }
 
   return {
-    bind, render, onEnter, onLeave, setTask, enterHyperfocus, renderHud, finishEarly,
+    bind, render, onEnter, onLeave, setTask, enterHyperfocus, renderHud, finishEarly, askCustom,
     startIfIdle: () => { if (!T.running) start(); },
     toggleTimer: () => (T.running ? pause() : start()),
     get running() { return T.running; },

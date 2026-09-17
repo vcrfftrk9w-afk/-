@@ -46,6 +46,18 @@ const Music = (() => {
       drums: 'pulse', pad: 0.06, bass: 0.1, pluck: 0.06, binaural: 40, filter: 800,
     },
     {
+      id: 'jazz', emoji: '🎷', name: 'Джаз-кафе', desc: 'Свинг и гуляющий бас',
+      bpm: 88, swing: 0.24, root: 53, // F
+      prog: [[0, 'maj7'], [9, 'm7'], [2, 'm7'], [7, '7']],
+      drums: 'jazz', pad: 0.035, bass: 0.14, pluck: 0.45, walking: true, filter: 1900,
+    },
+    {
+      id: 'deadline', emoji: '🥁', name: 'Дедлайн', desc: 'Когда осталось мало времени',
+      bpm: 124, swing: 0, root: 45, // A низкая
+      prog: [[0, 'm7'], [0, 'm7'], [10, 'maj7'], [8, 'maj7']],
+      drums: 'drive', pad: 0.04, bass: 0.16, pluck: 0.5, arp: true, filter: 2600,
+    },
+    {
       id: 'sleep', emoji: '🌙', name: 'Засыпание', desc: 'Всё медленнее и тише',
       bpm: 46, swing: 0, root: 48, // C низкая
       prog: [[0, 'maj7'], [5, 'maj7'], [3, 'm9'], [7, 'sus']],
@@ -336,50 +348,87 @@ const Music = (() => {
     return notes.concat(extra);
   }
 
-  function scheduleStep(s, t) {
-    const st = station();
+  function scheduleStep(s, t, st) {
     const bar = Math.floor(s / 16);
     const inBar = s % 16;
-    const beat = Math.floor(inBar / 4);
     const spb = 60 / bpm();
+    const barInPhrase = bar % 4;
+    const isFill = barInPhrase === 3;              // последний такт фразы — сбивка
+    const isBreak = st.drums && bar % 16 === 15;   // раз в 16 тактов — короткий брейк
+    const phraseB = Math.floor(bar / 4) % 2 === 1; // вторая половина — плотнее
+    const human = () => (rnd() - 0.5) * 0.012;     // лёгкий «человеческий» разброс
 
-    // пэд — в начале такта
+    // пэд — в начале такта, на брейке тише
     if (inBar === 0 && st.pad) {
-      playPad(t, chordNotes(st, bar), spb * 4, st);
+      const notes = chordNotes(st, bar);
+      const voiced = phraseB ? notes.map((n, i) => (i === 0 ? n : n + (rnd() < 0.3 ? 12 : 0))) : notes;
+      playPad(t, voiced, spb * 4, isBreak ? { ...st, pad: st.pad * 0.5 } : st);
     }
 
     // бас
-    if (st.bass) {
+    if (st.bass && !isBreak) {
       const root = st.root + st.prog[bar % st.prog.length][0] - 12;
-      if (st.drone) { if (inBar === 0) playBass(t, root, spb * 4, st); }
-      else if (inBar === 0 || inBar === 8) playBass(t, root, spb * 1.6, st);
-      else if (inBar === 11 && rnd() < 0.4) playBass(t, root + 7, spb * 0.6, st);
+      if (st.walking) {
+        // гуляющий бас: нота на каждую долю по тонам аккорда
+        if (inBar % 4 === 0) {
+          const tones = chordNotes(st, bar).map((n) => n - 12);
+          const beat = inBar / 4;
+          const n = beat === 0 ? root : tones[Math.floor(rnd() * tones.length)];
+          playBass(t + human(), n, spb * 0.9, st);
+        }
+      } else if (st.drone) {
+        if (inBar === 0) playBass(t, root, spb * 4, st);
+      } else if (inBar === 0 || inBar === 8) {
+        playBass(t + human(), root, spb * 1.6, st);
+      } else if (inBar === 11 && (phraseB || rnd() < 0.35)) {
+        playBass(t + human(), root + (rnd() < 0.5 ? 7 : 5), spb * 0.6, st);
+      }
     }
 
     // барабаны
-    if (st.drums === 'lofi') {
-      if (inBar === 0 || inBar === 10) playKick(t);
-      if (inBar === 4 || inBar === 12) playSnare(t, true);
-      if (inBar % 2 === 0 && rnd() < 0.85) playHat(t, inBar === 14);
-    } else if (st.drums === 'four') {
-      if (inBar % 4 === 0) playKick(t);
-      if (inBar === 4 || inBar === 12) playSnare(t);
-      if (inBar % 2 === 1) playHat(t, false);
-      if (inBar === 14 && rnd() < 0.5) playHat(t, true);
-    } else if (st.drums === 'pulse') {
-      if (inBar % 8 === 0) playPulse(t);
+    if (st.drums && !(isBreak && inBar < 8)) {
+      if (st.drums === 'lofi') {
+        if (inBar === 0 || inBar === 10) playKick(t + human());
+        if (inBar === 4 || inBar === 12) playSnare(t + human(), true);
+        if (inBar % 2 === 0 && rnd() < 0.85) playHat(t + human(), inBar === 14);
+        if (isFill && inBar >= 12 && rnd() < 0.6) playSnare(t + human(), true);
+      } else if (st.drums === 'four') {
+        if (inBar % 4 === 0) playKick(t);
+        if (inBar === 4 || inBar === 12) playSnare(t + human());
+        if (inBar % 2 === 1) playHat(t + human(), false);
+        if (inBar === 14 && rnd() < 0.5) playHat(t, true);
+        if (isFill && inBar >= 12) playSnare(t + human());
+      } else if (st.drums === 'drive') {
+        if (inBar % 4 === 0) playKick(t);
+        if (inBar === 6 || inBar === 14) playKick(t + human());
+        if (inBar === 4 || inBar === 12) playSnare(t);
+        if (inBar % 2 === 1) playHat(t + human(), inBar === 15);
+        if (isFill && inBar >= 10) playSnare(t + human());
+      } else if (st.drums === 'jazz') {
+        // джазовый райд: 1, 2-и, 3, 4-и
+        if (inBar === 0 || inBar === 8) playHat(t, false);
+        if (inBar === 6 || inBar === 14) playHat(t + human(), true);
+        if (inBar === 4 || inBar === 12) playHat(t + human(), false);
+        if (inBar === 2 && rnd() < 0.4) playSnare(t + human(), true);
+        if (inBar === 0) playKick(t);
+        if (isFill && inBar >= 12 && rnd() < 0.7) playSnare(t + human(), true);
+      } else if (st.drums === 'pulse') {
+        if (inBar % 8 === 0) playPulse(t);
+      }
     }
 
-    // мелодия/арпеджио
+    // мелодия и арпеджио
     const notes = scaleNotes(st, bar);
+    const density = st.pluck * (phraseB ? 1.25 : 1) * (isBreak ? 0.4 : 1);
     if (st.arp) {
-      if (inBar % 2 === 0) {
+      const stride = phraseB ? 1 : 2;
+      if (inBar % (stride * 2) === 0) {
         const n = notes[(s / 2 + bar) % notes.length];
-        playPluck(t, n, st, 0.85);
+        playPluck(t + human(), n, st, 0.85);
       }
-    } else if (st.pluck && rnd() < st.pluck * (inBar % 4 === 0 ? 0.9 : 0.28)) {
+    } else if (density && rnd() < density * (inBar % 4 === 0 ? 0.9 : 0.28)) {
       const n = notes[Math.floor(rnd() * notes.length)];
-      playPluck(t, n + (rnd() < 0.25 ? 12 : 0), st, 0.7 + rnd() * 0.3);
+      playPluck(t + human(), n + (rnd() < 0.25 ? 12 : 0), st, 0.65 + rnd() * 0.35);
     }
   }
 
@@ -390,7 +439,7 @@ const Music = (() => {
     const st = station();
     while (nextTime < ctx.currentTime + 0.25) {
       const swing = st.swing && step % 2 === 1 ? stepDur * st.swing : 0;
-      scheduleStep(step, nextTime + swing);
+      scheduleStep(step, nextTime + swing, st);
       nextTime += stepDur;
       step = (step + 1) % (16 * 64);
     }

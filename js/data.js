@@ -270,6 +270,7 @@ const Data = (() => {
     { id: 'review_4', emoji: '📋', name: 'Ретроспектива', desc: '4 недельных итога', xp: 80, coins: 60, cond: (s) => (s.totals.reviewsDone || 0) >= 4 },
   ];
 
+
   /* ---------- ШАБЛОНЫ ДЕКОМПОЗИЦИИ ---------- */
   const BREAKDOWN_TEMPLATES = [
     { id: 'generic', emoji: '⚙️', name: 'Универсальный', steps: ['Собрать всё нужное в одном месте', 'Сделать первый кусочек 5 минут', 'Довести до половины', 'Закончить и проверить'] },
@@ -566,11 +567,87 @@ const Data = (() => {
     { emoji: '📝', name: 'План на завтра', skill: 'discipline' },
   ];
 
+  /* ---------- ПРОГРЕСС ПО ДОСТИЖЕНИЯМ (для полосок в интерфейсе) ---------- */
+  const ACH_PROGRESS = {
+    first_task: { val: (s) => s.totals.tasksCompleted, goal: 1 },
+    tasks_10: { val: (s) => s.totals.tasksCompleted, goal: 10 },
+    tasks_50: { val: (s) => s.totals.tasksCompleted, goal: 50 },
+    tasks_100: { val: (s) => s.totals.tasksCompleted, goal: 100 },
+    tasks_500: { val: (s) => s.totals.tasksCompleted, goal: 500 },
+    boss_1: { val: (s) => s.totals.bossTasks, goal: 10 },
+    day_10: { val: (s) => Math.max(0, ...Object.values(s.dailyTaskCounts)), goal: 10 },
+    streak_3: { val: (s) => s.bestStreak, goal: 3 },
+    streak_7: { val: (s) => s.bestStreak, goal: 7 },
+    streak_21: { val: (s) => s.bestStreak, goal: 21 },
+    streak_100: { val: (s) => s.bestStreak, goal: 100 },
+    focus_60: { val: (s) => s.totals.focusMinutes, goal: 60 },
+    focus_300: { val: (s) => s.totals.focusMinutes, goal: 300 },
+    focus_1000: { val: (s) => s.totals.focusMinutes, goal: 1000 },
+    focus_s10: { val: (s) => s.totals.focusSessions, goal: 10 },
+    focus_s100: { val: (s) => s.totals.focusSessions, goal: 100 },
+    hyperfocus: { val: (s) => s.totals.hyperfocus, goal: 1 },
+    habit_first: { val: (s) => s.habits.length, goal: 1 },
+    habit_21: { val: (s, api) => Math.max(0, ...s.habits.map((h) => api.habitStreak(h)), 0), goal: 21 },
+    habit_5: { val: (s) => s.habits.length, goal: 5 },
+    habit_perfect: { val: (s) => s.totals.perfectHabitDays, goal: 1 },
+    level_5: { val: (s) => s.level, goal: 5 },
+    level_10: { val: (s) => s.level, goal: 10 },
+    level_21: { val: (s) => s.level, goal: 21 },
+    level_50: { val: (s) => s.level, goal: 50 },
+    skill_10: { val: (s, api) => Math.max(...SKILLS.map((sk) => api.skillLevel(sk.id))), goal: 10 },
+    skill_all5: { val: (s, api) => Math.min(...SKILLS.map((sk) => api.skillLevel(sk.id))), goal: 5 },
+    coins_1000: { val: (s) => s.totals.coinsEarned, goal: 1000 },
+    coins_100k: { val: (s) => s.totals.coinsEarned, goal: 100000 },
+    asset_first: { val: (s) => Object.keys(s.business.assets).length, goal: 1 },
+    asset_all: { val: (s) => ASSETS.filter((a) => (s.business.assets[a.id] || 0) > 0).length, goal: ASSETS.length },
+    passive_100: { val: (s, api) => api.passivePerMin(), goal: 100 },
+    millionaire: { val: (s, api) => api.netWorth(), goal: MILLIONAIRE_GOAL },
+    lesson_1: { val: (s) => Object.keys(s.lessons.read).length, goal: 1 },
+    lesson_10: { val: (s) => Object.keys(s.lessons.read).length, goal: 10 },
+    lesson_all: { val: (s) => Object.keys(s.lessons.read).length, goal: LESSONS.length },
+    breakdown_5: { val: (s) => s.totals.breakdownsUsed, goal: 5 },
+    breathing_10: { val: (s) => s.totals.breathingSessions, goal: 10 },
+    dump_25: { val: (s) => s.totals.dumpCount, goal: 25 },
+    distraction_20: { val: (s) => s.totals.distractionCount, goal: 20 },
+    roulette: { val: (s) => s.totals.rouletteSpins, goal: 1 },
+    goal_first: { val: (s) => s.goals.length, goal: 1 },
+    goal_done: { val: (s) => s.goals.filter((g) => g.done).length, goal: 1 },
+    reward_first: { val: (s) => s.totals.rewardsBought, goal: 1 },
+    mood_7: { val: (s) => Object.keys(s.moods).length, goal: 7 },
+    quest_10: { val: (s) => s.totals.questsDone, goal: 10 },
+    night_owl: { val: (s) => s.totals.nightTasks, goal: 1 },
+    early_bird: { val: (s) => s.totals.earlyTasks, goal: 1 },
+    music_60: { val: (s) => s.totals.musicMinutes || 0, goal: 60 },
+    music_600: { val: (s) => s.totals.musicMinutes || 0, goal: 600 },
+    routine_first: { val: (s) => s.totals.routinesDone || 0, goal: 1 },
+    routine_20: { val: (s) => s.totals.routinesDone || 0, goal: 20 },
+    returns_10: { val: (s) => s.totals.returns || 0, goal: 10 },
+    review_4: { val: (s) => s.totals.reviewsDone || 0, goal: 4 },
+  };
+
+  /* редкость достижения определяется размером награды */
+  function achRarity(a) {
+    const weight = (a.xp || 0) + (a.coins || 0);
+    if (weight >= 400) return { id: 'legendary', name: 'легендарное' };
+    if (weight >= 150) return { id: 'epic', name: 'эпическое' };
+    if (weight >= 60) return { id: 'rare', name: 'редкое' };
+    return { id: 'common', name: 'обычное' };
+  }
+
+  function achProgress(a, s, api) {
+    const p = ACH_PROGRESS[a.id];
+    if (!p) return null;
+    let cur = 0;
+    try { cur = p.val(s, api) || 0; } catch (e) { cur = 0; }
+    return { cur: Math.min(cur, p.goal), goal: p.goal, pct: Math.min(100, (cur / p.goal) * 100) };
+  }
+
   return {
     SKILLS, CATEGORIES, PRIORITIES, EVOLUTION, PALETTES, ASSETS, MILLIONAIRE_GOAL,
     SOUND_LAYERS, SOUND_PRESETS, TIMER_MODES, BREATHING, QUOTES, MICRO_STEPS,
     COMPANION_MSGS, QUEST_POOL, ACHIEVEMENTS, BREAKDOWN_TEMPLATES, MOODS, BOOSTERS,
     TRACKS, LESSONS, HABIT_TEMPLATES, ROUTINE_DEFAULTS, REMINDERS,
+    ACH_PROGRESS, achRarity, achProgress,
     skillById: (id) => SKILLS.find((s) => s.id === id),
     categoryById: (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[CATEGORIES.length - 1],
     priorityById: (id) => PRIORITIES.find((p) => p.id === id) || PRIORITIES[1],

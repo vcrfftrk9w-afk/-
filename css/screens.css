@@ -834,3 +834,44 @@
   .mini-player { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
   .hyperfocus { z-index: 3000; }
 }
+
+/* ==================== ДОСТИЖЕНИЯ: ПРОГРЕСС И РЕДКОСТЬ ==================== */
+.achievement { padding-bottom: 26px; }
+.ach-bar {
+  height: 5px; border-radius: 5px; margin: 8px 6px 4px;
+  background: color-mix(in srgb, var(--border-strong) 60%, transparent); overflow: hidden;
+}
+.ach-bar > i {
+  display: block; height: 100%; border-radius: 5px;
+  background: linear-gradient(90deg, var(--accent2), var(--accent));
+  transition: width var(--t-slow);
+}
+.ach-prog { font-size: 0.66rem; color: var(--text-muted); font-weight: 700; }
+.ach-rarity {
+  position: absolute; bottom: 7px; left: 0; right: 0;
+  font-size: 0.6rem; font-weight: 800; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted); opacity: 0.75;
+}
+.achievement.r-rare { border-color: color-mix(in srgb, var(--accent2) 35%, var(--border)); }
+.achievement.r-epic { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.achievement.r-legendary { border-color: color-mix(in srgb, var(--accent3) 45%, var(--border)); }
+.achievement.r-rare .ach-rarity { color: var(--accent2); }
+.achievement.r-epic .ach-rarity { color: var(--accent-soft); }
+.achievement.r-legendary .ach-rarity { color: var(--accent3); }
+.achievement.unlocked.r-legendary {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent3) 16%, var(--surface)), var(--surface));
+  box-shadow: 0 10px 30px -16px var(--accent3);
+}
+.achievement.unlocked.r-epic {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), var(--surface));
+}
+.achievement.close {
+  opacity: 0.85;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent2) 45%, var(--border));
+}
+.achievement.close::before {
+  content: 'почти!';
+  position: absolute; top: 8px; right: 8px;
+  font-size: 0.6rem; font-weight: 800; color: var(--accent2);
+}

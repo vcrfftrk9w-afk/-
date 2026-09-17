@@ -235,6 +235,7 @@ const App = (() => {
     }
     requestAnimationFrame(moveIndicator);
     setTimeout(moveIndicator, 320);
+    if (Screens.focus.renderHud) Screens.focus.renderHud();
     window.scrollTo({ top: 0, behavior: State.s.reduceMotion ? 'auto' : 'smooth' });
   }
 

@@ -284,6 +284,7 @@
           </div>
           <div class="filter-row" id="task-filters">
             <button class="chip active" data-filter="active">Активные</button>
+            <button class="chip" data-filter="today">Сегодня</button>
             <button class="chip" data-filter="all">Все</button>
             <button class="chip" data-filter="done">Готово</button>
           </div>
@@ -294,6 +295,7 @@
         <input id="task-title" type="text" placeholder="Название задачи…" maxlength="110" required autocomplete="off">
         <select id="task-category"></select>
         <select id="task-priority"></select>
+        <input id="task-due" type="date" title="Дедлайн (не обязателен)">
         <label class="check-inline" title="Срочная — горит дедлайн">
           <input type="checkbox" id="task-urgent"><span>🔥 Срочно</span>
         </label>
@@ -624,6 +626,17 @@
     </section>
 
   </main>
+
+  <button id="focus-hud" class="focus-hud hidden" title="Вернуться к таймеру">
+    <svg class="focus-hud-ring" viewBox="0 0 30 30">
+      <circle class="bg" cx="15" cy="15" r="12"></circle>
+      <circle class="fg" id="focus-hud-ring" cx="15" cy="15" r="12"></circle>
+    </svg>
+    <span>
+      <span class="focus-hud-time" id="focus-hud-time">25:00</span>
+      <span class="focus-hud-label" id="focus-hud-label">фокус идёт</span>
+    </span>
+  </button>
 
   <div id="mini-player" class="mini-player">
     <button id="mini-play" class="mini-btn" title="Играть/пауза" aria-label="Играть или пауза"></button>

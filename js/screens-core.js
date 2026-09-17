@@ -269,6 +269,7 @@ Screens.tasks = (() => {
   const { $, $$ } = UI;
   let filter = 'active';
   let view = 'list';
+  const expandedTasks = new Set();
 
   function bind() {
     Screens.helpers.fillSelect($('#task-category'), Data.CATEGORIES.map((c) => ({ value: c.id, label: `${c.emoji} ${c.name}` })), 'work');
@@ -279,8 +280,9 @@ Screens.tasks = (() => {
       const input = $('#task-title');
       const title = input.value.trim();
       if (!title) return;
-      add(title, $('#task-category').value, $('#task-priority').value, $('#task-urgent').checked);
+      add(title, $('#task-category').value, $('#task-priority').value, $('#task-urgent').checked, { due: $('#task-due').value || null });
       input.value = '';
+      $('#task-due').value = '';
       $('#task-urgent').checked = false;
       input.focus();
     });
@@ -304,7 +306,7 @@ Screens.tasks = (() => {
     State.s.tasks.unshift({
       id: State.uid(), title, category: c.id, priority: p.id, xp: p.xp, skill: c.skill,
       urgent: !!urgent, done: false, rewarded: false, createdAt: Date.now(), doneAt: null,
-      goalId: extra.goalId || null,
+      goalId: extra.goalId || null, due: extra.due || null, subtasks: [],
     });
     Sound.sfx('click');
     UI.toast('Задача добавлена', 'success', '📝');
@@ -336,6 +338,10 @@ Screens.tasks = (() => {
       State.bumpQuest('tasks', 1);
       if (task.priority === 'boss' || task.priority === 'high') State.bumpQuest('bigTasks', 1);
 
+      if (isDueToday(task)) {
+        const bonus = State.addXP(10, skill);
+        UI.toast(`Дедлайн закрыт вовремя! +${bonus} XP сверху`, 'level', '📅');
+      }
       Sound.sfx('success');
       FX.vibrate([12, 40, 18]);
       FX.confettiFrom(sourceEl, task.priority === 'boss' ? 70 : 34, { power: task.priority === 'boss' ? 12 : 9 });
@@ -365,36 +371,163 @@ Screens.tasks = (() => {
     const cat = Data.categoryById(t.category);
     const pri = Data.priorityById(t.priority);
     const skill = Data.skillById(Screens.helpers.taskSkill(t));
-    const li = UI.node('li', `task-item pri-${t.priority}${t.done ? ' done' : ''}${t.urgent ? ' urgent' : ''}`);
+    const subs = t.subtasks || [];
+    const doneSubs = subs.filter((x) => x.done).length;
+    const due = dueInfo(t);
+    const expanded = expandedTasks.has(t.id);
+
+    const li = UI.node('li', `task-item pri-${t.priority}${t.done ? ' done' : ''}${t.urgent ? ' urgent' : ''}${expanded ? ' expanded' : ''}${due && due.cls === 'overdue' && !t.done ? ' overdue' : ''}`);
     li.dataset.id = t.id;
     li.innerHTML = `
-      <button class="task-check" aria-label="Готово">✓</button>
-      <div class="task-body">
-        <div class="task-title">${UI.esc(t.title)}</div>
-        <div class="task-meta">
-          <span>${cat.emoji} ${cat.name}</span>
-          <span class="dot">·</span>
-          <span>${pri.emoji} ${pri.name}</span>
-          ${t.urgent ? '<span class="tag-urgent">срочно</span>' : ''}
-          <span class="task-xp">+${Screens.helpers.taskXP(t)} XP</span>
-          ${skill ? `<span class="task-skill" style="color:${skill.color}">${skill.emoji}</span>` : ''}
+      <div class="task-row">
+        <button class="task-check" aria-label="Готово">✓</button>
+        <div class="task-body">
+          <div class="task-title">${UI.esc(t.title)}</div>
+          <div class="task-meta">
+            <span>${cat.emoji} ${cat.name}</span>
+            <span class="dot">·</span>
+            <span>${pri.emoji} ${pri.name}</span>
+            ${t.urgent ? '<span class="tag-urgent">срочно</span>' : ''}
+            <span class="task-xp">+${Screens.helpers.taskXP(t)} XP</span>
+            ${skill ? `<span class="task-skill" style="color:${skill.color}">${skill.emoji}</span>` : ''}
+            ${subs.length ? `<span class="task-steps">шаги ${doneSubs}/${subs.length}</span>` : ''}
+            ${due ? `<span class="task-due ${due.cls}">📅 ${UI.esc(due.label)}</span>` : ''}
+          </div>
+          ${subs.length ? `<div class="task-substrip"><i style="width:${(doneSubs / subs.length) * 100}%"></i></div>` : ''}
+        </div>
+        <div class="task-actions">
+          <button class="icon-mini task-expand" title="Шаги задачи">${expanded ? '▴' : '▾'}</button>
+          <button class="icon-mini task-focus" title="Работать над этим">🎯</button>
+          <button class="icon-mini task-del" title="Удалить">🗑️</button>
         </div>
       </div>
-      <div class="task-actions">
-        <button class="icon-mini task-focus" title="Работать над этим">🎯</button>
-        <button class="icon-mini task-del" title="Удалить">🗑️</button>
-      </div>`;
+      ${expanded ? `
+        <div class="task-subs">
+          ${subs.map((st) => `
+            <label class="task-sub${st.done ? ' done' : ''}" data-sub="${st.id}">
+              <input type="checkbox" ${st.done ? 'checked' : ''}>
+              <span>${UI.esc(st.text)}</span>
+              <button class="icon-mini sub-del" title="Удалить шаг" type="button">✕</button>
+            </label>`).join('')}
+          <form class="row task-sub-add">
+            <input class="grow" id="sub-add-${t.id}" type="text" placeholder="Добавить шаг…" maxlength="90">
+            <button class="btn btn-ghost btn-sm" type="submit">+</button>
+          </form>
+          <button class="link-btn sub-template">🐘 Разбить по шаблону</button>
+        </div>` : ''}`;
+
     li.querySelector('.task-check').addEventListener('click', (e) => complete(t, e.currentTarget));
     li.querySelector('.task-del').addEventListener('click', () => remove(t.id, li));
     li.querySelector('.task-focus').addEventListener('click', () => focusOn(t));
+    li.querySelector('.task-expand').addEventListener('click', () => {
+      if (expandedTasks.has(t.id)) expandedTasks.delete(t.id);
+      else expandedTasks.add(t.id);
+      Sound.sfx('click');
+      render();
+      renderToday();
+    });
+
+    if (expanded) {
+      li.querySelectorAll('.task-sub input').forEach((cb) => {
+        cb.addEventListener('change', (e) => {
+          const id = e.target.closest('[data-sub]').dataset.sub;
+          toggleSub(t, id, e.target);
+        });
+      });
+      li.querySelectorAll('.sub-del').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const id = e.target.closest('[data-sub]').dataset.sub;
+          t.subtasks = (t.subtasks || []).filter((x) => x.id !== id);
+          State.commit();
+        });
+      });
+      const form = li.querySelector('.task-sub-add');
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const input = form.querySelector('input');
+        addSub(t, input.value);
+        input.value = '';
+      });
+      li.querySelector('.sub-template').addEventListener('click', () => applyTemplate(t));
+    }
     return li;
+  }
+
+  /* ---------- подзадачи ---------- */
+  function addSub(t, text) {
+    if (!text.trim()) return;
+    t.subtasks = t.subtasks || [];
+    t.subtasks.push({ id: State.uid(), text: text.trim(), done: false });
+    Sound.sfx('pop');
+    State.commit();
+  }
+
+  function applyTemplate(t) {
+    const tpl = Data.BREAKDOWN_TEMPLATES[0];
+    t.subtasks = (t.subtasks || []).concat(tpl.steps.map((text) => ({ id: State.uid(), text, done: false })));
+    State.s.totals.breakdownsUsed += 1;
+    State.bumpQuest('breakdowns', 1);
+    Sound.sfx('success');
+    UI.toast('Задача разбита на 4 шага 🐘', 'success', '🐘');
+    State.commit();
+  }
+
+  function toggleSub(t, subId, el) {
+    const sub = (t.subtasks || []).find((x) => x.id === subId);
+    if (!sub) return;
+    sub.done = !sub.done;
+    if (sub.done) {
+      State.addXP(4, Screens.helpers.taskSkill(t));
+      State.addCoins(3);
+      Sound.sfx('check');
+      FX.floatText(el, '+4 XP', 'xp');
+      const all = t.subtasks.length && t.subtasks.every((x) => x.done);
+      if (all && !t.done) {
+        UI.toast('Все шаги закрыты — задача готова!', 'success', '✅');
+        complete(t, el);
+        return;
+      }
+    } else {
+      Sound.sfx('click');
+    }
+    State.commit();
+  }
+
+  function dueInfo(t) {
+    if (!t.due) return null;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const due = new Date(t.due); due.setHours(0, 0, 0, 0);
+    const days = Math.round((due - today) / 86400000);
+    if (days < 0) return { days, label: days === -1 ? 'просрочено вчера' : `просрочено на ${-days} дн.`, cls: 'overdue' };
+    if (days === 0) return { days, label: 'сегодня', cls: 'today' };
+    if (days === 1) return { days, label: 'завтра', cls: 'soon' };
+    if (days <= 7) return { days, label: `через ${days} дн.`, cls: 'soon' };
+    return { days, label: UI.dateLabel(t.due), cls: '' };
+  }
+
+  function isDueToday(t) {
+    const info = dueInfo(t);
+    return !!info && info.days <= 0;
   }
 
   function filtered() {
     const tasks = State.s.tasks;
-    if (filter === 'active') return tasks.filter((t) => !t.done);
-    if (filter === 'done') return tasks.filter((t) => t.done);
-    return tasks;
+    let list;
+    if (filter === 'active') list = tasks.filter((t) => !t.done);
+    else if (filter === 'done') list = tasks.filter((t) => t.done);
+    else if (filter === 'today') list = tasks.filter((t) => !t.done && (isDueToday(t) || t.urgent));
+    else list = tasks;
+
+    // сначала просроченные и сегодняшние, потом остальные по дате
+    return list.slice().sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      const da = dueInfo(a), db = dueInfo(b);
+      if (da && db) return da.days - db.days;
+      if (da) return -1;
+      if (db) return 1;
+      return 0;
+    });
   }
 
   function quadrant(t) {
@@ -433,7 +566,7 @@ Screens.tasks = (() => {
     $('#dash-empty').classList.toggle('hidden', active.length > 0);
   }
 
-  return { bind, render, renderToday, add, complete };
+  return { bind, render, renderToday, add, complete, addSub, dueInfo };
 })();
 
 /* =========================================================

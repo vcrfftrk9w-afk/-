@@ -387,7 +387,7 @@ const State = (() => {
     registerActivity, habitStreak,
     assetLevel, assetCost, passivePerMin, activityMultiplier, netWorth, tickPassive, buyAsset,
     ensureQuests, todayQuests, bumpQuest, ensureRoutines, routineProgress,
-    checkAchievements, unlockedAchievements, paletteUnlocked,
+    checkAchievements, unlockedAchievements, paletteUnlocked, api,
     reset, replace,
   };
 })();

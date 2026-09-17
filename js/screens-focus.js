@@ -81,6 +81,29 @@ Screens.focus = (() => {
     UI.countUp($('#focus-total'), State.s.totals.focusSessions);
 
     renderHyperfocus();
+    renderHud();
+  }
+
+  /* плавающая плашка таймера — видна на любой вкладке */
+  const HUD_RING = 2 * Math.PI * 12;
+  function renderHud() {
+    const hud = document.getElementById('focus-hud');
+    if (!hud) return;
+    const onFocusTab = document.getElementById('tab-adhd').classList.contains('active');
+    const hyper = !document.getElementById('hyperfocus').classList.contains('hidden');
+    const show = T.running && !onFocusTab && !hyper;
+    hud.classList.toggle('hidden', !show);
+    if (!show) return;
+
+    const m = modeData();
+    const isFlow = m.focus === 0 && T.phase === 'focus';
+    document.getElementById('focus-hud-time').textContent = fmtTime(isFlow ? T.elapsed : T.remaining);
+    document.getElementById('focus-hud-label').textContent = T.phase === 'break' ? 'перерыв' : (isFlow ? 'поток' : 'фокус идёт');
+    hud.classList.toggle('break', T.phase === 'break');
+    const frac = isFlow ? (T.elapsed % 3600) / 3600 : (T.total ? 1 - T.remaining / T.total : 0);
+    const ring = document.getElementById('focus-hud-ring');
+    ring.style.strokeDasharray = HUD_RING;
+    ring.style.strokeDashoffset = HUD_RING * (1 - frac);
   }
 
   function companion(msg) {
@@ -639,6 +662,8 @@ Screens.focus = (() => {
     $('#timer-task').addEventListener('change', (e) => { T.taskId = e.target.value || null; });
 
     $('#hyperfocus-btn').addEventListener('click', enterHyperfocus);
+    const hud = $('#focus-hud');
+    if (hud) hud.addEventListener('click', () => { App.go('adhd'); Sound.sfx('click'); });
     $('#hf-exit').addEventListener('click', exitHyperfocus);
     $('#hf-toggle').addEventListener('click', () => { T.running ? pause() : start(); renderHyperfocus(); });
 
@@ -717,11 +742,11 @@ Screens.focus = (() => {
     Screens.reminders.render();
   }
 
-  function onEnter() { startVisualizer(); }
-  function onLeave() { stopVisualizer(); }
+  function onEnter() { startVisualizer(); renderHud(); }
+  function onLeave() { stopVisualizer(); renderHud(); }
 
   return {
-    bind, render, onEnter, onLeave, setTask, enterHyperfocus,
+    bind, render, onEnter, onLeave, setTask, enterHyperfocus, renderHud,
     toggleTimer: () => (T.running ? pause() : start()),
     get running() { return T.running; },
   };

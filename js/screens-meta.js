@@ -245,19 +245,30 @@ Screens.rewards = (() => {
     // достижения
     const grid = $('#achievement-grid');
     grid.innerHTML = '';
-    const sorted = Data.ACHIEVEMENTS.slice().sort((a, b) => {
-      const ua = s.achievements[a.id] ? 1 : 0;
-      const ub = s.achievements[b.id] ? 1 : 0;
-      return ub - ua;
-    });
-    sorted.forEach((a) => {
+    const withMeta = Data.ACHIEVEMENTS.map((a) => {
       const unlocked = !!(s.achievements[a.id] && s.achievements[a.id].unlocked);
-      const el = UI.node('div', `achievement${unlocked ? ' unlocked' : ''}`);
+      const prog = unlocked ? null : Data.achProgress(a, s, State.api);
+      return { a, unlocked, prog, rarity: Data.achRarity(a) };
+    });
+    // сначала полученные, затем самые близкие к получению
+    withMeta.sort((x, y) => {
+      if (x.unlocked !== y.unlocked) return x.unlocked ? -1 : 1;
+      if (x.unlocked) return (s.achievements[y.a.id].at || 0) - (s.achievements[x.a.id].at || 0);
+      return (y.prog ? y.prog.pct : 0) - (x.prog ? x.prog.pct : 0);
+    });
+
+    withMeta.forEach(({ a, unlocked, prog, rarity }) => {
+      const el = UI.node('div', `achievement r-${rarity.id}${unlocked ? ' unlocked' : ''}${!unlocked && prog && prog.pct >= 60 ? ' close' : ''}`);
       el.innerHTML = `
         <span class="achievement-emoji">${unlocked ? a.emoji : '🔒'}</span>
         <div class="achievement-name">${UI.esc(a.name)}</div>
         <div class="achievement-desc">${UI.esc(a.desc)}</div>
-        ${unlocked ? `<div class="achievement-date">${new Date(s.achievements[a.id].at).toLocaleDateString('ru-RU')}</div>` : `<div class="achievement-reward">+${a.xp} XP${a.coins ? ` · +${a.coins}🪙` : ''}</div>`}`;
+        ${unlocked
+          ? `<div class="achievement-date">${new Date(s.achievements[a.id].at).toLocaleDateString('ru-RU')}</div>`
+          : `${prog ? `<div class="ach-bar"><i style="width:${prog.pct}%"></i></div>
+               <div class="ach-prog">${UI.fmtShort(prog.cur)} / ${UI.fmtShort(prog.goal)}</div>` : ''}
+             <div class="achievement-reward">+${a.xp} XP${a.coins ? ` · +${a.coins}🪙` : ''}</div>`}
+        <span class="ach-rarity">${rarity.name}</span>`;
       grid.appendChild(el);
     });
     $('#achievement-progress').textContent = `${State.unlockedAchievements()} / ${Data.ACHIEVEMENTS.length}`;

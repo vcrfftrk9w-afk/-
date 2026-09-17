@@ -512,3 +512,80 @@
   .palette-modal { padding-top: 6vh; }
   .palette-foot { display: none; }
 }
+
+/* ---------- подзадачи ---------- */
+.task-item { flex-direction: column; align-items: stretch; gap: 0; }
+.task-row { display: flex; align-items: center; gap: 12px; width: 100%; }
+.task-item.expanded { background: color-mix(in srgb, var(--accent) 7%, var(--surface-2)); }
+.task-steps {
+  padding: 1px 7px; border-radius: 999px; font-weight: 800; font-size: 0.68rem;
+  background: color-mix(in srgb, var(--accent2) 18%, transparent); color: var(--accent2);
+}
+.task-substrip {
+  height: 4px; border-radius: 4px; margin-top: 6px;
+  background: color-mix(in srgb, var(--border-strong) 55%, transparent); overflow: hidden;
+}
+.task-substrip > i {
+  display: block; height: 100%; border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent2), var(--accent));
+  transition: width var(--t-slow);
+}
+.task-subs {
+  display: flex; flex-direction: column; gap: 5px;
+  margin: 10px 0 2px; padding: 10px 6px 4px 38px;
+  border-top: 1px dashed var(--border);
+  animation: slide-up 0.25s ease;
+}
+.task-sub {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 0.85rem; cursor: pointer; padding: 3px 4px; border-radius: 8px;
+  transition: background var(--t-fast);
+}
+.task-sub:hover { background: var(--surface-2); }
+.task-sub input { width: 17px; height: 17px; flex: 0 0 auto; }
+.task-sub span { flex: 1; min-width: 0; }
+.task-sub.done span { text-decoration: line-through; opacity: 0.5; }
+.task-sub-add { margin-top: 4px; }
+.task-sub-add input { font-size: 0.83rem; padding: 7px 10px; }
+.sub-template { align-self: flex-start; margin-top: 2px; }
+
+/* ---------- плавающий индикатор фокуса ---------- */
+.focus-hud {
+  position: fixed; z-index: 810;
+  right: 18px; bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 15px 9px 11px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-solid) 94%, transparent);
+  backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 12px 34px -14px var(--accent);
+  color: var(--text); font-weight: 800;
+  animation: card-in 0.35s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.focus-hud.break { border-color: color-mix(in srgb, var(--success) 60%, transparent); }
+.focus-hud-ring { width: 26px; height: 26px; flex: 0 0 26px; transform: rotate(-90deg); }
+.focus-hud-ring circle { fill: none; stroke-width: 3.4; }
+.focus-hud-ring .bg { stroke: color-mix(in srgb, var(--border-strong) 70%, transparent); }
+.focus-hud-ring .fg { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 0.9s linear; }
+.focus-hud.break .focus-hud-ring .fg { stroke: var(--success); }
+.focus-hud-time { font-variant-numeric: tabular-nums; font-size: 0.92rem; }
+.focus-hud-label { font-size: 0.66rem; color: var(--text-muted); font-weight: 700; display: block; }
+.focus-hud:hover { transform: translateY(-2px); }
+@media (max-width: 760px) {
+  .focus-hud { right: 12px; bottom: calc(130px + env(safe-area-inset-bottom, 0px)); padding: 7px 12px 7px 9px; }
+}
+
+/* ---------- дедлайны ---------- */
+.task-due {
+  padding: 1px 7px; border-radius: 999px; font-weight: 700; font-size: 0.68rem;
+  background: var(--surface-2); color: var(--text-muted);
+}
+.task-due.soon { background: color-mix(in srgb, var(--accent2) 18%, transparent); color: var(--accent2); }
+.task-due.today { background: color-mix(in srgb, var(--accent3) 20%, transparent); color: var(--accent3); }
+.task-due.overdue { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); }
+.task-item.overdue { border-left-color: var(--danger); }
+.task-item.overdue .task-title::after {
+  content: '!';
+  margin-left: 6px; color: var(--danger); font-weight: 900;
+}

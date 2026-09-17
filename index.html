@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Из Ленивца в Миллионеры 🦥→👑</title>
+<meta name="description" content="Геймифицированное приложение саморазвития со специальным режимом для СДВГ: фокус-таймер, звуки, разбивка задач, привычки, достижения.">
+<meta name="theme-color" content="#7c3aed">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-theme="dark" data-mode="normal">
+
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<canvas id="confetti-canvas" aria-hidden="true"></canvas>
+
+<div id="toast-root" class="toast-root" aria-live="polite"></div>
+
+<!-- ===================== ЭКРАН ЗАГРУЗКИ ===================== -->
+<div id="loader" class="loader">
+  <div class="loader-sloth">🦥</div>
+  <div class="loader-bar"><span></span></div>
+  <p class="loader-text">Пробуждаем ленивца…</p>
+</div>
+
+<!-- ===================== ONBOARDING ===================== -->
+<div id="onboarding" class="onboarding hidden">
+  <div class="onboarding-card floaty">
+    <div class="onboarding-emoji">🦥➡️👑</div>
+    <h1>Из Ленивца в Миллионеры</h1>
+    <p>Прокачивай задачи, привычки и фокус — а мы превратим это в игру. Уровни, монеты, достижения и отдельный режим для СДВГ с музыкой и таймером.</p>
+    <label class="field">
+      <span>Как тебя называть?</span>
+      <input id="onboarding-name" type="text" maxlength="24" placeholder="Например, Саша" autocomplete="off">
+    </label>
+    <div class="onboarding-choice">
+      <p>Тебе подходит СДВГ-режим?</p>
+      <div class="choice-row">
+        <button class="choice-btn" data-mode="normal">🧘 Обычный режим</button>
+        <button class="choice-btn" data-mode="adhd">⚡ СДВГ-режим</button>
+      </div>
+      <small>Это можно изменить в любой момент вкладкой сверху.</small>
+    </div>
+    <button id="onboarding-start" class="btn btn-primary btn-lg pulse">Начать превращение 🚀</button>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app" class="app hidden">
+
+  <!-- HEADER -->
+  <header class="topbar">
+    <div class="brand">
+      <span id="avatar-emoji" class="avatar-emoji bounce-idle">🦥</span>
+      <div class="brand-text">
+        <strong id="user-title">Ленивец</strong>
+        <span id="user-name" class="muted">Гость</span>
+      </div>
+    </div>
+
+    <div class="stat-pills">
+      <div class="pill pill-level" title="Уровень">
+        <span class="pill-icon">⭐</span>
+        <span id="stat-level">1</span>
+      </div>
+      <div class="pill pill-xp" title="Опыт">
+        <div class="xp-track">
+          <div id="xp-fill" class="xp-fill"></div>
+        </div>
+        <span id="stat-xp">0/100</span>
+      </div>
+      <div class="pill pill-coins" title="Монеты">
+        <span class="pill-icon coin-spin">🪙</span>
+        <span id="stat-coins">0</span>
+      </div>
+      <div class="pill pill-streak" title="Стрик дней подряд">
+        <span class="pill-icon flame">🔥</span>
+        <span id="stat-streak">0</span>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <button id="mode-toggle" class="mode-switch" aria-pressed="false">
+        <span class="mode-track">
+          <span class="mode-thumb"></span>
+        </span>
+        <span id="mode-label">Обычный</span>
+      </button>
+      <button id="theme-toggle" class="icon-btn" title="Тема">🌙</button>
+      <button id="settings-btn" class="icon-btn" title="Настройки">⚙️</button>
+    </div>
+  </header>
+
+  <!-- NAV -->
+  <nav class="tabbar" id="tabbar">
+    <button class="tab-btn active" data-tab="dashboard"><span>🏠</span>Главная</button>
+    <button class="tab-btn" data-tab="tasks"><span>✅</span>Задачи</button>
+    <button class="tab-btn tab-adhd" data-tab="adhd"><span>⚡</span>СДВГ-режим</button>
+    <button class="tab-btn" data-tab="habits"><span>🔥</span>Привычки</button>
+    <button class="tab-btn" data-tab="rewards"><span>🏆</span>Награды</button>
+    <button class="tab-btn" data-tab="stats"><span>📊</span>Статистика</button>
+    <span class="tab-indicator" id="tab-indicator"></span>
+  </nav>
+
+  <main class="content">
+
+    <!-- ===================== DASHBOARD ===================== -->
+    <section id="tab-dashboard" class="tab-panel active">
+      <div class="grid grid-dash">
+
+        <div class="card hero-card reveal">
+          <div class="hero-avatar-wrap">
+            <div class="hero-glow"></div>
+            <div id="hero-avatar" class="hero-avatar bounce-idle">🦥</div>
+          </div>
+          <h2 id="hero-title">Ленивец</h2>
+          <p id="hero-sub" class="muted">Уровень <span id="hero-level">1</span> · до следующего уровня <span id="hero-xp-left">100</span> XP</p>
+          <div class="progress-ring-wrap">
+            <div class="xp-track big"><div id="xp-fill-big" class="xp-fill"></div><span class="shine"></span></div>
+          </div>
+          <div class="evolution-track" id="evolution-track"></div>
+        </div>
+
+        <div class="card quote-card reveal" style="--d:1">
+          <div class="quote-icon">💬</div>
+          <p id="quote-text" class="quote-text">Загрузка мотивации…</p>
+          <button id="quote-next" class="btn btn-ghost btn-sm">Следующая мысль ✨</button>
+        </div>
+
+        <div class="card quickadd-card reveal" style="--d:2">
+          <h3>Быстрая задача</h3>
+          <form id="quick-task-form" class="quick-form">
+            <input id="quick-task-input" type="text" placeholder="Что нужно сделать?" maxlength="80" autocomplete="off" required>
+            <select id="quick-task-priority">
+              <option value="low">Легко · 10 XP</option>
+              <option value="mid" selected>Средне · 20 XP</option>
+              <option value="high">Важно · 35 XP</option>
+              <option value="boss">Босс-задача · 60 XP</option>
+            </select>
+            <button type="submit" class="btn btn-primary">Добавить</button>
+          </form>
+        </div>
+
+        <div class="card mini-stats reveal" style="--d:3">
+          <div class="mini-stat">
+            <span class="mini-num" id="stat-today-tasks">0</span>
+            <span class="mini-label">задач сегодня</span>
+          </div>
+          <div class="mini-stat">
+            <span class="mini-num" id="stat-focus-min">0</span>
+            <span class="mini-label">мин. фокуса</span>
+          </div>
+          <div class="mini-stat">
+            <span class="mini-num" id="stat-habit-done">0</span>
+            <span class="mini-label">привычек сегодня</span>
+          </div>
+          <div class="mini-stat">
+            <span class="mini-num" id="stat-achievements">0</span>
+            <span class="mini-label">достижений</span>
+          </div>
+        </div>
+
+        <div class="card today-list reveal" style="--d:4">
+          <h3>На сегодня</h3>
+          <ul id="dash-today-tasks" class="task-list compact"></ul>
+          <p id="dash-empty" class="empty-hint hidden">Пока пусто. Добавь задачу выше — ленивец ждёт 🦥</p>
+        </div>
+
+        <div class="card unstuck-card reveal" style="--d:5">
+          <h3>Не можешь начать?</h3>
+          <p class="muted">Один клик — и получишь крошечный первый шаг.</p>
+          <button id="unstuck-btn" class="btn btn-accent wiggle-hover">🎯 Дай мне микро-шаг</button>
+          <p id="unstuck-result" class="unstuck-result"></p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ===================== TASKS ===================== -->
+    <section id="tab-tasks" class="tab-panel">
+      <div class="panel-header">
+        <h2>Задачи</h2>
+        <div class="filter-row" id="task-filters">
+          <button class="chip active" data-filter="all">Все</button>
+          <button class="chip" data-filter="active">Активные</button>
+          <button class="chip" data-filter="done">Готово</button>
+        </div>
+      </div>
+
+      <form id="task-form" class="task-form card reveal">
+        <input id="task-title" type="text" placeholder="Название задачи…" maxlength="100" required autocomplete="off">
+        <select id="task-category">
+          <option value="work">💼 Работа</option>
+          <option value="study">📚 Учёба</option>
+          <option value="health">💪 Здоровье</option>
+          <option value="home">🏡 Дом</option>
+          <option value="money">💰 Деньги</option>
+          <option value="other">✨ Другое</option>
+        </select>
+        <select id="task-priority">
+          <option value="low">Легко · 10 XP</option>
+          <option value="mid" selected>Средне · 20 XP</option>
+          <option value="high">Важно · 35 XP</option>
+          <option value="boss">Босс-задача · 60 XP</option>
+        </select>
+        <button type="submit" class="btn btn-primary">➕ Добавить</button>
+      </form>
+
+      <ul id="task-list" class="task-list"></ul>
+      <p id="task-empty" class="empty-hint hidden">Список пуст. Разбей слона на кусочки и начни с одного 🐘</p>
+    </section>
+
+    <!-- ===================== ADHD MODE ===================== -->
+    <section id="tab-adhd" class="tab-panel">
+      <div class="grid grid-adhd">
+
+        <div class="card focus-card reveal">
+          <h2>⏱️ Фокус-таймер</h2>
+          <div class="timer-wrap">
+            <svg class="timer-ring" viewBox="0 0 200 200">
+              <circle class="timer-ring-bg" cx="100" cy="100" r="88"></circle>
+              <circle id="timer-ring-fg" class="timer-ring-fg" cx="100" cy="100" r="88"></circle>
+            </svg>
+            <div class="timer-center">
+              <span id="timer-time">25:00</span>
+              <span id="timer-phase" class="timer-phase">Фокус</span>
+            </div>
+          </div>
+          <div class="timer-presets" id="timer-presets">
+            <button class="chip" data-min="5">5 мин</button>
+            <button class="chip active" data-min="25">25 мин</button>
+            <button class="chip" data-min="45">45 мин</button>
+            <button class="chip" data-min="90">90 мин</button>
+          </div>
+          <div class="timer-controls">
+            <button id="timer-start" class="btn btn-primary btn-lg">▶️ Старт</button>
+            <button id="timer-pause" class="btn btn-ghost" disabled>⏸️ Пауза</button>
+            <button id="timer-reset" class="btn btn-ghost">↺ Сброс</button>
+          </div>
+          <p id="timer-companion" class="companion-msg">Готов, когда будешь готов ты 🦥</p>
+        </div>
+
+        <div class="card sound-card reveal" style="--d:1">
+          <h2>🎧 Звуки для фокуса</h2>
+          <div class="visualizer" id="visualizer">
+            <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="sound-grid" id="sound-grid">
+            <button class="sound-btn" data-sound="rain"><span class="sound-emoji">🌧️</span>Дождь</button>
+            <button class="sound-btn" data-sound="brown"><span class="sound-emoji">🟤</span>Коричневый шум</button>
+            <button class="sound-btn" data-sound="white"><span class="sound-emoji">📻</span>Белый шум</button>
+            <button class="sound-btn" data-sound="binaural"><span class="sound-emoji">🧠</span>Бинауральный фокус</button>
+            <button class="sound-btn" data-sound="lofi"><span class="sound-emoji">🎹</span>Lo-fi волна</button>
+            <button class="sound-btn" data-sound="off"><span class="sound-emoji">🔇</span>Тишина</button>
+          </div>
+          <label class="volume-row">
+            <span>🔊</span>
+            <input id="sound-volume" type="range" min="0" max="100" value="40">
+          </label>
+        </div>
+
+        <div class="card breakdown-card reveal" style="--d:2">
+          <h2>🐘 Разбей слона на кусочки</h2>
+          <p class="muted">Большая задача пугает? Раздроби её на маленькие шаги — и начни с первого.</p>
+          <form id="breakdown-form" class="breakdown-form">
+            <input id="breakdown-title" type="text" placeholder="Большая задача (например: 'Сделать отчёт')" maxlength="100" required autocomplete="off">
+            <button type="submit" class="btn btn-accent">Создать чек-лист шагов</button>
+          </form>
+          <div id="breakdown-list" class="breakdown-list"></div>
+        </div>
+
+        <div class="card distraction-card reveal" style="--d:3">
+          <h2>🌀 Журнал отвлечений</h2>
+          <p class="muted">Отвлёкся? Запиши мысль и спокойно возвращайся к фокусу.</p>
+          <form id="distraction-form" class="distraction-form">
+            <input id="distraction-input" type="text" placeholder="Что отвлекло?" maxlength="80" autocomplete="off" required>
+            <button type="submit" class="btn btn-ghost">Отпустить 🍃</button>
+          </form>
+          <ul id="distraction-list" class="distraction-list"></ul>
+        </div>
+
+        <div class="card fidget-card reveal" style="--d:4">
+          <h2>🫧 Пупырка для рук</h2>
+          <p class="muted">Нужна сенсорная разрядка? Полопай пузырьки.</p>
+          <div id="bubble-wrap" class="bubble-wrap"></div>
+          <button id="bubble-reset" class="btn btn-ghost btn-sm">Обновить лист</button>
+        </div>
+
+        <div class="card breathing-card reveal" style="--d:5">
+          <h2>🌬️ Дыхательная пауза</h2>
+          <p class="muted">4 секунды вдох — 4 задержка — 6 выдох.</p>
+          <div class="breathing-wrap">
+            <div id="breathing-circle" class="breathing-circle">Дыши</div>
+          </div>
+          <button id="breathing-toggle" class="btn btn-primary">Начать</button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ===================== HABITS ===================== -->
+    <section id="tab-habits" class="tab-panel">
+      <div class="panel-header">
+        <h2>Привычки</h2>
+      </div>
+      <form id="habit-form" class="habit-form card reveal">
+        <input id="habit-title" type="text" placeholder="Новая привычка (например: 'Пить воду')" maxlength="60" required autocomplete="off">
+        <input id="habit-emoji" type="text" placeholder="Эмодзи" maxlength="4" value="✅" class="emoji-input">
+        <button type="submit" class="btn btn-primary">➕ Добавить привычку</button>
+      </form>
+      <div id="habit-list" class="habit-list"></div>
+      <p id="habit-empty" class="empty-hint hidden">Привычек пока нет. Маленькие шаги — большие перемены 🌱</p>
+    </section>
+
+    <!-- ===================== REWARDS / ACHIEVEMENTS ===================== -->
+    <section id="tab-rewards" class="tab-panel">
+      <div class="panel-header">
+        <h2>Достижения</h2>
+      </div>
+      <div id="achievement-grid" class="achievement-grid"></div>
+
+      <div class="panel-header" style="margin-top:2rem;">
+        <h2>Магазин наград</h2>
+      </div>
+      <p class="muted">Придумай себе награды и покупай их за заработанные монеты 🪙</p>
+      <form id="reward-form" class="reward-form card reveal">
+        <input id="reward-title" type="text" placeholder="Награда (например: 'Час игр')" maxlength="60" required autocomplete="off">
+        <input id="reward-cost" type="number" placeholder="Цена" min="1" max="99999" value="50" required>
+        <button type="submit" class="btn btn-primary">➕ Создать награду</button>
+      </form>
+      <div id="reward-list" class="reward-list"></div>
+    </section>
+
+    <!-- ===================== STATS ===================== -->
+    <section id="tab-stats" class="tab-panel">
+      <div class="grid grid-stats">
+        <div class="card reveal">
+          <h3>Задачи за 7 дней</h3>
+          <div id="chart-tasks" class="bar-chart"></div>
+        </div>
+        <div class="card reveal" style="--d:1">
+          <h3>Минуты фокуса за 7 дней</h3>
+          <div id="chart-focus" class="bar-chart"></div>
+        </div>
+        <div class="card reveal" style="--d:2">
+          <h3>Прогресс уровня</h3>
+          <div class="stats-numbers">
+            <div><span id="stats-total-tasks">0</span><small>задач выполнено</small></div>
+            <div><span id="stats-total-xp">0</span><small>всего XP</small></div>
+            <div><span id="stats-total-coins">0</span><small>монет заработано</small></div>
+            <div><span id="stats-total-focus">0</span><small>минут фокуса</small></div>
+            <div><span id="stats-best-streak">0</span><small>лучший стрик</small></div>
+          </div>
+        </div>
+        <div class="card reveal" style="--d:3">
+          <h3>Управление данными</h3>
+          <p class="muted">Твой прогресс хранится локально в этом браузере.</p>
+          <div class="data-actions">
+            <button id="export-btn" class="btn btn-ghost">⬇️ Экспорт</button>
+            <button id="import-btn" class="btn btn-ghost">⬆️ Импорт</button>
+            <button id="reset-btn" class="btn btn-danger">🗑️ Сбросить всё</button>
+          </div>
+          <input id="import-file" type="file" accept="application/json" class="hidden">
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ===================== MODALS ===================== -->
+<div id="levelup-modal" class="modal hidden">
+  <div class="modal-card levelup-card">
+    <div class="levelup-burst"></div>
+    <div id="levelup-emoji" class="levelup-emoji">🦥</div>
+    <h2>Новый уровень!</h2>
+    <p>Ты теперь: <strong id="levelup-title">—</strong></p>
+    <p class="muted">Уровень <span id="levelup-num">2</span></p>
+    <button class="btn btn-primary btn-lg" id="levelup-close">Продолжать путь 🚀</button>
+  </div>
+</div>
+
+<div id="settings-modal" class="modal hidden">
+  <div class="modal-card">
+    <h2>⚙️ Настройки</h2>
+    <label class="switch-row">
+      <span>Тёмная тема</span>
+      <input type="checkbox" id="setting-theme">
+    </label>
+    <label class="switch-row">
+      <span>Звуковые эффекты</span>
+      <input type="checkbox" id="setting-sfx" checked>
+    </label>
+    <label class="switch-row">
+      <span>Меньше анимаций</span>
+      <input type="checkbox" id="setting-reduce-motion">
+    </label>
+    <label class="switch-row">
+      <span>СДВГ-режим</span>
+      <input type="checkbox" id="setting-adhd">
+    </label>
+    <label class="field">
+      <span>Имя</span>
+      <input type="text" id="setting-name" maxlength="24">
+    </label>
+    <button class="btn btn-primary" id="settings-close">Готово</button>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

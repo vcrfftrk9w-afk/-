@@ -25,7 +25,7 @@ const Sound = (() => {
       analyser = ctx.createAnalyser();
       analyser.fftSize = 512;
       sfxGain = ctx.createGain();
-      sfxGain.gain.value = 0.3;
+      sfxGain.gain.value = (State.s.sfxVolume != null ? State.s.sfxVolume : 0.3);
       master.connect(analyser);
       analyser.connect(ctx.destination);
       sfxGain.connect(ctx.destination);
@@ -271,6 +271,10 @@ const Sound = (() => {
     if (master) master.gain.value = v;
   }
 
+  function setSfxVolume(v) {
+    if (sfxGain) sfxGain.gain.value = Math.max(0, Math.min(1, v));
+  }
+
   function activeLayers() { return Object.keys(layers); }
 
   /* доступ к контексту и отдельная шина для музыкального движка */
@@ -343,5 +347,5 @@ const Sound = (() => {
     return out;
   }
 
-  return { ready, setLayer, applyMix, stopAll, setMasterVolume, activeLayers, sfx, levels, context, createBus, setExternalActive };
+  return { ready, setLayer, applyMix, stopAll, setMasterVolume, activeLayers, sfx, levels, context, createBus, setExternalActive, setSfxVolume };
 })();

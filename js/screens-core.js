@@ -320,6 +320,7 @@ Screens.tasks = (() => {
   let filter = 'active';
   let view = 'list';
   const expandedTasks = new Set();
+  let category = 'all';
   const REPEAT_LABEL = { daily: 'каждый день', weekdays: 'по будням', weekly: 'каждую неделю' };
 
   /* следующая дата повторяющейся задачи */
@@ -371,6 +372,18 @@ Screens.tasks = (() => {
       $$('#task-filters .chip').forEach((c) => c.classList.toggle('active', c === chip));
       render();
     }));
+
+    const catRow = $('#task-categories');
+    catRow.innerHTML = `<button class="chip active" data-cat="all">Все категории</button>` +
+      Data.CATEGORIES.map((c) => `<button class="chip" data-cat="${c.id}">${c.emoji} ${UI.esc(c.name)}</button>`).join('');
+    catRow.addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-cat]');
+      if (!chip) return;
+      category = chip.dataset.cat;
+      UI.$$('[data-cat]', catRow).forEach((c) => c.classList.toggle('active', c === chip));
+      Sound.sfx('click');
+      render();
+    });
 
     $$('#task-view .chip').forEach((chip) => chip.addEventListener('click', () => {
       view = chip.dataset.view;
@@ -478,6 +491,7 @@ Screens.tasks = (() => {
         </div>
         <div class="task-actions">
           <button class="icon-mini task-expand" title="Шаги задачи">${expanded ? '▴' : '▾'}</button>
+          <button class="icon-mini task-snooze" title="Перенести на завтра">⏭️</button>
           <button class="icon-mini task-focus" title="Работать над этим">🎯</button>
           <button class="icon-mini task-del" title="Удалить">🗑️</button>
         </div>
@@ -500,6 +514,7 @@ Screens.tasks = (() => {
     li.querySelector('.task-check').addEventListener('click', (e) => complete(t, e.currentTarget));
     li.querySelector('.task-del').addEventListener('click', () => remove(t.id, li));
     li.querySelector('.task-focus').addEventListener('click', () => focusOn(t));
+    li.querySelector('.task-snooze').addEventListener('click', () => snooze(t));
 
     // двойной клик по названию — переименование на месте
     const titleEl = li.querySelector('.task-title');
@@ -538,6 +553,17 @@ Screens.tasks = (() => {
       li.querySelector('.sub-template').addEventListener('click', () => applyTemplate(t));
     }
     return li;
+  }
+
+  /* перенести задачу на завтра — без вины и без потери из виду */
+  function snooze(task) {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    task.due = State.dateKey(d);
+    task.urgent = false;
+    Sound.sfx('whoosh');
+    UI.toast('Перенесено на завтра. Это нормально 🌙', 'default', '⏭️');
+    State.commit();
   }
 
   /* ---------- переименование на месте ---------- */
@@ -635,6 +661,8 @@ Screens.tasks = (() => {
     else if (filter === 'done') list = tasks.filter((t) => t.done);
     else if (filter === 'today') list = tasks.filter((t) => !t.done && (isDueToday(t) || t.urgent));
     else list = tasks;
+
+    if (category !== 'all') list = list.filter((t) => t.category === category);
 
     // сначала просроченные и сегодняшние, потом остальные по дате
     return list.slice().sort((a, b) => {

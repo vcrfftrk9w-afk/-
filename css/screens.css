@@ -1025,3 +1025,23 @@
 .insight-row span { font-size: 1.1rem; }
 .insight-row p { margin: 0; font-size: 0.84rem; line-height: 1.45; }
 .insight-row b { color: var(--accent3); }
+
+.forecast-line {
+  padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 14px;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--accent3) 14%, var(--surface-2)), var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--accent3) 30%, transparent);
+  font-size: 0.85rem;
+}
+.forecast-line b { color: var(--accent3); }
+
+/* ==================== ЗАДАЧИ-ПРИЗРАКИ ==================== */
+.ghost-list { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; max-height: 46vh; overflow-y: auto; }
+.ghost-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 0.87rem; cursor: pointer;
+}
+.ghost-item input { width: 17px; height: 17px; }
+.ghost-item span { flex: 1; min-width: 0; }
+.ghost-item small { color: var(--text-muted); font-size: 0.7rem; white-space: nowrap; }

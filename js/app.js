@@ -10,6 +10,18 @@ const App = (() => {
   let pendingLevelUp = null;
 
   /* ---------- применение настроек ---------- */
+  /* авто-тема: светлая днём, тёмная вечером */
+  function autoThemeTick() {
+    if (!State.s.autoTheme) return;
+    const h = new Date().getHours();
+    const want = (h >= 8 && h < 19) ? 'light' : 'dark';
+    if (State.s.theme !== want) {
+      State.s.theme = want;
+      applyTheme();
+      State.save();
+    }
+  }
+
   function applyTheme() {
     document.body.setAttribute('data-theme', State.s.theme);
     const btn = $('#theme-toggle');
@@ -327,6 +339,10 @@ const App = (() => {
     // бустеры
     setInterval(renderBooster, 1000);
 
+    // авто-тема
+    autoThemeTick();
+    setInterval(autoThemeTick, 300000);
+
     // отложенная модалка уровня (чтобы не перекрывать конфетти действия)
     setInterval(() => {
       if (pendingLevelUp && $$('.modal:not(.hidden)').length === 0) {
@@ -446,6 +462,8 @@ const App = (() => {
       $('#setting-font').checked = (s.a11y && s.a11y.font) === 'lexend';
       $('#setting-contrast').checked = !!(s.a11y && s.a11y.contrast);
       $('#setting-scale').value = (s.a11y && s.a11y.scale) || 'md';
+      $('#setting-autotheme').checked = !!s.autoTheme;
+      $('#setting-sfx-vol').value = Math.round((s.sfxVolume != null ? s.sfxVolume : 0.3) * 100);
       UI.openModal('#settings-modal');
     });
     $('#settings-close').addEventListener('click', () => UI.closeModal('#settings-modal'));
@@ -454,6 +472,11 @@ const App = (() => {
     $('#setting-theme').addEventListener('change', (e) => { State.s.theme = e.target.checked ? 'light' : 'dark'; applyTheme(); State.save(); });
     $('#setting-adhd').addEventListener('change', (e) => { State.s.mode = e.target.checked ? 'adhd' : 'normal'; applyMode(); State.save(); });
     $('#setting-sfx').addEventListener('change', (e) => { State.s.sfx = e.target.checked; State.save(); });
+    $('#setting-sfx-vol').addEventListener('input', (e) => {
+      State.s.sfxVolume = Number(e.target.value) / 100;
+      Sound.setSfxVolume(State.s.sfxVolume);
+    });
+    $('#setting-sfx-vol').addEventListener('change', () => { Sound.sfx('check'); State.save(); });
     $('#setting-haptics').addEventListener('change', (e) => { State.s.haptics = e.target.checked; State.save(); });
     $('#setting-reduce').addEventListener('change', (e) => { State.s.reduceMotion = e.target.checked; applyMotion(); State.save(); });
     $('#setting-notify').addEventListener('change', (e) => {
@@ -466,6 +489,11 @@ const App = (() => {
 
     $('#setting-font').addEventListener('change', (e) => { State.s.a11y.font = e.target.checked ? 'lexend' : 'default'; applyA11y(); State.save(); });
     $('#setting-contrast').addEventListener('change', (e) => { State.s.a11y.contrast = e.target.checked; applyA11y(); State.save(); });
+    $('#setting-autotheme').addEventListener('change', (e) => {
+      State.s.autoTheme = e.target.checked;
+      if (e.target.checked) { autoThemeTick(); UI.toast('Тема будет меняться сама: светлая днём, тёмная вечером', 'default', '🌗'); }
+      State.save();
+    });
     $('#setting-scale').addEventListener('change', (e) => { State.s.a11y.scale = e.target.value; applyA11y(); State.save(); });
 
     $('#theme-toggle').addEventListener('click', () => {
@@ -635,6 +663,81 @@ const App = (() => {
     });
   }
 
+  /* ---------- свайпы между вкладками ---------- */
+  const TAB_ORDER = ['dashboard', 'tasks', 'adhd', 'habits', 'goals', 'lessons', 'empire', 'rewards', 'stats'];
+  function bindSwipe() {
+    const area = $('.content');
+    if (!area) return;
+    let startX = 0, startY = 0, tracking = false;
+
+    area.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      const t = e.target;
+      // не перехватываем жесты у ползунков и горизонтально прокручиваемых блоков
+      if (t.closest('input[type="range"], .heatmap, .mixer-grid, .station-grid, .chips-row, .filter-row')) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      tracking = true;
+    }, { passive: true });
+
+    area.addEventListener('touchend', (e) => {
+      if (!tracking) return;
+      tracking = false;
+      const dx = e.changedTouches[0].clientX - startX;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+      const idx = TAB_ORDER.indexOf(currentTab);
+      if (idx === -1) return;
+      const next = dx < 0 ? idx + 1 : idx - 1;
+      if (next < 0 || next >= TAB_ORDER.length) return;
+      Sound.sfx('whoosh');
+      FX.vibrate(10);
+      go(TAB_ORDER[next]);
+    }, { passive: true });
+  }
+
+  /* ---------- забытые задачи ---------- */
+  function ghostTasks() {
+    const cutoff = Date.now() - 14 * 86400000;
+    return State.s.tasks.filter((t) => !t.done && t.createdAt < cutoff);
+  }
+
+  function offerGhostCleanup() {
+    const ghosts = ghostTasks();
+    if (ghosts.length < 3) return;
+    if (State.s.ghostAskedAt && Date.now() - State.s.ghostAskedAt < 7 * 86400000) return;
+    State.s.ghostAskedAt = Date.now();
+    State.save();
+
+    setTimeout(() => {
+      const body = UI.sheet(`
+        <h2>👻 Задачи-призраки</h2>
+        <p class="muted">Эти задачи висят больше двух недель. Если они до сих пор не сделаны — скорее всего, они не нужны. Отпустить их не стыдно: это освобождает внимание.</p>
+        <div class="ghost-list">
+          ${ghosts.slice(0, 12).map((t) => `
+            <label class="ghost-item">
+              <input type="checkbox" data-ghost="${t.id}" checked>
+              <span>${UI.esc(t.title)}</span>
+              <small>${UI.timeAgo(t.createdAt)}</small>
+            </label>`).join('')}
+        </div>
+        <div class="row-end" style="margin-top:16px">
+          <button class="btn btn-ghost" data-act="keep">Оставить всё</button>
+          <button class="btn btn-primary" data-act="drop">Отпустить выбранные</button>
+        </div>`, { wide: true });
+
+      body.querySelector('[data-act="keep"]').addEventListener('click', () => UI.closeModal('#sheet-modal'));
+      body.querySelector('[data-act="drop"]').addEventListener('click', () => {
+        const ids = Array.from(body.querySelectorAll('[data-ghost]:checked')).map((c) => c.dataset.ghost);
+        State.s.tasks = State.s.tasks.filter((t) => !ids.includes(t.id));
+        UI.closeModal('#sheet-modal');
+        Sound.sfx('whoosh');
+        UI.toast(`Отпущено: ${UI.plur(ids.length, 'задача', 'задачи', 'задач')} 🍃`, 'success');
+        State.commit();
+      });
+    }, 3000);
+  }
+
   /* ---------- первый жест: восстановить звук ---------- */
   function bindFirstGesture() {
     const restore = () => {
@@ -677,6 +780,7 @@ const App = (() => {
     bindPresence();
     bindEmptyStates();
     bindInstall();
+    bindSwipe();
     Palette.bind();
     Advisor.bind();
     $('#shortcuts-btn').addEventListener('click', () => { UI.closeModal('#settings-modal'); setTimeout(showShortcuts, 200); });
@@ -708,6 +812,7 @@ const App = (() => {
           dailyCheckIn();
           go('dashboard');
           UI.initTilt();
+          offerGhostCleanup();
         } else {
           $('#onboarding').classList.remove('hidden');
         }

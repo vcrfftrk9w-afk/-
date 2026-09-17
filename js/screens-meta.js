@@ -131,6 +131,26 @@ Screens.empire = (() => {
     $('#empire-progress').style.width = pct + '%';
     $('#empire-percent').textContent = pct < 1 ? pct.toFixed(2) + '%' : pct.toFixed(1) + '%';
 
+    // прогноз: сколько дней до миллиона при текущем темпе
+    const perDayPassive = passive * mult * 60 * 24;
+    const activeDays = Math.max(1, Object.keys(s.dailyTaskCounts).length);
+    const perDayActive = s.totals.coinsEarned / activeDays * 0.6;   // консервативная оценка
+    const perDay = perDayPassive + perDayActive;
+    const left = Math.max(0, Data.MILLIONAIRE_GOAL - nw);
+    const forecast = $('#empire-forecast');
+    if (forecast) {
+      if (nw >= Data.MILLIONAIRE_GOAL) {
+        forecast.innerHTML = '👑 Миллион взят. Дальше — просто ради удовольствия.';
+      } else if (perDay <= 0) {
+        forecast.innerHTML = 'Выполни задачи или купи первый актив — появится прогноз.';
+      } else {
+        const days = Math.ceil(left / perDay);
+        forecast.innerHTML = days > 3650
+          ? `При текущем темпе до миллиона — больше 10 лет. Пора вкладываться в активы 🏦`
+          : `При текущем темпе до миллиона: <b>${UI.plur(days, 'день', 'дня', 'дней')}</b> · примерно ${UI.fmtShort(perDay)} ${UI.plural(perDay, 'монета', 'монеты', 'монет')} в день`;
+      }
+    }
+
     $('#empire-note').innerHTML = mult === 1
       ? '✅ Сегодня ты был активен — бизнес работает на <b>100%</b> мощности.'
       : '⚠️ Бизнес простаивает: сегодня не было активности, доход <b>25%</b>. Выполни любую задачу.';
@@ -178,6 +198,7 @@ Screens.empire = (() => {
    ========================================================= */
 Screens.rewards = (() => {
   const { $ } = UI;
+  let achFilter = 'all';
 
   function bind() {
     $('#reward-form').addEventListener('submit', (e) => {
@@ -244,6 +265,18 @@ Screens.rewards = (() => {
 
     // достижения
     const grid = $('#achievement-grid');
+    const filterRow = $('#ach-filters');
+    if (filterRow && !filterRow.dataset.built) {
+      filterRow.dataset.built = '1';
+      filterRow.addEventListener('click', (e) => {
+        const chip = e.target.closest('[data-ach]');
+        if (!chip) return;
+        achFilter = chip.dataset.ach;
+        UI.$$('[data-ach]', filterRow).forEach((c) => c.classList.toggle('active', c === chip));
+        Sound.sfx('click');
+        render();
+      });
+    }
     grid.innerHTML = '';
     const withMeta = Data.ACHIEVEMENTS.map((a) => {
       const unlocked = !!(s.achievements[a.id] && s.achievements[a.id].unlocked);
@@ -257,7 +290,14 @@ Screens.rewards = (() => {
       return (y.prog ? y.prog.pct : 0) - (x.prog ? x.prog.pct : 0);
     });
 
-    withMeta.forEach(({ a, unlocked, prog, rarity }) => {
+    const visible = withMeta.filter(({ unlocked, prog }) => {
+      if (achFilter === 'unlocked') return unlocked;
+      if (achFilter === 'close') return !unlocked && prog && prog.pct >= 30;
+      if (achFilter === 'locked') return !unlocked;
+      return true;
+    });
+
+    visible.forEach(({ a, unlocked, prog, rarity }) => {
       const el = UI.node('div', `achievement r-${rarity.id}${unlocked ? ' unlocked' : ''}${!unlocked && prog && prog.pct >= 60 ? ' close' : ''}`);
       el.innerHTML = `
         <span class="achievement-emoji">${unlocked ? a.emoji : '🔒'}</span>
@@ -337,8 +377,76 @@ Screens.rewards = (() => {
 Screens.stats = (() => {
   const { $ } = UI;
 
+  /* человекочитаемый отчёт в Markdown — можно унести куда угодно */
+  function exportReport() {
+    const s = State.s;
+    const stage = State.stage();
+    const L = [];
+    L.push(`# Отчёт: ${s.name || 'Игрок'} — ${stage.emoji} ${stage.title}`);
+    L.push('');
+    L.push(`Дата: ${new Date().toLocaleDateString('ru-RU')}`);
+    L.push('');
+    L.push('## Прогресс');
+    L.push(`- Уровень: **${s.level}** (${UI.fmt(s.totals.xpEarned)} XP всего)`);
+    L.push(`- Капитал: **${UI.fmt(State.netWorth())}** монет, пассивный доход ${UI.fmtSmart(State.passivePerMin())}/мин`);
+    L.push(`- Серия: ${UI.plur(s.streak, 'день', 'дня', 'дней')} подряд (рекорд ${s.bestStreak})`);
+    L.push(`- Достижений: ${State.unlockedAchievements()} из ${Data.ACHIEVEMENTS.length}`);
+    L.push('');
+    L.push('## Сделано');
+    L.push(`- Задач выполнено: **${s.totals.tasksCompleted}**`);
+    L.push(`- Минут фокуса: **${s.totals.focusMinutes}** за ${UI.plur(s.totals.focusSessions, 'сессию', 'сессии', 'сессий')}`);
+    L.push(`- Уроков пройдено: ${Object.keys(s.lessons.read).length} из ${Data.LESSONS.length}`);
+    L.push(`- Квестов выполнено: ${s.totals.questsDone}`);
+    L.push(`- Минут под музыку: ${s.totals.musicMinutes || 0}`);
+    L.push('');
+    L.push('## Навыки');
+    Data.SKILLS.forEach((sk) => {
+      const p = State.skillProgress(sk.id);
+      L.push(`- ${sk.emoji} ${sk.name}: ур. **${p.level}** (${p.xp}/${p.need})`);
+    });
+    L.push('');
+    if (s.habits.length) {
+      L.push('## Привычки');
+      s.habits.forEach((h) => L.push(`- ${h.emoji} ${h.name}: ${UI.plur(State.habitStreak(h), 'день', 'дня', 'дней')} подряд, всего ${Object.keys(h.history).length}`));
+      L.push('');
+    }
+    const openTasks = s.tasks.filter((t) => !t.done);
+    if (openTasks.length) {
+      L.push('## Открытые задачи');
+      openTasks.slice(0, 30).forEach((t) => {
+        const pri = Data.priorityById(t.priority);
+        L.push(`- [ ] ${t.title} — ${pri.name}${t.due ? ` (до ${UI.dateLabel(t.due)})` : ''}`);
+      });
+      L.push('');
+    }
+    if (s.goals.length) {
+      L.push('## Цели');
+      s.goals.forEach((g) => {
+        const done = g.milestones.filter((m) => m.done).length;
+        L.push(`- ${g.emoji} **${g.title}** — ${done}/${g.milestones.length} шагов${g.done ? ' ✅' : ''}`);
+      });
+      L.push('');
+    }
+    const insights = Advisor && Advisor.renderInsights ? null : null;
+    L.push('---');
+    L.push('_Сгенерировано приложением «Из Ленивца в Миллионеры»_');
+
+    const blob = new Blob([L.join('\n')], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lenivec-otchet-${State.todayKey()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    Sound.sfx('success');
+    UI.toast('Отчёт скачан в Markdown', 'success', '📄');
+  }
+
   function bind() {
     $('#export-btn').addEventListener('click', exportData);
+    $('#report-btn').addEventListener('click', exportReport);
     $('#import-btn').addEventListener('click', () => $('#import-file').click());
     $('#import-file').addEventListener('change', (e) => {
       if (e.target.files[0]) importData(e.target.files[0]);

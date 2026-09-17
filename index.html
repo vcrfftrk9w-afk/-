@@ -356,6 +356,7 @@
         <button type="submit" class="btn btn-primary">➕ Добавить</button>
       </form>
 
+      <div class="chips-row" id="task-categories"></div>
       <ul id="task-list" class="task-list"></ul>
 
       <div id="task-matrix" class="matrix hidden">
@@ -620,6 +621,7 @@
       </div>
 
       <p class="note-line" id="empire-note"></p>
+      <p class="forecast-line" id="empire-forecast"></p>
       <div id="asset-list" class="asset-list"></div>
     </section>
 
@@ -627,7 +629,15 @@
     <section id="tab-rewards" class="tab-panel">
       <div class="panel-header">
         <h2>Достижения</h2>
-        <span class="badge" id="achievement-progress">0 / 0</span>
+        <div class="row">
+          <div class="filter-row" id="ach-filters">
+            <button class="chip active" data-ach="all">Все</button>
+            <button class="chip" data-ach="close">Почти</button>
+            <button class="chip" data-ach="unlocked">Получены</button>
+            <button class="chip" data-ach="locked">Закрыты</button>
+          </div>
+          <span class="badge" id="achievement-progress">0 / 0</span>
+        </div>
       </div>
       <div id="achievement-grid" class="achievement-grid"></div>
 
@@ -704,7 +714,8 @@
           <h3>💾 Данные</h3>
           <p class="muted small">Прогресс хранится локально в этом браузере. Делай бэкапы.</p>
           <div class="row wrap">
-            <button id="export-btn" class="btn btn-ghost">⬇️ Экспорт</button>
+            <button id="export-btn" class="btn btn-ghost">⬇️ Бэкап</button>
+            <button id="report-btn" class="btn btn-ghost">📄 Отчёт .md</button>
             <button id="import-btn" class="btn btn-ghost">⬆️ Импорт</button>
             <button id="reset-btn" class="btn btn-danger">🗑️ Сброс</button>
           </div>
@@ -800,8 +811,10 @@
     <h2>⚙️ Настройки</h2>
     <label class="field"><span>Имя</span><input type="text" id="setting-name" maxlength="24"></label>
     <label class="switch-row"><span>☀️ Светлая тема</span><input type="checkbox" id="setting-theme"></label>
+    <label class="switch-row"><span>🌗 Тема по времени суток</span><input type="checkbox" id="setting-autotheme"></label>
     <label class="switch-row"><span>⚡ СДВГ-режим</span><input type="checkbox" id="setting-adhd"></label>
     <label class="switch-row"><span>🔔 Звуковые эффекты</span><input type="checkbox" id="setting-sfx"></label>
+    <label class="field"><span>Громкость эффектов</span><input type="range" id="setting-sfx-vol" min="0" max="100" value="30"></label>
     <label class="switch-row"><span>📳 Вибрация</span><input type="checkbox" id="setting-haptics"></label>
     <label class="switch-row"><span>🎬 Меньше анимаций</span><input type="checkbox" id="setting-reduce"></label>
     <label class="switch-row"><span>🔕 Уведомления о конце сессии</span><input type="checkbox" id="setting-notify"></label>

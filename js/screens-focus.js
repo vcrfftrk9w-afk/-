@@ -202,10 +202,14 @@ Screens.focus = (() => {
     awardFocus(minutes);
 
     const m = modeData();
+    // каждый четвёртый помидор — длинный перерыв
+    const longBreak = m.focus > 0 && T.cycles > 0 && T.cycles % 4 === 0;
+    const breakMin = longBreak ? Math.max(m.break * 3, 15) : m.break;
     T.phase = 'break';
-    T.total = m.break * 60;
-    T.remaining = m.break * 60;
+    T.total = breakMin * 60;
+    T.remaining = breakMin * 60;
     T.running = true;
+    if (longBreak) UI.toast(`Четыре сессии подряд! Длинный перерыв: ${breakMin} мин 🌿`, 'level', '🏆');
     T.interval = setInterval(tick, 1000);
     T.msgInterval = setInterval(() => companion(), 60000);
     companion('Перерыв! Глаза от экрана, ноги на пол 🌿');

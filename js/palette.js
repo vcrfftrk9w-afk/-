@@ -53,6 +53,8 @@ const Palette = (() => {
         run: () => $('#theme-toggle').click() },
       { group: 'Действия', icon: 'bolt', title: s.mode === 'adhd' ? 'Обычный режим' : 'СДВГ-режим', sub: 'Сменить интенсивность интерфейса',
         run: () => $('#mode-toggle').click() },
+      { group: 'Действия', icon: 'coin', title: 'Трекер денег', sub: 'Доход, расходы, подушка, капитал',
+        run: () => { App.go('path'); setTimeout(() => { const el = document.querySelector('#m-income'); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } }, 250); } },
       { group: 'Действия', icon: 'settings', title: 'Настройки', sub: 'Тема, звук, доступность',
         run: () => $('#settings-btn').click() },
     );

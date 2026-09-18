@@ -478,6 +478,13 @@ Screens.stats = (() => {
       if (e.target.files[0]) importData(e.target.files[0]);
       e.target.value = '';
     });
+    $('#path-reset-btn').addEventListener('click', async () => {
+      const ok = await UI.confirm('Отметки на пути будут сняты, но цифры в трекере денег останутся. Уровень, монеты и достижения не тронуты.', { title: 'Пройти путь заново?', okText: 'Сбросить путь', danger: true });
+      if (!ok) return;
+      State.s.path = { done: {}, claimed: {}, startedAt: null, stage: 0 };
+      State.commit();
+      UI.toast('Путь сброшен — начинай с первого шага', 'success', '🧭');
+    });
     $('#reset-btn').addEventListener('click', resetData);
   }
 

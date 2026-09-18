@@ -35,6 +35,8 @@ Screens.dashboard = (() => {
   let moodDraft = null;
 
   function bind() {
+    const gp = document.querySelector('[data-goto-path]');
+    if (gp) gp.addEventListener('click', () => App.go('path'));
     Screens.helpers.fillSelect($('#quick-priority'), Data.PRIORITIES.map((p) => ({ value: p.id, label: `${p.emoji} ${p.name} · ${p.xp} XP` })), 'mid');
 
     $('#quick-form').addEventListener('submit', (e) => {
@@ -116,6 +118,7 @@ Screens.dashboard = (() => {
   const CARDS = [
     { id: 'hero', name: 'Персонаж и уровень' },
     { id: 'next', name: 'Что дальше' },
+    { id: 'path', name: 'Твой путь к деньгам' },
     { id: 'quests', name: 'Квесты дня' },
     { id: 'quickadd', name: 'Быстрая задача и микро-шаг' },
     { id: 'today', name: 'Задачи на сегодня' },
@@ -396,6 +399,26 @@ Screens.dashboard = (() => {
       : 'Выполни любую задачу или привычку, чтобы продлить серию.';
   }
 
+  /* карточка пути на главной */
+  function renderPathCard() {
+    const el = $('#dash-path');
+    if (!el || typeof Path === 'undefined') return;
+    const n = Path.nextStep();
+    const pct = Path.progressPct();
+    if (!n) {
+      el.innerHTML = `<div class="path-card-step">🏁 Весь путь пройден — все ${Path.STEP_COUNT} шагов.</div>`;
+    } else {
+      el.innerHTML = `
+        <div class="path-card-stage">${n.stage.emoji} Этап ${Path.currentIndex() + 1}/${Path.STAGES.length} · ${UI.esc(n.stage.name)}</div>
+        <div class="path-card-step">${UI.esc(n.step.t)}</div>
+        <div class="path-bar" style="margin:0 0 10px"><span style="width:${pct}%"></span></div>
+        <div class="path-card-stage">${Path.doneCount()} из ${Path.STEP_COUNT} шагов · ${pct}%</div>
+        <button class="btn btn-primary btn-block" style="margin-top:10px" id="dash-path-go">Показать, что делать</button>`;
+      const go = $('#dash-path-go');
+      if (go) go.onclick = () => { App.go('path'); };
+    }
+  }
+
   function render() {
     renderHero();
     renderQuests();
@@ -403,6 +426,7 @@ Screens.dashboard = (() => {
     renderSkills();
     renderStreak();
     renderFocusGoal();
+    renderPathCard();
     applyCards();
     Advisor.renderNext();
     Screens.routines.render();
@@ -410,7 +434,7 @@ Screens.dashboard = (() => {
     if (!$('#quote-text').dataset.ready) { showQuote(); $('#quote-text').dataset.ready = '1'; }
   }
 
-  return { bind, render, showQuote };
+  return { bind, render, showQuote, renderPathCard };
 })();
 
 /* =========================================================

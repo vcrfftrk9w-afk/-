@@ -75,12 +75,12 @@
     <section class="ob-step" data-step="2">
       <div class="ob-emoji">🎁</div>
       <h1>Что внутри</h1>
-      <p class="muted">Четыре вещи, ради которых это приложение вообще существует.</p>
+      <p class="muted">Главное — путь. Приложение всегда знает, какой у тебя следующий шаг, и не даёт распыляться.</p>
       <div class="ob-features">
-        <div class="ob-feature"><span>🎧</span><b>Живая музыка</b><small>7 станций, которые пишутся прямо в браузере</small></div>
-        <div class="ob-feature"><span>⏱️</span><b>Фокус-таймер</b><small>5 режимов, гиперфокус и визуальный диск времени</small></div>
+        <div class="ob-feature"><span>🗺️</span><b>Путь к деньгам</b><small>35 конкретных шагов: что делать в реальной жизни</small></div>
+        <div class="ob-feature"><span>🎧</span><b>Живая музыка</b><small>9 станций, которые пишутся прямо в браузере</small></div>
+        <div class="ob-feature"><span>⏱️</span><b>Фокус-таймер</b><small>6 режимов, гиперфокус и визуальный диск времени</small></div>
         <div class="ob-feature"><span>🏦</span><b>Бизнес-империя</b><small>задачи превращаются в пассивный доход</small></div>
-        <div class="ob-feature"><span>📚</span><b>Курс из 24 уроков</b><small>СДВГ, фокус, деньги, энергия</small></div>
       </div>
       <div class="row-end">
         <button class="btn btn-ghost" data-ob-prev>← Назад</button>
@@ -161,8 +161,9 @@
     <span class="tab-indicator" id="tab-indicator" aria-hidden="true"></span>
     <button class="tab-btn active" data-tab="dashboard" data-icon="home"><span class="tab-ico"></span><em>Главная</em><i class="tab-badge hidden"></i></button>
     <button class="tab-btn" data-tab="tasks" data-icon="tasks"><span class="tab-ico"></span><em>Задачи</em><i class="tab-badge hidden"></i></button>
+    <button class="tab-btn tab-path" data-tab="path" data-icon="path"><span class="tab-ico"></span><em>Путь</em><i class="tab-badge hidden"></i></button>
     <button class="tab-btn tab-accent" data-tab="adhd" data-icon="focus"><span class="tab-ico"></span><em>Фокус</em><i class="tab-badge hidden"></i></button>
-    <button class="tab-btn" data-tab="habits" data-icon="habits"><span class="tab-ico"></span><em>Привычки</em><i class="tab-badge hidden"></i></button>
+    <button class="tab-btn tab-overflow" data-tab="habits" data-icon="habits"><span class="tab-ico"></span><em>Привычки</em><i class="tab-badge hidden"></i></button>
     <button class="tab-btn tab-overflow" data-tab="goals" data-icon="goals"><span class="tab-ico"></span><em>Цели</em><i class="tab-badge hidden"></i></button>
     <button class="tab-btn tab-overflow" data-tab="lessons" data-icon="lessons"><span class="tab-ico"></span><em>Курс</em><i class="tab-badge hidden"></i></button>
     <button class="tab-btn tab-overflow" data-tab="empire" data-icon="empire"><span class="tab-ico"></span><em>Империя</em><i class="tab-badge hidden"></i></button>
@@ -214,6 +215,14 @@
             <button class="link-btn" id="next-refresh">другое</button>
           </div>
           <div id="next-action" class="next-action"></div>
+        </div>
+
+        <div class="card card-path tilt" data-card="path">
+          <div class="card-head">
+            <h3>🗺️ Твой путь</h3>
+            <button class="link-btn" data-goto-path>открыть</button>
+          </div>
+          <div id="dash-path"></div>
         </div>
 
         <div class="card quest-card tilt" data-card="quests">
@@ -601,6 +610,16 @@
     </section>
 
     <!-- ==================== КУРС ==================== -->
+    <!-- ==================== ПУТЬ ==================== -->
+    <section id="tab-path" class="tab-panel">
+      <div class="panel-header">
+        <h2>Путь к деньгам</h2>
+        <span class="badge" id="path-progress">0 / 35</span>
+      </div>
+      <p class="panel-sub">35 конкретных шагов от «денег нет» до «доход не зависит от меня». Один шаг за раз — приложение всегда показывает, какой.</p>
+      <div id="path-root"></div>
+    </section>
+
     <section id="tab-lessons" class="tab-panel">
       <div class="panel-header">
         <h2>Курс саморазвития</h2>
@@ -898,7 +917,9 @@
 <script src="js/screens-core.js"></script>
 <script src="js/screens-focus.js"></script>
 <script src="js/screens-meta.js"></script>
+<script src="js/path.js"></script>
 <script src="js/screens-extra.js"></script>
+<script src="js/screens-path.js"></script>
 <script src="js/advisor.js"></script>
 <script src="js/palette.js"></script>
 <script src="js/app.js"></script>

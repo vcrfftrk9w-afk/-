@@ -1086,3 +1086,181 @@
 .weekly-bar { height: 7px; border-radius: 7px; background: color-mix(in srgb, var(--border-strong) 60%, transparent); overflow: hidden; }
 .weekly-bar > i { display: block; height: 100%; border-radius: 7px; background: linear-gradient(90deg, var(--accent3), var(--accent)); transition: width var(--t-slow); }
 .weekly-meta { margin-top: 6px; font-size: 0.72rem; color: var(--text-muted); font-weight: 700; }
+
+/* =========================================================
+   ПУТЬ К ДЕНЬГАМ
+   ========================================================= */
+.panel-sub { color: var(--text-muted); font-size: 14px; margin: -6px 0 16px; max-width: 70ch; line-height: 1.55; }
+
+.path-hero { position: relative; overflow: hidden; }
+.path-hero::after {
+  content: ''; position: absolute; inset: auto -40% -70% auto; width: 320px; height: 320px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 28%, transparent), transparent 66%);
+  pointer-events: none;
+}
+.path-hero-top { display: flex; align-items: center; gap: 16px; position: relative; z-index: 1; }
+.path-hero-emoji {
+  font-size: 40px; width: 68px; height: 68px; flex: none; display: grid; place-items: center;
+  border-radius: 20px; background: var(--surface-2); border: 1px solid var(--border);
+  animation: float-y 5s ease-in-out infinite;
+}
+.path-hero-text { flex: 1; min-width: 0; }
+.path-hero-text small { color: var(--text-muted); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+.path-hero-text h3 { margin: 2px 0 2px; font-size: 24px; }
+.path-hero-text p { margin: 0; color: var(--text-muted); font-size: 14px; }
+.path-hero-pct { text-align: right; flex: none; }
+.path-hero-pct b { display: block; font-size: 28px; font-variant-numeric: tabular-nums; color: var(--accent); }
+.path-hero-pct small { color: var(--text-muted); font-size: 11px; }
+
+.path-bar { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin: 16px 0 8px; }
+.path-bar span {
+  display: block; height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transition: width var(--t-slow);
+}
+.path-hero-meta { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 12.5px; }
+
+.path-stepper {
+  display: flex; align-items: flex-start; gap: 0; margin-top: 18px;
+  overflow-x: auto; scrollbar-width: none; padding-bottom: 4px;
+}
+.path-stepper::-webkit-scrollbar { display: none; }
+.path-line { flex: 1 0 14px; height: 2px; background: var(--border); margin-top: 21px; min-width: 10px; }
+.path-dot {
+  flex: none; width: 74px; display: flex; flex-direction: column; align-items: center; gap: 5px;
+  background: none; border: 0; cursor: pointer; color: var(--text-muted); padding: 0;
+}
+.path-dot span {
+  width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font-size: 19px;
+  background: var(--surface-2); border: 2px solid var(--border); transition: transform var(--t-med), border-color var(--t-med);
+}
+.path-dot em { font-size: 10.5px; font-style: normal; text-align: center; line-height: 1.2; }
+.path-dot:hover span { transform: translateY(-3px) scale(1.06); }
+.path-dot.done span { border-color: var(--success); background: color-mix(in srgb, var(--success) 18%, var(--surface-2)); }
+.path-dot.done em { color: var(--success); }
+.path-dot.now span {
+  border-color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, var(--surface-2));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+  animation: glow-pulse 2.4s ease-in-out infinite;
+}
+.path-dot.now em { color: var(--text); font-weight: 700; }
+.path-dot.locked { opacity: .45; }
+
+.path-next { border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.path-next.done-all { text-align: center; }
+.path-next-tag {
+  display: inline-block; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent);
+  padding: 5px 11px; border-radius: 99px; margin-bottom: 10px;
+}
+.path-next h3, .path-modal h2 { margin: 0 0 12px; font-size: 21px; line-height: 1.3; }
+.path-why {
+  background: var(--surface-2); border-left: 3px solid var(--accent2); border-radius: 0 12px 12px 0;
+  padding: 11px 14px; font-size: 14px; line-height: 1.6; color: var(--text); margin-bottom: 14px;
+}
+.path-why b { color: var(--accent2); }
+.path-how b { font-size: 13px; letter-spacing: .03em; text-transform: uppercase; color: var(--text-muted); }
+.path-how ol { margin: 8px 0 0; padding-left: 20px; }
+.path-how li { margin-bottom: 7px; line-height: 1.55; font-size: 14.5px; }
+.path-reward {
+  margin: 14px 0; font-size: 13px; color: var(--accent3); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.path-next-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.path-next-actions .btn { flex: 1 1 auto; min-width: 150px; }
+
+/* трекер денег */
+.path-money .panel-header { margin-bottom: 4px; }
+.money-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 14px 0; }
+.money-field { display: flex; flex-direction: column; gap: 6px; }
+.money-field span { font-size: 12.5px; color: var(--text-muted); }
+.money-field input {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 11px 13px; color: var(--text); font-size: 16px; font-variant-numeric: tabular-nums;
+  transition: border-color var(--t-fast);
+}
+.money-field input:focus { outline: none; border-color: var(--accent); }
+.money-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 18px; }
+.money-stat {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px;
+}
+.money-stat small { display: block; color: var(--text-muted); font-size: 11.5px; margin-bottom: 4px; }
+.money-stat b { display: block; font-size: 19px; font-variant-numeric: tabular-nums; }
+.money-stat em { display: block; font-style: normal; font-size: 11.5px; color: var(--text-muted); margin-top: 3px; }
+.money-bars { margin-top: 16px; display: grid; gap: 10px; }
+.money-bar { display: flex; align-items: center; gap: 12px; }
+.money-bar span { flex: none; width: 74px; font-size: 12.5px; color: var(--text-muted); }
+.money-bar i { flex: 1; height: 9px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.money-bar b { display: block; height: 100%; border-radius: 99px; background: var(--success); transition: width var(--t-slow); }
+.money-bar b.alt { background: linear-gradient(90deg, var(--accent), var(--accent3)); }
+.money-warn {
+  margin-top: 14px; padding: 11px 14px; border-radius: 12px; font-size: 13.5px; line-height: 1.5;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+/* этапы */
+.path-stages { display: grid; gap: 12px; }
+.path-stage { padding: 0; overflow: hidden; }
+.path-stage-head {
+  width: 100%; display: flex; align-items: center; gap: 14px; padding: 16px 18px;
+  background: none; border: 0; cursor: pointer; color: var(--text); text-align: left;
+}
+.path-stage-head:hover { background: var(--surface-2); }
+.path-stage-emoji {
+  font-size: 24px; width: 46px; height: 46px; flex: none; display: grid; place-items: center;
+  background: var(--surface-2); border-radius: 14px; border: 1px solid var(--border);
+}
+.path-stage-title { flex: 1; min-width: 0; }
+.path-stage-title b { display: block; font-size: 16px; }
+.path-stage-title small { display: block; color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+.path-stage-count {
+  flex: none; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text-muted);
+  background: var(--surface-2); padding: 5px 10px; border-radius: 99px; border: 1px solid var(--border);
+}
+.path-stage.complete .path-stage-emoji { border-color: var(--success); background: color-mix(in srgb, var(--success) 16%, var(--surface-2)); }
+.path-stage.complete .path-stage-count { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+.path-stage.locked { opacity: .62; }
+.path-stage-body { display: none; padding: 0 18px 18px; }
+.path-stage.expanded .path-stage-body { display: block; animation: slide-up var(--t-med) ease both; }
+.path-goal {
+  font-size: 13.5px; line-height: 1.55; color: var(--text-muted); padding: 11px 14px;
+  background: var(--surface-2); border-radius: 12px; margin-bottom: 14px;
+}
+.path-goal b { color: var(--text); }
+.path-goal i { font-style: normal; opacity: .8; }
+.path-locked-note { font-size: 13.5px; color: var(--text-muted); }
+
+.path-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.path-step { display: flex; gap: 12px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--border); }
+.path-step:first-child { border-top: 0; }
+.path-check {
+  flex: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+  background: var(--surface-2); border: 2px solid var(--border); color: var(--text-muted);
+  display: grid; place-items: center; font-size: 12px; transition: all var(--t-fast);
+}
+.path-check i { font-style: normal; font-weight: 700; }
+.path-check:hover { border-color: var(--accent); transform: scale(1.1); }
+.path-step.done .path-check { background: var(--success); border-color: var(--success); color: #fff; }
+.path-step-body { flex: 1; min-width: 0; }
+.path-step-title {
+  background: none; border: 0; padding: 0; cursor: pointer; color: var(--text); text-align: left;
+  font-size: 14.5px; line-height: 1.45; font-weight: 600;
+}
+.path-step-title:hover { color: var(--accent); }
+.path-step.done .path-step-title { text-decoration: line-through; color: var(--text-muted); font-weight: 500; }
+.path-step-meta { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 11.5px; text-decoration: underline; }
+
+.path-modal { max-width: 560px; }
+
+/* карточка пути на главной */
+.card-path .path-card-step { font-size: 15px; font-weight: 600; line-height: 1.4; margin: 8px 0 10px; }
+.card-path .path-card-stage { font-size: 12.5px; color: var(--text-muted); }
+
+@media (max-width: 600px) {
+  .path-hero-emoji { width: 56px; height: 56px; font-size: 32px; }
+  .path-hero-text h3 { font-size: 20px; }
+  .path-hero-pct b { font-size: 22px; }
+  .path-next-actions .btn { min-width: 100%; }
+}

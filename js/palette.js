@@ -19,6 +19,7 @@ const Palette = (() => {
     const NAV = [
       ['dashboard', 'home', 'Главная', 'Квесты, персонаж, состояние дня'],
       ['tasks', 'tasks', 'Задачи', 'Список и матрица приоритетов'],
+      ['path', 'path', 'Путь к деньгам', '35 шагов от нуля до свободы'],
       ['adhd', 'focus', 'Фокус и СДВГ-инструменты', 'Таймер, музыка, рулетка, дыхание'],
       ['habits', 'habits', 'Привычки', 'Недельная сетка и стрики'],
       ['goals', 'goals', 'Цели', 'Большие цели и шаги'],
@@ -55,6 +56,22 @@ const Palette = (() => {
       { group: 'Действия', icon: 'settings', title: 'Настройки', sub: 'Тема, звук, доступность',
         run: () => $('#settings-btn').click() },
     );
+
+    // шаги пути
+    if (typeof Path !== 'undefined') {
+      const n = Path.nextStep();
+      if (n) list.push({
+        group: 'Действия', icon: 'path', title: 'Следующий шаг пути', sub: n.step.t,
+        run: () => App.go('path'),
+      });
+      Path.ALL.filter((x) => !Path.isDone(x.id)).slice(0, 40).forEach((step) => {
+        const st = Path.STAGES.find((x) => x.id === step.stage);
+        list.push({
+          group: 'Путь', emoji: st.emoji, title: step.t, sub: `${st.name} · +${step.xp} XP`,
+          run: () => { App.go('path'); setTimeout(() => Screens.path.openStep(step.id), 220); },
+        });
+      });
+    }
 
     // станции музыки
     Music.STATIONS.forEach((st) => list.push({

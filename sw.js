@@ -1,11 +1,29 @@
-const CACHE_NAME = 'ldm-cache-v1';
+const CACHE_NAME = 'ldm-cache-v2';
 const ASSETS = [
   './',
   './index.html',
-  './css/style.css',
-  './js/app.js',
   './manifest.json',
-  './icons/icon.svg'
+  './icons/icon.svg',
+  './css/base.css',
+  './css/components.css',
+  './css/screens.css',
+  './css/animations.css',
+  './js/icons.js',
+  './js/data.js',
+  './js/state.js',
+  './js/audio.js',
+  './js/music.js',
+  './js/fx.js',
+  './js/ui.js',
+  './js/screens-core.js',
+  './js/screens-focus.js',
+  './js/screens-meta.js',
+  './js/path.js',
+  './js/screens-extra.js',
+  './js/screens-path.js',
+  './js/advisor.js',
+  './js/palette.js',
+  './js/app.js'
 ];
 
 self.addEventListener('install', (event) => {

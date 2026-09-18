@@ -190,6 +190,7 @@ const Data = (() => {
 
   /* ---------- ЕЖЕДНЕВНЫЕ КВЕСТЫ ---------- */
   const QUEST_POOL = [
+    { id: 'q_path', emoji: '🧭', text: 'Сделай 1 шаг пути к деньгам', target: 1, metric: 'pathStep', xp: 60, coins: 50 },
     { id: 'q_tasks3', emoji: '✅', text: 'Выполни 3 задачи', target: 3, metric: 'tasks', xp: 30, coins: 20 },
     { id: 'q_tasks5', emoji: '🗂️', text: 'Выполни 5 задач', target: 5, metric: 'tasks', xp: 50, coins: 35 },
     { id: 'q_boss', emoji: '🔴', text: 'Закрой 1 важную или босс-задачу', target: 1, metric: 'bigTasks', xp: 45, coins: 30 },
@@ -279,6 +280,15 @@ const Data = (() => {
     { id: 'routine_20', emoji: '🗓️', name: 'Система дня', desc: '20 закрытых рутин', xp: 90, coins: 80, cond: (s) => (s.totals.routinesDone || 0) >= 20 },
     { id: 'returns_10', emoji: '🔄', name: 'Возвращенец', desc: '10 возвращений к фокусу после отвлечения', xp: 40, coins: 30, cond: (s) => (s.totals.returns || 0) >= 10 },
     { id: 'review_4', emoji: '📋', name: 'Ретроспектива', desc: '4 недельных итога', xp: 80, coins: 60, cond: (s) => (s.totals.reviewsDone || 0) >= 4 },
+    // путь к деньгам
+    { id: 'path_start', emoji: '🧭', name: 'Путь начат', desc: 'Сделай первый шаг пути к деньгам', xp: 30, coins: 30, cond: (s) => (s.totals.pathSteps || 0) >= 1 },
+    { id: 'path_5', emoji: '🗺️', name: 'Пять шагов', desc: '5 шагов пути позади', xp: 70, coins: 60, cond: (s) => (s.totals.pathSteps || 0) >= 5 },
+    { id: 'path_stage1', emoji: '🧱', name: 'Фундамент заложен', desc: 'Закрой первый этап пути', xp: 120, coins: 120, cond: (s) => (s.totals.pathStages || 0) >= 1 },
+    { id: 'path_stage3', emoji: '💡', name: 'Полдороги', desc: 'Закрой три этапа пути', xp: 250, coins: 250, cond: (s) => (s.totals.pathStages || 0) >= 3 },
+    { id: 'path_half', emoji: '🚶', name: 'Половина пути', desc: '18 шагов пути сделано', xp: 200, coins: 200, cond: (s) => (s.totals.pathSteps || 0) >= 18 },
+    { id: 'path_all', emoji: '🕊️', name: 'Весь путь', desc: 'Пройди все 35 шагов пути', xp: 800, coins: 900, cond: (s) => (s.totals.pathSteps || 0) >= 35 },
+    { id: 'money_tracked', emoji: '🧮', name: 'Цифры на столе', desc: 'Заполни трекер реальных денег', xp: 40, coins: 40, cond: (s) => !!(s.money && s.money.income > 0 && s.money.expenses > 0) },
+    { id: 'money_cushion', emoji: '🛟', name: 'Подушка готова', desc: 'Накопи месяц расходов в реальной жизни', xp: 300, coins: 300, cond: (s) => !!(s.money && s.money.expenses > 0 && s.money.cushion >= s.money.expenses) },
   ];
 
 
@@ -632,6 +642,12 @@ const Data = (() => {
     music_600: { val: (s) => s.totals.musicMinutes || 0, goal: 600 },
     routine_first: { val: (s) => s.totals.routinesDone || 0, goal: 1 },
     routine_20: { val: (s) => s.totals.routinesDone || 0, goal: 20 },
+    path_start: { val: (s) => (s.totals.pathSteps || 0), goal: 1 },
+    path_5: { val: (s) => (s.totals.pathSteps || 0), goal: 5 },
+    path_stage1: { val: (s) => (s.totals.pathStages || 0), goal: 1 },
+    path_stage3: { val: (s) => (s.totals.pathStages || 0), goal: 3 },
+    path_half: { val: (s) => (s.totals.pathSteps || 0), goal: 18 },
+    path_all: { val: (s) => (s.totals.pathSteps || 0), goal: 35 },
     returns_10: { val: (s) => s.totals.returns || 0, goal: 10 },
     review_4: { val: (s) => s.totals.reviewsDone || 0, goal: 4 },
   };

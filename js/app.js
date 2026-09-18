@@ -138,6 +138,7 @@ const App = (() => {
 
   /* ---------- лист «Ещё» (мобильная навигация) ---------- */
   const OVERFLOW = [
+    { tab: 'habits', icon: 'habits', name: 'Привычки', desc: 'Недельная сетка и стрики' },
     { tab: 'goals', icon: 'goals', name: 'Цели', desc: 'Большие цели и шаги к ним' },
     { tab: 'lessons', icon: 'lessons', name: 'Курс', desc: '24 урока по СДВГ, фокусу и деньгам' },
     { tab: 'empire', icon: 'empire', name: 'Империя', desc: 'Активы и пассивный доход' },
@@ -204,6 +205,7 @@ const App = (() => {
   const screenByTab = {
     dashboard: () => Screens.dashboard,
     tasks: () => Screens.tasks,
+    path: () => Screens.path,
     adhd: () => Screens.focus,
     habits: () => Screens.habits,
     goals: () => Screens.goals,
@@ -264,6 +266,19 @@ const App = (() => {
     State.on('change', () => renderActive());
 
     State.on('levelup', (info) => { pendingLevelUp = info; });
+
+    State.on('pathStage', (info) => {
+      Sound.sfx('fanfare');
+      FX.fireworks();
+      UI.sheet(`
+        <div class="path-stage-win">
+          <div class="path-hero-emoji" style="margin:0 auto 14px">${info.stage.emoji}</div>
+          <h2 style="text-align:center;margin:0 0 6px">Этап пройден: ${UI.esc(info.stage.name)}</h2>
+          <p class="muted" style="text-align:center">${UI.esc(info.stage.goal)}</p>
+          <div class="path-reward" style="text-align:center;font-size:16px">+${info.xp} XP · +${info.coins} 🪙</div>
+          <button class="btn btn-primary btn-block" id="path-win-ok">Дальше</button>
+        </div>`).querySelector('#path-win-ok').onclick = () => UI.closeModal('#sheet-modal');
+    });
 
     State.on('achievement', (a) => {
       UI.toast(`Достижение: ${a.name}`, 'level', a.emoji);
@@ -395,7 +410,7 @@ const App = (() => {
         if (e.key === 'Escape') e.target.blur();
         return;
       }
-      const tabs = ['dashboard', 'tasks', 'adhd', 'habits', 'goals', 'lessons', 'empire', 'rewards', 'stats'];
+      const tabs = ['dashboard', 'tasks', 'path', 'adhd', 'habits', 'goals', 'lessons', 'empire', 'rewards'];
       if (e.key >= '1' && e.key <= '9') { go(tabs[Number(e.key) - 1]); return; }
       const k = e.key.toLowerCase();
       if (k === 'n' || k === 'т') { go('tasks'); setTimeout(() => $('#task-title').focus(), 120); }
@@ -671,7 +686,7 @@ const App = (() => {
   }
 
   /* ---------- свайпы между вкладками ---------- */
-  const TAB_ORDER = ['dashboard', 'tasks', 'adhd', 'habits', 'goals', 'lessons', 'empire', 'rewards', 'stats'];
+  const TAB_ORDER = ['dashboard', 'tasks', 'path', 'adhd', 'habits', 'goals', 'lessons', 'empire', 'rewards', 'stats'];
   function bindSwipe() {
     const area = $('.content');
     if (!area) return;

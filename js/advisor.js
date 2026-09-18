@@ -16,6 +16,19 @@ const Advisor = (() => {
     const hour = new Date().getHours();
     const list = [];
 
+    if (typeof Path !== 'undefined') {
+      const n = Path.nextStep();
+      if (n) {
+        const stale = !s.path || !s.path.startedAt;
+        list.push({
+          emoji: n.stage.emoji, title: stale ? 'Начни путь к деньгам' : `Шаг пути: ${n.stage.name}`,
+          text: n.step.t,
+          action: stale ? 'Показать первый шаг' : 'Открыть путь', run: () => App.go('path'),
+          weight: stale ? 86 : 72,
+        });
+      }
+    }
+
     if (Screens.focus.running) {
       list.push({
         emoji: '🎯', title: 'Ты уже в фокусе',

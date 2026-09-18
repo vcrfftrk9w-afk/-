@@ -1316,3 +1316,29 @@
   background: var(--accent); border-color: var(--accent);
   box-shadow: inset 0 0 0 3px var(--surface-solid);
 }
+
+/* =========================================================
+   ВОЗВРАЩЕНИЕ ПОСЛЕ ПЕРЕРЫВА
+   ========================================================= */
+.comeback { text-align: center; max-width: 480px; }
+.comeback-emoji { font-size: 52px; animation: float-y 3.4s ease-in-out infinite; }
+.comeback h2 { margin: 10px 0 8px; font-size: 24px; }
+.comeback-kept { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 18px 0; }
+.comeback-chip {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; padding: 10px 6px;
+}
+.comeback-chip span { display: block; font-size: 18px; }
+.comeback-chip b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.comeback-chip small { display: block; color: var(--text-muted); font-size: 10.5px; }
+.comeback-step {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  border-radius: 16px; padding: 14px 16px; margin-bottom: 18px;
+}
+.comeback-step b { font-size: 12.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); }
+.comeback-step p { margin: 6px 0 0; font-size: 15.5px; line-height: 1.45; }
+.comeback-actions { display: flex; gap: 10px; flex-direction: column; }
+
+@media (max-width: 520px) {
+  .comeback-kept { grid-template-columns: repeat(2, 1fr); }
+}

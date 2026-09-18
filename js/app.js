@@ -391,6 +391,7 @@ const App = (() => {
     const today = State.todayKey();
     if (State.s.lastSeenDate === today) return;
     const first = !State.s.lastSeenDate;
+    const away = State.s.lastSeenDate ? State.daysBetween(State.s.lastSeenDate, today) : 0;
     State.s.lastSeenDate = today;
     State.ensureQuests();
     if (!first) {
@@ -401,6 +402,45 @@ const App = (() => {
       Sound.sfx('coin');
     }
     State.commit();
+    if (away >= 2) setTimeout(() => showComeback(away), 900);
+  }
+
+  /* ---------- возвращение после перерыва ----------
+     Без вины: перерыв — это не провал, а просто перерыв. Показываем,
+     что всё сохранено, и предлагаем один маленький шаг, а не весь список. */
+  function showComeback(days) {
+    const s = State.s;
+    const micro = Data.MICRO_STEPS[Math.floor(Math.random() * Data.MICRO_STEPS.length)];
+    const pathInfo = (typeof Path !== 'undefined' && Path.nextStep()) || null;
+    const kept = [
+      { emoji: '⭐', label: 'Уровень', value: s.level },
+      { emoji: '🪙', label: 'Монеты', value: UI.fmtShort ? UI.fmtShort(s.coins) : s.coins },
+      { emoji: '🏆', label: 'Достижений', value: State.unlockedAchievements() },
+      { emoji: '🧭', label: 'Шагов пути', value: typeof Path !== 'undefined' ? Path.doneCount() : 0 },
+    ];
+    const body = UI.sheet(`
+      <div class="comeback">
+        <div class="comeback-emoji">👋</div>
+        <h2>Тебя не было ${days} ${UI.plural(days, 'день', 'дня', 'дней')}</h2>
+        <p class="muted">И это нормально. Перерыв — не провал, а просто перерыв. Ничего из того, что ты сделал раньше, не пропало:</p>
+        <div class="comeback-kept">
+          ${kept.map((k) => `<div class="comeback-chip"><span>${k.emoji}</span><b>${k.value}</b><small>${k.label}</small></div>`).join('')}
+        </div>
+        <div class="comeback-step">
+          <b>Сегодня достаточно одного маленького действия</b>
+          <p>${UI.esc(pathInfo ? pathInfo.step.t : micro)}</p>
+        </div>
+        <div class="comeback-actions">
+          <button class="btn btn-primary btn-lg" id="cb-go">${pathInfo ? 'Показать этот шаг' : 'Хорошо, начну'}</button>
+          <button class="btn btn-ghost" id="cb-later">Просто осмотрюсь</button>
+        </div>
+      </div>`);
+    Sound.sfx('start');
+    body.querySelector('#cb-go').onclick = () => {
+      UI.closeModal('#sheet-modal');
+      if (pathInfo) { go('path'); } else { openCapture(); }
+    };
+    body.querySelector('#cb-later').onclick = () => UI.closeModal('#sheet-modal');
   }
 
   /* ---------- горячие клавиши ---------- */
@@ -842,7 +882,7 @@ const App = (() => {
     }, 850);
   }
 
-  return { init, go, applyAll, applyPalette, renderHeader, renderActive, openCapture, moveIndicator, paintMiniPlayIcon, focusTask: null };
+  return { init, go, showComeback, applyAll, applyPalette, renderHeader, renderActive, openCapture, moveIndicator, paintMiniPlayIcon, focusTask: null };
 })();
 
 document.addEventListener('DOMContentLoaded', App.init);

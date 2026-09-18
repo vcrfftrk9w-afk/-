@@ -1357,3 +1357,24 @@
 .path-lesson em { font-style: normal; }
 .path-lesson i { font-style: normal; font-size: 11px; color: var(--success); }
 .path-lesson.read { opacity: .72; }
+
+/* =========================================================
+   «ЧТО ЕСЛИ» — симулятор темпа
+   ========================================================= */
+.wi-slider { display: block; margin: 16px 0; }
+.wi-slider > span { display: block; font-size: 13.5px; color: var(--text-muted); margin-bottom: 8px; }
+.wi-slider > span b { color: var(--accent3); font-variant-numeric: tabular-nums; }
+.wi-slider input[type="range"] { width: 100%; }
+.wi-out { display: grid; gap: 8px; margin-top: 6px; }
+.wi-row {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 13px; padding: 11px 14px;
+}
+.wi-row > span { flex: 1; min-width: 140px; font-size: 13.5px; color: var(--text-muted); }
+.wi-row > b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.wi-row.muted > b { font-size: 15px; color: var(--text-muted); }
+.wi-gain {
+  font-style: normal; font-size: 12.5px; font-weight: 700; color: var(--success);
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  padding: 3px 9px; border-radius: 99px;
+}

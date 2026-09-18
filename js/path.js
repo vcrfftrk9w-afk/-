@@ -581,8 +581,36 @@ const Path = (() => {
     return { free, savingRate, cushionMonths, freedomNumber, passiveNow, freedomPct, yearsToFreedom, ...m };
   }
 
+  /* ---------- «что если»: сколько лет до цели при другом темпе ---------- */
+  function monthsTo(target, startCapital, perMonth, ratePct) {
+    if (perMonth <= 0 && startCapital <= 0) return null;
+    const r = (ratePct / 100) / 12;
+    let bal = startCapital, m = 0;
+    while (bal < target && m < 1200) { bal = bal * (1 + r) + perMonth; m++; }
+    return m >= 1200 ? null : m;
+  }
+
+  function project(opts) {
+    const m = money();
+    const extra = Math.max(0, opts.extraIncome || 0);
+    const cut = Math.max(0, opts.cutExpenses || 0);
+    const rate = opts.rate === undefined ? 7 : opts.rate;
+    const expenses = Math.max(0, m.expenses - cut);
+    const perMonth = Math.max(0, m.income + extra - expenses);
+    const freedomTarget = expenses * 12 * 25;
+    const mi = monthsTo(1000000, m.capital, perMonth, rate);
+    const fr = expenses > 0 ? monthsTo(freedomTarget, m.capital, perMonth, rate) : null;
+    const years = (x) => (x === null ? null : Math.round((x / 12) * 10) / 10);
+    return {
+      perMonth, expenses, freedomTarget,
+      millionYears: years(mi), freedomYears: years(fr),
+      baseMillionYears: years(monthsTo(1000000, m.capital, Math.max(0, m.income - m.expenses), rate)),
+      baseFreedomYears: m.expenses > 0 ? years(monthsTo(m.expenses * 12 * 25, m.capital, Math.max(0, m.income - m.expenses), rate)) : null,
+    };
+  }
+
   return {
-    STAGES, ALL, STEP_COUNT,
+    STAGES, ALL, STEP_COUNT, project,
     isDone, doneCount, stageDone, stageComplete, stageOpen,
     currentIndex, currentStage, nextStep, progressPct, toggle,
     money, setMoney, calc,

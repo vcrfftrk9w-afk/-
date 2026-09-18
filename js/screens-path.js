@@ -85,7 +85,7 @@ Screens.path = (() => {
           <div class="money-stat"><small>Свободный остаток</small><b>${fmt(c.free)}</b><em>${c.savingRate}% от дохода</em></div>
           <div class="money-stat"><small>Подушка</small><b>${(Math.round(c.cushionMonths * 10) / 10)} мес.</b><em>цель — 1 месяц</em></div>
           <div class="money-stat"><small>Пассив сейчас</small><b>${fmt(c.passiveNow)}/мес</b><em>${Math.round(c.freedomPct)}% расходов</em></div>
-          <div class="money-stat"><small>Цифра свободы</small><b>${fmt(c.freedomNumber)}</b><em>${c.yearsToFreedom !== null ? `≈ ${c.yearsToFreedom} лет при текущем темпе` : 'нужен положительный остаток'}</em></div>
+          <div class="money-stat"><small>Цифра свободы</small><b>${fmt(c.freedomNumber)}</b><em>${c.yearsToFreedom !== null ? `≈ ${years(c.yearsToFreedom)} при текущем темпе` : 'нужен положительный остаток'}</em></div>
         </div>
         <div class="money-bars">
           <div class="money-bar"><span>Подушка</span><i><b style="width:${cushionPct}%"></b></i></div>
@@ -108,6 +108,56 @@ Screens.path = (() => {
         </div>
         <button class="btn btn-primary btn-block" id="m-save">Пересчитать</button>
         <div id="money-out-wrap">${moneyOutHTML(Path.calc())}</div>
+      </div>`;
+  }
+
+
+  /* ---------- «что если» ---------- */
+  const WI = { extraIncome: 0, cutExpenses: 0 };
+
+  /* по-русски: 1 год, 2 года, 5 лет, но дробное — всегда «года» (1,3 года) */
+  function years(n) {
+    const v = Math.round(n * 10) / 10;
+    return Number.isInteger(v) ? `${v} ${UI.plural(v, 'год', 'года', 'лет')}` : `${v} года`;
+  }
+
+  function whatIfOutHTML() {
+    const pr = Path.project(WI);
+    const m = Path.money();
+    const fmt = (v) => UI.fmt(Math.round(v));
+    if (!m.income && !m.expenses) {
+      return `<p class="muted small">Заполни доход и расходы выше — и приложение посчитает, через сколько лет ты станешь миллионером и когда сможешь не работать.</p>`;
+    }
+    const line = (label, now, base) => {
+      const diff = (base !== null && now !== null) ? Math.round((base - now) * 10) / 10 : null;
+      return `<div class="wi-row">
+        <span>${label}</span>
+        <b>${now === null ? 'никогда при таком темпе' : years(now)}</b>
+        ${diff && diff > 0 ? `<em class="wi-gain">−${years(diff)}</em>` : ''}
+      </div>`;
+    };
+    return `
+      <div class="wi-out">
+        ${line('Первый миллион', pr.millionYears, pr.baseMillionYears)}
+        ${line('Свобода (пассив покрывает жизнь)', pr.freedomYears, pr.baseFreedomYears)}
+        <div class="wi-row muted"><span>Откладываешь в месяц</span><b>${fmt(pr.perMonth)}</b></div>
+      </div>`;
+  }
+
+  function whatIfHTML() {
+    return `
+      <div class="card path-whatif">
+        <div class="panel-header"><h3>Что если</h3><span class="badge">твои цифры</span></div>
+        <p class="muted small">Подвигай ползунки и посмотри, что делает с твоей жизнью лишняя тысяча в месяц. Это тот же расчёт, что и выше, только с другим тобой.</p>
+        <label class="wi-slider">
+          <span>Дополнительный доход <b id="wi-inc-val">${UI.fmt(WI.extraIncome)}</b> в месяц</span>
+          <input type="range" id="wi-inc" min="0" max="100000" step="1000" value="${WI.extraIncome}">
+        </label>
+        <label class="wi-slider">
+          <span>Урезать расходы на <b id="wi-cut-val">${UI.fmt(WI.cutExpenses)}</b> в месяц</span>
+          <input type="range" id="wi-cut" min="0" max="50000" step="500" value="${WI.cutExpenses}">
+        </label>
+        <div id="wi-out-wrap">${whatIfOutHTML()}</div>
       </div>`;
   }
 
@@ -254,7 +304,7 @@ Screens.path = (() => {
     if (!root) return;
     const badge = $('#path-progress');
     if (badge) badge.textContent = `${Path.doneCount()} / ${Path.STEP_COUNT}`;
-    root.innerHTML = heroHTML() + nextHTML() + moneyHTML() + stagesHTML();
+    root.innerHTML = heroHTML() + nextHTML() + moneyHTML() + whatIfHTML() + stagesHTML();
     UI.initTilt();
     if (!bound) bindRoot(root);
   }
@@ -262,6 +312,14 @@ Screens.path = (() => {
   function bindRoot(root) {
     bound = true;
     root.addEventListener('input', (e) => {
+      if (e.target.matches('#wi-inc, #wi-cut')) {
+        WI.extraIncome = Number($('#wi-inc').value) || 0;
+        WI.cutExpenses = Number($('#wi-cut').value) || 0;
+        $('#wi-inc-val').textContent = UI.fmt(WI.extraIncome);
+        $('#wi-cut-val').textContent = UI.fmt(WI.cutExpenses);
+        $('#wi-out-wrap').innerHTML = whatIfOutHTML();
+        return;
+      }
       if (!e.target.matches('#m-income, #m-expenses, #m-cushion, #m-capital')) return;
       Path.setMoney({
         income: $('#m-income').value, expenses: $('#m-expenses').value,
@@ -269,6 +327,8 @@ Screens.path = (() => {
       }, true);
       const wrap = $('#money-out-wrap');
       if (wrap) wrap.innerHTML = moneyOutHTML(Path.calc());
+      const wi = $('#wi-out-wrap');
+      if (wi) wi.innerHTML = whatIfOutHTML();
     });
     root.addEventListener('click', (e) => {
       const jump = e.target.closest('[data-jump]');

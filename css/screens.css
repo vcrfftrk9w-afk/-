@@ -1396,3 +1396,14 @@
 }
 .path-micro b { font-size: 12.5px; letter-spacing: .03em; text-transform: uppercase; color: var(--accent3); }
 .path-micro p { margin: 6px 0 10px; font-size: 14.5px; line-height: 1.45; }
+
+/* типичные ошибки этапа */
+.path-traps {
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 26%, transparent);
+  border-radius: 14px; padding: 12px 15px; margin: 0 0 14px;
+}
+.path-traps > b { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--danger); }
+.path-traps ul { margin: 8px 0 0; padding-left: 18px; }
+.path-traps li { font-size: 13.5px; line-height: 1.5; margin-bottom: 5px; color: var(--text-muted); }
+.path-traps li::marker { color: var(--danger); }

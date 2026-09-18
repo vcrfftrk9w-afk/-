@@ -187,6 +187,11 @@ Screens.path = (() => {
           </button>
           <div class="path-stage-body">
             <div class="path-goal"><b>Результат этапа.</b> ${UI.esc(st.goal)} <i>· ${UI.esc(st.time)}</i></div>
+            ${open && st.traps && st.traps.length ? `
+              <div class="path-traps">
+                <b>На чём здесь спотыкаются</b>
+                <ul>${st.traps.map((t) => `<li>${UI.esc(t)}</li>`).join('')}</ul>
+              </div>` : ''}
             ${open && st.lessons && st.lessons.length ? `
               <div class="path-reading">
                 <b>Почитать на этом этапе</b>

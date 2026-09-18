@@ -35,8 +35,7 @@ Screens.dashboard = (() => {
   let moodDraft = null;
 
   function bind() {
-    const gp = document.querySelector('[data-goto-path]');
-    if (gp) gp.addEventListener('click', () => App.go('path'));
+    document.querySelectorAll('[data-goto-path]').forEach((b) => b.addEventListener('click', () => App.go('path')));
     Screens.helpers.fillSelect($('#quick-priority'), Data.PRIORITIES.map((p) => ({ value: p.id, label: `${p.emoji} ${p.name} · ${p.xp} XP` })), 'mid');
 
     $('#quick-form').addEventListener('submit', (e) => {

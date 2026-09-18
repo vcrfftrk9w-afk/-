@@ -115,6 +115,12 @@ const App = (() => {
       return (i === 0 || prev > 0) && s.coins >= State.assetCost(a.id);
     });
     set('empire', affordable, true);
+    // точка на «Пути», если сегодня ещё не сделан ни один шаг
+    if (typeof Path !== 'undefined') {
+      const since = new Date(); since.setHours(0, 0, 0, 0);
+      const todayStep = Path.ALL.some((x) => (s.path.done[x.id] || 0) >= since.getTime());
+      set('path', !todayStep && !!Path.nextStep(), true);
+    }
     const unseen = State.unlockedAchievements() - (s.seenAchievements || 0);
     set('rewards', Math.max(0, unseen));
 
@@ -383,6 +389,7 @@ const App = (() => {
     // смена дня
     setInterval(() => {
       if (State.s.lastSeenDate && State.s.lastSeenDate !== State.todayKey()) dailyCheckIn();
+      pathNudge();
     }, 60000);
   }
 
@@ -403,6 +410,22 @@ const App = (() => {
     }
     State.commit();
     if (away >= 2) setTimeout(() => showComeback(away), 900);
+  }
+
+  /* ---------- вечерний толчок: шаг пути ещё не сделан ---------- */
+  function pathNudge() {
+    if (typeof Path === 'undefined') return;
+    const s = State.s;
+    const hour = new Date().getHours();
+    if (hour < 19 || hour > 22) return;
+    if (s.pathNudgeDate === State.todayKey()) return;
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    if (Path.ALL.some((x) => (s.path.done[x.id] || 0) >= midnight.getTime())) return;
+    const n = Path.nextStep();
+    if (!n) return;
+    s.pathNudgeDate = State.todayKey();
+    State.save();
+    UI.toast(`Шаг пути ещё ждёт: ${n.step.t}`, 'default', '🧭');
   }
 
   /* ---------- возвращение после перерыва ----------

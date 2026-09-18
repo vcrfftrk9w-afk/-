@@ -511,6 +511,26 @@ const App = (() => {
       Sound.sfx('pop');
     }));
 
+    // живой расчёт прямо в онбординге: две цифры — и видно, сколько лет до миллиона
+    const obMoney = () => {
+      const inc = Number($('#ob-income').value) || 0;
+      const exp = Number($('#ob-expenses').value) || 0;
+      const out = $('#ob-money-out');
+      if (!inc || !exp) { out.classList.add('hidden'); return; }
+      State.s.money = { ...State.s.money, income: inc, expenses: exp };
+      const free = Math.max(0, inc - exp);
+      const pr = Path.project({});
+      out.classList.remove('hidden');
+      out.innerHTML = free <= 0
+        ? `<b>Расходы съедают весь доход.</b><span>Первый шаг пути как раз про это — приложение покажет, где искать.</span>`
+        : `<b>Откладывая ${UI.fmt(free)} в месяц, ты дойдёшь до первого миллиона примерно за ${pr.millionYears === null ? 'очень долго' : UI.years(pr.millionYears)}.</b><span>Внутри есть ползунок «что если» — посмотришь, как это меняется, если поднять доход.</span>`;
+      State.save();
+    };
+    ['#ob-income', '#ob-expenses'].forEach((sel) => {
+      const el = $(sel);
+      if (el) el.addEventListener('input', obMoney);
+    });
+
     $('#ob-start').addEventListener('click', () => {
       const s = State.s;
       s.name = $('#ob-name').value.trim();

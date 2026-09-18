@@ -121,11 +121,7 @@ Screens.path = (() => {
   /* ---------- «что если» ---------- */
   const WI = { extraIncome: 0, cutExpenses: 0 };
 
-  /* по-русски: 1 год, 2 года, 5 лет, но дробное — всегда «года» (1,3 года) */
-  function years(n) {
-    const v = Math.round(n * 10) / 10;
-    return Number.isInteger(v) ? `${v} ${UI.plural(v, 'год', 'года', 'лет')}` : `${v} года`;
-  }
+  const years = UI.years;
 
   function whatIfOutHTML() {
     const pr = Path.project(WI);

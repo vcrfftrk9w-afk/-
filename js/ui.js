@@ -43,6 +43,13 @@ const UI = (() => {
   }
   const plur = (n, one, few, many) => `${fmt(n)} ${plural(n, one, few, many)}`;
 
+  /* «1 год», «2 года», «5 лет», но дробное всегда «года»: 3,1 года */
+  function years(n) {
+    const v = Math.round(n * 10) / 10;
+    if (Number.isInteger(v)) return `${v} ${plural(v, 'год', 'года', 'лет')}`;
+    return `${String(v).replace('.', ',')} года`;
+  }
+
   function fmtMin(n) {
     const h = Math.floor(n / 60), m = Math.round(n % 60);
     return h > 0 ? `${h} ч ${m} мин` : `${m} мин`;
@@ -210,7 +217,7 @@ const UI = (() => {
   const WEEKDAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
   return {
-    $, $$, esc, fmt, fmtShort, fmtSmart, fmtMin, plural, plur, countUp, toast, openModal, closeModal,
+    $, $$, esc, fmt, fmtShort, fmtSmart, fmtMin, plural, plur, years, countUp, toast, openModal, closeModal,
     sheet, confirm, initTilt, initRipple, node, timeAgo, hhmm, dateLabel, WEEKDAYS, preserveFocus,
   };
 })();

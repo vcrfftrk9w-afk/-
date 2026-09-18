@@ -37,7 +37,7 @@
 <!-- ==================== ОНБОРДИНГ ==================== -->
 <div id="onboarding" class="onboarding hidden">
   <div class="onboarding-card">
-    <div class="onboarding-steps"><i class="active"></i><i></i><i></i><i></i></div>
+    <div class="onboarding-steps"><i class="active"></i><i></i><i></i><i></i><i></i></div>
 
     <section class="ob-step active" data-step="0">
       <div class="ob-emoji">🦥</div>
@@ -89,6 +89,27 @@
     </section>
 
     <section class="ob-step" data-step="3">
+      <div class="ob-emoji">💰</div>
+      <h1>Две цифры</h1>
+      <p class="muted">Приблизительно — можно уточнить потом. Без них приложение не сможет посчитать, сколько тебе осталось до первого миллиона. Можно пропустить.</p>
+      <div class="ob-money">
+        <label class="field">
+          <span>Доход в месяц</span>
+          <input id="ob-income" type="number" min="0" inputmode="numeric" placeholder="например, 80000" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Расходы в месяц</span>
+          <input id="ob-expenses" type="number" min="0" inputmode="numeric" placeholder="например, 55000" autocomplete="off">
+        </label>
+      </div>
+      <div id="ob-money-out" class="ob-money-out hidden"></div>
+      <div class="row-end">
+        <button class="btn btn-ghost" data-ob-prev>← Назад</button>
+        <button class="btn btn-primary" data-ob-next>Дальше →</button>
+      </div>
+    </section>
+
+    <section class="ob-step" data-step="4">
       <div class="ob-emoji">🎯</div>
       <h1>Первая цель</h1>
       <p class="muted">Что ты хочешь изменить в ближайшие 3 месяца? Можно пропустить и добавить позже.</p>

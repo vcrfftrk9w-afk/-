@@ -355,3 +355,14 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 .ob-feature b { font-size: 0.86rem; }
 .ob-feature small { font-size: 0.7rem; color: var(--text-muted); line-height: 1.35; }
 @media (max-width: 480px) { .ob-features { grid-template-columns: 1fr; } }
+
+/* онбординг: шаг с двумя цифрами */
+.ob-money { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ob-money-out {
+  margin-top: 14px; padding: 12px 15px; border-radius: 14px; text-align: left;
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+}
+.ob-money-out b { display: block; font-size: 15px; line-height: 1.4; }
+.ob-money-out span { display: block; font-size: 13px; color: var(--text-muted); margin-top: 5px; }
+@media (max-width: 480px) { .ob-money { grid-template-columns: 1fr; } }

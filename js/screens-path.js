@@ -68,6 +68,12 @@ Screens.path = (() => {
           <b>Как сделать</b>
           <ol>${step.how.map((h) => `<li>${UI.esc(h)}</li>`).join('')}</ol>
         </div>
+        ${State.s.mode === 'adhd' ? `
+          <div class="path-micro">
+            <b>⚡ Слишком много? Начни с этого</b>
+            <p>${UI.esc(step.how[0])}</p>
+            <button class="btn btn-accent btn-sm" data-micro="${step.id}">5 минут на это</button>
+          </div>` : ''}
         <div class="path-reward">+${step.xp} XP · +${step.coins} 🪙</div>
         <div class="path-next-actions">
           <button class="btn btn-primary" data-done="${step.id}">${Icons.get('check', { size: 18 })} Сделал</button>
@@ -337,6 +343,7 @@ Screens.path = (() => {
       const openBtn = e.target.closest('[data-open]');
       const actBtn = e.target.closest('[data-act]');
       const lessonBtn = e.target.closest('[data-lesson]');
+      const microBtn = e.target.closest('[data-micro]');
       const save = e.target.closest('#m-save');
 
       if (save) {
@@ -353,6 +360,12 @@ Screens.path = (() => {
       if (doneBtn) { markDone(doneBtn.dataset.done); return; }
       if (openBtn) { openStep(openBtn.dataset.open); return; }
       if (actBtn) { runAct(actBtn.dataset.act, actBtn.dataset.step); return; }
+      if (microBtn) {
+        const st = Path.ALL.find((x) => x.id === microBtn.dataset.micro);
+        App.go('adhd');
+        setTimeout(() => Screens.focus.quickStart(5, st ? st.how[0] : ''), 250);
+        return;
+      }
       if (lessonBtn) { App.go('lessons'); setTimeout(() => Screens.lessons.openById(lessonBtn.dataset.lesson), 220); return; }
     });
   }

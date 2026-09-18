@@ -1387,3 +1387,12 @@
 }
 .review-path b { display: block; font-size: 15px; }
 .review-path p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--text-muted); }
+
+/* микро-старт шага (СДВГ-режим) */
+.path-micro {
+  background: color-mix(in srgb, var(--accent3) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent3) 36%, transparent);
+  border-radius: 14px; padding: 12px 15px; margin: 0 0 14px;
+}
+.path-micro b { font-size: 12.5px; letter-spacing: .03em; text-transform: uppercase; color: var(--accent3); }
+.path-micro p { margin: 6px 0 10px; font-size: 14.5px; line-height: 1.45; }

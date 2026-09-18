@@ -10,6 +10,7 @@ const Path = (() => {
   const STAGES = [
     {
       id: 'base',
+      lessons: ['money1', 'prod2', 'adhd4'],
       emoji: '🧱',
       name: 'Фундамент',
       tagline: 'Узнать правду о своих деньгах',
@@ -75,6 +76,7 @@ const Path = (() => {
     },
     {
       id: 'cushion',
+      lessons: ['money2', 'money3', 'prod4'],
       emoji: '🛟',
       name: 'Подушка',
       tagline: 'Месяц жизни в запасе',
@@ -140,6 +142,7 @@ const Path = (() => {
     },
     {
       id: 'skill',
+      lessons: ['money6', 'adhd3', 'prod5'],
       emoji: '💡',
       name: 'Навык',
       tagline: 'То, за что реально платят',
@@ -205,6 +208,7 @@ const Path = (() => {
     },
     {
       id: 'income',
+      lessons: ['money6', 'prod1', 'adhd8'],
       emoji: '💵',
       name: 'Первый доход',
       tagline: 'Первые деньги со стороны',
@@ -270,6 +274,7 @@ const Path = (() => {
     },
     {
       id: 'system',
+      lessons: ['prod4', 'prod5', 'prod6'],
       emoji: '⚙️',
       name: 'Система',
       tagline: 'Доход, который повторяется',
@@ -335,6 +340,7 @@ const Path = (() => {
     },
     {
       id: 'capital',
+      lessons: ['money4', 'money5', 'money3'],
       emoji: '📈',
       name: 'Капитал',
       tagline: 'Деньги начинают работать',
@@ -401,6 +407,7 @@ const Path = (() => {
     },
     {
       id: 'freedom',
+      lessons: ['money5', 'money4', 'energy4'],
       emoji: '🕊️',
       name: 'Свобода',
       tagline: 'Доход не зависит от твоего дня',

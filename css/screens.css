@@ -1342,3 +1342,18 @@
 @media (max-width: 520px) {
   .comeback-kept { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* уроки, привязанные к этапу пути */
+.path-reading { margin: 0 0 14px; }
+.path-reading > b { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+.path-reading-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.path-lesson {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 99px;
+  padding: 7px 13px; color: var(--text); font-size: 13px;
+  transition: border-color var(--t-fast), transform var(--t-fast);
+}
+.path-lesson:hover { border-color: var(--accent2); transform: translateY(-2px); }
+.path-lesson em { font-style: normal; }
+.path-lesson i { font-style: normal; font-size: 11px; color: var(--success); }
+.path-lesson.read { opacity: .72; }

@@ -624,6 +624,9 @@ Screens.stats = (() => {
       ['📚', Object.keys(s.lessons.read).length, 'уроков пройдено'],
       ['📜', s.totals.questsDone, 'квестов выполнено'],
       ['🏆', State.unlockedAchievements(), 'достижений'],
+      ['🧭', (s.totals.pathSteps || 0), 'шагов пути'],
+      ['🗺️', (s.totals.pathStages || 0), 'этапов пути закрыто'],
+      ['🤝', (s.totals.pledgesKept || 0), 'обещаний сдержано'],
     ];
     const root = $('#stat-numbers');
     root.innerHTML = items.map(([emoji, value, label]) => `

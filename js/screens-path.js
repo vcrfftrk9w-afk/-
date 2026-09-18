@@ -131,6 +131,19 @@ Screens.path = (() => {
           </button>
           <div class="path-stage-body">
             <div class="path-goal"><b>Результат этапа.</b> ${UI.esc(st.goal)} <i>· ${UI.esc(st.time)}</i></div>
+            ${open && st.lessons && st.lessons.length ? `
+              <div class="path-reading">
+                <b>Почитать на этом этапе</b>
+                <div class="path-reading-list">
+                  ${st.lessons.map((lid) => {
+                    const l = Data.LESSONS.find((x) => x.id === lid);
+                    if (!l) return '';
+                    const read = !!State.s.lessons.read[lid];
+                    return `<button class="path-lesson ${read ? 'read' : ''}" data-lesson="${lid}">
+                      <span>${l.emoji}</span><em>${UI.esc(l.title)}</em>${read ? '<i>прочитано</i>' : ''}</button>`;
+                  }).join('')}
+                </div>
+              </div>` : ''}
             ${!open ? `<div class="path-locked-note">Откроется, когда закроешь этап «${UI.esc(Path.STAGES[i - 1].name)}».</div>` : `
             <ul class="path-steps">
               ${st.steps.map((step, j) => {
@@ -263,6 +276,7 @@ Screens.path = (() => {
       const doneBtn = e.target.closest('[data-done]');
       const openBtn = e.target.closest('[data-open]');
       const actBtn = e.target.closest('[data-act]');
+      const lessonBtn = e.target.closest('[data-lesson]');
       const save = e.target.closest('#m-save');
 
       if (save) {
@@ -279,6 +293,7 @@ Screens.path = (() => {
       if (doneBtn) { markDone(doneBtn.dataset.done); return; }
       if (openBtn) { openStep(openBtn.dataset.open); return; }
       if (actBtn) { runAct(actBtn.dataset.act, actBtn.dataset.step); return; }
+      if (lessonBtn) { App.go('lessons'); setTimeout(() => Screens.lessons.openById(lessonBtn.dataset.lesson), 220); return; }
     });
   }
 

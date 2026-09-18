@@ -119,6 +119,7 @@ Screens.dashboard = (() => {
     { id: 'hero', name: 'Персонаж и уровень' },
     { id: 'next', name: 'Что дальше' },
     { id: 'path', name: 'Твой путь к деньгам' },
+    { id: 'pledge', name: 'Обещание дня (3 дела)' },
     { id: 'quests', name: 'Квесты дня' },
     { id: 'quickadd', name: 'Быстрая задача и микро-шаг' },
     { id: 'today', name: 'Задачи на сегодня' },
@@ -427,6 +428,7 @@ Screens.dashboard = (() => {
     renderStreak();
     renderFocusGoal();
     renderPathCard();
+    if (Screens.pledge) Screens.pledge.render();
     applyCards();
     Advisor.renderNext();
     Screens.routines.render();

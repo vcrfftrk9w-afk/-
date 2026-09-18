@@ -288,6 +288,9 @@ const Data = (() => {
     { id: 'path_half', emoji: '🚶', name: 'Половина пути', desc: '18 шагов пути сделано', xp: 200, coins: 200, cond: (s) => (s.totals.pathSteps || 0) >= 18 },
     { id: 'path_all', emoji: '🕊️', name: 'Весь путь', desc: 'Пройди все 35 шагов пути', xp: 800, coins: 900, cond: (s) => (s.totals.pathSteps || 0) >= 35 },
     { id: 'money_tracked', emoji: '🧮', name: 'Цифры на столе', desc: 'Заполни трекер реальных денег', xp: 40, coins: 40, cond: (s) => !!(s.money && s.money.income > 0 && s.money.expenses > 0) },
+    { id: 'pledge_1', emoji: '🤝', name: 'Слово держу', desc: 'Сдержи обещание дня первый раз', xp: 40, coins: 40, cond: (s) => (s.totals.pledgesKept || 0) >= 1 },
+    { id: 'pledge_7', emoji: '🪢', name: 'Неделя слова', desc: 'Сдержи обещание дня 7 раз', xp: 150, coins: 140, cond: (s) => (s.totals.pledgesKept || 0) >= 7 },
+    { id: 'pledge_30', emoji: '⚓', name: 'Человек слова', desc: 'Сдержи обещание дня 30 раз', xp: 400, coins: 400, cond: (s) => (s.totals.pledgesKept || 0) >= 30 },
     { id: 'money_cushion', emoji: '🛟', name: 'Подушка готова', desc: 'Накопи месяц расходов в реальной жизни', xp: 300, coins: 300, cond: (s) => !!(s.money && s.money.expenses > 0 && s.money.cushion >= s.money.expenses) },
   ];
 
@@ -642,6 +645,9 @@ const Data = (() => {
     music_600: { val: (s) => s.totals.musicMinutes || 0, goal: 600 },
     routine_first: { val: (s) => s.totals.routinesDone || 0, goal: 1 },
     routine_20: { val: (s) => s.totals.routinesDone || 0, goal: 20 },
+    pledge_1: { val: (s) => (s.totals.pledgesKept || 0), goal: 1 },
+    pledge_7: { val: (s) => (s.totals.pledgesKept || 0), goal: 7 },
+    pledge_30: { val: (s) => (s.totals.pledgesKept || 0), goal: 30 },
     path_start: { val: (s) => (s.totals.pathSteps || 0), goal: 1 },
     path_5: { val: (s) => (s.totals.pathSteps || 0), goal: 5 },
     path_stage1: { val: (s) => (s.totals.pathStages || 0), goal: 1 },

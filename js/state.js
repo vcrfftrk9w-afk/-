@@ -74,6 +74,7 @@ const State = (() => {
       focusLog: [],
       weeklyReviews: {},
       path: { done: {}, claimed: {}, startedAt: null, stage: 0 },
+      pledge: { date: null, items: [], rewarded: false },
       money: { income: 0, expenses: 0, cushion: 0, capital: 0, updated: null },
       achievements: {},
 
@@ -83,7 +84,7 @@ const State = (() => {
         breathingSessions: 0, rewardsBought: 0, dumpCount: 0, distractionCount: 0,
         rouletteSpins: 0, questsDone: 0, hyperfocus: 0, perfectHabitDays: 0,
         nightTasks: 0, earlyTasks: 0, lessonsRead: 0, musicMinutes: 0,
-        returns: 0, routinesDone: 0, reviewsDone: 0, pathSteps: 0, pathStages: 0,
+        returns: 0, routinesDone: 0, reviewsDone: 0, pathSteps: 0, pathStages: 0, pledgesKept: 0,
       },
 
       dailyTaskCounts: {},

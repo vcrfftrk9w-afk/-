@@ -54,6 +54,7 @@ const State = (() => {
       moods: {},
       lessons: { read: {}, actions: {} },
       quests: { date: null, ids: [], progress: {}, done: {} },
+      weekly: { week: null, id: null, claimed: false },
       boosters: { xpUntil: 0, coinUntil: 0, streakSaves: 0 },
       business: { assets: {}, invested: 0, lastTick: Date.now(), millionaireAt: null },
       soundMix: {},
@@ -148,6 +149,7 @@ const State = (() => {
   function emit(evt, payload) { (listeners[evt] || []).forEach((fn) => fn(payload)); }
 
   function commit() {
+    checkWeekly();
     checkAchievements();
     save();
     emit('change');
@@ -344,6 +346,64 @@ const State = (() => {
     if (completed) emit('quest', completed);
   }
 
+  /* ---------- недельный вызов ---------- */
+  function weekKey() {
+    const d = new Date();
+    const onejan = new Date(d.getFullYear(), 0, 1);
+    const week = Math.ceil(((d - onejan) / 86400000 + onejan.getDay() + 1) / 7);
+    return `${d.getFullYear()}-W${week}`;
+  }
+
+  function ensureWeekly() {
+    const wk = weekKey();
+    if (s.weekly.week === wk && s.weekly.id) return;
+    const h = hashDate(wk);
+    const pick = Data.WEEKLY_POOL[h % Data.WEEKLY_POOL.length];
+    s.weekly = { week: wk, id: pick.id, claimed: false };
+  }
+
+  function weeklyChallenge() {
+    ensureWeekly();
+    return Data.WEEKLY_POOL.find((w) => w.id === s.weekly.id) || Data.WEEKLY_POOL[0];
+  }
+
+  /* прогресс считается прямо из истории — ничего дополнительно хранить не нужно */
+  function weeklyProgress() {
+    const w = weeklyChallenge();
+    let value = 0;
+    if (w.metric === 'tasksWeek') {
+      for (let i = 0; i < 7; i++) value += s.dailyTaskCounts[daysAgoKey(i)] || 0;
+    } else if (w.metric === 'focusWeek') {
+      for (let i = 0; i < 7; i++) value += s.dailyFocusMinutes[daysAgoKey(i)] || 0;
+    } else if (w.metric === 'daysWeek') {
+      for (let i = 0; i < 7; i++) {
+        const k = daysAgoKey(i);
+        if ((s.dailyTaskCounts[k] || 0) > 0 || (s.dailyFocusMinutes[k] || 0) > 0) value += 1;
+      }
+    } else if (w.metric === 'habitsWeek') {
+      for (let i = 0; i < 7; i++) value += s.habits.filter((h) => h.history[daysAgoKey(i)]).length;
+    } else if (w.metric === 'lessonsWeek') {
+      const since = Date.now() - 7 * 86400000;
+      value = Object.values(s.lessons.read).filter((ts) => ts > since).length;
+    } else if (w.metric === 'sessionsWeek') {
+      const since = Date.now() - 7 * 86400000;
+      value = (s.focusLog || []).filter((x) => x.at > since).length;
+    }
+    return { value: Math.min(value, w.target), target: w.target, pct: Math.min(100, (value / w.target) * 100), done: value >= w.target };
+  }
+
+  function checkWeekly() {
+    ensureWeekly();
+    if (s.weekly.claimed) return;
+    const p = weeklyProgress();
+    if (!p.done) return;
+    const w = weeklyChallenge();
+    s.weekly.claimed = true;
+    addXP(w.xp, 'discipline');
+    addCoins(w.coins);
+    emit('weekly', w);
+  }
+
   /* ---------- достижения ---------- */
   const api = {
     habitStreak, skillLevel, passivePerMin, netWorth,
@@ -392,6 +452,7 @@ const State = (() => {
     registerActivity, habitStreak,
     assetLevel, assetCost, passivePerMin, activityMultiplier, netWorth, tickPassive, buyAsset,
     ensureQuests, todayQuests, bumpQuest, ensureRoutines, routineProgress,
+    weeklyChallenge, weeklyProgress, checkWeekly, weekKey,
     checkAchievements, unlockedAchievements, paletteUnlocked, api,
     reset, replace,
   };

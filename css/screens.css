@@ -1069,3 +1069,20 @@
 .quiet-row small { display: block; font-weight: 500; }
 #quiet-times { margin-top: 6px; }
 #quiet-times input { text-align: center; }
+
+/* ==================== ВЫЗОВ НЕДЕЛИ ==================== */
+.weekly-wrap { margin-top: 12px; }
+.weekly {
+  padding: 12px; border-radius: var(--radius-sm);
+  background: linear-gradient(140deg, color-mix(in srgb, var(--accent3) 14%, var(--surface-2)), var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--accent3) 35%, transparent);
+}
+.weekly.done { border-color: color-mix(in srgb, var(--success) 50%, transparent); }
+.weekly-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.weekly-head b { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent3); }
+.weekly-head p { margin: 2px 0 0; }
+.weekly-emoji { font-size: 1.5rem; }
+.weekly-reward { text-align: right; font-size: 0.74rem; font-weight: 800; color: var(--accent3); }
+.weekly-bar { height: 7px; border-radius: 7px; background: color-mix(in srgb, var(--border-strong) 60%, transparent); overflow: hidden; }
+.weekly-bar > i { display: block; height: 100%; border-radius: 7px; background: linear-gradient(90deg, var(--accent3), var(--accent)); transition: width var(--t-slow); }
+.weekly-meta { margin-top: 6px; font-size: 0.72rem; color: var(--text-muted); font-weight: 700; }

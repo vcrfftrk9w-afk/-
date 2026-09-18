@@ -284,6 +284,13 @@ const App = (() => {
       FX.coinRain(80);
     });
 
+    State.on('weekly', (w) => {
+      UI.toast(`Вызов недели пройден: ${w.text}`, 'level', '🏆');
+      Sound.sfx('fanfare');
+      FX.fireworks(4);
+      FX.coinRain(40);
+    });
+
     State.on('streakSaved', () => {
       UI.toast('Стрик спасён бустером 🛟', 'level', '🔥');
     });

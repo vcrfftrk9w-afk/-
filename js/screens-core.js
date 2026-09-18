@@ -245,6 +245,24 @@ Screens.dashboard = (() => {
       root.appendChild(el);
     });
     $('#quest-counter').textContent = `${done}/${quests.length}`;
+
+    // недельный вызов
+    const w = State.weeklyChallenge();
+    const wp = State.weeklyProgress();
+    const claimed = State.s.weekly.claimed;
+    $('#weekly-wrap').innerHTML = `
+      <div class="weekly${claimed ? ' done' : ''}">
+        <div class="weekly-head">
+          <span class="weekly-emoji">${claimed ? '🏆' : w.emoji}</span>
+          <div class="grow">
+            <b>Вызов недели</b>
+            <p class="muted small">${UI.esc(w.text)}</p>
+          </div>
+          <span class="weekly-reward">+${w.xp} XP<br><small>+${w.coins}🪙</small></span>
+        </div>
+        <div class="weekly-bar"><i style="width:${wp.pct}%"></i></div>
+        <div class="weekly-meta">${claimed ? 'Вызов пройден — награда получена' : `${UI.fmt(wp.value)} из ${UI.fmt(wp.target)}`}</div>
+      </div>`;
   }
 
   function renderMood() {

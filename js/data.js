@@ -204,6 +204,16 @@ const Data = (() => {
     { id: 'q_invest', emoji: '🏦', text: 'Вложись в бизнес-актив', target: 1, metric: 'invest', xp: 30, coins: 0 },
   ];
 
+  /* ---------- НЕДЕЛЬНЫЕ ВЫЗОВЫ ---------- */
+  const WEEKLY_POOL = [
+    { id: 'w_tasks20', emoji: '🗂️', text: 'Закрой 20 задач за неделю', target: 20, metric: 'tasksWeek', xp: 200, coins: 180 },
+    { id: 'w_focus180', emoji: '🎧', text: 'Набери 180 минут фокуса', target: 180, metric: 'focusWeek', xp: 220, coins: 200 },
+    { id: 'w_days5', emoji: '🔥', text: 'Будь активен 5 дней из 7', target: 5, metric: 'daysWeek', xp: 180, coins: 160 },
+    { id: 'w_habits15', emoji: '🌱', text: 'Отметь привычки 15 раз', target: 15, metric: 'habitsWeek', xp: 170, coins: 150 },
+    { id: 'w_lessons3', emoji: '📚', text: 'Пройди 3 урока курса', target: 3, metric: 'lessonsWeek', xp: 160, coins: 140 },
+    { id: 'w_sessions7', emoji: '🍅', text: 'Заверши 7 фокус-сессий', target: 7, metric: 'sessionsWeek', xp: 200, coins: 180 },
+  ];
+
   /* ---------- ДОСТИЖЕНИЯ ---------- */
   const ACHIEVEMENTS = [
     // задачи
@@ -647,7 +657,7 @@ const Data = (() => {
     SKILLS, CATEGORIES, PRIORITIES, EVOLUTION, PALETTES, ASSETS, MILLIONAIRE_GOAL,
     SOUND_LAYERS, SOUND_PRESETS, TIMER_MODES, BREATHING, QUOTES, MICRO_STEPS,
     COMPANION_MSGS, QUEST_POOL, ACHIEVEMENTS, BREAKDOWN_TEMPLATES, MOODS, BOOSTERS,
-    TRACKS, LESSONS, HABIT_TEMPLATES, ROUTINE_DEFAULTS, REMINDERS,
+    TRACKS, LESSONS, HABIT_TEMPLATES, ROUTINE_DEFAULTS, REMINDERS, WEEKLY_POOL,
     ACH_PROGRESS, achRarity, achProgress,
     skillById: (id) => SKILLS.find((s) => s.id === id),
     categoryById: (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[CATEGORIES.length - 1],

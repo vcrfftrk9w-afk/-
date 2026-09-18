@@ -399,6 +399,32 @@ Screens.stats = (() => {
     L.push(`- Квестов выполнено: ${s.totals.questsDone}`);
     L.push(`- Минут под музыку: ${s.totals.musicMinutes || 0}`);
     L.push('');
+    if (typeof Path !== 'undefined') {
+      const cur = Path.currentStage();
+      const n = Path.nextStep();
+      const m = Path.money();
+      L.push('## Путь к деньгам');
+      L.push(`- Пройдено: **${Path.doneCount()} из ${Path.STEP_COUNT}** шагов (${Path.progressPct()}%)`);
+      L.push(`- Текущий этап: ${cur.emoji} **${cur.name}** — ${cur.goal}`);
+      if (n) L.push(`- Следующий шаг: **${n.step.t}**`);
+      L.push('');
+      if (m.income || m.expenses) {
+        const c = Path.calc();
+        L.push('### Реальные деньги');
+        L.push(`- Доход ${UI.fmt(m.income)} · расходы ${UI.fmt(m.expenses)} · свободный остаток **${UI.fmt(c.free)}** (${c.savingRate}%)`);
+        L.push(`- Подушка: ${UI.fmt(m.cushion)} — это ${Math.round(c.cushionMonths * 10) / 10} мес. расходов`);
+        L.push(`- Капитал: ${UI.fmt(m.capital)} · пассив ${UI.fmt(c.passiveNow)}/мес (${Math.round(c.freedomPct)}% расходов)`);
+        L.push(`- Цифра свободы: **${UI.fmt(c.freedomNumber)}**${c.yearsToFreedom !== null ? ` — примерно ${c.yearsToFreedom} года при текущем темпе` : ''}`);
+        L.push('');
+      }
+      L.push('### Что делать дальше');
+      Path.STAGES.forEach((st, i) => {
+        const done = Path.stageDone(st);
+        L.push(`${i + 1}. ${st.emoji} **${st.name}** (${done}/${st.steps.length}) — ${st.tagline}`);
+        st.steps.forEach((step) => L.push(`   - [${Path.isDone(step.id) ? 'x' : ' '}] ${step.t}`));
+      });
+      L.push('');
+    }
     L.push('## Навыки');
     Data.SKILLS.forEach((sk) => {
       const p = State.skillProgress(sk.id);

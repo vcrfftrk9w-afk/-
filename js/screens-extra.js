@@ -480,7 +480,25 @@ Screens.review = (() => {
       ['🔥', 'Отметок привычек', cur.habits, prev.habits],
     ];
 
+    // шаги пути за неделю — главный показатель движения к деньгам
+    let pathBlock = '';
+    if (typeof Path !== 'undefined') {
+      const weekAgo = Date.now() - 7 * 86400000;
+      const doneThisWeek = Path.ALL.filter((x) => (State.s.path.done[x.id] || 0) > weekAgo).length;
+      const n = Path.nextStep();
+      pathBlock = `
+        <div class="review-path">
+          <b>${doneThisWeek > 0
+            ? `${UI.plur(doneThisWeek, 'шаг', 'шага', 'шагов')} пути за неделю`
+            : 'За неделю ни одного шага пути'}</b>
+          <p>${doneThisWeek > 0
+            ? `Всего пройдено ${Path.doneCount()} из ${Path.STEP_COUNT}. ${n ? 'Следующий: ' + UI.esc(n.step.t) : 'Путь пройден целиком.'}`
+            : (n ? 'Задачи закрываются, но к деньгам это пока не двигает. Следующий шаг: ' + UI.esc(n.step.t) : 'Путь пройден целиком.')}</p>
+        </div>`;
+    }
+
     root.innerHTML = `
+      ${pathBlock}
       <div class="review-grid">
         ${rows.map(([emoji, label, now, before]) => `
           <div class="review-cell">

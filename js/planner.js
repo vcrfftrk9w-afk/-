@@ -147,11 +147,11 @@ const Planner = (() => {
   }
 
   /* свободные промежутки между каркасными блоками */
-  function freeSlots(fixed) {
+  function freeSlots(fixed, fromMin) {
     const p = Track.profile();
     const d = Track.today();
     const wake = d.wakeAt !== null ? d.wakeAt : p.wakeTarget;
-    const dayStart = wake + 30;
+    const dayStart = Math.max(wake + 30, fromMin === undefined ? 0 : fromMin);
     const dayEnd = p.sleepTarget - 45;
     const busy = fixed.filter((b) => b.end > dayStart && b.start < dayEnd)
       .map((b) => [b.start, b.end]).sort((a, b) => a[0] - b[0]);
@@ -239,7 +239,7 @@ const Planner = (() => {
     const o = opts || {};
     const p = Track.profile();
     const fixed = fixedBlocks();
-    const slots = freeSlots(fixed).map(([s, e]) => ({ s, e }));
+    const slots = freeSlots(fixed, o.from).map(([s, e]) => ({ s, e }));
 
     const today = State.todayKey();
     let pool = State.s.tasks.filter((t) => !t.done).map((t) => ({ ...t, _src: 'task' }));
@@ -308,8 +308,15 @@ const Planner = (() => {
       slots.splice(best.si, 1, ...rest);
     });
 
-    const blocks = fixed.concat(placed).sort((a, b) => a.start - b.start);
-    State.s.plan = { date: today, blocks, generatedAt: Date.now(), skipped: {} };
+    let keep = [];
+    if (o.keepDone && plan()) keep = plan().blocks.filter((b) => b.kind === 'task' && isDone(b));
+    const keepIds = new Set(keep.map((b) => b.taskId || b.habitId || b.pathId));
+    const fresh = placed.filter((b) => !keepIds.has(b.taskId || b.habitId || b.pathId));
+    const blocks = fixed.concat(keep, fresh).sort((a, b) => a.start - b.start);
+    State.s.plan = {
+      date: today, blocks, generatedAt: Date.now(),
+      skipped: (o.keepDone && plan()) ? plan().skipped : {},
+    };
     State.s.totals.plansMade = (State.s.totals.plansMade || 0) + 1;
     State.commit();
     return blocks;
@@ -360,10 +367,18 @@ const Planner = (() => {
     State.commit();
   }
 
-  /* перенести оставшиеся невыполненные задачи на свободное время */
-  function reschedule() {
-    if (!plan()) return build({});
-    return build({});
+  /* сколько блоков сгорело: время прошло, дело не сделано, не пропущено */
+  function missed() {
+    const pl = plan();
+    if (!pl) return [];
+    const now = Track.nowMin();
+    const skipped = pl.skipped || {};
+    return pl.blocks.filter((b) => b.kind === 'task' && b.end <= now && !skipped[b.id] && !isDone(b));
+  }
+
+  /* догнать план: пересобрать остаток дня от текущей минуты, сохранив сделанное */
+  function catchUp() {
+    return build({ from: Track.nowMin(), keepDone: true });
   }
 
   /* сколько по плану сделано */
@@ -376,7 +391,7 @@ const Planner = (() => {
 
   return {
     energyAt, energyOver, build, plan, blocks, currentBlock, nextBlock,
-    isDone, skip, reschedule, progress, evaluate,
+    isDone, skip, missed, catchUp, progress, evaluate,
     taskDuration, taskKind, KIND_LABEL, NEED, fixedBlocks, freeSlots,
   };
 })();

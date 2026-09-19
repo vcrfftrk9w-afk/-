@@ -1554,6 +1554,7 @@
 .pill-row button { background: none; border: 0; color: var(--text-muted); cursor: pointer; font-size: 14px; }
 .meal-presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
 
+@media (max-width: 760px) { .tl-hour.tl-thin { display: none; } }
 @media (max-width: 600px) {
   .tl-block em { display: none; }
   .tl-block { height: 52px; }
@@ -1573,3 +1574,24 @@
   color: var(--text); cursor: pointer; padding: 7px 11px; font-size: 12.5px; transition: all var(--t-fast);
 }
 .dd-quick button:hover { border-color: var(--accent); transform: translateY(-1px); }
+
+/* отставание от плана */
+.day-behind { border: 1px solid color-mix(in srgb, var(--danger) 34%, var(--border)); }
+.behind-list { list-style: none; margin: 10px 0 14px; padding: 0; display: grid; gap: 6px; }
+.behind-list li { display: flex; align-items: baseline; gap: 10px; font-size: 14px; }
+.behind-list li i { font-style: normal; margin-left: auto; font-size: 11.5px; color: var(--danger); flex: none; }
+.behind-list li b { font-weight: 600; min-width: 0; }
+
+/* история режима */
+.dh-bars { display: flex; align-items: flex-end; gap: 5px; height: 110px; margin: 14px 0 10px; }
+.dh-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.dh-col i {
+  display: block; width: 100%; max-width: 26px; border-radius: 5px 5px 2px 2px;
+  background: var(--surface-2); transition: height var(--t-slow);
+}
+.dh-col i.ok { background: linear-gradient(180deg, var(--success), color-mix(in srgb, var(--success) 45%, transparent)); }
+.dh-col i.mid { background: linear-gradient(180deg, var(--warn), color-mix(in srgb, var(--warn) 45%, transparent)); }
+.dh-col i.bad { background: linear-gradient(180deg, var(--danger), color-mix(in srgb, var(--danger) 40%, transparent)); }
+.dh-col small { font-size: 9.5px; color: var(--text-muted); margin-top: 5px; }
+.dh-sum { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--text-muted); }
+.dh-sum b { color: var(--text); }

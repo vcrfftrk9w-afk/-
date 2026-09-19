@@ -131,6 +131,25 @@ Screens.day = (() => {
       </div>`;
   }
 
+  /* ---------- отставание от плана ---------- */
+  function behindHTML() {
+    if (!Planner.plan()) return '';
+    const miss = Planner.missed();
+    if (!miss.length) return '';
+    return `
+      <div class="card day-behind">
+        <div class="card-head"><h3>⏰ Ты отстал от плана</h3><span class="badge badge-bad">${miss.length}</span></div>
+        <p class="muted small">Эти дела должны были быть сделаны. Ничего страшного — пересоберу остаток дня под то время, что осталось.</p>
+        <ul class="behind-list">
+          ${miss.slice(0, 5).map((b) => `<li><span>${b.emoji}</span><b>${UI.esc(b.title)}</b><i>было в ${Track.hhmm(b.start)}</i></li>`).join('')}
+        </ul>
+        <div class="row wrap">
+          <button class="btn btn-primary" id="day-catchup">🔁 Догнать план</button>
+          <button class="btn btn-ghost" id="day-dropmiss">Отпустить на сегодня</button>
+        </div>
+      </div>`;
+  }
+
   /* ---------- напоминания «ты кое-что не сделал» ---------- */
   function nudgesHTML() {
     const list = Track.nudges();
@@ -163,7 +182,7 @@ Screens.day = (() => {
 
     const hours = [];
     for (let h = Math.ceil(from / 60); h <= Math.floor(to / 60); h++) {
-      hours.push(`<span class="tl-hour" style="left:${(((h * 60) - from) / span) * 100}%">${h}:00</span>`);
+      hours.push(`<span class="tl-hour ${h % 3 === 0 ? '' : 'tl-thin'}" style="left:${(((h * 60) - from) / span) * 100}%">${h}:00</span>`);
     }
 
     const blocks = (pl ? pl.blocks : Planner.fixedBlocks()).filter((b) => b.end > from && b.start < to);
@@ -393,6 +412,48 @@ Screens.day = (() => {
     });
   }
 
+  /* ---------- история режима за две недели ---------- */
+  function historyHTML() {
+    const days = 14;
+    const rows = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const k = State.daysAgoKey(i);
+      const has = State.s.day && State.s.day[k];
+      rows.push({
+        key: k, i,
+        score: has ? Track.score(k).value : 0,
+        slept: has ? Track.sleptHours(k) : null,
+        water: has ? (State.s.day[k].water || 0) : 0,
+        wake: has ? State.s.day[k].wakeAt : null,
+        has: !!has,
+      });
+    }
+    if (!rows.some((r) => r.has)) return '';
+
+    const avg = Track.scoreAvg(days);
+    const sleepVals = rows.filter((r) => r.slept !== null).map((r) => r.slept);
+    const avgSleep = sleepVals.length ? Math.round((sleepVals.reduce((a, b) => a + b, 0) / sleepVals.length) * 10) / 10 : null;
+    const wakeVals = rows.filter((r) => r.wake !== null).map((r) => r.wake);
+    const avgWake = wakeVals.length ? Math.round(wakeVals.reduce((a, b) => a + b, 0) / wakeVals.length) : null;
+
+    return `
+      <div class="card day-history">
+        <div class="card-head"><h3>Режим за две недели</h3><span class="badge">в среднем ${avg}</span></div>
+        <div class="dh-bars">
+          ${rows.map((r) => `
+            <div class="dh-col" title="${UI.dateLabel(r.key)} — режим ${r.score}${r.slept !== null ? `, сон ${String(r.slept).replace('.', ',')} ч` : ''}">
+              <i class="${r.score >= 70 ? 'ok' : (r.score >= 40 ? 'mid' : 'bad')}" style="height:${Math.max(4, r.score)}%"></i>
+              <small>${r.i === 0 ? 'сег' : new Date(r.key).getDate()}</small>
+            </div>`).join('')}
+        </div>
+        <div class="dh-sum">
+          ${avgWake !== null ? `<span>Обычно встаёшь в <b>${Track.hhmm(avgWake)}</b></span>` : ''}
+          ${avgSleep !== null ? `<span>Спишь в среднем <b>${String(avgSleep).replace('.', ',')} ч</b></span>` : ''}
+          <span>Дней под контролем: <b>${rows.filter((r) => r.has).length}</b></span>
+        </div>
+      </div>`;
+  }
+
   /* ---------- рендер ---------- */
   function render() {
     const root = $('#day-root');
@@ -403,7 +464,7 @@ Screens.day = (() => {
       badge.textContent = `режим ${sc}`;
       badge.className = 'badge ' + (sc >= 70 ? 'badge-ok' : (sc >= 40 ? 'badge-mid' : 'badge-bad'));
     }
-    root.innerHTML = nowHTML() + statusHTML() + nudgesHTML() + timelineHTML() + listHTML();
+    root.innerHTML = nowHTML() + statusHTML() + behindHTML() + nudgesHTML() + timelineHTML() + listHTML() + historyHTML();
     UI.initTilt();
     if (!bound) bind(root);
   }
@@ -421,6 +482,17 @@ Screens.day = (() => {
         render(); return;
       }
       if (g('#day-settings')) { settings(); return; }
+      if (g('#day-catchup')) {
+        Planner.catchUp();
+        Sound.sfx('success');
+        UI.toast('Остаток дня пересобран под то время, что осталось', 'success', '🔁');
+        render(); return;
+      }
+      if (g('#day-dropmiss')) {
+        Planner.missed().forEach((b) => Planner.skip(b.id));
+        UI.toast('Отпустили. Завтра новый день.', 'default', '🕊️');
+        render(); return;
+      }
       const w = g('[data-water]'); if (w) { Track.water(Number(w.dataset.water)); Sound.sfx('pop'); return; }
       const c = g('[data-coffee]'); if (c) { Track.coffee(Number(c.dataset.coffee)); Sound.sfx('pop'); return; }
       const wo = g('[data-workout]'); if (wo) { Track.workout(Number(wo.dataset.workout)); Sound.sfx('check'); return; }

@@ -298,6 +298,10 @@ const Data = (() => {
     { id: 'plan_20', emoji: '🗂️', name: 'Живу по плану', desc: '20 собранных планов дня', xp: 140, coins: 130, cond: (s) => (s.totals.plansMade || 0) >= 20 },
     { id: 'water_100', emoji: '💧', name: 'Сто стаканов', desc: 'Выпей 100 стаканов воды', xp: 90, coins: 80, cond: (s) => (s.totals.waterGlasses || 0) >= 100 },
     { id: 'regime_80', emoji: '🎯', name: 'Идеальный режим', desc: 'Набери 80 из 100 за день', xp: 120, coins: 110, cond: (s) => { try { return Track.score().value >= 80; } catch (e) { return false; } } },
+    { id: 'chill_1', emoji: '🍿', name: 'Вышел вовремя', desc: 'Закрой залипание до звонка таймера', xp: 30, coins: 30, cond: (s) => (s.totals.chillKept || 0) >= 1 },
+    { id: 'chill_10', emoji: '🎬', name: 'Одно видео значит одно', desc: '10 раз выйти из залипания вовремя', xp: 130, coins: 120, cond: (s) => (s.totals.chillKept || 0) >= 10 },
+    { id: 'tpl_first', emoji: '🗂️', name: 'День по шаблону', desc: 'Поставь дела из шаблона первый раз', xp: 30, coins: 30, cond: (s) => (s.totals.templatesApplied || 0) >= 1 },
+    { id: 'tpl_14', emoji: '📋', name: 'Две недели по шаблону', desc: '14 дней подряд ставить дела из шаблона', xp: 180, coins: 170, cond: (s) => (s.totals.templatesApplied || 0) >= 14 },
     { id: 'money_cushion', emoji: '🛟', name: 'Подушка готова', desc: 'Накопи месяц расходов в реальной жизни', xp: 300, coins: 300, cond: (s) => !!(s.money && s.money.expenses > 0 && s.money.cushion >= s.money.expenses) },
   ];
 
@@ -652,6 +656,10 @@ const Data = (() => {
     music_600: { val: (s) => s.totals.musicMinutes || 0, goal: 600 },
     routine_first: { val: (s) => s.totals.routinesDone || 0, goal: 1 },
     routine_20: { val: (s) => s.totals.routinesDone || 0, goal: 20 },
+    chill_1: { val: (s) => (s.totals.chillKept || 0), goal: 1 },
+    chill_10: { val: (s) => (s.totals.chillKept || 0), goal: 10 },
+    tpl_first: { val: (s) => (s.totals.templatesApplied || 0), goal: 1 },
+    tpl_14: { val: (s) => (s.totals.templatesApplied || 0), goal: 14 },
     day_first: { val: (s) => (s.totals.daysLogged || 0), goal: 1 },
     day_7: { val: (s) => (s.totals.daysLogged || 0), goal: 7 },
     day_30: { val: (s) => (s.totals.daysLogged || 0), goal: 30 },

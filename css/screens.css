@@ -1646,3 +1646,72 @@
 .switch-row b { display: block; font-size: 14px; }
 .switch-row small { display: block; color: var(--text-muted); font-size: 12px; line-height: 1.45; margin-top: 3px; }
 .switch-row input { flex: none; width: 20px; height: 20px; accent-color: var(--accent); margin-top: 2px; }
+
+/* =========================================================
+   КОНТРОЛИРУЕМОЕ ЗАЛИПАНИЕ
+   ========================================================= */
+.chill {
+  position: fixed; inset: 0; z-index: 240; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--bg) 92%, #000); padding: 24px;
+  animation: fade-in var(--t-med) ease both;
+}
+.chill.hidden { display: none; }
+.chill-card { text-align: center; max-width: 380px; width: 100%; }
+.chill-emoji { font-size: 44px; animation: idle-bob 3s ease-in-out infinite; }
+.chill-card h2 { margin: 8px 0 18px; font-size: 22px; line-height: 1.3; }
+.chill-ring { position: relative; width: 240px; height: 240px; margin: 0 auto 18px; max-width: 70vw; max-height: 70vw; }
+.chill-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.chill-ring circle { fill: none; stroke-width: 10; }
+.chill-ring .cr-bg { stroke: var(--surface-2); }
+.chill-ring .cr-fg { stroke: var(--accent3); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.chill-ring b {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 46px; font-variant-numeric: tabular-nums; font-family: var(--font-display);
+}
+.chill p { font-size: 14px; line-height: 1.5; margin: 0 0 20px; }
+.chill-actions { display: grid; gap: 10px; }
+
+/* время вышло — экран начинает давить */
+.chill.over { background: color-mix(in srgb, var(--danger) 22%, var(--bg)); animation: chill-alarm 1.6s ease-in-out infinite; }
+.chill.over .cr-fg { stroke: var(--danger); }
+.chill.over .chill-ring b { color: var(--danger); }
+.chill.over .chill-emoji { animation: shake-x 0.6s ease-in-out infinite; }
+@keyframes chill-alarm {
+  0%, 100% { background: color-mix(in srgb, var(--danger) 18%, var(--bg)); }
+  50% { background: color-mix(in srgb, var(--danger) 32%, var(--bg)); }
+}
+:root[data-reduce-motion] .chill.over { animation: none; }
+
+/* шаблон дня */
+.tpl-list { display: grid; gap: 6px; margin: 14px 0; }
+.tpl-item {
+  display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 13px;
+  padding: 9px 12px; color: var(--text); transition: all var(--t-fast);
+}
+.tpl-item:hover { border-color: var(--accent); }
+.tpl-item.off { opacity: .45; }
+.tpl-check {
+  flex: none; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center;
+  border: 1.5px solid var(--border); background: var(--surface); font-size: 12px; color: #fff;
+}
+.tpl-item:not(.off) .tpl-check { background: var(--accent); border-color: var(--accent); }
+.tpl-text { flex: 1; min-width: 0; }
+.tpl-text b { display: block; font-size: 14px; line-height: 1.3; font-weight: 600; }
+.tpl-text small { display: block; color: var(--text-muted); font-size: 11.5px; margin-top: 2px; }
+.tpl-del { flex: none; color: var(--text-muted); font-size: 13px; padding: 2px 4px; }
+.tpl-del:hover { color: var(--danger); }
+
+/* статистика залипаний */
+.chill-stat {
+  margin-top: 16px; padding: 11px 15px; border-radius: 13px; font-size: 13.5px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.chill-stat b { font-size: 15px; }
+.chill-stat small { display: block; color: var(--text-muted); font-size: 11.5px; margin-top: 3px; }
+.chill-stat.ok { border-color: color-mix(in srgb, var(--success) 38%, transparent); }
+.chill-stat.ok b { color: var(--success); }
+.chill-stat.mid { border-color: color-mix(in srgb, var(--warn) 38%, transparent); }
+.chill-stat.mid b { color: var(--warn); }
+.chill-stat.bad { border-color: color-mix(in srgb, var(--danger) 34%, transparent); }
+.chill-stat.bad b { color: var(--danger); }

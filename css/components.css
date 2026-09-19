@@ -640,3 +640,8 @@
 .badge-ok { color: var(--success); border-color: color-mix(in srgb, var(--success) 42%, transparent); }
 .badge-mid { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 42%, transparent); }
 .badge-bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+
+/* жёсткое время, длительность и «залипательная» задача */
+.task-at { color: var(--accent2); font-weight: 600; }
+.task-est { color: var(--text-muted); }
+.task-chill { color: var(--accent3); }

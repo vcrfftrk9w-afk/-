@@ -392,6 +392,18 @@
         <select id="task-category"></select>
         <select id="task-priority"></select>
         <input id="task-due" type="date" title="Дедлайн (не обязателен)">
+        <input id="task-at" type="time" title="Жёсткое время: делать ровно в этот час">
+        <select id="task-est" title="Сколько займёт">
+          <option value="">Длительность</option>
+          <option value="5">5 мин</option>
+          <option value="10">10 мин</option>
+          <option value="15">15 мин</option>
+          <option value="25">25 мин</option>
+          <option value="45">45 мин</option>
+          <option value="60">1 час</option>
+          <option value="90">1.5 часа</option>
+          <option value="120">2 часа</option>
+        </select>
         <select id="task-repeat" title="Повтор">
           <option value="">Без повтора</option>
           <option value="daily">🔁 Каждый день</option>
@@ -947,6 +959,26 @@
   </div>
 </div>
 
+<!-- ==================== ЗАЛИПАНИЕ ==================== -->
+<div id="chill" class="chill hidden">
+  <div class="chill-card">
+    <div class="chill-emoji">🍿</div>
+    <h2 id="chill-title">Залипание</h2>
+    <div class="chill-ring">
+      <svg viewBox="0 0 200 200">
+        <circle class="cr-bg" cx="100" cy="100" r="88"/>
+        <circle id="chill-ring-fg" class="cr-fg" cx="100" cy="100" r="88"/>
+      </svg>
+      <b id="chill-time">15:00</b>
+    </div>
+    <p id="chill-sub" class="muted"></p>
+    <div class="chill-actions">
+      <button class="btn btn-primary btn-lg btn-block" id="chill-done">Хватит, выхожу</button>
+      <button class="btn btn-ghost btn-block" id="chill-more">Ещё 5 минут</button>
+    </div>
+  </div>
+</div>
+
 <div id="sheet-modal" class="modal hidden">
   <div class="modal-card">
     <button class="modal-x" data-close-sheet>✕</button>
@@ -966,6 +998,8 @@
 <script src="js/screens-meta.js"></script>
 <script src="js/track.js"></script>
 <script src="js/planner.js"></script>
+<script src="js/template.js"></script>
+<script src="js/chill.js"></script>
 <script src="js/path.js"></script>
 <script src="js/screens-extra.js"></script>
 <script src="js/screens-path.js"></script>

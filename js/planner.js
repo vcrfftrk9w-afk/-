@@ -305,6 +305,39 @@ const Planner = (() => {
     const placed = [];
     const BUFFER = 10;
 
+    /* 1) сначала прибиваем задачи с жёстким временем — они не двигаются */
+    const pinned = pool.filter((t) => t.at !== null && t.at !== undefined);
+    pool = pool.filter((t) => t.at === null || t.at === undefined);
+
+    pinned.forEach((task) => {
+      const dur = taskDuration(task);
+      const wake = wakeMin();
+      const start = task.at < wake ? task.at + MIN : task.at;
+      const end = start + dur;
+      const ev = evaluate(task, start, end);
+      ev.pros.unshift('Ты сам назначил это время — оно не двигается');
+      placed.push({
+        id: 'p-' + task.id, kind: 'task', src: task._src || 'task', pinned: true,
+        taskId: task._src === 'task' || !task._src ? task.id : null,
+        habitId: task.habitId || null, pathId: task.pathId || null,
+        emoji: task.emoji || (Data.categoryById(task.category) || {}).emoji || '⏰',
+        title: task.title, start, end,
+        score: Math.round(ev.score), energy: ev.energy,
+        pros: ev.pros, cons: ev.cons, taskKind: ev.kind, duration: dur,
+        chill: !!task.chill,
+      });
+      // вырезаем это время из свободных слотов, чтобы вокруг ничего не налезло
+      for (let i = slots.length - 1; i >= 0; i--) {
+        const sl = slots[i];
+        if (end + BUFFER <= sl.s || start - BUFFER >= sl.e) continue;
+        const rest = [];
+        if ((start - BUFFER) - sl.s >= 20) rest.push({ s: sl.s, e: start - BUFFER });
+        if (sl.e - (end + BUFFER) >= 20) rest.push({ s: end + BUFFER, e: sl.e });
+        slots.splice(i, 1, ...rest);
+      }
+    });
+
+    /* 2) остальное раскладываем по оценке */
     pool.forEach((task) => {
       const dur = taskDuration(task);
       let best = null;
@@ -327,7 +360,7 @@ const Planner = (() => {
         title: task.title, start: best.start, end,
         score: Math.round(best.score), energy: best.energy,
         pros: best.pros, cons: best.cons, taskKind: best.kind,
-        duration: dur,
+        duration: dur, chill: !!task.chill,
       });
       // вырезаем занятое время из слота
       const slot = slots[best.si];

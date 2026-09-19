@@ -20,6 +20,8 @@ const ASSETS = [
   './js/screens-meta.js',
   './js/track.js',
   './js/planner.js',
+  './js/template.js',
+  './js/chill.js',
   './js/path.js',
   './js/screens-extra.js',
   './js/screens-path.js',

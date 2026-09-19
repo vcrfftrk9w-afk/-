@@ -88,6 +88,7 @@ const State = (() => {
       },
       day: {},
       plan: { date: null, blocks: [], generatedAt: null, skipped: {} },
+      dayTemplate: { items: [], seeded: false, autoApply: true, appliedDate: null },
       achievements: {},
 
       totals: {
@@ -97,7 +98,7 @@ const State = (() => {
         rouletteSpins: 0, questsDone: 0, hyperfocus: 0, perfectHabitDays: 0,
         nightTasks: 0, earlyTasks: 0, lessonsRead: 0, musicMinutes: 0,
         returns: 0, routinesDone: 0, reviewsDone: 0, pathSteps: 0, pathStages: 0, pledgesKept: 0,
-        daysLogged: 0, blocksDone: 0, plansMade: 0, waterGlasses: 0,
+        daysLogged: 0, blocksDone: 0, plansMade: 0, waterGlasses: 0, templatesApplied: 0, chillKept: 0, chillOver: 0,
       },
 
       dailyTaskCounts: {},

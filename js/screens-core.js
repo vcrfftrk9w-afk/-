@@ -518,6 +518,7 @@ Screens.tasks = (() => {
       xp: task.xp, skill: task.skill, urgent: task.urgent, done: false, rewarded: false,
       createdAt: Date.now(), doneAt: null, goalId: task.goalId || null,
       due: nextDue, repeat: task.repeat,
+      at: task.at === undefined ? null : task.at, estimate: task.estimate || null, chill: !!task.chill,
       subtasks: (task.subtasks || []).map((st) => ({ id: State.uid(), text: st.text, done: false })),
     });
     UI.toast(`Повтор: вернётся ${UI.dateLabel(nextDue)} 🔁`, 'default', '🔁');
@@ -535,9 +536,13 @@ Screens.tasks = (() => {
       add(title, $('#task-category').value, $('#task-priority').value, $('#task-urgent').checked, {
         due: $('#task-due').value || null,
         repeat: $('#task-repeat').value || null,
+        at: Track.parseHHMM($('#task-at').value),
+        estimate: Number($('#task-est').value) || null,
       });
       input.value = '';
       $('#task-due').value = '';
+      $('#task-at').value = '';
+      $('#task-est').value = '';
       $('#task-urgent').checked = false;
       input.focus();
     });
@@ -574,6 +579,9 @@ Screens.tasks = (() => {
       id: State.uid(), title, category: c.id, priority: p.id, xp: p.xp, skill: c.skill,
       urgent: !!urgent, done: false, rewarded: false, createdAt: Date.now(), doneAt: null,
       goalId: extra.goalId || null, due: extra.due || null, repeat: extra.repeat || null, subtasks: [],
+      at: extra.at === undefined ? null : extra.at,
+      estimate: extra.estimate || null,
+      chill: !!extra.chill,
     });
     Sound.sfx('click');
     UI.toast('Задача добавлена', 'success', '📝');
@@ -629,6 +637,11 @@ Screens.tasks = (() => {
   }
 
   function focusOn(task) {
+    // залипательное дело открывается не таймером фокуса, а таймером выхода
+    if (task.chill && typeof Chill !== 'undefined') {
+      Chill.start(task.estimate || 15, task.title, task.id);
+      return;
+    }
     App.focusTask = task.id;
     App.go('adhd');
     Screens.focus.setTask(task.id);
@@ -661,13 +674,16 @@ Screens.tasks = (() => {
             ${subs.length ? `<span class="task-steps">шаги ${doneSubs}/${subs.length}</span>` : ''}
             ${due ? `<span class="task-due ${due.cls}">📅 ${UI.esc(due.label)}</span>` : ''}
             ${t.repeat ? `<span class="task-repeat">🔁 ${REPEAT_LABEL[t.repeat] || 'повтор'}</span>` : ''}
+            ${t.at !== null && t.at !== undefined ? `<span class="task-at">⏰ ровно в ${Track.hhmm(t.at)}</span>` : ''}
+            ${t.estimate ? `<span class="task-est">⏱ ${t.estimate} мин</span>` : ''}
+            ${t.chill ? '<span class="task-chill">🍿 залипание</span>' : ''}
           </div>
           ${subs.length ? `<div class="task-substrip"><i style="width:${(doneSubs / subs.length) * 100}%"></i></div>` : ''}
         </div>
         <div class="task-actions">
           <button class="icon-mini task-expand" title="Шаги задачи">${expanded ? '▴' : '▾'}</button>
           <button class="icon-mini task-snooze" title="Перенести на завтра">⏭️</button>
-          <button class="icon-mini task-focus" title="Работать над этим">🎯</button>
+          <button class="icon-mini task-focus" title="${t.chill ? 'Залипнуть с таймером' : 'Работать над этим'}">${t.chill ? '🍿' : '🎯'}</button>
           <button class="icon-mini task-del" title="Удалить">🗑️</button>
         </div>
       </div>

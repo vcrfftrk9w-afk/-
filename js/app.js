@@ -980,6 +980,8 @@ const App = (() => {
     bindSwipe();
     Palette.bind();
     Advisor.bind();
+    Chill.bind();
+    DayTpl.seed();
     $('#shortcuts-btn').addEventListener('click', () => { UI.closeModal('#settings-modal'); setTimeout(showShortcuts, 200); });
 
     paintIcons();

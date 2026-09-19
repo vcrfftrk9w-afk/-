@@ -111,6 +111,15 @@ Screens.day = (() => {
           </div>
         </div>
 
+        ${(() => {
+          const c = Chill.stats();
+          if (!c.total) return '';
+          return `<div class="chill-stat ${c.pct >= 70 ? 'ok' : (c.pct >= 40 ? 'mid' : 'bad')}">
+            🍿 Выходишь вовремя из залипаний в <b>${c.pct}%</b> случаев
+            <small>${c.kept} ${UI.plural(c.kept, 'раз', 'раза', 'раз')} вышел вовремя, ${c.over} ${UI.plural(c.over, 'раз', 'раза', 'раз')} перебрал</small>
+          </div>`;
+        })()}
+
         <div class="day-counters">
           <div class="day-counter">
             <span class="dc-emoji">💧</span>
@@ -324,6 +333,7 @@ Screens.day = (() => {
       return;
     }
     if (b.pathId) { App.go('path'); setTimeout(() => Screens.path.openStep(b.pathId), 220); return; }
+    if (b.chill) { Chill.start(b.end - b.start, b.title, b.taskId); return; }
     App.go('adhd');
     setTimeout(() => {
       Screens.focus.setTask(b.taskId);
@@ -337,7 +347,10 @@ Screens.day = (() => {
       Track.wake();
       Sound.sfx('success');
       FX.confetti(window.innerWidth / 2, window.innerHeight * 0.25, 30);
-      UI.toast(`Подъём в ${Track.hhmm(Track.today().wakeAt)} — собираю план дня`, 'success', '☀️');
+      const added = DayTpl.tpl().autoApply && !DayTpl.appliedToday() ? DayTpl.apply({ quiet: true }) : 0;
+      UI.toast(added
+        ? `Подъём в ${Track.hhmm(Track.today().wakeAt)}. Поставил ${added} ${UI.plural(added, 'дело', 'дела', 'дел')} из шаблона и собрал план.`
+        : `Подъём в ${Track.hhmm(Track.today().wakeAt)} — собираю план дня`, 'success', '☀️');
       setTimeout(() => { Planner.build({}); render(); }, 400);
       return;
     }
@@ -526,6 +539,72 @@ Screens.day = (() => {
     });
   }
 
+  /* ---------- шаблон дня ---------- */
+  function templateHTML() {
+    const t = DayTpl.tpl();
+    const on = DayTpl.active().length;
+    const applied = DayTpl.appliedToday();
+    return `
+      <div class="card day-tpl">
+        <div class="card-head">
+          <h3>🗂️ Шаблон дня</h3>
+          <span class="badge">${on} ${UI.plural(on, 'дело', 'дела', 'дел')}</span>
+        </div>
+        <p class="muted small">Дела, которые повторяются каждый день. Одна кнопка — и они в сегодняшнем плане, на своих часах.</p>
+        <div class="tpl-list">
+          ${t.items.map((x) => `
+            <button class="tpl-item ${x.on ? '' : 'off'}" data-tplon="${x.id}">
+              <span class="tpl-check">${x.on ? '✓' : ''}</span>
+              <span class="tpl-text">
+                <b>${UI.esc(x.title)}</b>
+                <small>${x.at !== null && x.at !== undefined ? `⏰ ровно в ${Track.hhmm(x.at)} · ` : ''}${x.est ? `${x.est} мин` : 'без длительности'}${x.chill ? ' · 🍿 с таймером' : ''}</small>
+              </span>
+              <span class="tpl-del" data-tpldel="${x.id}">✕</span>
+            </button>`).join('') || '<span class="muted small">Шаблон пуст</span>'}
+        </div>
+        <div class="row wrap">
+          <button class="btn ${applied ? 'btn-ghost' : 'btn-primary'}" id="tpl-apply">${applied ? '🔁 Применить ещё раз' : '▶ Поставить дела на сегодня'}</button>
+          <button class="btn btn-ghost" id="tpl-add">＋ Добавить дело</button>
+          <button class="btn btn-ghost" id="tpl-capture" title="Сохранить сегодняшние задачи как шаблон">💾 Из сегодняшних</button>
+        </div>
+        <label class="switch-row" style="margin-bottom:0">
+          <span><b>Ставить автоматически</b><small>Как только отметишь подъём, дела из шаблона появятся в плане сами.</small></span>
+          <input type="checkbox" id="tpl-auto" ${t.autoApply ? 'checked' : ''}>
+        </label>
+      </div>`;
+  }
+
+  function tplAddDialog() {
+    const body = UI.sheet(`
+      <h2>Новое дело в шаблон</h2>
+      <p class="muted small">Оно будет появляться каждый день.</p>
+      <label class="field"><span>Что делать</span><input id="ta-title" type="text" maxlength="80" placeholder="Например, читать 20 страниц"></label>
+      <div class="rg-grid">
+        <label class="field"><span>Категория</span><select id="ta-cat">${Data.CATEGORIES.map((c) => `<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('')}</select></label>
+        <label class="field"><span>Важность</span><select id="ta-pri">${Data.PRIORITIES.map((x) => `<option value="${x.id}" ${x.id === 'mid' ? 'selected' : ''}>${x.emoji} ${x.name}</option>`).join('')}</select></label>
+        <label class="field"><span>Сколько займёт</span><input id="ta-est" type="number" min="5" max="180" step="5" value="30"></label>
+        <label class="field"><span>Жёсткое время</span><input id="ta-at" type="time" placeholder="не обязательно"></label>
+      </div>
+      <label class="switch-row">
+        <span><b>Это залипательное</b><small>Видео, лента, игра. Откроется отдельный таймер, который выведет тебя обратно.</small></span>
+        <input type="checkbox" id="ta-chill">
+      </label>
+      <button class="btn btn-primary btn-block" id="ta-save">Добавить в шаблон</button>`);
+    body.querySelector('#ta-save').addEventListener('click', () => {
+      const title = body.querySelector('#ta-title').value.trim();
+      if (!title) { UI.toast('Напиши название', 'warn', '✍️'); return; }
+      DayTpl.add({
+        title, cat: body.querySelector('#ta-cat').value, pri: body.querySelector('#ta-pri').value,
+        est: Number(body.querySelector('#ta-est').value) || 30,
+        at: Track.parseHHMM(body.querySelector('#ta-at').value),
+        chill: body.querySelector('#ta-chill').checked,
+      });
+      UI.closeModal('#sheet-modal');
+      Sound.sfx('check');
+      render();
+    });
+  }
+
   /* ---------- история режима за две недели ---------- */
   function historyHTML() {
     const days = 14;
@@ -578,13 +657,16 @@ Screens.day = (() => {
       badge.textContent = `режим ${sc}`;
       badge.className = 'badge ' + (sc >= 70 ? 'badge-ok' : (sc >= 40 ? 'badge-mid' : 'badge-bad'));
     }
-    root.innerHTML = setupHTML() + nowHTML() + statusHTML() + behindHTML() + nudgesHTML() + timelineHTML() + listHTML() + historyHTML();
+    root.innerHTML = setupHTML() + nowHTML() + statusHTML() + behindHTML() + nudgesHTML() + timelineHTML() + listHTML() + templateHTML() + historyHTML();
     UI.initTilt();
     if (!bound) bind(root);
   }
 
   function bind(root) {
     bound = true;
+    root.addEventListener('change', (e) => {
+      if (e.target.id === 'tpl-auto') { DayTpl.tpl().autoApply = e.target.checked; State.commit(); }
+    });
     root.addEventListener('click', (e) => {
       const t = e.target;
       const g = (sel) => t.closest(sel);
@@ -616,6 +698,22 @@ Screens.day = (() => {
       }
       if (g('#su-skip')) { Track.profile().set = true; State.commit(); render(); return; }
       if (g('#day-settings')) { settings(); return; }
+      const tdel = g('[data-tpldel]');
+      if (tdel) { e.stopPropagation(); DayTpl.remove(tdel.dataset.tpldel); render(); return; }
+      const ton = g('[data-tplon]');
+      if (ton) { DayTpl.toggle(ton.dataset.tplon); Sound.sfx('pop'); render(); return; }
+      if (g('#tpl-apply')) {
+        const n = DayTpl.apply({});
+        Sound.sfx(n ? 'success' : 'click');
+        UI.toast(n ? `Поставил ${n} ${UI.plural(n, 'дело', 'дела', 'дел')} и пересобрал план` : 'Все дела шаблона уже в списке', n ? 'success' : 'default', '🗂️');
+        render(); return;
+      }
+      if (g('#tpl-add')) { tplAddDialog(); return; }
+      if (g('#tpl-capture')) {
+        const n = DayTpl.captureFromToday();
+        UI.toast(`Шаблон обновлён: ${n} ${UI.plural(n, 'дело', 'дела', 'дел')}`, 'success', '💾');
+        render(); return;
+      }
       if (g('#day-busy-add')) { busyDialog(); return; }
       if (g('#day-notify')) {
         try {

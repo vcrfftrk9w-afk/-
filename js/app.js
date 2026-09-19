@@ -114,6 +114,7 @@ const App = (() => {
       const prev = i === 0 ? 1 : State.assetLevel(Data.ASSETS[i - 1].id);
       return (i === 0 || prev > 0) && s.coins >= State.assetCost(a.id);
     });
+    if (typeof Track !== 'undefined') set('day', Track.nudges().length);
     set('empire', affordable, true);
     // точка на «Пути», если сегодня ещё не сделан ни один шаг
     if (typeof Path !== 'undefined') {
@@ -210,6 +211,7 @@ const App = (() => {
   /* ---------- роутинг ---------- */
   const screenByTab = {
     dashboard: () => Screens.dashboard,
+    day: () => Screens.day,
     tasks: () => Screens.tasks,
     path: () => Screens.path,
     adhd: () => Screens.focus,
@@ -224,6 +226,7 @@ const App = (() => {
   function go(tab) {
     if (!screenByTab[tab]) return;
     if (currentTab === 'adhd' && tab !== 'adhd') Screens.focus.onLeave();
+    if (currentTab === 'day' && tab !== 'day' && Screens.day) Screens.day.onLeave();
     currentTab = tab;
 
     if (tab === 'rewards') State.s.seenAchievements = State.unlockedAchievements();
@@ -248,6 +251,7 @@ const App = (() => {
     });
     renderActive();
     if (tab === 'adhd') Screens.focus.onEnter();
+    if (tab === 'day' && Screens.day) Screens.day.onEnter();
     UI.initTilt();
     const btn = $$('.tab-btn').find((b) => b.dataset.tab === tab);
     if (btn && btn.offsetParent !== null && btn.scrollIntoView) {
@@ -390,6 +394,7 @@ const App = (() => {
     setInterval(() => {
       if (State.s.lastSeenDate && State.s.lastSeenDate !== State.todayKey()) dailyCheckIn();
       pathNudge();
+      dayTick();
     }, 60000);
   }
 
@@ -410,6 +415,63 @@ const App = (() => {
     }
     State.commit();
     if (away >= 2) setTimeout(() => showComeback(away), 900);
+  }
+
+  /* ---------- контроль дня: напоминает и подгоняет ---------- */
+  let lastBlockId = null;
+  let lastNudgeAt = 0;
+
+  function dayTick() {
+    if (typeof Planner === 'undefined' || !Planner.plan()) return;
+    const cur = Planner.currentBlock();
+    const skipped = Planner.plan().skipped || {};
+
+    // блок начался — объявляем
+    if (cur && cur.id !== lastBlockId && !skipped[cur.id] && !Planner.isDone(cur)) {
+      lastBlockId = cur.id;
+      const mins = cur.end - cur.start;
+      UI.toast(`По плану сейчас: ${cur.title} · ${mins} мин`, 'default', cur.emoji);
+      Sound.sfx('start');
+      FX.vibrate(60);
+      notify(`${cur.emoji} ${cur.title}`, `${Track.hhmm(cur.start)}–${Track.hhmm(cur.end)} — по твоему плану дня`);
+    }
+
+    // блок кончился, а дело не сделано
+    const now = Track.nowMin();
+    Planner.blocks().forEach((b) => {
+      if (b.kind !== 'task' || skipped[b.id] || Planner.isDone(b)) return;
+      if (now >= b.end && now < b.end + 2 && b.id !== lastBlockId) {
+        UI.toast(`«${b.title}» по плану уже закончилось. Сделаешь сейчас или переносим?`, 'warn', '⏰');
+        Sound.sfx('deny');
+      }
+    });
+
+    // бытовые напоминания — не чаще раза в 20 минут
+    if (Date.now() - lastNudgeAt > 20 * 60000 && !isQuietNow()) {
+      const list = Track.nudges();
+      if (list.length) {
+        const n = list[0];
+        UI.toast(n.text, 'warn', n.emoji);
+        Sound.sfx('tick');
+        lastNudgeAt = Date.now();
+      }
+    }
+  }
+
+  function isQuietNow() {
+    const q = State.s.quiet;
+    if (!q || !q.on) return false;
+    const h = new Date().getHours();
+    return q.from > q.to ? (h >= q.from || h < q.to) : (h >= q.from && h < q.to);
+  }
+
+  function notify(title, body) {
+    if (!State.s.notifications) return;
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification(title, { body, silent: true });
+      }
+    } catch (e) { /* не поддерживается */ }
   }
 
   /* ---------- вечерний толчок: шаг пути ещё не сделан ---------- */
@@ -473,7 +535,7 @@ const App = (() => {
         if (e.key === 'Escape') e.target.blur();
         return;
       }
-      const tabs = ['dashboard', 'tasks', 'path', 'adhd', 'habits', 'goals', 'lessons', 'empire', 'rewards'];
+      const tabs = ['dashboard', 'day', 'tasks', 'path', 'adhd', 'habits', 'goals', 'lessons', 'empire'];
       if (e.key >= '1' && e.key <= '9') { go(tabs[Number(e.key) - 1]); return; }
       const k = e.key.toLowerCase();
       if (k === 'n' || k === 'т') { go('tasks'); setTimeout(() => $('#task-title').focus(), 120); }
@@ -769,7 +831,7 @@ const App = (() => {
   }
 
   /* ---------- свайпы между вкладками ---------- */
-  const TAB_ORDER = ['dashboard', 'tasks', 'path', 'adhd', 'habits', 'goals', 'lessons', 'empire', 'rewards', 'stats'];
+  const TAB_ORDER = ['dashboard', 'day', 'tasks', 'path', 'adhd', 'habits', 'goals', 'lessons', 'empire', 'rewards', 'stats'];
   function bindSwipe() {
     const area = $('.content');
     if (!area) return;

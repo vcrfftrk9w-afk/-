@@ -635,3 +635,8 @@
   width: 100%; padding: 4px 8px; font-size: 0.92rem; font-weight: 700;
   border-radius: 8px; border: 1.5px solid var(--accent); background: var(--surface-solid);
 }
+
+/* цветной бейдж состояния (режим дня) */
+.badge-ok { color: var(--success); border-color: color-mix(in srgb, var(--success) 42%, transparent); }
+.badge-mid { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 42%, transparent); }
+.badge-bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }

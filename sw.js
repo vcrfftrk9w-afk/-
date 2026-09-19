@@ -18,10 +18,13 @@ const ASSETS = [
   './js/screens-core.js',
   './js/screens-focus.js',
   './js/screens-meta.js',
+  './js/track.js',
+  './js/planner.js',
   './js/path.js',
   './js/screens-extra.js',
   './js/screens-path.js',
   './js/pledge.js',
+  './js/screens-day.js',
   './js/advisor.js',
   './js/palette.js',
   './js/app.js'

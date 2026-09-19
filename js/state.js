@@ -76,6 +76,18 @@ const State = (() => {
       path: { done: {}, claimed: {}, startedAt: null, stage: 0 },
       pledge: { date: null, items: [], rewarded: false },
       money: { income: 0, expenses: 0, cushion: 0, capital: 0, updated: null },
+
+      /* режим дня и планировщик */
+      profile: {
+        chronotype: 'neutral',
+        wakeTarget: 7 * 60, sleepTarget: 23 * 60,
+        workStart: 9 * 60, workEnd: 18 * 60,
+        waterGoal: 8, kcalGoal: 2000, mealsGoal: 3, sleepGoal: 8,
+        pills: [],
+        strict: true,
+      },
+      day: {},
+      plan: { date: null, blocks: [], generatedAt: null, skipped: {} },
       achievements: {},
 
       totals: {
@@ -85,6 +97,7 @@ const State = (() => {
         rouletteSpins: 0, questsDone: 0, hyperfocus: 0, perfectHabitDays: 0,
         nightTasks: 0, earlyTasks: 0, lessonsRead: 0, musicMinutes: 0,
         returns: 0, routinesDone: 0, reviewsDone: 0, pathSteps: 0, pathStages: 0, pledgesKept: 0,
+        daysLogged: 0, blocksDone: 0, plansMade: 0, waterGlasses: 0,
       },
 
       dailyTaskCounts: {},

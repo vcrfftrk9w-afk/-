@@ -36,6 +36,7 @@ Screens.dashboard = (() => {
 
   function bind() {
     document.querySelectorAll('[data-goto-path]').forEach((b) => b.addEventListener('click', () => App.go('path')));
+    document.querySelectorAll('[data-goto-day]').forEach((b) => b.addEventListener('click', () => App.go('day')));
     Screens.helpers.fillSelect($('#quick-priority'), Data.PRIORITIES.map((p) => ({ value: p.id, label: `${p.emoji} ${p.name} · ${p.xp} XP` })), 'mid');
 
     $('#quick-form').addEventListener('submit', (e) => {
@@ -119,6 +120,7 @@ Screens.dashboard = (() => {
     { id: 'next', name: 'Что дальше' },
     { id: 'path', name: 'Твой путь к деньгам' },
     { id: 'pledge', name: 'Обещание дня (3 дела)' },
+    { id: 'daynow', name: 'Сейчас по плану дня' },
     { id: 'quests', name: 'Квесты дня' },
     { id: 'quickadd', name: 'Быстрая задача и микро-шаг' },
     { id: 'today', name: 'Задачи на сегодня' },
@@ -399,6 +401,52 @@ Screens.dashboard = (() => {
       : 'Выполни любую задачу или привычку, чтобы продлить серию.';
   }
 
+  /* карточка «сейчас по плану» на главной */
+  function renderDayCard() {
+    const el = $('#dash-day');
+    if (!el || typeof Planner === 'undefined') return;
+    const pl = Planner.plan();
+    const d = Track.today();
+
+    if (d.wakeAt === null) {
+      el.innerHTML = `<p class="muted small">День ещё не начат. Отметь подъём — приложение построит расписание от этого времени.</p>
+        <button class="btn btn-primary btn-block" id="dash-wake">☀️ Я проснулся</button>`;
+      const w = $('#dash-wake');
+      if (w) w.onclick = () => { Screens.day.quick('wake'); App.go('day'); };
+      return;
+    }
+    if (!pl) {
+      el.innerHTML = `<p class="muted small">Задачи ещё не разложены по часам.</p>
+        <button class="btn btn-primary btn-block" id="dash-plan">🧠 Собрать план дня</button>`;
+      const b = $('#dash-plan');
+      if (b) b.onclick = () => { Planner.build({}); App.go('day'); };
+      return;
+    }
+    const cur = Planner.currentBlock();
+    const next = Planner.nextBlock();
+    const pr = Planner.progress();
+    const sc = Track.score().value;
+    const b = cur || next;
+    el.innerHTML = `
+      <div class="dd-line">${cur ? 'Идёт сейчас' : (next ? `Дальше в ${Track.hhmm(next.start)}` : 'План на сегодня закрыт')}</div>
+      <div class="dd-title">${b ? `${b.emoji} ${UI.esc(b.title)}` : '🎉 Всё по плану сделано'}</div>
+      <div class="path-bar" style="margin:10px 0 8px"><span style="width:${pr.pct}%"></span></div>
+      <div class="dd-line">${pr.done} из ${pr.total} пунктов · режим дня ${sc}/100</div>
+      <div class="dd-quick">
+        <button data-dq="water">💧 +вода</button>
+        <button data-dq="meal">🍽️ еда</button>
+        <button data-dq="day">→ весь день</button>
+      </div>`;
+    el.querySelectorAll('[data-dq]').forEach((btn) => {
+      btn.onclick = () => {
+        const k = btn.dataset.dq;
+        if (k === 'water') { Track.water(1); Sound.sfx('pop'); }
+        else if (k === 'meal') Screens.day.quick('meal');
+        else App.go('day');
+      };
+    });
+  }
+
   /* карточка пути на главной */
   function renderPathCard() {
     const el = $('#dash-path');
@@ -427,6 +475,7 @@ Screens.dashboard = (() => {
     renderStreak();
     renderFocusGoal();
     renderPathCard();
+    renderDayCard();
     if (Screens.pledge) Screens.pledge.render();
     applyCards();
     Advisor.renderNext();
@@ -435,7 +484,7 @@ Screens.dashboard = (() => {
     if (!$('#quote-text').dataset.ready) { showQuote(); $('#quote-text').dataset.ready = '1'; }
   }
 
-  return { bind, render, showQuote, renderPathCard };
+  return { bind, render, showQuote, renderPathCard, renderDayCard };
 })();
 
 /* =========================================================

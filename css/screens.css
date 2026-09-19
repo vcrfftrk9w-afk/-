@@ -1748,3 +1748,8 @@
 .vr-item span { font-size: 18px; flex: none; }
 .vr-item b { display: block; font-size: 14px; font-weight: 600; }
 .vr-item small { display: block; font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+/* прогресс шаблона за день */
+.tpl-progress { margin: 12px 0 4px; }
+.tpl-progress-meta { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--text-muted); margin-top: 6px; }
+.tpl-progress-meta b { color: var(--accent3); }

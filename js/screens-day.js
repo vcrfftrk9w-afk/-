@@ -545,20 +545,29 @@ Screens.day = (() => {
     const t = DayTpl.tpl();
     const on = DayTpl.active().length;
     const applied = DayTpl.appliedToday();
+    const pr = DayTpl.progressToday();
+    const st = DayTpl.streak();
     return `
       <div class="card day-tpl">
         <div class="card-head">
           <h3>🗂️ Шаблон дня</h3>
-          <span class="badge">${on} ${UI.plural(on, 'дело', 'дела', 'дел')}</span>
+          <span class="badge ${pr.pct >= 80 ? 'badge-ok' : (pr.pct >= 40 ? 'badge-mid' : '')}">${pr.done}/${pr.total} сегодня</span>
         </div>
         <p class="muted small">Дела, которые повторяются каждый день. Одна кнопка — и они в сегодняшнем плане, на своих часах.</p>
+        <div class="tpl-progress">
+          <div class="path-bar"><span style="width:${pr.pct}%"></span></div>
+          <div class="tpl-progress-meta">
+            <span>${pr.pct}% шаблона закрыто</span>
+            ${st > 0 ? `<b>🔥 ${UI.plur(st, 'день', 'дня', 'дней')} подряд</b>` : '<span class="muted">серия начнётся, когда закроешь 80% за день</span>'}
+          </div>
+        </div>
         <div class="tpl-list">
           ${t.items.map((x) => `
             <button class="tpl-item ${x.on ? '' : 'off'}" data-tplon="${x.id}">
               <span class="tpl-check">${x.on ? '✓' : ''}</span>
               <span class="tpl-text">
                 <b>${UI.esc(x.title)}</b>
-                <small>${x.at !== null && x.at !== undefined ? `⏰ ровно в ${Track.hhmm(x.at)} · ` : ''}${x.est ? `${x.est} мин` : 'без длительности'}${x.chill ? ' · 🍿 с таймером' : ''}</small>
+                <small>${x.at !== null && x.at !== undefined ? `⏰ ровно в ${Track.hhmm(x.at)} · ` : ''}${x.est ? `${x.est} мин` : 'без длительности'}${x.chill ? ' · 🍿 с таймером' : ''}${x.subs && x.subs.length ? ` · ${UI.plur(x.subs.length, 'шаг', 'шага', 'шагов')}` : ''}</small>
               </span>
               <span class="tpl-del" data-tpldel="${x.id}">✕</span>
             </button>`).join('') || '<span class="muted small">Шаблон пуст</span>'}

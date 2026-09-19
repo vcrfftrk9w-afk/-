@@ -302,6 +302,7 @@ const Data = (() => {
     { id: 'chill_10', emoji: '🎬', name: 'Одно видео значит одно', desc: '10 раз выйти из залипания вовремя', xp: 130, coins: 120, cond: (s) => (s.totals.chillKept || 0) >= 10 },
     { id: 'tpl_first', emoji: '🗂️', name: 'День по шаблону', desc: 'Поставь дела из шаблона первый раз', xp: 30, coins: 30, cond: (s) => (s.totals.templatesApplied || 0) >= 1 },
     { id: 'tpl_14', emoji: '📋', name: 'Две недели по шаблону', desc: '14 дней подряд ставить дела из шаблона', xp: 180, coins: 170, cond: (s) => (s.totals.templatesApplied || 0) >= 14 },
+    { id: 'tpl_streak7', emoji: '🔁', name: 'Неделя по шаблону', desc: '7 дней подряд закрывать 80% шаблона дня', xp: 200, coins: 190, cond: (s, api) => { try { return DayTpl.streak() >= 7; } catch (e) { return false; } } },
     { id: 'money_cushion', emoji: '🛟', name: 'Подушка готова', desc: 'Накопи месяц расходов в реальной жизни', xp: 300, coins: 300, cond: (s) => !!(s.money && s.money.expenses > 0 && s.money.cushion >= s.money.expenses) },
   ];
 

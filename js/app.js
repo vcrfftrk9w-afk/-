@@ -430,10 +430,12 @@ const App = (() => {
     if (cur && cur.id !== lastBlockId && !skipped[cur.id] && !Planner.isDone(cur)) {
       lastBlockId = cur.id;
       const mins = cur.end - cur.start;
-      UI.toast(`По плану сейчас: ${cur.title} · ${mins} мин`, 'default', cur.emoji);
       Sound.sfx('start');
       FX.vibrate(60);
       notify(`${cur.emoji} ${cur.title}`, `${Track.hhmm(cur.start)}–${Track.hhmm(cur.end)} — по твоему плану дня`);
+      // в строгом режиме задачу нельзя просто проигнорировать: нужен ответ
+      if (Track.profile().strict && cur.kind === 'task' && !isQuietNow()) demandBlock(cur, mins);
+      else UI.toast(`По плану сейчас: ${cur.title} · ${mins} мин`, 'default', cur.emoji);
     }
 
     // блок кончился, а дело не сделано
@@ -447,7 +449,8 @@ const App = (() => {
     });
 
     // бытовые напоминания — не чаще раза в 20 минут
-    if (Date.now() - lastNudgeAt > 20 * 60000 && !isQuietNow()) {
+    const nudgeGap = (Track.profile().strict ? 10 : 25) * 60000;
+    if (Date.now() - lastNudgeAt > nudgeGap && !isQuietNow()) {
       const list = Track.nudges();
       if (list.length) {
         const n = list[0];
@@ -456,6 +459,33 @@ const App = (() => {
         lastNudgeAt = Date.now();
       }
     }
+  }
+
+  /* строгий режим: блок требует ответа, а не просто всплывает */
+  function demandBlock(b, mins) {
+    if (document.querySelector('#sheet-modal.modal-open')) return;
+    const body = UI.sheet(`
+      <div class="demand">
+        <div class="demand-emoji">${b.emoji}</div>
+        <div class="why-tag">${Track.hhmm(b.start)} – ${Track.hhmm(b.end)} · ${mins} мин</div>
+        <h2>${UI.esc(b.title)}</h2>
+        <p class="muted">Это время ты сам отдал под эту задачу. Оно уже идёт.</p>
+        <div class="demand-actions">
+          <button class="btn btn-primary btn-lg btn-block" data-d="go">▶ Начинаю</button>
+          <button class="btn btn-ghost btn-block" data-d="later">Дай 10 минут</button>
+          <button class="linkbtn" data-d="skip">сегодня не буду</button>
+        </div>
+      </div>`);
+    Sound.sfx('quest');
+    body.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-d]');
+      if (!btn) return;
+      UI.closeModal('#sheet-modal');
+      const k = btn.dataset.d;
+      if (k === 'go') { go('day'); setTimeout(() => Screens.day.explain(b.id), 200); }
+      else if (k === 'later') { lastBlockId = null; setTimeout(() => dayTick(), 10 * 60000); UI.toast('Вернусь через 10 минут', 'default', '⏳'); }
+      else { Planner.skip(b.id); UI.toast('Убрал из плана на сегодня', 'default', '⏭️'); }
+    });
   }
 
   function isQuietNow() {

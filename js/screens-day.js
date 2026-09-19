@@ -377,6 +377,9 @@ Screens.day = (() => {
     const sc = Track.score();
     const pr = Planner.plan() ? Planner.progress() : { done: 0, total: 0, pct: 0 };
     const miss = Planner.plan() ? Planner.missed() : [];
+    // обещание «завтра поставлю их первыми» должно быть настоящим
+    d.carriedOver = miss.map((b) => b.taskId || b.pathId || b.habitId).filter(Boolean);
+    State.save();
     const avg7 = Track.scoreAvg(7);
     const yest = State.s.day[State.daysAgoKey(1)] ? Track.score(State.daysAgoKey(1)).value : null;
     const diff = yest === null ? null : sc.value - yest;
@@ -472,6 +475,10 @@ Screens.day = (() => {
             .map(([id, t, d]) => `<button class="chrono-opt ${p.chronotype === id ? 'sel' : ''}" data-chrono="${id}"><b>${t}</b><small>${d}</small></button>`).join('')}
         </div>
       </div>
+      <label class="switch-row">
+        <span><b>Строгий режим</b><small>Блок плана требует ответа: «начинаю», «дай 10 минут» или «сегодня не буду». Напоминания чаще.</small></span>
+        <input type="checkbox" id="pf-strict" ${p.strict ? 'checked' : ''}>
+      </label>
       <div class="field"><span>Таблетки и витамины</span>
         <div class="pill-editor" id="pill-editor">
           ${p.pills.map((x) => `<div class="pill-row"><b>${UI.esc(x.name)}</b><i>${Track.hhmm(x.at)}</i><button data-delpill="${x.id}">✕</button></div>`).join('') || '<span class="muted small">Пока ничего</span>'}
@@ -510,6 +517,7 @@ Screens.day = (() => {
       p.kcalGoal = n('#pf-kcal', 2000);
       p.sleepGoal = n('#pf-sl', 8);
       p.chronotype = chrono;
+      p.strict = body.querySelector('#pf-strict').checked;
       UI.closeModal('#sheet-modal');
       Planner.build({});
       Sound.sfx('success');

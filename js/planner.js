@@ -123,8 +123,16 @@ const Planner = (() => {
     return base;
   }
 
+  /* что не успели вчера — сегодня идёт первым, как и обещано в итоге дня */
+  function carriedOver() {
+    const y = State.s.day && State.s.day[State.daysAgoKey(1)];
+    return new Set((y && y.carriedOver) || []);
+  }
+
   function urgency(t) {
     const today = State.todayKey();
+    const carried = carriedOver();
+    if (carried.has(t.id) || carried.has(t.pathId) || carried.has(t.habitId)) return 0.95;
     if (!t.due) return t.urgent ? 0.7 : 0.25;
     if (t.due < today) return 1;
     if (t.due === today) return 0.9;
@@ -224,7 +232,8 @@ const Planner = (() => {
     // 3. дедлайн
     const u = urgency(task);
     score += u * 24;
-    if (task.due && task.due < State.todayKey()) pros.push('Просрочено — дальше тянуть некуда');
+    if (carriedOver().has(task.id) || carriedOver().has(task.pathId)) pros.push('Не успел вчера — сегодня это идёт первым');
+    else if (task.due && task.due < State.todayKey()) pros.push('Просрочено — дальше тянуть некуда');
     else if (task.due === State.todayKey()) pros.push('Дедлайн сегодня');
     else if (task.urgent) pros.push('Отмечено как срочное');
 
@@ -412,7 +421,7 @@ const Planner = (() => {
 
   return {
     energyAt, energyOver, build, plan, blocks, currentBlock, nextBlock,
-    isDone, skip, missed, catchUp, progress, evaluate,
+    isDone, skip, missed, catchUp, progress, evaluate, carriedOver,
     taskDuration, taskKind, KIND_LABEL, NEED, fixedBlocks, freeSlots, wakeMin, sleepMin,
   };
 })();

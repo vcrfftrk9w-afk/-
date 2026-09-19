@@ -420,11 +420,42 @@ const App = (() => {
   /* ---------- контроль дня: напоминает и подгоняет ---------- */
   let lastBlockId = null;
   let lastNudgeAt = 0;
+  const preWarned = {};   // предупреждения о жёстком времени, по одному на блок
 
   function dayTick() {
     if (typeof Planner === 'undefined' || !Planner.plan()) return;
     const cur = Planner.currentBlock();
     const skipped = Planner.plan().skipped || {};
+
+    const nowMin = Track.nowMin();
+
+    // жёсткое время: предупреждаем заранее, иначе смысла в нём нет
+    Planner.blocks().forEach((b) => {
+      if (!b.pinned || skipped[b.id] || Planner.isDone(b)) return;
+      const left = b.start - nowMin;
+      // тик раз в минуту может не попасть в точную отметку — берём первый тик после неё
+      for (const mark of [15, 5]) {
+        const key = b.id + ':' + mark;
+        if (preWarned[key]) continue;
+        if (left > mark || left <= 0) continue;
+        preWarned[key] = true;
+        if (mark === 5) preWarned[b.id + ':15'] = true;   // если плана не было раньше, не сыпем оба сразу
+        UI.toast(`Через ${UI.plur(left, 'минуту', 'минуты', 'минут')} — ${b.title} (${Track.hhmm(b.start)})`, 'warn', '⏰');
+        Sound.sfx(mark === 5 ? 'quest' : 'tick');
+        FX.vibrate(mark === 5 ? [80, 50, 80] : 50);
+        notify(`⏰ Через ${left} мин: ${b.title}`, `Жёсткое время — ровно в ${Track.hhmm(b.start)}`);
+        break;
+      }
+      // момент настал
+      const keyNow = b.id + ':now';
+      if (!preWarned[keyNow] && left <= 0 && left > -1) {
+        preWarned[keyNow] = true;
+        UI.toast(`${Track.hhmm(b.start)} — пора: ${b.title}`, 'level', '🔔');
+        Sound.sfx('fanfare');
+        FX.vibrate([160, 80, 160]);
+        notify(`🔔 ${b.title}`, `Ровно ${Track.hhmm(b.start)} — это то самое время`);
+      }
+    });
 
     // блок начался — объявляем
     if (cur && cur.id !== lastBlockId && !skipped[cur.id] && !Planner.isDone(cur)) {

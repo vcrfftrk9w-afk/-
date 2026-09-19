@@ -11,6 +11,19 @@ const Planner = (() => {
   const MIN = 1440;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+  /* фактическое время подъёма сегодня (или цель, если ещё не вставал) */
+  function wakeMin() {
+    const p = Track.profile();
+    const d = Track.today();
+    return d.wakeAt !== null ? d.wakeAt : p.wakeTarget;
+  }
+  /* отбой: если он «раньше» подъёма — значит уже за полночь, добавляем сутки */
+  function sleepMin() {
+    const p = Track.profile();
+    const w = wakeMin();
+    return p.sleepTarget > w + 120 ? p.sleepTarget : p.sleepTarget + MIN;
+  }
+
   /* ---------- кривая энергии ---------- */
   /* Опорные точки: минут с момента подъёма → уровень 0..1 */
   const CURVE = [
@@ -46,12 +59,11 @@ const Planner = (() => {
   /* итоговая энергия в конкретную минуту суток */
   function energyAt(minute) {
     const p = Track.profile();
-    const d = Track.today();
-    const wake = d.wakeAt !== null ? d.wakeAt : p.wakeTarget;
+    const wake = wakeMin();
     let e = baseEnergy(minute - wake);
 
     // хронотип смещает акценты
-    const hour = Math.floor(minute / 60);
+    const hour = Math.floor(minute / 60) % 24;
     if (p.chronotype === 'lark') e += hour < 12 ? 0.08 : (hour >= 19 ? -0.10 : 0);
     if (p.chronotype === 'owl') e += hour >= 17 ? 0.10 : (hour < 10 ? -0.10 : 0);
 
@@ -66,7 +78,7 @@ const Planner = (() => {
     if (rc) e = e * 0.68 + (rc[hour] || 0) * 0.32;
 
     // ночь — почти ноль
-    if (minute >= p.sleepTarget || minute < Math.min(wake, p.wakeTarget)) e = Math.min(e, 0.12);
+    if (minute >= sleepMin() || minute < wake) e = Math.min(e, 0.12);
 
     return clamp(e, 0.05, 1);
   }
@@ -126,7 +138,8 @@ const Planner = (() => {
   function fixedBlocks() {
     const p = Track.profile();
     const d = Track.today();
-    const wake = d.wakeAt !== null ? d.wakeAt : p.wakeTarget;
+    const wake = wakeMin();
+    const bed = sleepMin();
     const out = [];
     const add = (kind, emoji, title, start, end, note) => {
       if (end <= start) return;
@@ -135,24 +148,31 @@ const Planner = (() => {
 
     add('wake', '☀️', 'Подъём и утренняя рутина', wake, wake + 30, 'Свет, вода, движение — разгоняют мозг быстрее кофе.');
     add('meal', '🍳', 'Завтрак', wake + 30, wake + 60, 'Белок с утра держит концентрацию до обеда.');
-    const lunch = clamp(wake + 330, 11 * 60, 15 * 60);
+    const lunch = clamp(wake + 330, wake + 240, wake + 420);
     add('meal', '🍽️', 'Обед', lunch, lunch + 40, 'После него будет спад — тяжёлое туда не ставим.');
-    const dinner = clamp(p.sleepTarget - 210, 17 * 60, 21 * 60);
+    const dinner = clamp(bed - 210, lunch + 240, bed - 150);
     add('meal', '🥗', 'Ужин', dinner, dinner + 40, 'За 3 часа до сна — иначе сон будет хуже.');
     if ((p.pills || []).length) {
       p.pills.forEach((x) => add('pill', '💊', x.name, x.at, x.at + 10, 'По расписанию.'));
     }
-    add('evening', '🌙', 'Вечерняя рутина и отбой', p.sleepTarget - 45, p.sleepTarget, 'Без экранов — засыпание быстрее на 20 минут.');
+    add('evening', '🌙', 'Вечерняя рутина и отбой', bed - 45, bed, 'Без экранов — засыпание быстрее на 20 минут.');
+    // занятые часы: встречи, работа, учёба — план их обходит
+    (d.busy || []).forEach((x) => {
+      const shift = x.start < wake ? MIN : 0;
+      out.push({
+        id: 'busy-' + x.id, kind: 'busy', emoji: '📌', title: x.title,
+        start: x.start + shift, end: x.end + shift, fixed: true, busyId: x.id,
+        note: 'Занятое время — сюда ничего не ставлю.',
+      });
+    });
     return out.sort((a, b) => a.start - b.start);
   }
 
   /* свободные промежутки между каркасными блоками */
   function freeSlots(fixed, fromMin) {
-    const p = Track.profile();
-    const d = Track.today();
-    const wake = d.wakeAt !== null ? d.wakeAt : p.wakeTarget;
+    const wake = wakeMin();
     const dayStart = Math.max(wake + 30, fromMin === undefined ? 0 : fromMin);
-    const dayEnd = p.sleepTarget - 45;
+    const dayEnd = sleepMin() - 45;
     const busy = fixed.filter((b) => b.end > dayStart && b.start < dayEnd)
       .map((b) => [b.start, b.end]).sort((a, b) => a[0] - b[0]);
 
@@ -216,7 +236,7 @@ const Planner = (() => {
     }
 
     // 5. штраф за поздний час для тяжёлого
-    if (kind === 'deep' && start >= p.sleepTarget - 180) {
+    if (kind === 'deep' && start >= sleepMin() - 180) {
       score -= 14; cons.push('Меньше трёх часов до сна — голова уже не та');
     }
 
@@ -303,7 +323,8 @@ const Planner = (() => {
       // вырезаем занятое время из слота
       const slot = slots[best.si];
       const rest = [];
-      if (best.start - slot.s >= 20) rest.push({ s: slot.s, e: best.start });
+      // буфер с обеих сторон: спина к спине задачи для СДВГ — верный способ сорваться
+      if ((best.start - BUFFER) - slot.s >= 20) rest.push({ s: slot.s, e: best.start - BUFFER });
       if (slot.e - (end + BUFFER) >= 20) rest.push({ s: end + BUFFER, e: slot.e });
       slots.splice(best.si, 1, ...rest);
     });
@@ -392,6 +413,6 @@ const Planner = (() => {
   return {
     energyAt, energyOver, build, plan, blocks, currentBlock, nextBlock,
     isDone, skip, missed, catchUp, progress, evaluate,
-    taskDuration, taskKind, KIND_LABEL, NEED, fixedBlocks, freeSlots,
+    taskDuration, taskKind, KIND_LABEL, NEED, fixedBlocks, freeSlots, wakeMin, sleepMin,
   };
 })();

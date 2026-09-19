@@ -1595,3 +1595,19 @@
 .dh-col small { font-size: 9.5px; color: var(--text-muted); margin-top: 5px; }
 .dh-sum { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--text-muted); }
 .dh-sum b { color: var(--text); }
+
+/* занятые часы */
+.day-busy { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.busy-chip {
+  display: inline-flex; align-items: center; gap: 7px; font-size: 13px;
+  background: var(--surface-2); border: 1px dashed var(--border-strong); border-radius: 99px; padding: 6px 12px;
+}
+.busy-chip i { font-style: normal; color: var(--text-muted); font-size: 11.5px; }
+.busy-chip button { background: none; border: 0; color: var(--text-muted); cursor: pointer; font-size: 13px; padding: 0; }
+.tl-block.k-busy { background: repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 6px, transparent 6px, transparent 12px); border-style: dashed; }
+
+/* первичная настройка режима */
+.day-setup { text-align: center; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.day-setup h3 { margin: 8px 0 6px; font-size: 22px; }
+.day-setup .rg-grid, .day-setup .field { text-align: left; }
+.day-setup .linkbtn { margin-top: 10px; }

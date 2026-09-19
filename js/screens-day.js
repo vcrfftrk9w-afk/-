@@ -7,6 +7,30 @@ Screens.day = (() => {
   let bound = false;
   let tickTimer = null;
 
+  /* ---------- первый вход: настроить режим ---------- */
+  function setupHTML() {
+    const p = Track.profile();
+    if (p.set) return '';
+    return `
+      <div class="card day-setup">
+        <div class="ob-emoji" style="font-size:38px">🕰️</div>
+        <h3>Настроим режим за 30 секунд</h3>
+        <p class="muted">От этих цифр зависит всё: когда у тебя пик энергии, куда встанет тяжёлая задача и когда приложение начнёт тебя подгонять.</p>
+        <div class="rg-grid">
+          <label class="field"><span>Во сколько встаёшь</span><input id="su-wake" type="time" value="${Track.hhmm(p.wakeTarget)}"></label>
+          <label class="field"><span>Во сколько ложишься</span><input id="su-sleep" type="time" value="${Track.hhmm(p.sleepTarget)}"></label>
+        </div>
+        <div class="field"><span>Когда ты живее</span>
+          <div class="chrono" id="su-chrono">
+            ${[['lark', '🐦 Жаворонок', 'пик с утра'], ['neutral', '⚖️ Обычный', 'пик до обеда'], ['owl', '🦉 Сова', 'пик вечером']]
+              .map(([id, t, dd]) => `<button class="chrono-opt ${p.chronotype === id ? 'sel' : ''}" data-su="${id}"><b>${t}</b><small>${dd}</small></button>`).join('')}
+          </div>
+        </div>
+        <button class="btn btn-primary btn-lg btn-block" id="su-save">Готово, построй мой день</button>
+        <button class="linkbtn" id="su-skip">пропустить, разберусь потом</button>
+      </div>`;
+  }
+
   /* ---------- сейчас по плану ---------- */
   function nowHTML() {
     const cur = Planner.currentBlock();
@@ -122,10 +146,17 @@ Screens.day = (() => {
               </button>`).join('')}
           </div>` : ''}
 
+        ${(d.busy || []).length ? `
+          <div class="day-busy">
+            ${d.busy.map((x) => `<span class="busy-chip">📌 ${UI.esc(x.title)} <i>${Track.hhmm(x.start)}–${Track.hhmm(x.end)}</i><button data-delbusy="${x.id}">✕</button></span>`).join('')}
+          </div>` : ''}
+
         <div class="day-main-actions">
           ${d.wakeAt === null
             ? `<button class="btn btn-primary" data-quick="wake">☀️ Я проснулся</button>`
             : (d.sleepAt === null ? `<button class="btn btn-ghost" data-quick="sleep">🌙 Ложусь спать</button>` : `<span class="muted small">День закрыт в ${Track.hhmm(d.sleepAt)}</span>`)}
+          <button class="btn btn-ghost" id="day-busy-add">📌 Занятое время</button>
+          ${typeof Notification !== 'undefined' && Notification.permission !== 'granted' ? '<button class="btn btn-ghost" id="day-notify">🔔 Включить напоминания</button>' : ''}
           <button class="btn btn-ghost" id="day-settings">⚙️ Мой режим</button>
         </div>
       </div>`;
@@ -166,9 +197,9 @@ Screens.day = (() => {
     const pl = Planner.plan();
     const p = Track.profile();
     const d = Track.today();
-    const wake = d.wakeAt !== null ? d.wakeAt : p.wakeTarget;
+    const wake = Planner.wakeMin();
     const from = Math.max(0, wake - 30);
-    const to = Math.min(1440, p.sleepTarget + 30);
+    const to = Planner.sleepMin() + 30;
     const span = to - from;
     const now = Track.nowMin();
     const skipped = (pl && pl.skipped) || {};
@@ -182,7 +213,7 @@ Screens.day = (() => {
 
     const hours = [];
     for (let h = Math.ceil(from / 60); h <= Math.floor(to / 60); h++) {
-      hours.push(`<span class="tl-hour ${h % 3 === 0 ? '' : 'tl-thin'}" style="left:${(((h * 60) - from) / span) * 100}%">${h}:00</span>`);
+      hours.push(`<span class="tl-hour ${h % 3 === 0 ? '' : 'tl-thin'}" style="left:${(((h * 60) - from) / span) * 100}%">${h % 24}:00</span>`);
     }
 
     const blocks = (pl ? pl.blocks : Planner.fixedBlocks()).filter((b) => b.end > from && b.start < to);
@@ -344,6 +375,42 @@ Screens.day = (() => {
     });
   }
 
+  /* ---------- занятое время ---------- */
+  function busyDialog() {
+    const now = Track.nowMin();
+    const body = UI.sheet(`
+      <h2>Занятое время</h2>
+      <p class="muted small">Работа, пары, встреча, дорога — планировщик обойдёт это стороной и разложит задачи вокруг.</p>
+      <label class="field"><span>Что это</span><input id="busy-title" type="text" maxlength="40" placeholder="Например, созвон с командой"></label>
+      <div class="rg-grid">
+        <label class="field"><span>С</span><input id="busy-from" type="time" value="${Track.hhmm(Math.ceil(now / 30) * 30)}"></label>
+        <label class="field"><span>До</span><input id="busy-to" type="time" value="${Track.hhmm(Math.ceil(now / 30) * 30 + 60)}"></label>
+      </div>
+      <div class="meal-presets">
+        ${[['💼 Работа', 9 * 60, 18 * 60], ['🎓 Учёба', 9 * 60, 14 * 60], ['🚗 Дорога', 8 * 60, 9 * 60]]
+          .map(([t, a, b2]) => `<button class="chip" data-bp="${a}-${b2}" data-t="${UI.esc(t)}">${t}</button>`).join('')}
+      </div>
+      <button class="btn btn-primary btn-block" id="busy-save">Занять это время</button>`);
+    body.querySelectorAll('[data-bp]').forEach((btn) => btn.addEventListener('click', () => {
+      const [a, b2] = btn.dataset.bp.split('-').map(Number);
+      body.querySelector('#busy-from').value = Track.hhmm(a);
+      body.querySelector('#busy-to').value = Track.hhmm(b2);
+      if (!body.querySelector('#busy-title').value) body.querySelector('#busy-title').value = btn.dataset.t.replace(/^\S+\s/, '');
+    }));
+    body.querySelector('#busy-save').addEventListener('click', () => {
+      const ok = Track.addBusy(
+        body.querySelector('#busy-title').value,
+        body.querySelector('#busy-from').value,
+        body.querySelector('#busy-to').value);
+      if (!ok) { UI.toast('Время указано неверно', 'warn', '⚠️'); return; }
+      UI.closeModal('#sheet-modal');
+      Planner.build({ keepDone: true });
+      Sound.sfx('check');
+      UI.toast('Время занято, план пересобран вокруг него', 'success', '📌');
+      render();
+    });
+  }
+
   /* ---------- настройки режима ---------- */
   function settings() {
     const p = Track.profile();
@@ -464,7 +531,7 @@ Screens.day = (() => {
       badge.textContent = `режим ${sc}`;
       badge.className = 'badge ' + (sc >= 70 ? 'badge-ok' : (sc >= 40 ? 'badge-mid' : 'badge-bad'));
     }
-    root.innerHTML = nowHTML() + statusHTML() + behindHTML() + nudgesHTML() + timelineHTML() + listHTML() + historyHTML();
+    root.innerHTML = setupHTML() + nowHTML() + statusHTML() + behindHTML() + nudgesHTML() + timelineHTML() + listHTML() + historyHTML();
     UI.initTilt();
     if (!bound) bind(root);
   }
@@ -481,7 +548,40 @@ Screens.day = (() => {
         UI.toast('План дня собран', 'success', '🧠');
         render(); return;
       }
+      const su = g('[data-su]');
+      if (su) {
+        Track.profile().chronotype = su.dataset.su;
+        root.querySelectorAll('[data-su]').forEach((x) => x.classList.toggle('sel', x === su));
+        Sound.sfx('pop'); State.save(); return;
+      }
+      if (g('#su-save')) {
+        const pr = Track.profile();
+        pr.wakeTarget = Track.parseHHMM($('#su-wake').value) ?? pr.wakeTarget;
+        pr.sleepTarget = Track.parseHHMM($('#su-sleep').value) ?? pr.sleepTarget;
+        pr.set = true;
+        // если настраивает утром — сразу отмечаем подъём, вечером это было бы неправдой
+        if (Track.today().wakeAt === null && Track.nowMin() < 12 * 60) Track.wake();
+        Planner.build({});
+        Sound.sfx('fanfare');
+        FX.confetti(window.innerWidth / 2, 200, 34);
+        UI.toast('Режим настроен — день построен', 'level', '🕰️');
+        render(); return;
+      }
+      if (g('#su-skip')) { Track.profile().set = true; State.commit(); render(); return; }
       if (g('#day-settings')) { settings(); return; }
+      if (g('#day-busy-add')) { busyDialog(); return; }
+      if (g('#day-notify')) {
+        try {
+          Notification.requestPermission().then((r) => {
+            if (r === 'granted') { State.s.notifications = true; State.commit(); UI.toast('Буду напоминать о блоках плана', 'success', '🔔'); }
+            else UI.toast('Без разрешения напоминания будут только внутри приложения', 'warn', '🔕');
+            render();
+          });
+        } catch (e) { UI.toast('Браузер не поддерживает уведомления', 'warn', '🔕'); }
+        return;
+      }
+      const db = g('[data-delbusy]');
+      if (db) { Track.removeBusy(db.dataset.delbusy); Planner.build({ keepDone: true }); render(); return; }
       if (g('#day-catchup')) {
         Planner.catchUp();
         Sound.sfx('success');

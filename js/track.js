@@ -11,6 +11,7 @@ const Track = (() => {
     water: 0, coffee: 0,
     meals: [],          // [{ at, kcal, title }]
     pills: {},          // { pillId: timestamp }
+    busy: [],           // [{ id, title, start, end }] — встречи, работа, учёба
     workout: 0,         // минут
     closed: false,
   });
@@ -34,6 +35,7 @@ const Track = (() => {
     const d = s.day[k];
     if (!Array.isArray(d.meals)) d.meals = [];
     if (!d.pills) d.pills = {};
+    if (!Array.isArray(d.busy)) d.busy = [];
     return d;
   }
 
@@ -108,6 +110,22 @@ const Track = (() => {
     d.workout = Math.max(0, (d.workout || 0) + Math.round(minutes));
     State.commit();
     return d.workout;
+  }
+
+  /* ---------- занятые часы ---------- */
+  function addBusy(title, fromStr, toStr) {
+    const d = today();
+    const a = parseHHMM(fromStr), b = parseHHMM(toStr);
+    if (a === null || b === null || b <= a) return false;
+    d.busy.push({ id: State.uid(), title: (title || 'Занято').slice(0, 40), start: a, end: b });
+    d.busy.sort((x, y) => x.start - y.start);
+    State.commit();
+    return true;
+  }
+  function removeBusy(id) {
+    const d = today();
+    d.busy = d.busy.filter((x) => x.id !== id);
+    State.commit();
   }
 
   function pill(id) {
@@ -219,7 +237,8 @@ const Track = (() => {
     p.pills.forEach((x) => {
       if (!d.pills[x.id] && now > x.at + 30) out.push({ id: 'pill-' + x.id, emoji: '💊', text: `${x.name} — по плану в ${hhmm(x.at)}` });
     });
-    if (now > p.sleepTarget && d.sleepAt === null) {
+    const bedEff = p.sleepTarget > (d.wakeAt !== null ? d.wakeAt : p.wakeTarget) + 120 ? p.sleepTarget : p.sleepTarget + 1440;
+    if (bedEff <= 1440 && now > p.sleepTarget && d.sleepAt === null) {
       out.push({ id: 'sleep', emoji: '🌙', text: `Отбой был назначен на ${hhmm(p.sleepTarget)}` });
     }
     return out;
@@ -228,7 +247,7 @@ const Track = (() => {
   return {
     profile, get, today, blank,
     nowMin, hhmm, parseHHMM,
-    wake, sleep, water, coffee, meal, removeMeal, workout, pill, addPill, removePill,
+    wake, sleep, water, coffee, meal, removeMeal, workout, pill, addPill, removePill, addBusy, removeBusy,
     kcal, lastMealMin, sleptHours, awakeMinutes, score, scoreAvg, nudges,
   };
 })();

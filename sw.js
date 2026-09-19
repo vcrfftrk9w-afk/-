@@ -22,6 +22,7 @@ const ASSETS = [
   './js/planner.js',
   './js/template.js',
   './js/chill.js',
+  './js/verdict.js',
   './js/path.js',
   './js/screens-extra.js',
   './js/screens-path.js',

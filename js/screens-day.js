@@ -164,6 +164,7 @@ Screens.day = (() => {
           ${d.wakeAt === null
             ? `<button class="btn btn-primary" data-quick="wake">☀️ Я проснулся</button>`
             : (d.sleepAt === null ? `<button class="btn btn-ghost" data-quick="sleep">🌙 Ложусь спать</button>` : `<span class="muted small">День закрыт в ${Track.hhmm(d.sleepAt)}</span>`)}
+          <button class="btn btn-accent" id="day-verdict">🧠 Что сейчас главное</button>
           <button class="btn btn-ghost" id="day-busy-add">📌 Занятое время</button>
           ${typeof Notification !== 'undefined' && Notification.permission !== 'granted' ? '<button class="btn btn-ghost" id="day-notify">🔔 Включить напоминания</button>' : ''}
           <button class="btn btn-ghost" id="day-settings">⚙️ Мой режим</button>
@@ -714,6 +715,7 @@ Screens.day = (() => {
         UI.toast(`Шаблон обновлён: ${n} ${UI.plural(n, 'дело', 'дела', 'дел')}`, 'success', '💾');
         render(); return;
       }
+      if (g('#day-verdict')) { Verdict.open(); return; }
       if (g('#day-busy-add')) { busyDialog(); return; }
       if (g('#day-notify')) {
         try {

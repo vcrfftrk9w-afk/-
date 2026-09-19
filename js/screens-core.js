@@ -37,6 +37,8 @@ Screens.dashboard = (() => {
   function bind() {
     document.querySelectorAll('[data-goto-path]').forEach((b) => b.addEventListener('click', () => App.go('path')));
     document.querySelectorAll('[data-goto-day]').forEach((b) => b.addEventListener('click', () => App.go('day')));
+    const vb = document.querySelector('#verdict-btn');
+    if (vb) vb.addEventListener('click', () => Verdict.open());
     Screens.helpers.fillSelect($('#quick-priority'), Data.PRIORITIES.map((p) => ({ value: p.id, label: `${p.emoji} ${p.name} · ${p.xp} XP` })), 'mid');
 
     $('#quick-form').addEventListener('submit', (e) => {

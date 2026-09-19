@@ -63,7 +63,9 @@ const Palette = (() => {
     // день
     if (typeof Track !== 'undefined') {
       list.push(
-        { group: 'День', icon: 'day', title: 'Собрать план дня', sub: 'Разложить задачи по часам под твою энергию',
+        { group: 'День', icon: 'bolt', title: 'Что сейчас главное', sub: 'Разбор: одно дело с обоснованием',
+          run: () => Verdict.open() },
+      { group: 'День', icon: 'day', title: 'Собрать план дня', sub: 'Разложить задачи по часам под твою энергию',
           run: () => { Planner.build({}); App.go('day'); UI.toast('План дня собран', 'success', '🧠'); } },
         { group: 'День', emoji: '💧', title: 'Стакан воды', sub: 'Записать + 1',
           run: () => { Track.water(1); UI.toast(`Воды: ${Track.today().water}`, 'success', '💧'); } },

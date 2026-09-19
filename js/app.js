@@ -572,6 +572,7 @@ const App = (() => {
       else if (k === 'f' || k === 'а') { Screens.focus.toggleTimer(); }
       else if (k === 'h' || k === 'р') { Screens.focus.enterHyperfocus(); }
       else if (k === 'q' || k === 'й') { e.preventDefault(); openCapture(); }
+      else if (k === 'g' || k === 'п') { e.preventDefault(); Verdict.open(); }
       else if (e.key === '?' || (e.shiftKey && e.key === '/')) { e.preventDefault(); showShortcuts(); }
       else if (k === 'm' || k === 'ь') { Music.toggle(State.s.music.station); Screens.music.render(); }
       else if (e.key === 'Escape') {

@@ -19,6 +19,7 @@ const Palette = (() => {
     const NAV = [
       ['dashboard', 'home', 'Главная', 'Квесты, персонаж, состояние дня'],
       ['tasks', 'tasks', 'Задачи', 'Список и матрица приоритетов'],
+      ['day', 'day', 'День под контролем', 'Режим, трекер и план от ИИ'],
       ['path', 'path', 'Путь к деньгам', '35 шагов от нуля до свободы'],
       ['adhd', 'focus', 'Фокус и СДВГ-инструменты', 'Таймер, музыка, рулетка, дыхание'],
       ['habits', 'habits', 'Привычки', 'Недельная сетка и стрики'],
@@ -58,6 +59,24 @@ const Palette = (() => {
       { group: 'Действия', icon: 'settings', title: 'Настройки', sub: 'Тема, звук, доступность',
         run: () => $('#settings-btn').click() },
     );
+
+    // день
+    if (typeof Track !== 'undefined') {
+      list.push(
+        { group: 'День', icon: 'day', title: 'Собрать план дня', sub: 'Разложить задачи по часам под твою энергию',
+          run: () => { Planner.build({}); App.go('day'); UI.toast('План дня собран', 'success', '🧠'); } },
+        { group: 'День', emoji: '💧', title: 'Стакан воды', sub: 'Записать + 1',
+          run: () => { Track.water(1); UI.toast(`Воды: ${Track.today().water}`, 'success', '💧'); } },
+        { group: 'День', emoji: '🍽️', title: 'Записать приём пищи', sub: 'Что съел и сколько калорий',
+          run: () => Screens.day.quick('meal') },
+        { group: 'День', emoji: '☀️', title: 'Я проснулся', sub: 'Отметить подъём и построить день',
+          run: () => Screens.day.quick('wake') },
+        { group: 'День', emoji: '🌙', title: 'Ложусь спать', sub: 'Закрыть день',
+          run: () => Screens.day.quick('sleep') },
+        { group: 'День', icon: 'settings', title: 'Мой режим', sub: 'Подъём, отбой, хронотип, таблетки',
+          run: () => Screens.day.settings() },
+      );
+    }
 
     // шаги пути
     if (typeof Path !== 'undefined') {

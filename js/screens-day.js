@@ -268,6 +268,12 @@ Screens.day = (() => {
     const pl = Planner.plan();
     const b = pl && pl.blocks.find((x) => x.id === id);
     if (!b || b.kind !== 'task') return;
+    if (b.habitId) {
+      const h = State.s.habits.find((x) => x.id === b.habitId);
+      if (h) { Screens.habits.toggleDay(h, State.todayKey()); UI.toast('Привычка отмечена', 'success', h.emoji || '🔥'); render(); }
+      return;
+    }
+    if (b.pathId) { App.go('path'); setTimeout(() => Screens.path.openStep(b.pathId), 220); return; }
     App.go('adhd');
     setTimeout(() => {
       Screens.focus.setTask(b.taskId);

@@ -16,6 +16,40 @@ const Advisor = (() => {
     const hour = new Date().getHours();
     const list = [];
 
+    // день: подъём, текущий блок плана, просроченный быт
+    if (typeof Track !== 'undefined') {
+      const d = Track.today();
+      if (d.wakeAt === null && hour >= 5 && hour < 14) {
+        list.push({
+          emoji: '☀️', title: 'Отметь подъём',
+          text: 'С этого начинается день: приложение построит расписание от твоего реального времени пробуждения.',
+          action: 'Я проснулся', run: () => { Screens.day.quick('wake'); App.go('day'); }, weight: 95,
+        });
+      }
+      const cur = typeof Planner !== 'undefined' && Planner.plan() ? Planner.currentBlock() : null;
+      if (cur && cur.kind === 'task' && !Planner.isDone(cur)) {
+        list.push({
+          emoji: cur.emoji, title: 'Сейчас по плану дня',
+          text: `${cur.title} — до ${Track.hhmm(cur.end)}. План уже решил, что это лучшее время.`,
+          action: 'Открыть день', run: () => App.go('day'), weight: 90,
+        });
+      }
+      if (d.wakeAt !== null && typeof Planner !== 'undefined' && !Planner.plan()) {
+        list.push({
+          emoji: '🧠', title: 'День не распланирован',
+          text: 'Задачи лежат кучей. Разложу их по часам: тяжёлое на пик энергии, мелочь на спад.',
+          action: 'Собрать план', run: () => { Planner.build({}); App.go('day'); }, weight: 84,
+        });
+      }
+      const nd = Track.nudges();
+      if (nd.length) {
+        list.push({
+          emoji: nd[0].emoji, title: 'Быт просел',
+          text: nd[0].text, action: 'Исправить', run: () => App.go('day'), weight: 64,
+        });
+      }
+    }
+
     if (typeof Path !== 'undefined') {
       const n = Path.nextStep();
       if (n) {

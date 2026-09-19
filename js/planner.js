@@ -242,7 +242,33 @@ const Planner = (() => {
     const slots = freeSlots(fixed).map(([s, e]) => ({ s, e }));
 
     const today = State.todayKey();
-    let pool = State.s.tasks.filter((t) => !t.done);
+    let pool = State.s.tasks.filter((t) => !t.done).map((t) => ({ ...t, _src: 'task' }));
+
+    // привычки, не отмеченные сегодня — короткие блоки
+    State.s.habits.filter((h) => !h.history[today]).forEach((h) => {
+      pool.push({
+        id: 'h-' + h.id, _src: 'habit', habitId: h.id, title: h.name, emoji: h.emoji || '🔁',
+        category: h.skill === 'health' ? 'health' : (h.skill === 'mind' ? 'study' : 'other'),
+        priority: 'mid', estimate: 15, due: today, urgent: false, subtasks: [],
+      });
+    });
+
+    // следующий шаг пути — главное дело дня
+    if (typeof Path !== 'undefined') {
+      const n = Path.nextStep();
+      const doneToday = Path.ALL.some((x) => {
+        const ts = State.s.path.done[x.id];
+        return ts && State.dateKey(new Date(ts)) === today;
+      });
+      if (n && !doneToday) {
+        pool.push({
+          id: 'path-' + n.step.id, _src: 'path', pathId: n.step.id, title: `Шаг пути: ${n.step.t}`,
+          emoji: n.stage.emoji, category: 'money', priority: 'high', estimate: 30,
+          due: today, urgent: false, subtasks: [],
+        });
+      }
+    }
+
     // сначала то, что горит
     pool.sort((a, b) => urgency(b) - urgency(a) || (PRI_W[b.priority] || 0) - (PRI_W[a.priority] || 0));
     if (o.max) pool = pool.slice(0, o.max);
@@ -265,8 +291,10 @@ const Planner = (() => {
       if (!best) return;
       const end = best.start + dur;
       placed.push({
-        id: 'p-' + task.id, kind: 'task', taskId: task.id,
-        emoji: (Data.categoryById(task.category) || {}).emoji || '✅',
+        id: 'p-' + task.id, kind: 'task', src: task._src || 'task',
+        taskId: task._src === 'task' ? task.id : null,
+        habitId: task.habitId || null, pathId: task.pathId || null,
+        emoji: task.emoji || (Data.categoryById(task.category) || {}).emoji || '✅',
         title: task.title, start: best.start, end,
         score: Math.round(best.score), energy: best.energy,
         pros: best.pros, cons: best.cons, taskKind: best.kind,
@@ -307,6 +335,11 @@ const Planner = (() => {
   /* блок выполнен? задача отмечена или блок каркасный и время прошло */
   function isDone(b) {
     if (b.kind === 'task') {
+      if (b.habitId) {
+        const h = State.s.habits.find((x) => x.id === b.habitId);
+        return !h || !!h.history[State.todayKey()];
+      }
+      if (b.pathId) return typeof Path !== 'undefined' && Path.isDone(b.pathId);
       const t = State.s.tasks.find((x) => x.id === b.taskId);
       return !t || !!t.done;
     }

@@ -1080,7 +1080,7 @@ Screens.habits = (() => {
     $('#habit-empty').classList.toggle('hidden', State.s.habits.length > 0);
   }
 
-  return { bind, render, add, detail };
+  return { bind, render, add, detail, toggleDay };
 })();
 
 /* =========================================================

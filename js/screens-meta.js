@@ -425,6 +425,15 @@ Screens.stats = (() => {
       });
       L.push('');
     }
+    if (typeof Track !== 'undefined') {
+      const d = Track.today();
+      const sc = Track.score();
+      L.push('## Режим дня');
+      L.push(`- Сегодня: **${sc.value} из 100**${d.wakeAt !== null ? `, подъём в ${Track.hhmm(d.wakeAt)}` : ''}`);
+      L.push(`- Вода ${d.water || 0} стаканов · еда ${d.meals.length} приёмов (${Track.kcal()} ккал) · движение ${d.workout || 0} мин`);
+      L.push(`- Средний режим за 7 дней: ${Track.scoreAvg(7)} / 100`);
+      L.push('');
+    }
     L.push('## Навыки');
     Data.SKILLS.forEach((sk) => {
       const p = State.skillProgress(sk.id);
@@ -660,6 +669,9 @@ Screens.stats = (() => {
       ['🧭', (s.totals.pathSteps || 0), 'шагов пути'],
       ['🗺️', (s.totals.pathStages || 0), 'этапов пути закрыто'],
       ['🤝', (s.totals.pledgesKept || 0), 'обещаний сдержано'],
+      ['☀️', (s.totals.daysLogged || 0), 'дней под контролем'],
+      ['💧', (s.totals.waterGlasses || 0), 'стаканов воды'],
+      ['🧠', (s.totals.plansMade || 0), 'планов дня собрано'],
     ];
     const root = $('#stat-numbers');
     root.innerHTML = items.map(([emoji, value, label]) => `

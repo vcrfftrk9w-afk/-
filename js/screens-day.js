@@ -341,13 +341,7 @@ Screens.day = (() => {
       setTimeout(() => { Planner.build({}); render(); }, 400);
       return;
     }
-    if (kind === 'sleep') {
-      Track.sleep();
-      Sound.sfx('whoosh');
-      const sc = Track.score();
-      UI.toast(`День закрыт. Режим сегодня — ${sc.value} из 100`, 'level', '🌙');
-      return;
-    }
+    if (kind === 'sleep') { closeDay(); return; }
     if (kind === 'meal') { mealDialog(); return; }
     if (kind === 'pills') { App.go('day'); return; }
   }
@@ -373,6 +367,51 @@ Screens.day = (() => {
       Sound.sfx('check');
       UI.toast('Приём пищи записан', 'success', '🍽️');
     });
+  }
+
+  /* ---------- итог дня ---------- */
+  function closeDay() {
+    Track.sleep();
+    Sound.sfx('fanfare');
+    const d = Track.today();
+    const sc = Track.score();
+    const pr = Planner.plan() ? Planner.progress() : { done: 0, total: 0, pct: 0 };
+    const miss = Planner.plan() ? Planner.missed() : [];
+    const avg7 = Track.scoreAvg(7);
+    const yest = State.s.day[State.daysAgoKey(1)] ? Track.score(State.daysAgoKey(1)).value : null;
+    const diff = yest === null ? null : sc.value - yest;
+
+    const wins = [];
+    if (d.wakeAt !== null && Math.abs(d.wakeAt - Track.profile().wakeTarget) <= 30) wins.push('Встал вовремя');
+    if ((d.water || 0) >= Track.profile().waterGoal) wins.push('Выпил всю норму воды');
+    if (d.meals.length >= Track.profile().mealsGoal) wins.push('Поел как надо');
+    if ((d.workout || 0) >= 30) wins.push('Подвигался');
+    if (pr.pct >= 80 && pr.total) wins.push('План дня почти закрыт');
+    const pills = Track.profile().pills;
+    if (pills.length && pills.every((x) => d.pills[x.id])) wins.push('Всё принял по расписанию');
+
+    if (sc.value >= 70) FX.fireworks(4);
+
+    const body = UI.sheet(`
+      <div class="day-close">
+        <div class="comeback-emoji">🌙</div>
+        <h2>День закрыт</h2>
+        <div class="dc-score">
+          <b>${sc.value}</b><small>режим дня из 100</small>
+          ${diff !== null ? `<i class="${diff >= 0 ? 'up' : 'down'}">${diff >= 0 ? '▲' : '▼'} ${Math.abs(diff)} к вчера</i>` : ''}
+        </div>
+        <div class="comeback-kept">
+          <div class="comeback-chip"><span>✅</span><b>${pr.done}/${pr.total}</b><small>по плану</small></div>
+          <div class="comeback-chip"><span>💧</span><b>${d.water || 0}</b><small>воды</small></div>
+          <div class="comeback-chip"><span>🍽️</span><b>${Track.kcal()}</b><small>ккал</small></div>
+          <div class="comeback-chip"><span>📊</span><b>${avg7}</b><small>за 7 дней</small></div>
+        </div>
+        ${wins.length ? `<div class="dc-wins"><b>Что получилось</b><ul>${wins.map((w) => `<li>${UI.esc(w)}</li>`).join('')}</ul></div>` : ''}
+        ${miss.length ? `<div class="dc-miss"><b>Не сделано</b><p>${miss.slice(0, 3).map((m) => UI.esc(m.title)).join(', ')}${miss.length > 3 ? ` и ещё ${miss.length - 3}` : ''}. Завтра поставлю их первыми.</p></div>` : ''}
+        <p class="muted small">Ложись сейчас — и завтрашний пик энергии будет твоим. Приложение разбудит план, как только отметишь подъём.</p>
+        <button class="btn btn-primary btn-lg btn-block" id="dc-ok">Спокойной ночи</button>
+      </div>`);
+    body.querySelector('#dc-ok').onclick = () => { UI.closeModal('#sheet-modal'); render(); };
   }
 
   /* ---------- занятое время ---------- */
@@ -612,5 +651,5 @@ Screens.day = (() => {
   }
   function onLeave() { clearInterval(tickTimer); tickTimer = null; }
 
-  return { render, onEnter, onLeave, quick, settings, explain };
+  return { render, onEnter, onLeave, quick, settings, explain, closeDay };
 })();

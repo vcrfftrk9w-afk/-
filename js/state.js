@@ -124,21 +124,94 @@ const State = (() => {
     return out;
   }
 
+  const BACKUP_KEY = KEY + '_backup';
+  let lastWrite = 0;          // когда эта вкладка последний раз писала
+  let loadProblem = null;     // что пошло не так при загрузке — покажем человеку
+
+  function parseState(raw) {
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('не объект');
+    return obj;
+  }
+
   function load() {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) s = deepMerge(defaults(), JSON.parse(raw));
-    } catch (e) {
+    loadProblem = null;
+    let raw = null, fromBackup = false;
+    try { raw = localStorage.getItem(KEY); } catch (e) { raw = null; }
+
+    if (raw) {
+      try {
+        s = deepMerge(defaults(), parseState(raw));
+      } catch (e) {
+        /* Основное сохранение испорчено. Молча начинать с нуля нельзя:
+           это стирает всё, что человек накопил. Пробуем запасную копию,
+           а испорченное откладываем в сторону, а не затираем. */
+        let restored = false;
+        try {
+          const bk = localStorage.getItem(BACKUP_KEY);
+          if (bk) { s = deepMerge(defaults(), parseState(bk)); restored = true; fromBackup = true; }
+        } catch (e2) { restored = false; }
+        try {
+          // держим только одну отложенную копию: иначе они забьют хранилище
+          Object.keys(localStorage)
+            .filter((k) => k.indexOf(KEY + '_corrupt_') === 0)
+            .forEach((k) => localStorage.removeItem(k));
+          localStorage.setItem(KEY + '_corrupt_' + Date.now(), raw.slice(0, 200000));
+        } catch (e3) { /* нет места */ }
+        if (!restored) s = defaults();
+        loadProblem = restored ? 'backup' : 'lost';
+      }
+    } else {
       s = defaults();
     }
+
     ensureSkills();
     ensureRoutines();
+    lastWrite = Date.now();
+    if (!fromBackup) writeBackup();
     return s;
   }
 
-  function save() {
-    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* приватный режим */ }
+  function writeBackup() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw && raw.length > 40) localStorage.setItem(BACKUP_KEY, raw);
+    } catch (e) { /* нет места — не беда, это подстраховка */ }
   }
+
+  let backupTimer = null;
+  function save() {
+    try {
+      s.savedAt = Date.now();
+      localStorage.setItem(KEY, JSON.stringify(s));
+      lastWrite = s.savedAt;
+      /* запасную копию обновляем не чаще раза в минуту: она нужна на случай
+         порчи основной, а не как второй полный лог каждого нажатия */
+      clearTimeout(backupTimer);
+      backupTimer = setTimeout(writeBackup, 60000);
+    } catch (e) { /* приватный режим или кончилось место */ }
+  }
+
+  /* ---------- несколько вкладок ----------
+     Раньше вкладки молча затирали работу друг друга: последняя запись
+     побеждала. Теперь чужая запись подхватывается сразу. */
+  function watchOtherTabs() {
+    if (typeof window === 'undefined' || !window.addEventListener) return;
+    window.addEventListener('storage', (e) => {
+      if (e.key !== KEY || !e.newValue) return;
+      let incoming;
+      try { incoming = parseState(e.newValue); } catch (err) { return; }
+      if (!incoming.savedAt || incoming.savedAt <= lastWrite) return;
+      s = deepMerge(defaults(), incoming);
+      ensureSkills();
+      ensureRoutines();
+      lastWrite = incoming.savedAt;
+      emit('externalChange', null);
+      emit('change', null);
+    });
+  }
+
+  const problem = () => loadProblem;
 
   function ensureSkills() {
     Data.SKILLS.forEach((sk) => { if (!s.skills[sk.id]) s.skills[sk.id] = { xp: 0 }; });
@@ -463,7 +536,7 @@ const State = (() => {
   return {
     get s() { return s; },
     KEY, uid, todayKey, daysAgoKey, dateKey, daysBetween,
-    load, save, commit, on, emit,
+    load, save, commit, on, emit, watchOtherTabs, problem, BACKUP_KEY,
     xpToNext, stage, nextStage, addXP, addCoins, spend, boosterActive,
     skillLevel, skillProgress, skillNeed,
     registerActivity, habitStreak,

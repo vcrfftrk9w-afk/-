@@ -275,6 +275,12 @@ const App = (() => {
   function bindStateEvents() {
     State.on('change', () => renderActive());
 
+    // другая вкладка изменила состояние — подхватываем, а не затираем
+    State.on('externalChange', () => {
+      applyAll();
+      UI.toast('Обновил данные из другой вкладки', 'default', '🔄');
+    });
+
     State.on('levelup', (info) => { pendingLevelUp = info; });
 
     State.on('pathStage', (info) => {
@@ -415,6 +421,27 @@ const App = (() => {
     }
     State.commit();
     if (away >= 2) setTimeout(() => showComeback(away), 900);
+  }
+
+  /* ---------- честно сказать, если сохранение не прочиталось ---------- */
+  function reportLoadProblem() {
+    const kind = State.problem();
+    if (!kind) return;
+    setTimeout(() => {
+      if (kind === 'backup') {
+        UI.toast('Основное сохранение повредилось — восстановил из запасной копии', 'warn', '🛟');
+      } else {
+        const body = UI.sheet(`
+          <div class="comeback">
+            <div class="comeback-emoji">🛟</div>
+            <h2>Не удалось прочитать сохранение</h2>
+            <p class="muted">Данные в браузере повредились, и запасной копии тоже не нашлось. Приложение начало с чистого листа, но <b>испорченный файл не стёрт</b> — он лежит рядом, и из него можно попробовать что-то достать.</p>
+            <p class="muted">Чтобы такое больше не било по тебе: во вкладке «Статистика» есть кнопка «Бэкап» — файл можно хранить где угодно и вернуть одним нажатием.</p>
+            <button class="btn btn-primary btn-lg btn-block" id="lp-ok">Понятно</button>
+          </div>`);
+        body.querySelector('#lp-ok').onclick = () => UI.closeModal('#sheet-modal');
+      }
+    }, 1200);
   }
 
   /* ---------- контроль дня: напоминает и подгоняет ---------- */
@@ -983,6 +1010,7 @@ const App = (() => {
   /* ---------- запуск ---------- */
   function init() {
     State.load();
+    State.watchOtherTabs();
     applyAll();
 
     FX.initBackground($('#bg-canvas'));
@@ -1014,6 +1042,7 @@ const App = (() => {
     Advisor.bind();
     Chill.bind();
     DayTpl.seed();
+    reportLoadProblem();
     $('#shortcuts-btn').addEventListener('click', () => { UI.closeModal('#settings-modal'); setTimeout(showShortcuts, 200); });
 
     paintIcons();

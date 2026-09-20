@@ -1753,3 +1753,24 @@
 .tpl-progress { margin: 12px 0 4px; }
 .tpl-progress-meta { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--text-muted); margin-top: 6px; }
 .tpl-progress-meta b { color: var(--accent3); }
+
+/* =========================================================
+   ЗАЩИТА ОТ ДЛИННЫХ СЛОВ
+   Названия задач и привычек пишут люди: одно слово без пробелов
+   раздвигало страницу и создавало горизонтальный скролл.
+   ========================================================= */
+.habit-info, .habit-name, .habit-sub,
+.dl-item, .dl-title,
+.tpl-text, .tpl-text b, .tpl-text small,
+.behind-list li, .behind-list li b,
+.pledge-text, .pledge-opt-text, .pledge-opt-text b,
+.path-step-body, .path-step-title,
+.day-now h3, .dd-title,
+.verdict-top h2, .vr-item div, .vr-item b,
+.task-title, .next-action b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.habit-row, .habit-item, .dl-item, .tpl-item, .pledge-item, .path-step, .vr-item, .behind-list li { min-width: 0; }
+.tl-block em, .busy-chip, .day-pill, .path-lesson { overflow-wrap: anywhere; }

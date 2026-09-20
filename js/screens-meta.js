@@ -550,16 +550,23 @@ Screens.stats = (() => {
 
   function renderHeatmap() {
     const root = $('#heatmap');
-    root.innerHTML = '';
+    const s = State.s;
+    /* дни с отметками привычек считаем один раз, а не фильтром по каждому из 365 дней */
+    const habitDays = new Map();
+    s.habits.forEach((h) => {
+      Object.keys(h.history || {}).forEach((k) => habitDays.set(k, (habitDays.get(k) || 0) + 1));
+    });
     const days = 364;
+    const html = [];
     for (let i = days; i >= 0; i--) {
       const key = State.daysAgoKey(i);
-      const lvl = Screens.helpers.activityLevel(key);
+      const lvl = (s.dailyTaskCounts[key] || 0)
+        + Math.round((s.dailyFocusMinutes[key] || 0) / 25)
+        + (habitDays.get(key) || 0);
       const cls = lvl === 0 ? 'h0' : lvl <= 1 ? 'h1' : lvl <= 3 ? 'h2' : lvl <= 6 ? 'h3' : 'h4';
-      const cell = UI.node('i', `heat ${cls}`);
-      cell.title = `${UI.dateLabel(key)}: активность ${lvl}`;
-      root.appendChild(cell);
+      html.push(`<i class="heat ${cls}" title="${UI.dateLabel(key)}: активность ${lvl}"></i>`);
     }
+    root.innerHTML = html.join('');
   }
 
   function renderMood() {

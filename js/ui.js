@@ -209,9 +209,21 @@ const UI = (() => {
     return new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   }
 
+  /* Intl-форматтер создаётся один раз: toLocaleDateString строит его заново
+     на каждый вызов, и на тепловой карте из 365 дней это десятки миллисекунд */
+  let dateFmt = null;
+  const dateCache = new Map();
   function dateLabel(key) {
-    const d = new Date(key);
-    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+    const hit = dateCache.get(key);
+    if (hit) return hit;
+    if (!dateFmt) {
+      try { dateFmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }); }
+      catch (e) { dateFmt = { format: (d) => `${d.getDate()}.${d.getMonth() + 1}` }; }
+    }
+    const out = dateFmt.format(new Date(key));
+    if (dateCache.size > 800) dateCache.clear();
+    dateCache.set(key, out);
+    return out;
   }
 
   const WEEKDAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];

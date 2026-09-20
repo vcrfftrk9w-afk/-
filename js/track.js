@@ -75,19 +75,19 @@ const Track = (() => {
     return d.sleepAt;
   }
 
-  function water(delta) {
+  function water(delta, silent) {
     const d = today();
     d.water = Math.max(0, (d.water || 0) + delta);
     if (delta > 0) State.s.totals.waterGlasses = (State.s.totals.waterGlasses || 0) + delta;
     State.emit('dayEvent', { kind: 'water', value: d.water });
-    State.commit();
+    if (silent) State.save(); else State.commit();
     return d.water;
   }
 
-  function coffee(delta) {
+  function coffee(delta, silent) {
     const d = today();
     d.coffee = Math.max(0, (d.coffee || 0) + delta);
-    State.commit();
+    if (silent) State.save(); else State.commit();
     return d.coffee;
   }
 
@@ -105,10 +105,10 @@ const Track = (() => {
     State.commit();
   }
 
-  function workout(minutes) {
+  function workout(minutes, silent) {
     const d = today();
     d.workout = Math.max(0, (d.workout || 0) + Math.round(minutes));
-    State.commit();
+    if (silent) State.save(); else State.commit();
     return d.workout;
   }
 

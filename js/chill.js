@@ -93,7 +93,8 @@ const Chill = (() => {
     const el = $('#chill');
     el.classList.add('hidden');
     el.classList.remove('over');
-    document.body.classList.remove('modal-lock');
+    // под залипанием могла остаться открытая модалка — не снимаем блокировку прокрутки зря
+    if (!document.querySelector('.modal.modal-open')) document.body.classList.remove('modal-lock');
 
     if (finished && taskId) {
       const t = State.s.tasks.find((x) => x.id === taskId);

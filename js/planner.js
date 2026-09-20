@@ -376,9 +376,16 @@ const Planner = (() => {
     const keepIds = new Set(keep.map((b) => b.taskId || b.habitId || b.pathId));
     const fresh = placed.filter((b) => !keepIds.has(b.taskId || b.habitId || b.pathId));
     const blocks = fixed.concat(keep, fresh).sort((a, b) => a.start - b.start);
+    // что не поместилось — про это надо сказать вслух, а не молча потерять
+    const placedIds = new Set(placed.map((b) => b.taskId || b.habitId || b.pathId));
+    const unplaced = pool.concat(pinned)
+      .filter((t) => !placedIds.has(t.id) && !placedIds.has(t.pathId) && !placedIds.has(t.habitId))
+      .map((t) => t.title);
+
     State.s.plan = {
       date: today, blocks, generatedAt: Date.now(),
       skipped: (o.keepDone && plan()) ? plan().skipped : {},
+      unplaced,
     };
     State.s.totals.plansMade = (State.s.totals.plansMade || 0) + 1;
     State.commit();
@@ -392,6 +399,7 @@ const Planner = (() => {
     return s.plan;
   }
   const blocks = () => (plan() ? plan().blocks : []);
+  const unplaced = () => (plan() ? (plan().unplaced || []) : []);
 
   function currentBlock() {
     const now = Track.nowMin();
@@ -454,7 +462,7 @@ const Planner = (() => {
 
   return {
     energyAt, energyOver, build, plan, blocks, currentBlock, nextBlock,
-    isDone, skip, missed, catchUp, progress, evaluate, carriedOver,
+    isDone, skip, missed, catchUp, progress, evaluate, carriedOver, unplaced,
     taskDuration, taskKind, KIND_LABEL, NEED, fixedBlocks, freeSlots, wakeMin, sleepMin,
   };
 })();

@@ -172,6 +172,27 @@ Screens.day = (() => {
       </div>`;
   }
 
+  /* ---------- что не поместилось в день ---------- */
+  function unplacedHTML() {
+    const list = Planner.unplaced();
+    if (!list.length) return '';
+    const busy = (Track.today().busy || []).reduce((a, x) => a + (x.end - x.start), 0);
+    return `
+      <div class="card day-unplaced">
+        <div class="card-head"><h3>🚫 Не поместилось в день</h3><span class="badge badge-mid">${list.length}</span></div>
+        <p class="muted small">${busy > 240
+          ? `Занятого времени сегодня ${Math.round(busy / 60)} ч — свободных окон под эти дела не осталось.`
+          : 'Свободного времени между едой, сном и занятыми часами не хватило.'} Убери лишнее, укороти длительность или перенеси на завтра.</p>
+        <ul class="behind-list">
+          ${list.slice(0, 6).map((t) => `<li><span>•</span><b>${UI.esc(t)}</b></li>`).join('')}
+        </ul>
+        <div class="row wrap">
+          <button class="btn btn-ghost" id="day-busy-edit">📌 Посмотреть занятое время</button>
+          <button class="btn btn-ghost" id="day-settings2">⚙️ Сдвинуть подъём или отбой</button>
+        </div>
+      </div>`;
+  }
+
   /* ---------- отставание от плана ---------- */
   function behindHTML() {
     if (!Planner.plan()) return '';
@@ -657,6 +678,37 @@ Screens.day = (() => {
       </div>`;
   }
 
+  /* Точечное обновление счётчиков: полная перерисовка на каждый «+1»
+     заменяла кнопку под пальцем и теряла быстрые нажатия. */
+  let patchTimer = null;
+  function patchCounters() {
+    const d = Track.today();
+    const p = Track.profile();
+    const set = (sel, html) => { const el = $(sel); if (el) el.innerHTML = html; };
+    const cells = $$('.day-counter b');
+    if (cells[0]) cells[0].innerHTML = `${d.water || 0}<i>/${p.waterGoal}</i>`;
+    if (cells[1]) cells[1].innerHTML = `${Track.kcal()}<i> ккал</i>`;
+    if (cells[2]) cells[2].textContent = d.coffee || 0;
+    if (cells[3]) cells[3].innerHTML = `${d.workout || 0}<i> мин</i>`;
+    const ring = $('.day-ring');
+    if (ring) {
+      const sc = Track.score();
+      const R = 2 * Math.PI * 40;
+      const fg = ring.querySelector('.dr-fg');
+      if (fg) fg.style.strokeDashoffset = R * (1 - sc.value / 100);
+      const b = ring.querySelector('b');
+      if (b) b.textContent = sc.value;
+      const badge = $('#day-badge');
+      if (badge) {
+        badge.textContent = `режим ${sc.value}`;
+        badge.className = 'badge ' + (sc.value >= 70 ? 'badge-ok' : (sc.value >= 40 ? 'badge-mid' : 'badge-bad'));
+      }
+    }
+    // остальное (напоминания, достижения) досчитываем, когда пальцы остановились
+    clearTimeout(patchTimer);
+    patchTimer = setTimeout(() => { State.commit(); }, 700);
+  }
+
   /* ---------- рендер ---------- */
   function render() {
     const root = $('#day-root');
@@ -667,7 +719,7 @@ Screens.day = (() => {
       badge.textContent = `режим ${sc}`;
       badge.className = 'badge ' + (sc >= 70 ? 'badge-ok' : (sc >= 40 ? 'badge-mid' : 'badge-bad'));
     }
-    root.innerHTML = setupHTML() + nowHTML() + statusHTML() + behindHTML() + nudgesHTML() + timelineHTML() + listHTML() + templateHTML() + historyHTML();
+    root.innerHTML = setupHTML() + nowHTML() + statusHTML() + behindHTML() + unplacedHTML() + nudgesHTML() + timelineHTML() + listHTML() + templateHTML() + historyHTML();
     UI.initTilt();
     if (!bound) bind(root);
   }
@@ -707,7 +759,8 @@ Screens.day = (() => {
         render(); return;
       }
       if (g('#su-skip')) { Track.profile().set = true; State.commit(); render(); return; }
-      if (g('#day-settings')) { settings(); return; }
+      if (g('#day-settings') || g('#day-settings2')) { settings(); return; }
+      if (g('#day-busy-edit')) { busyDialog(); return; }
       const tdel = g('[data-tpldel]');
       if (tdel) { e.stopPropagation(); DayTpl.remove(tdel.dataset.tpldel); render(); return; }
       const ton = g('[data-tplon]');
@@ -749,9 +802,9 @@ Screens.day = (() => {
         UI.toast('Отпустили. Завтра новый день.', 'default', '🕊️');
         render(); return;
       }
-      const w = g('[data-water]'); if (w) { Track.water(Number(w.dataset.water)); Sound.sfx('pop'); return; }
-      const c = g('[data-coffee]'); if (c) { Track.coffee(Number(c.dataset.coffee)); Sound.sfx('pop'); return; }
-      const wo = g('[data-workout]'); if (wo) { Track.workout(Number(wo.dataset.workout)); Sound.sfx('check'); return; }
+      const w = g('[data-water]'); if (w) { Track.water(Number(w.dataset.water), true); Sound.sfx('pop'); patchCounters(); return; }
+      const c = g('[data-coffee]'); if (c) { Track.coffee(Number(c.dataset.coffee), true); Sound.sfx('pop'); patchCounters(); return; }
+      const wo = g('[data-workout]'); if (wo) { Track.workout(Number(wo.dataset.workout), true); Sound.sfx('check'); patchCounters(); return; }
       const pill = g('[data-pill]'); if (pill) { Track.pill(pill.dataset.pill); Sound.sfx('check'); return; }
       const q = g('[data-quick]'); if (q) { quick(q.dataset.quick); return; }
       const why = g('[data-why]'); if (why) { explain(why.dataset.why); return; }

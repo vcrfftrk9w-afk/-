@@ -275,7 +275,9 @@ Screens.day = (() => {
             const done = Planner.isDone(b);
             const past = b.end < now;
             const cls = skipped[b.id] ? 'skip' : (done ? 'done' : (past ? 'miss' : ''));
-            return `<button class="tl-block k-${b.kind} ${cls}" style="left:${l}%;width:${w}%" data-block="${b.id}" title="${UI.esc(b.title)} · ${Track.hhmm(b.start)}">
+            // короткие блоки выше в стопке: иначе длинный сосед накрывает их край
+            const z = Math.max(1, 24 - Math.round(w));
+            return `<button class="tl-block k-${b.kind} ${cls}" style="left:${l}%;width:${w}%;z-index:${z}" data-block="${b.id}" title="${UI.esc(b.title)} · ${Track.hhmm(b.start)}">
               <span>${b.emoji}</span>${w > 5 ? `<em>${UI.esc(b.title)}</em>` : ''}</button>`;
           }).join('')}
         </div>

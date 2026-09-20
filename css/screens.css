@@ -1479,7 +1479,7 @@
 .tl-hours { position: relative; height: 16px; }
 .tl-hour { position: absolute; transform: translateX(-50%); font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .tl-track { position: relative; min-height: 100px; margin-top: 6px; border-top: 1px solid var(--border); padding-top: 8px; }
-.tl-now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--danger); z-index: 3; box-shadow: 0 0 8px var(--danger); }
+.tl-now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--danger); z-index: 3; box-shadow: 0 0 8px var(--danger); pointer-events: none; }
 .tl-now::before { content: ''; position: absolute; top: -4px; left: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
 .tl-block {
   position: absolute; top: 8px; height: 86px; min-width: 14px; overflow: hidden; cursor: pointer;
@@ -1774,3 +1774,37 @@
 }
 .habit-row, .habit-item, .dl-item, .tpl-item, .pledge-item, .path-step, .vr-item, .behind-list li { min-width: 0; }
 .tl-block em, .busy-chip, .day-pill, .path-lesson { overflow-wrap: anywhere; }
+
+/* Узкие блоки таймлайна на телефоне не растягиваем: растянутый блок
+   налезает на соседний и перехватывает его нажатие. Таймлайн там —
+   картина дня, а нажимают в списке «Порядок дня» ниже: его строки
+   во всю ширину и по ним не промахнёшься. */
+@media (pointer: coarse), (max-width: 760px) {
+  .dl-item { min-height: 46px; }
+  .dl-title { padding: 6px 0; }
+  .tl-block { min-width: 10px; }
+}
+
+/* =========================================================
+   ПАЛЬЦЫ — ДОБОР
+   Этот файл грузится последним, поэтому правила для мелких
+   элементов экранов живут здесь: иначе их перебивает
+   собственное оформление этих же классов.
+   ========================================================= */
+@media (pointer: coarse), (max-width: 760px) {
+  .linkbtn { padding: 11px 8px; margin: -11px -8px; display: inline-block; }
+  .path-step-title { padding: 7px 0; }
+  .path-lesson { min-height: 40px; }
+  .path-step-meta { margin-top: 6px; }
+  .btn { min-height: 42px; }
+  .btn-sm { min-height: 36px; }
+  .routine-check { min-width: 28px; min-height: 28px; }
+  .reminder-toggle, .sound-toggle { min-height: 40px; }
+  .tpl-item, .pledge-opt, .more-item { min-height: 52px; }
+  .station { min-height: 84px; }
+  .mood-btn { min-width: 48px; min-height: 48px; }
+  .heat { min-width: 9px; min-height: 9px; }
+  .dd-quick button { min-height: 40px; padding: 9px 13px; }
+  .task-check { min-width: 32px; min-height: 32px; }
+  .routine-check { min-width: 30px; min-height: 30px; }
+}

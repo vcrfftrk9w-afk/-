@@ -626,7 +626,7 @@
       <form id="habit-form" class="card task-form">
         <input id="habit-title" type="text" placeholder="Новая привычка…" maxlength="60" required autocomplete="off">
         <input id="habit-emoji" type="text" class="emoji-input" maxlength="4" value="✅" title="Эмодзи">
-        <select id="habit-skill"></select>
+        <select aria-label="Навык привычки" title="Какой навык качает эта привычка" id="habit-skill"></select>
         <button type="submit" class="btn btn-primary">➕ Добавить</button>
       </form>
       <div class="chips-row" id="habit-templates"></div>

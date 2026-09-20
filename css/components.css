@@ -645,3 +645,27 @@
 .task-at { color: var(--accent2); font-weight: 600; }
 .task-est { color: var(--text-muted); }
 .task-chill { color: var(--accent3); }
+
+/* =========================================================
+   ПАЛЬЦЫ, А НЕ КУРСОР
+   На телефоне половина кнопок была высотой 19–25px — в них
+   промахиваешься. Зону нажатия растим настоящим отступом, а
+   отрицательный внешний отступ не даёт поехать вёрстке.
+   Невидимые оверлеи не используем: они перехватывают нажатия
+   у соседей и сами попадают под чужие элементы.
+   ========================================================= */
+@media (pointer: coarse), (max-width: 760px) {
+  .link-btn, .linkbtn {
+    padding: 11px 10px;
+    margin: -11px -10px;
+  }
+  .icon-mini { padding: 8px 10px; opacity: 0.75; }
+  .task-check { min-width: 30px; min-height: 30px; }
+  .dc-btns button { min-width: 48px; min-height: 40px; font-size: 15px; }
+  .path-check { min-width: 34px; min-height: 34px; }
+  .chip { min-height: 38px; }
+  .tab-btn { min-height: 48px; }
+  .tpl-del, .pill-row button, .busy-chip button { padding: 10px; margin: -10px; }
+  .switch-row input[type="checkbox"],
+  .check-inline input[type="checkbox"] { width: 24px; height: 24px; }
+}

@@ -446,11 +446,34 @@ const Music = (() => {
   }
 
   /* ---------- управление ---------- */
+  let pendingGesture = false;
+
   function play(id) {
     Sound.ready();
     if (!buildBus()) return false;
-    if (id && id !== stationId) { stationId = id; step = 0; }
+    if (id && id !== stationId) { stationId = id; step = 0; bpmOverride = null; }
     if (playing) { applyStationExtras(); return true; }
+
+    /* Браузер разрешает звук только после касания страницы, а ctx.resume()
+       асинхронный. Раньше мы сразу писали «играет» — и плеер врал: подпись
+       горит, звука нет. Теперь ждём, пока контекст реально запустится. */
+    if (ctx.state === 'suspended') {
+      if (!pendingGesture) {
+        pendingGesture = true;
+        const startOnGesture = () => {
+          document.removeEventListener('pointerdown', startOnGesture, true);
+          document.removeEventListener('keydown', startOnGesture, true);
+          pendingGesture = false;
+          play(stationId);
+        };
+        document.addEventListener('pointerdown', startOnGesture, true);
+        document.addEventListener('keydown', startOnGesture, true);
+        try { ctx.resume().then(() => { if (ctx.state === 'running' && pendingGesture) startOnGesture(); }); } catch (e) { /* ignore */ }
+      }
+      emitBlocked();
+      return false;
+    }
+
     playing = true;
     step = 0;
     rnd = mulberry32(seed);
@@ -464,6 +487,17 @@ const Music = (() => {
     startMinuteCounter();
     notify();
     return true;
+  }
+
+  let blockedNotified = false;
+  function emitBlocked() {
+    // сообщаем один раз за сеанс: автозапуск музыки вместе с таймером
+    // не должен сыпать предупреждениями, о которых никто не просил
+    if (!blockedNotified && typeof UI !== 'undefined' && UI.toast) {
+      blockedNotified = true;
+      UI.toast('Браузер включит звук после касания экрана — нажми ещё раз', 'warn', '🔇');
+    }
+    notify();
   }
 
   let autoRain = false;
@@ -512,10 +546,28 @@ const Music = (() => {
 
   function setStation(id) {
     const wasPlaying = playing;
+    const same = id === stationId;
     stationId = id;
     step = 0;
-    if (wasPlaying) { applyStationExtras(); notify(); }
-    else play(id);
+    bpmOverride = null;          // у новой станции свой темп
+    if (!wasPlaying) { play(id); return; }
+    if (same) { applyStationExtras(); notify(); return; }
+
+    /* Пэды и бас предыдущей станции затухают несколько секунд, поэтому
+       переключение «на слух» не срабатывало. Приглушаем шину на четверть
+       секунды, сбрасываем сетку на текущий момент и возвращаем громкость —
+       новая станция начинается сразу и слышно. */
+    try {
+      const t = ctx.currentTime;
+      bus.gain.cancelScheduledValues(t);
+      bus.gain.setValueAtTime(bus.gain.value, t);
+      bus.gain.linearRampToValueAtTime(0.0001, t + 0.18);
+      bus.gain.linearRampToValueAtTime(volume, t + 0.55);
+      nextTime = t + 0.3;
+    } catch (e) { /* контекст мог закрыться */ }
+    rnd = mulberry32(seed);
+    applyStationExtras();
+    notify();
   }
 
   function reseed() {

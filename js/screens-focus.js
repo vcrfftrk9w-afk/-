@@ -307,6 +307,7 @@ Screens.focus = (() => {
     const bars = $$('#hf-vis i');
     let t = 0;
     const loop = () => {
+      if (document.hidden) { hfVisRAF = null; return; }
       t += 0.08;
       const levels = Sound.levels(bars.length);
       bars.forEach((bar, i) => {
@@ -450,22 +451,33 @@ Screens.focus = (() => {
     });
   }
 
+  /* Полоски крутились 60 раз в секунду даже в полной тишине и при свёрнутой
+     вкладке. Когда звука нет, хватает медленного «дыхания»; когда вкладка
+     не видна, рисовать вообще незачем. */
   function startVisualizer() {
     if (visRAF) return;
     const bars = $$('#visualizer span');
+    if (!bars.length) return;
     let t = 0;
-    const loop = () => {
-      t += 0.1;
-      const levels = Sound.levels(bars.length);
-      bars.forEach((bar, i) => {
-        let h;
-        if (levels) h = 8 + Math.min(1, levels[i] * 1.05) * 92;
-        else h = 6 + (Math.sin(t + i * 0.5) * 0.5 + 0.5) * 10;
-        bar.style.height = h + '%';
-      });
+    let lastIdle = 0;
+    const loop = (now) => {
+      if (document.hidden) { visRAF = null; return; }
+      const active = (typeof Music !== 'undefined' && Music.playing) || Sound.activeLayers().length > 0;
+      if (active) {
+        const levels = Sound.levels(bars.length);
+        for (let i = 0; i < bars.length; i++) {
+          bars[i].style.height = (8 + Math.min(1, levels[i] * 1.05) * 92) + '%';
+        }
+      } else if (now - lastIdle > 55) {        // тишина — около 18 кадров в секунду
+        lastIdle = now;
+        t += 0.1;
+        for (let i = 0; i < bars.length; i++) {
+          bars[i].style.height = (6 + (Math.sin(t + i * 0.5) * 0.5 + 0.5) * 10) + '%';
+        }
+      }
       visRAF = requestAnimationFrame(loop);
     };
-    loop();
+    visRAF = requestAnimationFrame(loop);
   }
   function stopVisualizer() {
     if (visRAF) cancelAnimationFrame(visRAF);

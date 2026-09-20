@@ -57,6 +57,7 @@ const FX = (() => {
         depth: Math.random() * 0.8 + 0.2,
         alpha: Math.random() * 0.45 + 0.15,
         hueShift: Math.random(),
+        sprite: Math.floor(Math.random() * 3),
       });
     }
   }
@@ -64,6 +65,8 @@ const FX = (() => {
   function startBg() {
     if (bgRAF || !bgCtx) return;
     const loop = () => {
+      // свёрнутая вкладка не должна тратить кадры на фон, который не видно
+      if (document.hidden) { bgRAF = null; return; }
       drawBg();
       bgRAF = requestAnimationFrame(loop);
     };
@@ -74,16 +77,54 @@ const FX = (() => {
     bgRAF = null;
   }
 
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && !State.s.reduceMotion) startBg();
+    });
+  }
+
+  /* Свечение частиц раньше рисовалось через shadowBlur — это полноценное
+     размытие по гауссу на каждую частицу каждый кадр, самая дорогая
+     операция в canvas. Плюс цвета читались из CSS 60 раз в секунду, что
+     заставляло браузер пересчитывать стили. Теперь свечение — заранее
+     нарисованный спрайт, а цвета кэшируются до смены темы. */
+  const SPRITE = 48;
+  let sprites = null;
+  let spriteKey = '';
+
+  function buildSprites() {
+    const colors = [cssVar('--accent', '#7c3aed'), cssVar('--accent2', '#06b6d4'), cssVar('--accent3', '#f59e0b')];
+    const key = colors.join('|');
+    if (sprites && key === spriteKey) return sprites;
+    spriteKey = key;
+    sprites = colors.map((color) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = SPRITE;
+      const g = c.getContext('2d');
+      const grad = g.createRadialGradient(SPRITE / 2, SPRITE / 2, 0, SPRITE / 2, SPRITE / 2, SPRITE / 2);
+      grad.addColorStop(0, color);
+      grad.addColorStop(0.28, color);
+      grad.addColorStop(1, 'transparent');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, SPRITE, SPRITE);
+      return c;
+    });
+    return sprites;
+  }
+
+  /* цвета берём заново только когда сменилась тема или палитра */
+  function invalidateSprites() { sprites = null; spriteKey = ''; }
+
   function drawBg() {
     const w = window.innerWidth, h = window.innerHeight;
     bgCtx.clearRect(0, 0, w, h);
-    const c1 = cssVar('--accent', '#7c3aed');
-    const c2 = cssVar('--accent2', '#06b6d4');
-    const c3 = cssVar('--accent3', '#f59e0b');
-    const colors = [c1, c2, c3];
+    const sp = buildSprites();
     const still = reduce();
+    const mx = (mouse.x - 0.5) * 40;
+    const my = (mouse.y - 0.5) * 30;
 
-    for (const p of particles) {
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
       if (!still) {
         p.x += p.vx;
         p.y += p.vy;
@@ -91,19 +132,11 @@ const FX = (() => {
         if (p.x < -10) p.x = w + 10;
         if (p.x > w + 10) p.x = -10;
       }
-      const px = p.x + (mouse.x - 0.5) * 40 * p.depth;
-      const py = p.y + (mouse.y - 0.5) * 30 * p.depth;
-      const color = colors[Math.floor(p.hueShift * colors.length) % colors.length];
-      bgCtx.save();
+      const size = p.r * 7;
       bgCtx.globalAlpha = p.alpha * (still ? 0.6 : 1);
-      bgCtx.fillStyle = color;
-      bgCtx.shadowBlur = 12;
-      bgCtx.shadowColor = color;
-      bgCtx.beginPath();
-      bgCtx.arc(px, py, p.r, 0, Math.PI * 2);
-      bgCtx.fill();
-      bgCtx.restore();
+      bgCtx.drawImage(sp[p.sprite], p.x + mx * p.depth - size / 2, p.y + my * p.depth - size / 2, size, size);
     }
+    bgCtx.globalAlpha = 1;
   }
 
   /* ================= КОНФЕТТИ ================= */
@@ -279,7 +312,7 @@ const FX = (() => {
   }
 
   return {
-    initBackground, initConfetti, confetti, confettiFrom, coinRain, fireworks,
+    initBackground, initConfetti, confetti, confettiFrom, coinRain, fireworks, invalidateSprites,
     floatText, flyTo, shake, pulse, vibrate, seedParticles,
   };
 })();

@@ -42,7 +42,16 @@ const App = (() => {
     document.body.setAttribute('data-scale', a.scale || 'md');
     document.body.setAttribute('data-contrast', String(!!a.contrast));
   }
-  function applyAll() { applyTheme(); applyPalette(); applyMode(); applyMotion(); applyA11y(); }
+  function applyAll() {
+    if (typeof FX !== 'undefined' && FX.invalidateSprites) FX.invalidateSprites();
+    applyTheme();
+    applyPalette();
+    applyMode();
+    applyMotion();
+    applyA11y();
+    // масштаб текста меняет высоту нижней панели — отступы пересчитываем
+    if (typeof syncBottomInsets === 'function') setTimeout(syncBottomInsets, 60);
+  }
 
   /* ---------- иконки интерфейса ---------- */
   function paintIcons() {
@@ -257,7 +266,7 @@ const App = (() => {
     if (btn && btn.offsetParent !== null && btn.scrollIntoView) {
       btn.scrollIntoView({ block: 'nearest', inline: 'center', behavior: State.s.reduceMotion ? 'auto' : 'smooth' });
     }
-    requestAnimationFrame(moveIndicator);
+    requestAnimationFrame(() => { moveIndicator(); syncBottomInsets(); });
     setTimeout(moveIndicator, 320);
     if (Screens.focus.renderHud) Screens.focus.renderHud();
     window.scrollTo({ top: 0, behavior: State.s.reduceMotion ? 'auto' : 'smooth' });
@@ -421,6 +430,22 @@ const App = (() => {
     }
     State.commit();
     if (away >= 2) setTimeout(() => showComeback(away), 900);
+  }
+
+  /* ---------- высота нижней панели и плеера ----------
+     Меряем по факту: от настроек доступности и длины подписей панель
+     меняет высоту, а от зашитой цифры плеер однажды накрыл вкладки. */
+  function syncBottomInsets() {
+    const root = document.documentElement;
+    const bar = $('#tabbar');
+    const player = $('#mini-player');
+    if (bar) {
+      const fixed = getComputedStyle(bar).position === 'fixed';
+      root.style.setProperty('--tabbar-h', fixed ? Math.round(bar.getBoundingClientRect().height) + 'px' : '0px');
+    }
+    if (player) {
+      root.style.setProperty('--miniplayer-h', Math.round(player.getBoundingClientRect().height) + 'px');
+    }
   }
 
   /* ---------- честно сказать, если сохранение не прочиталось ---------- */
@@ -1042,6 +1067,10 @@ const App = (() => {
     Advisor.bind();
     Chill.bind();
     DayTpl.seed();
+    syncBottomInsets();
+    window.addEventListener('resize', syncBottomInsets);
+    window.addEventListener('orientationchange', () => setTimeout(syncBottomInsets, 250));
+    setTimeout(syncBottomInsets, 400);
     reportLoadProblem();
     $('#shortcuts-btn').addEventListener('click', () => { UI.closeModal('#settings-modal'); setTimeout(showShortcuts, 200); });
 
@@ -1080,7 +1109,7 @@ const App = (() => {
     }, 850);
   }
 
-  return { init, go, showComeback, applyAll, applyPalette, renderHeader, renderActive, openCapture, moveIndicator, paintMiniPlayIcon, focusTask: null };
+  return { init, go, showComeback, syncBottomInsets, applyAll, applyPalette, renderHeader, renderActive, openCapture, moveIndicator, paintMiniPlayIcon, focusTask: null };
 })();
 
 document.addEventListener('DOMContentLoaded', App.init);

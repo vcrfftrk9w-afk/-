@@ -147,7 +147,9 @@ Screens.music = (() => {
     $('#music-auto').checked = !!State.s.music.autoWithTimer;
     $('#music-bpm').value = currentStation().bpm;
     $('#music-bpm-val').textContent = currentStation().bpm;
-    startVisualizer();
+    restBars();
+    // страница ушла в фон — эквалайзер останавливается, вернулась — оживает
+    document.addEventListener('visibilitychange', syncVisualizer);
   }
 
   /* станция под время суток и текущее занятие */
@@ -179,22 +181,43 @@ Screens.music = (() => {
     $('#mini-sub').textContent = playing
       ? `${Music.bpm} BPM · трек #${String(Music.seed).slice(-4)}${sleepLeft ? ` · сон через ${Math.ceil(sleepLeft / 60)} мин` : ''}`
       : 'музыка выключена';
+    syncVisualizer();
   }
 
+  /* Эквалайзер крутился кадр за кадром всегда: и с выключенной музыкой,
+     и на других вкладках, и когда страница свёрнута. Каждый кадр он снимал
+     спектр — страница жила на 25 кадрах вместо 60, и переключение вкладок
+     ощущалось вязким. Теперь он работает ровно тогда, когда его видно. */
   function startVisualizer() {
     if (visRAF) return;
     const bars = $$('#mini-vis i');
-    let t = 0;
+    if (!bars.length) return;
     const loop = () => {
-      t += 0.12;
-      const levels = Music.playing ? Sound.levels(bars.length) : null;
+      if (!Music.playing || document.hidden) { stopVisualizer(); restBars(); return; }
+      const levels = Sound.levels(bars.length);
       bars.forEach((bar, i) => {
-        const h = levels ? 10 + Math.min(1, levels[i] * 1.05) * 90 : 8 + (Math.sin(t + i * 0.7) * 0.5 + 0.5) * 6;
-        bar.style.height = h + '%';
+        bar.style.height = (10 + Math.min(1, levels[i] * 1.05) * 90) + '%';
       });
       visRAF = requestAnimationFrame(loop);
     };
     loop();
+  }
+
+  function stopVisualizer() {
+    if (visRAF) cancelAnimationFrame(visRAF);
+    visRAF = null;
+  }
+
+  /* когда музыка выключена, полоски просто стоят — без единого кадра анимации */
+  function restBars() {
+    $$('#mini-vis i').forEach((bar, i) => {
+      bar.style.height = (9 + (i % 3) * 3) + '%';
+    });
+  }
+
+  function syncVisualizer() {
+    if (Music.playing && !document.hidden) startVisualizer();
+    else { stopVisualizer(); restBars(); }
   }
 
   /* вызывается таймером фокуса */
@@ -204,7 +227,7 @@ Screens.music = (() => {
     render();
   }
 
-  return { bind, render, autoStart, suggestStation };
+  return { bind, render, autoStart, suggestStation, syncVisualizer };
 })();
 
 /* =========================================================

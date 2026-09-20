@@ -87,6 +87,23 @@ const Verdict = (() => {
       });
     }
 
+    /* сгоревшие блоки сегодняшнего плана: это не «просрочено вообще»,
+       а «ты сам отвёл под это время сегодня, и оно прошло» */
+    const missed = (typeof Planner !== 'undefined' && Planner.plan()) ? Planner.missed() : [];
+    if (missed.length) {
+      const m = missed[0];
+      const late = now - m.end;
+      push({
+        id: 'missed', key: m.taskId ? 't-' + m.taskId : (m.pathId ? 'p-' + m.pathId : m.id),
+        emoji: m.emoji, title: m.title, weight: 87, minutes: m.end - m.start,
+        why: `Это стояло в плане на ${Track.hhmm(m.start)} и не сделано — ${UI.plur(Math.max(1, Math.round(late / 60)), 'час', 'часа', 'часов')} назад. ${missed.length > 1 ? `Таких сегодня ${missed.length}: чем дольше они висят, тем тяжелее к ним подойти.` : 'Пока оно висит, оно продолжает забирать внимание.'}`,
+        pros: [`По плану было в ${Track.hhmm(m.start)}`, missed.length > 1 ? `Всего пропущено сегодня: ${missed.length}` : 'Осталось только это'],
+        cons: [],
+        first: 'Сделай самую маленькую часть — или честно перенеси кнопкой «Догнать план».',
+        run: () => App.go('day'),
+      });
+    }
+
     /* задача с жёстким временем, которая скоро */
     const soon = Planner.blocks().find((b) => b.pinned && !Planner.isDone(b) && b.start - now > 0 && b.start - now <= 45);
     if (soon) {
@@ -121,7 +138,7 @@ const Verdict = (() => {
       });
       if (n && !doneToday) {
         push({
-          id: 'path', emoji: n.stage.emoji, title: `Шаг пути: ${n.step.t}`, weight: e >= 0.7 ? 78 : 62, minutes: 30,
+          id: 'path', key: 'p-' + n.step.id, emoji: n.stage.emoji, title: `Шаг пути: ${n.step.t}`, weight: e >= 0.7 ? 78 : 62, minutes: 30,
           why: `Всё остальное в списке — это сегодняшний день. Этот шаг — единственное, что двигает тебя с места, где ты сейчас, туда, где хочешь быть.`,
           pros: ['Без него остальное — бег на месте', `Этап «${n.stage.name}»`],
           cons: e < 0.6 ? ['Энергии сейчас маловато для нового'] : [],
@@ -138,7 +155,7 @@ const Verdict = (() => {
       const streak = State.habitStreak(h);
       if (streak >= 2) {
         push({
-          id: 'habit', emoji: h.emoji || '🔥', title: h.name, weight: 66 + Math.min(14, streak), minutes: 15,
+          id: 'habit', key: 'h-' + h.id, emoji: h.emoji || '🔥', title: h.name, weight: 66 + Math.min(14, streak), minutes: 15,
           why: `Серия ${UI.plur(streak, 'день', 'дня', 'дней')}. Обрывать её сегодня обиднее всего — на восстановление уйдёт больше сил, чем на сегодняшний раз.`,
           pros: [`Серия ${streak} — жалко терять`, 'Обычно это минут пятнадцать'],
           first: 'Сделай минимальную версию. Засчитывается.',
@@ -212,7 +229,11 @@ const Verdict = (() => {
   /* ---------- вердикт ---------- */
   function decide() {
     const list = candidates();
-    return { top: list[0], rest: list.slice(1, 4), all: list };
+    const top = list[0];
+    /* последняя страховка: одно и то же дело не должно оказаться
+       и главным, и в списке «почему не это» */
+    const rest = list.slice(1).filter((x) => x.title !== top.title).slice(0, 3);
+    return { top, rest, all: list };
   }
 
   function open() {

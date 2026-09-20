@@ -168,35 +168,61 @@ const Track = (() => {
 
   const awakeMinutes = () => { const d = today(); return d.wakeAt === null ? null : Math.max(0, nowMin() - d.wakeAt); };
 
-  /* ---------- оценка режима 0..100 ---------- */
+  /* ---------- оценка режима 0..100 ----------
+     Считаем только то, что приложение реально могло измерить.
+     Ставить ноль за сон в первый день, когда вчерашней ночи ещё
+     не существует, — это не оценка, а выдуманный упрёк. */
   function score(key) {
     const p = profile();
-    const d = get(key);
+    const k = key || State.todayKey();
+    const d = get(k);
     const parts = [];
+    const now = nowMin();
+    const isToday = k === State.todayKey();
 
+    /* подъём */
     if (d.wakeAt !== null) {
       const off = Math.abs(d.wakeAt - p.wakeTarget);
-      parts.push({ id: 'wake', label: 'Подъём вовремя', v: Math.max(0, 1 - off / 120), w: 22 });
-    } else parts.push({ id: 'wake', label: 'Подъём не отмечен', v: 0, w: 22 });
+      parts.push({ id: 'wake', label: 'Подъём вовремя', v: Math.max(0, 1 - off / 180), w: 22 });
+    } else if (isToday && now < p.wakeTarget + 60) {
+      parts.push({ id: 'wake', label: 'Подъём — ещё рано', w: 22, na: true });
+    } else {
+      parts.push({ id: 'wake', label: 'Подъём не отмечен', v: 0, w: 22 });
+    }
 
-    parts.push({ id: 'water', label: 'Вода', v: Math.min(1, (d.water || 0) / (p.waterGoal || 8)), w: 18 });
+    /* вода и еда: днём спрашиваем по прошедшей части дня, а не по всей норме */
+    const dayShare = (!isToday || d.wakeAt === null) ? 1
+      : Math.min(1, Math.max(0.12, (now - d.wakeAt) / Math.max(60, (p.sleepTarget > d.wakeAt ? p.sleepTarget : p.sleepTarget + 1440) - d.wakeAt)));
+    const awake = (isToday && d.wakeAt !== null) ? now - d.wakeAt : 24 * 60;
+    const justWoke = awake < 60;   // в первый час после подъёма спрашивать не за что
+    const waterGoalNow = Math.max(1, Math.round((p.waterGoal || 8) * dayShare));
+    const mealsGoalNow = Math.max(1, Math.round((p.mealsGoal || 3) * dayShare));
+    if (justWoke && !(d.water > 0)) parts.push({ id: 'water', label: 'Вода — день только начался', w: 18, na: true });
+    else parts.push({ id: 'water', label: 'Вода', v: Math.min(1, (d.water || 0) / waterGoalNow), w: 18 });
+    if (justWoke && !d.meals.length) parts.push({ id: 'meals', label: 'Еда — день только начался', w: 18, na: true });
+    else parts.push({ id: 'meals', label: 'Приёмы пищи', v: Math.min(1, d.meals.length / mealsGoalNow), w: 18 });
 
-    const meals = d.meals.length;
-    parts.push({ id: 'meals', label: 'Приёмы пищи', v: Math.min(1, meals / (p.mealsGoal || 3)), w: 18 });
-
-    const sh = sleptHours(key);
-    parts.push({ id: 'sleep', label: 'Сон', v: sh === null ? 0 : Math.max(0, 1 - Math.abs(sh - (p.sleepGoal || 8)) / 4), w: 22 });
+    /* сон: без вчерашнего отбоя измерить нечего */
+    const sh = sleptHours(k);
+    if (sh === null) parts.push({ id: 'sleep', label: 'Сон — пока не с чем сравнить', w: 22, na: true });
+    else parts.push({ id: 'sleep', label: 'Сон', v: Math.max(0, 1 - Math.abs(sh - (p.sleepGoal || 8)) / 4), w: 22 });
 
     if (p.pills.length) {
       const taken = p.pills.filter((x) => d.pills[x.id]).length;
       parts.push({ id: 'pills', label: 'Таблетки и витамины', v: taken / p.pills.length, w: 10 });
     }
 
-    parts.push({ id: 'move', label: 'Движение', v: Math.min(1, (d.workout || 0) / 30), w: 10 });
+    /* движение: спрашиваем только со второй половины дня */
+    if (isToday && d.wakeAt !== null && dayShare < 0.5 && !(d.workout > 0)) {
+      parts.push({ id: 'move', label: 'Движение — день только начался', w: 10, na: true });
+    } else {
+      parts.push({ id: 'move', label: 'Движение', v: Math.min(1, (d.workout || 0) / 30), w: 10 });
+    }
 
-    const totalW = parts.reduce((a, x) => a + x.w, 0);
-    const value = Math.round(parts.reduce((a, x) => a + x.v * x.w, 0) / totalW * 100);
-    return { value, parts };
+    const counted = parts.filter((x) => !x.na);
+    const totalW = counted.reduce((a, x) => a + x.w, 0) || 1;
+    const value = Math.round(counted.reduce((a, x) => a + x.v * x.w, 0) / totalW * 100);
+    return { value, parts, counted: counted.length, skipped: parts.length - counted.length };
   }
 
   /* средний режим за N дней */

@@ -1493,10 +1493,10 @@
   font-style: normal; font-size: 10px; line-height: 1.2; text-align: center;
   writing-mode: vertical-rl; max-height: 58px; overflow: hidden; color: var(--text-muted); opacity: .85;
 }
-.tl-block.k-task { background: color-mix(in srgb, var(--accent) 20%, var(--surface-2)); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
-.tl-block.k-meal { background: color-mix(in srgb, var(--accent3) 20%, var(--surface-2)); border-color: color-mix(in srgb, var(--accent3) 40%, transparent); }
-.tl-block.k-wake, .tl-block.k-evening { background: color-mix(in srgb, var(--accent2) 18%, var(--surface-2)); border-color: color-mix(in srgb, var(--accent2) 38%, transparent); }
-.tl-block.k-pill { background: color-mix(in srgb, var(--success) 18%, var(--surface-2)); border-color: color-mix(in srgb, var(--success) 38%, transparent); }
+.tl-block.k-task { background: color-mix(in srgb, var(--accent) 26%, var(--surface-2)); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.tl-block.k-meal { background: color-mix(in srgb, var(--accent3) 26%, var(--surface-2)); border-color: color-mix(in srgb, var(--accent3) 55%, transparent); }
+.tl-block.k-wake, .tl-block.k-evening { background: color-mix(in srgb, var(--accent2) 24%, var(--surface-2)); border-color: color-mix(in srgb, var(--accent2) 52%, transparent); }
+.tl-block.k-pill { background: color-mix(in srgb, var(--success) 24%, var(--surface-2)); border-color: color-mix(in srgb, var(--success) 52%, transparent); }
 .tl-block.done { opacity: .5; }
 .tl-block.miss { border-color: var(--danger); border-style: dashed; }
 .tl-block.skip { opacity: .3; }
@@ -1592,6 +1592,7 @@
 .dh-col i.ok { background: linear-gradient(180deg, var(--success), color-mix(in srgb, var(--success) 45%, transparent)); }
 .dh-col i.mid { background: linear-gradient(180deg, var(--warn), color-mix(in srgb, var(--warn) 45%, transparent)); }
 .dh-col i.bad { background: linear-gradient(180deg, var(--danger), color-mix(in srgb, var(--danger) 40%, transparent)); }
+.dh-col i.none { background: var(--surface-2); border: 1px dashed var(--border); border-radius: 4px; }
 .dh-col small { font-size: 9.5px; color: var(--text-muted); margin-top: 5px; }
 .dh-sum { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--text-muted); }
 .dh-sum b { color: var(--text); }
@@ -1808,3 +1809,6 @@
   .task-check { min-width: 32px; min-height: 32px; }
   .routine-check { min-width: 30px; min-height: 30px; }
 }
+
+/* показатель, который сегодня ещё нечем измерить */
+.dsp.na { opacity: .55; border-style: dashed; }

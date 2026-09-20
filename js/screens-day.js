@@ -106,7 +106,9 @@ Screens.day = (() => {
               ? `На ногах ${Math.floor(awake / 60)} ч ${awake % 60} мин${slept !== null ? ` · спал ${String(slept).replace('.', ',')} ч` : ''}`
               : `Цель подъёма — ${Track.hhmm(p.wakeTarget)}. Отметь, когда проснулся, и план построится от этого времени.`}</p>
             <div class="day-score-parts">
-              ${sc.parts.map((x) => `<span class="dsp ${x.v >= 0.8 ? 'ok' : (x.v >= 0.4 ? 'mid' : 'bad')}" title="${UI.esc(x.label)}">${UI.esc(x.label)} ${Math.round(x.v * 100)}%</span>`).join('')}
+              ${sc.parts.map((x) => x.na
+                ? `<span class="dsp na" title="Пока не считается в балле">${UI.esc(x.label)}</span>`
+                : `<span class="dsp ${x.v >= 0.8 ? 'ok' : (x.v >= 0.4 ? 'mid' : 'bad')}" title="${UI.esc(x.label)}">${UI.esc(x.label)} ${Math.round(x.v * 100)}%</span>`).join('')}
             </div>
           </div>
         </div>
@@ -656,7 +658,8 @@ Screens.day = (() => {
     }
     if (!rows.some((r) => r.has)) return '';
 
-    const avg = Track.scoreAvg(days);
+    const tracked = rows.filter((r) => r.has);
+    const avg = tracked.length ? Math.round(tracked.reduce((a, r) => a + r.score, 0) / tracked.length) : 0;
     const sleepVals = rows.filter((r) => r.slept !== null).map((r) => r.slept);
     const avgSleep = sleepVals.length ? Math.round((sleepVals.reduce((a, b) => a + b, 0) / sleepVals.length) * 10) / 10 : null;
     const wakeVals = rows.filter((r) => r.wake !== null).map((r) => r.wake);
@@ -666,16 +669,25 @@ Screens.day = (() => {
       <div class="card day-history">
         <div class="card-head"><h3>Режим за две недели</h3><span class="badge">в среднем ${avg}</span></div>
         <div class="dh-bars">
-          ${rows.map((r) => `
-            <div class="dh-col" title="${UI.dateLabel(r.key)} — режим ${r.score}${r.slept !== null ? `, сон ${String(r.slept).replace('.', ',')} ч` : ''}">
-              <i class="${r.score >= 70 ? 'ok' : (r.score >= 40 ? 'mid' : 'bad')}" style="height:${Math.max(4, r.score)}%"></i>
-              <small>${r.i === 0 ? 'сег' : new Date(r.key).getDate()}</small>
-            </div>`).join('')}
+          ${rows.map((r) => {
+            // день, когда приложением не пользовались, — это не провал,
+            // а пустое место: красным его красить нечестно
+            if (!r.has) return `
+              <div class="dh-col" title="${UI.dateLabel(r.key)} — данных нет">
+                <i class="none" style="height:4%"></i>
+                <small>${r.i === 0 ? 'сег' : new Date(r.key).getDate()}</small>
+              </div>`;
+            return `
+              <div class="dh-col" title="${UI.dateLabel(r.key)} — режим ${r.score}${r.slept !== null ? `, сон ${String(r.slept).replace('.', ',')} ч` : ''}">
+                <i class="${r.score >= 70 ? 'ok' : (r.score >= 40 ? 'mid' : 'bad')}" style="height:${Math.max(6, r.score)}%"></i>
+                <small>${r.i === 0 ? 'сег' : new Date(r.key).getDate()}</small>
+              </div>`;
+          }).join('')}
         </div>
         <div class="dh-sum">
           ${avgWake !== null ? `<span>Обычно встаёшь в <b>${Track.hhmm(avgWake)}</b></span>` : ''}
           ${avgSleep !== null ? `<span>Спишь в среднем <b>${String(avgSleep).replace('.', ',')} ч</b></span>` : ''}
-          <span>Дней под контролем: <b>${rows.filter((r) => r.has).length}</b></span>
+          <span>Дней под контролем: <b>${tracked.length}</b> из ${days}</span>
         </div>
       </div>`;
   }

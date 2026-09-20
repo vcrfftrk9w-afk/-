@@ -1,0 +1,96 @@
+const { chromium } = require('playwright');
+(async () => {
+  const b = await chromium.launch({ executablePath:'/opt/pw-browsers/chromium' });
+  const p = await b.newPage({viewport:{width:390,height:844}, hasTouch:true, isMobile:true});
+  const errors=[]; p.on('pageerror',e=>errors.push('PAGEERROR: '+e.message));
+  p.on('console',m=>{ if(m.type()==='error'&&!m.text().includes('ERR_')&&!m.text().includes('Failed to load')) errors.push('CONSOLE: '+m.text()); });
+  const hide=()=>p.evaluate(()=>{document.querySelectorAll('.modal:not(.hidden)').forEach(m=>{m.classList.add('hidden');m.classList.remove('modal-open');});document.body.classList.remove('modal-lock');});
+  const step=(n,v)=>console.log(`  ${v?'✓':'✗'} ${n}`);
+
+  console.log('=== ПЕРВЫЙ ДЕНЬ НОВОГО ЧЕЛОВЕКА (телефон) ===');
+  await p.goto('http://localhost:8792/index.html'); await p.waitForTimeout(2000);
+
+  // 1. Онбординг целиком
+  step('онбординг показан', await p.isVisible('#onboarding'));
+  await p.fill('#ob-name','Саша');
+  await p.click('.ob-step.active [data-ob-next]'); await p.waitForTimeout(350);
+  await p.click('.ob-mode[data-mode="adhd"]');
+  await p.click('.ob-step.active [data-ob-next]'); await p.waitForTimeout(350);
+  await p.click('.ob-step.active [data-ob-next]'); await p.waitForTimeout(350);
+  await p.fill('#ob-income','60000'); await p.fill('#ob-expenses','45000'); await p.waitForTimeout(400);
+  step('расчёт до миллиона показан', (await p.textContent('#ob-money-out')).includes('миллион'));
+  await p.click('.ob-step.active [data-ob-next]'); await p.waitForTimeout(350);
+  await p.fill('#ob-goal','Запустить канал'); await p.fill('#ob-task','Снять первое видео');
+  await p.click('#ob-start'); await p.waitForTimeout(1500); await hide();
+  step('приложение открылось', await p.isVisible('#app'));
+
+  // 2. Идёт в День, настраивает режим
+  await p.evaluate(()=>App.go('day')); await p.waitForTimeout(700); await hide();
+  step('карточка настройки режима', await p.isVisible('.day-setup'));
+  await p.click('[data-su="owl"]'); await p.fill('#su-wake','09:00'); await p.fill('#su-sleep','01:00');
+  await p.click('#su-save'); await p.waitForTimeout(1200); await hide();
+  const prof = await p.evaluate(()=>({w:Track.hhmm(Track.profile().wakeTarget), c:Track.profile().chronotype, plan:Planner.blocks().length}));
+  step(`режим сохранён (${prof.w}, ${prof.c}) и план собран (${prof.plan} блоков)`, prof.c==='owl' && prof.plan>0);
+
+  // 3. Ставит дела из шаблона
+  await p.evaluate(()=>App.go('day')); await p.waitForTimeout(500); await hide();
+  await p.click('#tpl-apply'); await p.waitForTimeout(1200); await hide();
+  const tasks = await p.evaluate(()=>State.s.tasks.filter(t=>!t.done).length);
+  step(`дела из шаблона поставлены (${tasks} задач)`, tasks>=10);
+
+  // 4. Спрашивает «что сейчас главное»
+  await p.evaluate(()=>App.go('day')); await p.waitForTimeout(500); await hide();
+  await p.click('#day-verdict'); await p.waitForTimeout(800);
+  const v = await p.evaluate(()=>{const e=document.querySelector('.verdict'); return e?{t:e.querySelector('h2').textContent, first:!!e.querySelector('.verdict-first')}:null;});
+  step(`разбор дал ответ: «${v&&v.t}»`, !!v && v.first);
+  await hide();
+
+  // 5. Пьёт воду, ест, отмечает таблетку
+  await p.evaluate(()=>App.go('day')); await p.waitForTimeout(500); await hide();
+  for (let i=0;i<6;i++) { await p.click('[data-water="1"]'); await p.waitForTimeout(60); }
+  await p.waitForTimeout(900);
+  step('вода записана', await p.evaluate(()=>Track.today().water)>=6);
+  await p.click('[data-quick="meal"]'); await p.waitForTimeout(600);
+  await p.click('[data-preset="450"]'); await p.click('#meal-save'); await p.waitForTimeout(700); await hide();
+  step('еда записана', await p.evaluate(()=>Track.today().meals.length)>0);
+
+  // 6. Делает залипательное дело и выходит вовремя
+  await p.evaluate(()=>{ const t=State.s.tasks.find(x=>x.chill); Chill.start(1,t.title,t.id); }); await p.waitForTimeout(600);
+  step('таймер залипания открылся', await p.isVisible('#chill'));
+  await p.click('#chill-done'); await p.waitForTimeout(800); await hide();
+  const cs = await p.evaluate(()=>Chill.stats());
+  step(`вышел вовремя (${cs.pct}%)`, cs.kept===1);
+
+  // 7. Закрывает несколько задач
+  await p.evaluate(()=>{ State.s.tasks.filter(t=>!t.done).slice(0,5).forEach(t=>{t.done=true;t.doneAt=Date.now();}); State.commit(); });
+  await p.waitForTimeout(800); await hide();
+  const lvl = await p.evaluate(()=>({lvl:State.s.level, coins:State.s.coins, ach:State.unlockedAchievements()}));
+  step(`прогресс идёт: ур.${lvl.lvl}, ${lvl.coins} монет, ${lvl.ach} достижений`, lvl.coins>0 && lvl.ach>0);
+
+  // 8. Закрывает день
+  await p.evaluate(()=>{document.querySelectorAll('.modal:not(.hidden)').forEach(m=>m.classList.add('hidden')); Screens.day.closeDay();});
+  await p.waitForTimeout(900);
+  const close = await p.evaluate(()=>{const e=document.querySelector('.day-close'); return e?e.textContent.replace(/\s+/g,' ').trim().slice(0,90):null;});
+  step('итог дня показан', !!close);
+  console.log('    ', close);
+  await p.screenshot({path:'/tmp/claude-0/-home-user--/0ce65798-8ce0-55df-9555-758bc4ae4080/scratchpad/v15_journey.png'});
+  await hide();
+
+  // 9. Перезагрузка — всё на месте
+  await p.reload(); await p.waitForTimeout(1800); await hide();
+  const after = await p.evaluate(()=>({name:State.s.name, water:Track.today().water, tpl:DayTpl.items().length,
+    money:Path.money().income, chrono:Track.profile().chronotype, tasks:State.s.tasks.length, sleep:Track.today().sleepAt!==null}));
+  step(`после перезагрузки всё на месте (${after.name}, вода ${after.water}, ${after.tasks} задач, ${after.chrono})`,
+    after.name==='Саша' && after.water>=6 && after.tasks>=10 && after.chrono==='owl' && after.sleep);
+
+  // 10. Горизонтальный скролл нигде
+  let ovAll=0;
+  for (const t of ['dashboard','day','tasks','path','adhd','habits','goals','lessons','empire','rewards','stats']) {
+    await p.evaluate((x)=>App.go(x), t); await p.waitForTimeout(280); await hide();
+    ovAll += await p.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
+  }
+  step(`ни одной вкладки с горизонтальным скроллом (сумма ${ovAll}px)`, ovAll===0);
+
+  console.log('\nОШИБКИ:', errors.length?JSON.stringify(errors,null,1):'нет');
+  await b.close();
+})();

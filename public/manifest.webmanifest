@@ -1,0 +1,10 @@
+{
+  "name": "Следующий шаг",
+  "short_name": "Шаг",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#11131a",
+  "theme_color": "#11131a",
+  "lang": "ru",
+  "description": "Личная система действий: одно следующее действие, фокус-сессии, недельный разбор."
+}

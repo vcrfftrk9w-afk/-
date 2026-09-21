@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-видеоредактор</title>
+<meta name="description" content="Загрузите видео и фото, опишите словами нужный монтаж — получите готовый ролик.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236c8cff'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230b0e14'%3E%E2%9C%82%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">✂</span>
+    <div>
+      <h1>AI-видеоредактор</h1>
+      <p class="brand-sub">Загрузите материал, опишите монтаж словами — движок соберёт ролик</p>
+    </div>
+  </div>
+  <div class="planner-badge" id="planner-badge" title="Источник монтажного плана">…</div>
+</header>
+
+<main>
+  <!-- Шаг 1 -->
+  <section class="card" aria-labelledby="step-upload">
+    <h2 id="step-upload"><span class="step">1</span>Материал</h2>
+
+    <div class="dropzone" id="dropzone" tabindex="0" role="button"
+         aria-label="Загрузить видео, фото или музыку">
+      <strong>Перетащите файлы сюда</strong>
+      <span>видео, фото и музыка — или нажмите, чтобы выбрать</span>
+      <input type="file" id="file-input" multiple accept="video/*,image/*,audio/*" hidden>
+    </div>
+
+    <ul class="assets" id="assets" aria-live="polite"></ul>
+    <p class="empty" id="assets-empty">Пока ничего не загружено.</p>
+  </section>
+
+  <!-- Шаг 2 -->
+  <section class="card" aria-labelledby="step-prompt">
+    <h2 id="step-prompt"><span class="step">2</span>Что смонтировать</h2>
+
+    <textarea id="prompt" rows="3" spellcheck="false"
+      placeholder="Например: динамичный вертикальный эдит под бит, нарежь клипово, кинолук, подпись «Лето 2026» сверху, 15 секунд"></textarea>
+
+    <div class="chips" id="examples" role="group" aria-label="Примеры запросов"></div>
+
+    <div class="row">
+      <label class="field">
+        <span>Формат кадра</span>
+        <select id="preset"></select>
+      </label>
+      <button class="primary" id="plan-btn" disabled>Собрать монтаж</button>
+    </div>
+  </section>
+
+  <!-- Шаг 3 -->
+  <section class="card" id="plan-card" hidden aria-labelledby="step-plan">
+    <h2 id="step-plan"><span class="step">3</span>План монтажа</h2>
+
+    <p class="notes" id="plan-notes"></p>
+    <ul class="warnings" id="plan-warnings" hidden></ul>
+
+    <div class="plan-meta">
+      <label class="field">
+        <span>Вписывание в кадр</span>
+        <select id="fit"></select>
+      </label>
+      <label class="field">
+        <span>Оригинальный звук</span>
+        <select id="keep-audio">
+          <option value="true">Оставить</option>
+          <option value="false">Заглушить</option>
+        </select>
+      </label>
+      <label class="field" id="music-field" hidden>
+        <span>Громкость музыки: <output id="music-vol-out"></output></span>
+        <input type="range" id="music-vol" min="0" max="1.5" step="0.05">
+      </label>
+      <p class="estimate">Хронометраж: <strong id="estimate">—</strong></p>
+    </div>
+
+    <ol class="timeline" id="timeline"></ol>
+
+    <div class="row end">
+      <button class="ghost" id="replan-btn">Переспросить с правкой</button>
+      <button class="primary" id="render-btn">Отрендерить</button>
+    </div>
+  </section>
+
+  <!-- Шаг 4 -->
+  <section class="card" id="render-card" hidden aria-labelledby="step-render">
+    <h2 id="step-render"><span class="step">4</span>Результат</h2>
+
+    <div class="progress-wrap" id="progress-wrap" hidden>
+      <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
+      <div class="progress-row">
+        <span id="progress-stage">Готовлю…</span>
+        <button class="ghost small" id="cancel-btn">Отменить</button>
+      </div>
+    </div>
+
+    <div class="result" id="result" hidden>
+      <video id="player" controls playsinline></video>
+      <a class="primary download" id="download" download>Скачать ролик</a>
+    </div>
+
+    <ul class="history" id="history"></ul>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

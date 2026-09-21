@@ -1,0 +1,12 @@
+{
+  "name": "most",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Мост — приложение, которое помогает превратить «хочу, но не знаю как» в один посильный шаг",
+  "scripts": {
+    "test": "node tests/run.js",
+    "build": "node tools/build.js",
+    "serve": "python3 -m http.server 8000"
+  },
+  "license": "MIT"
+}

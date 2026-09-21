@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- connect-src 'none' — страница не может отправить ничего наружу, даже если захочет. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Мост</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main id="app" class="wrap"></main>
+<footer id="foot" class="foot"></footer>
+
+<script src="src/util.js"></script>
+<script src="src/store.js"></script>
+<script src="src/content/pulls.js"></script>
+<script src="src/content/clarify.js"></script>
+<script src="src/content/paths.js"></script>
+<script src="src/logic/choose.js"></script>
+<script src="src/workshop/prototype.js"></script>
+<script src="src/workshop/letter.js"></script>
+<script src="src/workshop/declutter.js"></script>
+<script src="src/screens/home.js"></script>
+<script src="src/screens/clarify.js"></script>
+<script src="src/screens/resources.js"></script>
+<script src="src/screens/paths.js"></script>
+<script src="src/screens/step.js"></script>
+<script src="src/screens/workshop.js"></script>
+<script src="src/screens/close.js"></script>
+<script src="src/screens/bridges.js"></script>
+<script src="src/screens/data.js"></script>
+<script src="src/app.js"></script>
+</body>
+</html>

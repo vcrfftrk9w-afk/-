@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Мост — прогон</title>
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<main id="app" class="wrap"></main>
+<footer id="foot" class="foot"></footer>
+<pre id="log"></pre>
+
+<script src="../src/util.js"></script>
+<script src="../src/store.js"></script>
+<script src="../src/content/pulls.js"></script>
+<script src="../src/content/clarify.js"></script>
+<script src="../src/content/paths.js"></script>
+<script src="../src/logic/choose.js"></script>
+<script src="../src/workshop/prototype.js"></script>
+<script src="../src/workshop/letter.js"></script>
+<script src="../src/workshop/declutter.js"></script>
+<script src="../src/screens/home.js"></script>
+<script src="../src/screens/clarify.js"></script>
+<script src="../src/screens/resources.js"></script>
+<script src="../src/screens/paths.js"></script>
+<script src="../src/screens/step.js"></script>
+<script src="../src/screens/workshop.js"></script>
+<script src="../src/screens/close.js"></script>
+<script src="../src/screens/bridges.js"></script>
+<script src="../src/screens/data.js"></script>
+<script src="../src/app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var out = [];
+  function say(s) { out.push(s); }
+  function all() { return Array.prototype.slice.call(document.querySelectorAll('button')); }
+  function btn(text) {
+    var found = all().filter(function (b) { return b.textContent.trim().indexOf(text) === 0; })[0] ||
+                all().filter(function (b) { return b.textContent.indexOf(text) !== -1; })[0];
+    if (!found) { say('НЕТ КНОПКИ: ' + text + ' | есть: ' + all().map(function(b){return b.textContent.trim().slice(0,28);}).join(' / ')); return null; }
+    return found;
+  }
+  function click(text) { var b = btn(text); if (b) b.click(); return !!b; }
+  function body() { return document.getElementById('app').textContent.replace(/\s+/g, ' '); }
+  function has(text, label) { say((body().indexOf(text) !== -1 ? 'ок   ' : 'ПРОВАЛ ') + label); }
+
+  try {
+    localStorage.clear();
+    Most.store.wipe();
+    Most.go('home');
+
+    document.getElementById('wish').value = 'Мечтаю сделать игру, но ничего не умею';
+    click('Начать разбор');
+    has('никто не узнал', 'разбор: вопрос про чужое желание');
+
+    click('Да, всё равно хочу');
+    has('обычном вторнике', 'разбор: вторник');
+    document.getElementById('tuesday').value = 'вечером сажусь делать своё';
+    click('Дальше');
+
+    has('тянет сильнее', 'разбор: тяги');
+    click('Сделать своё');
+    click('Дальше');
+
+    has('придётся заплатить', 'разбор: цена');
+    click('Вечерами');
+    click('Дальше');
+
+    has('одной фразой', 'разбор: ядро');
+    click('Это оно');
+
+    has('есть на это сил', 'силы');
+    click('Так себе');
+    click('Показать пути');
+
+    has('разные дороги', 'пути');
+    var cards = document.querySelectorAll('.card h2');
+    say('ок   путей показано: ' + cards.length);
+    click('Показать весь путь');
+    has('1.', 'весь путь разворачивается');
+    click('Идти этим путём');
+
+    has('следующий шаг', 'шаг');
+    has('В конце у тебя будет', 'у шага есть осязаемый результат');
+    click('Слишком большой');
+    has('уменьшенный', 'уменьшенная версия шага');
+    click('Могу и полный шаг');
+
+    click('Сделать это вместе');
+    has('работающую штуку', 'мастерская: прототипы');
+    click('Кнопка со случайной шуткой');
+    click('Собрать');
+    has('Это работающая страница', 'файл собран');
+    has('Измени одну строчку', 'подсказка про правку');
+    click('Готово — это мой результат');
+
+    has('следующий шаг', 'возврат к шагу');
+    click('Готово');
+    has('На сегодня всё', 'конец сессии');
+    has('Ничего. Мы не пришлём', 'обещание не дёргать');
+
+    Most.go('step');
+    click('Готово');
+    Most.go('step');
+    click('Готово');
+    Most.go('step');
+    has('и без нас', 'предложение закрыть мост после трёх шагов');
+
+    Most.go('workshop', { tool: 'letter' });
+    click('Попросить больше денег');
+    document.getElementById('l-to').value = 'Аня';
+    document.getElementById('l-amount').value = '220 000';
+    click('Собрать черновик');
+    has('Аня, здравствуйте', 'черновик письма собран');
+
+    Most.go('workshop', { tool: 'declutter' });
+    click('Стол');
+    has('20:00', 'таймер на месте');
+    click('Выбросить');
+    click('Закончить и записать');
+
+    Most.go('bridges');
+    has('Мои мосты', 'список мостов');
+
+    Most.go('data');
+    has('Мои данные', 'данные');
+    has('connect-src', 'объяснение про приватность');
+    click('Показать всё как есть');
+
+    Most.go('close');
+    has('Ты здесь', 'счётчик времени');
+  } catch (e) {
+    say('ИСКЛЮЧЕНИЕ: ' + e.message + ' @ ' + (e.stack || '').split('\n')[1]);
+  }
+
+  document.getElementById('log').textContent = out.join('\n');
+});
+</script>
+</body>
+</html>

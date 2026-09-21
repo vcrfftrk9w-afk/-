@@ -81,18 +81,17 @@
         'Интернет для этого не нужен.'));
 
       var row = h('div', { class: 'row' });
-      if (M.env.downloads) {
-        row.appendChild(h('button', {
-          class: 'btn btn-go',
-          onclick: function (e) {
-            if (!M.download(W.filename(project), code)) {
-              e.target.textContent = 'Не вышло — скопируй код ниже';
-            }
-          }
-        }, 'Скачать файл'));
-      }
+      var saveBtn = h('button', {
+        class: 'btn btn-go',
+        onclick: function () {
+          M.download(W.filename(project), code, function () {
+            saveBtn.textContent = 'Тут не скачивается — скопируй код ниже';
+          });
+        }
+      }, 'Сохранить файл');
+      row.appendChild(saveBtn);
       var copyBtn = h('button', {
-        class: M.env.downloads ? 'btn' : 'btn btn-go',
+        class: 'btn',
         onclick: function () { M.copy(code, copyBtn); }
       }, 'Скопировать код');
       row.appendChild(copyBtn);

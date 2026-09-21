@@ -129,8 +129,23 @@
     document.body.removeChild(ta);
   }
 
-  M.download = function (filename, text) {
-    if (!M.env.downloads) return false;
+  /* Если оболочка не даёт странице отдавать файлы сама, но умеет сделать это
+     за неё (спросив человека) — сюда кладётся её функция сохранения. */
+  M.saver = null;
+
+  M.download = function (filename, text, onFail) {
+    if (M.saver) {
+      try {
+        M.saver({ filename: filename, data: text }).then(null, function () {
+          if (onFail) onFail();
+        });
+        return true;
+      } catch (e) {
+        if (onFail) onFail();
+        return false;
+      }
+    }
+    if (!M.env.downloads) { if (onFail) onFail(); return false; }
     try {
       var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
       var url = URL.createObjectURL(blob);
@@ -141,6 +156,7 @@
       setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
       return true;
     } catch (e) {
+      if (onFail) onFail();
       return false;
     }
   };

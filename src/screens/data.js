@@ -35,12 +35,15 @@
     ]));
 
     var row = h('div', { class: 'row' });
-    if (M.env.downloads) {
-      row.appendChild(h('button', {
-        class: 'btn',
-        onclick: function () { M.download('most-data.json', raw); }
-      }, 'Скачать всё'));
-    }
+    var saveBtn = h('button', {
+      class: 'btn',
+      onclick: function () {
+        M.download('most-data.json', raw, function () {
+          saveBtn.textContent = 'Тут не скачивается — скопируй';
+        });
+      }
+    }, 'Сохранить всё');
+    row.appendChild(saveBtn);
     var copyBtn = h('button', {
       class: 'btn',
       onclick: function () { M.copy(raw, copyBtn); }

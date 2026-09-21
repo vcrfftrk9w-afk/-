@@ -133,8 +133,23 @@
 
   /* — старт — */
 
+  /* Оболочка, в которой страница не может скачать файл сама, но умеет
+     предложить сохранение человеку. Если такой возможности нет — ничего
+     не меняется: остаётся обычная ссылка на скачивание или копирование. */
+  function findSaver() {
+    if (!root.claude || typeof root.claude.use !== 'function') return;
+    try {
+      root.claude.use('downloads').then(function (d) {
+        if (d && typeof d.save === 'function') {
+          M.saver = function (req) { return d.save(req); };
+        }
+      }, function () { /* нет так нет */ });
+    } catch (e) { /* нет так нет */ }
+  }
+
   function boot() {
     M.store.load();
+    findSaver();
     app.lastVisit = M.store.visit();
 
     var b = M.store.current();

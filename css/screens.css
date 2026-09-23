@@ -1816,3 +1816,73 @@
 
 /* показатель, который сегодня ещё нечем измерить */
 .dsp.na { opacity: .55; border-style: dashed; }
+
+/* =========================================================
+   СЕГОДНЯ ГЛАВНОЕ — первая карточка на первом экране
+   ========================================================= */
+.card-main {
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 9%, var(--surface)), var(--surface));
+}
+.main-list { list-style: none; margin: 4px 0 14px; padding: 0; display: grid; gap: 2px; }
+.main-item {
+  display: flex; align-items: center; gap: 11px; min-width: 0;
+  padding: 9px 10px; border-radius: 12px;
+  transition: background var(--t-fast);
+}
+.main-item + .main-item { border-top: 1px solid var(--border); border-radius: 0 0 12px 12px; }
+.main-check {
+  flex: none; width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+  background: var(--surface-2); border: 2px solid var(--border); color: #fff;
+  display: grid; place-items: center; font-size: 13px; transition: all var(--t-fast);
+}
+.main-check:hover { border-color: var(--accent); transform: scale(1.1); }
+.main-when {
+  flex: none; width: 88px; font-size: 12px; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.main-title {
+  flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--text); font-size: 14.5px; line-height: 1.35; overflow-wrap: anywhere;
+}
+.main-title:hover { color: var(--accent); }
+.main-item.big .main-title { font-weight: 700; }
+.main-item.done .main-check { background: var(--success); border-color: var(--success); }
+.main-item.done .main-title { text-decoration: line-through; color: var(--text-muted); font-weight: 500; }
+.main-item.done .main-when { opacity: .6; }
+.main-item.now {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.main-item.next { background: color-mix(in srgb, var(--accent2) 9%, transparent); }
+.main-item.late .main-when { color: var(--danger); }
+
+.main-tag {
+  flex: none; font-size: 10.5px; padding: 3px 8px; border-radius: 99px;
+  border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap;
+}
+.main-tag.pin { color: var(--accent2); border-color: color-mix(in srgb, var(--accent2) 45%, transparent); }
+.main-tag.now { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); font-weight: 700; }
+.main-tag.next { color: var(--accent2); }
+.main-tag.late { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.main-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+@media (max-width: 600px) {
+  .main-when { width: 74px; font-size: 11px; }
+  .main-item { gap: 8px; padding: 10px 6px; }
+  .main-tag { display: none; }
+  .main-item.now .main-title::after { content: ' · сейчас'; color: var(--accent); font-size: 11.5px; }
+  .main-item.late .main-title::after { content: ' · пропущено'; color: var(--danger); font-size: 11.5px; }
+}
+
+/* предложение загрузить недельный график */
+.week-offer {
+  background: color-mix(in srgb, var(--accent2) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent2) 34%, transparent);
+  border-radius: 14px; padding: 13px 15px; margin: 4px 0 14px;
+}
+.week-offer b { font-size: 14.5px; }
+.week-offer p { margin: 6px 0 11px; font-size: 13px; line-height: 1.5; color: var(--text-muted); }
+.tpl-item.other-day { opacity: .5; }
+.tpl-item.other-day .tpl-text small { font-style: italic; }
+.main-note { font-size: 12.5px; color: var(--text-muted); margin: 0 0 12px; line-height: 1.5; }

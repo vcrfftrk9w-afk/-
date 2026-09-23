@@ -588,15 +588,22 @@ Screens.day = (() => {
         </div>
         <div class="tpl-list">
           ${t.items.map((x) => `
-            <button class="tpl-item ${x.on ? '' : 'off'}" data-tplon="${x.id}">
+            <button class="tpl-item ${x.on ? '' : 'off'} ${DayTpl.runsToday(x) ? '' : 'other-day'}" data-tplon="${x.id}">
               <span class="tpl-check">${x.on ? '✓' : ''}</span>
               <span class="tpl-text">
                 <b>${UI.esc(x.title)}</b>
-                <small>${x.at !== null && x.at !== undefined ? `⏰ ровно в ${Track.hhmm(x.at)} · ` : ''}${x.est ? `${x.est} мин` : 'без длительности'}${x.chill ? ' · 🍿 с таймером' : ''}${x.subs && x.subs.length ? ` · ${UI.plur(x.subs.length, 'шаг', 'шага', 'шагов')}` : ''}</small>
+                <small>${DayTpl.atFor(x) !== null && DayTpl.atFor(x) !== undefined ? `⏰ ${DayTpl.runsToday(x) ? 'сегодня в' : 'в'} ${Track.hhmm(DayTpl.atFor(x))} · ` : ''}${x.est ? `${x.est} мин` : 'без длительности'}${x.chill ? ' · 🍿 с таймером' : ''}${x.subs && x.subs.length ? ` · ${UI.plur(x.subs.length, 'шаг', 'шага', 'шагов')}` : ''}${x.days && x.days.length && x.days.length < 7 ? ` · ${DayTpl.daysLabel(x)}` : ''}</small>
               </span>
               <span class="tpl-del" data-tpldel="${x.id}">✕</span>
             </button>`).join('') || '<span class="muted small">Шаблон пуст</span>'}
         </div>
+        ${typeof Week !== 'undefined' && !Week.installed() ? `
+          <div class="week-offer">
+            <b>🎓 Есть недельный график?</b>
+            <p>Пары в разное время по дням, дорога, тренировки по понедельникам, средам и пятницам, публикации в 19:55 и 21:00. Дела встанут каждое на свой час своего дня, а пары планировщик обойдёт.</p>
+            <button class="btn btn-accent" id="week-install">Загрузить недельный график</button>
+          </div>` : ''}
+
         <div class="row wrap">
           <button class="btn ${applied ? 'btn-ghost' : 'btn-primary'}" id="tpl-apply">${applied ? '🔁 Применить ещё раз' : '▶ Поставить дела на сегодня'}</button>
           <button class="btn btn-ghost" id="tpl-add">＋ Добавить дело</button>
@@ -789,6 +796,14 @@ Screens.day = (() => {
       if (g('#tpl-capture')) {
         const n = DayTpl.captureFromToday();
         UI.toast(`Шаблон обновлён: ${n} ${UI.plural(n, 'дело', 'дела', 'дел')}`, 'success', '💾');
+        render(); return;
+      }
+      if (g('#week-install')) {
+        const r = Week.install();
+        DayTpl.apply({});
+        Sound.sfx('fanfare');
+        FX.confetti(window.innerWidth / 2, 200, 34);
+        UI.toast(`График загружен: ${UI.plur(r.total, 'дело', 'дела', 'дел')} по дням недели${r.disabled ? `, ${r.disabled} старых выключено` : ''}`, 'level', '🎓');
         render(); return;
       }
       if (g('#day-verdict')) { Verdict.open(); return; }

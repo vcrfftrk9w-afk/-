@@ -118,6 +118,7 @@ Screens.dashboard = (() => {
 
   /* какие карточки показывать на главной */
   const CARDS = [
+    { id: 'main', name: 'Сегодня главное (первый экран)' },
     { id: 'hero', name: 'Персонаж и уровень' },
     { id: 'next', name: 'Что дальше' },
     { id: 'path', name: 'Твой путь к деньгам' },
@@ -403,6 +404,173 @@ Screens.dashboard = (() => {
       : 'Выполни любую задачу или привычку, чтобы продлить серию.';
   }
 
+  /* ================= СЕГОДНЯ ГЛАВНОЕ =================
+     Первое, что видно на первом экране: что нужно сделать сегодня,
+     по часам, с выделенным «сейчас». Берём из плана дня, а если плана
+     нет — из задач с жёстким временем, сроками и приоритетом. */
+
+  const MAIN_LIMIT = 7;
+
+  function mainItems() {
+    const s = State.s;
+    const today = State.todayKey();
+    const now = (typeof Track !== 'undefined') ? Track.nowMin() : 0;
+    const out = [];
+    const seen = new Set();
+    const add = (o) => {
+      const key = o.taskId || o.id;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(o);
+    };
+
+    // 1) план дня — он уже разложил всё по часам
+    if (typeof Planner !== 'undefined' && Planner.plan()) {
+      Planner.blocks().forEach((b) => {
+        if (b.kind !== 'task') return;
+        const t = b.taskId ? s.tasks.find((x) => x.id === b.taskId) : null;
+        const big = b.pinned || (t && (t.priority === 'boss' || t.priority === 'high')) || b.pathId || b.habitId;
+        add({
+          id: b.id, taskId: b.taskId, emoji: b.emoji, title: b.title,
+          at: b.start, end: b.end, pinned: !!b.pinned, big: !!big,
+          done: Planner.isDone(b), habitId: b.habitId || null, pathId: b.pathId || null,
+          chill: !!b.chill,
+        });
+      });
+    }
+
+    // 2) задачи с жёстким временем — даже если плана нет
+    s.tasks.filter((t) => !t.done && t.at !== null && t.at !== undefined).forEach((t) => {
+      add({ id: 't-' + t.id, taskId: t.id, emoji: (Data.categoryById(t.category) || {}).emoji || '⏰',
+            title: t.title, at: t.at, end: t.at + (t.estimate || 15), pinned: true, big: true, done: false, chill: !!t.chill });
+    });
+
+    // 3) просроченное и важное без времени
+    s.tasks.filter((t) => !t.done && (t.at === null || t.at === undefined))
+      .filter((t) => (t.due && t.due <= today) || t.priority === 'boss' || t.urgent)
+      .slice(0, 5)
+      .forEach((t) => {
+        add({ id: 't-' + t.id, taskId: t.id, emoji: (Data.categoryById(t.category) || {}).emoji || '✅',
+              title: t.title, at: null, end: null, pinned: false, big: true, done: false,
+              overdue: !!(t.due && t.due < today), chill: !!t.chill });
+      });
+
+    const byTime = (a, b) => {
+      if (a.at === null && b.at === null) return 0;
+      if (a.at === null) return 1;
+      if (b.at === null) return -1;
+      return a.at - b.at;
+    };
+    out.sort(byTime);
+
+    /* Карточка должна вести к следующему делу, а не к списку упущенного.
+       Сначала то, что идёт сейчас и впереди, потом дела без времени,
+       и только в конце — пропущенное, не больше двух строк. */
+    const undone = out.filter((x) => !x.done);
+    const live = undone.filter((x) => x.at !== null && (x.end === null || x.end >= now));
+    const untimed = undone.filter((x) => x.at === null);
+    const late = undone.filter((x) => x.at !== null && x.end !== null && x.end < now);
+
+    const list = live.concat(untimed).slice(0, MAIN_LIMIT);
+    if (list.length < MAIN_LIMIT && late.length) {
+      list.push(...late.slice(-Math.min(2, MAIN_LIMIT - list.length)));
+    }
+    /* если всё уже сделано — показываем сделанное, чтобы день не выглядел пустым */
+    if (!list.length) list.push(...out.slice(-MAIN_LIMIT));
+
+    return { list, total: out.length, done: out.filter((x) => x.done).length,
+             now, lateCount: late.length, aheadCount: live.length };
+  }
+
+  function renderMainCard() {
+    const el = $('#main-today');
+    if (!el) return;
+    const badge = $('#main-count');
+    const { list, total, done, now, lateCount, aheadCount } = mainItems();
+
+    if (!list.length) {
+      if (badge) badge.textContent = '—';
+      const hasTpl = typeof DayTpl !== 'undefined' && DayTpl.active().length;
+      el.innerHTML = `
+        <p class="muted small">На сегодня ещё ничего не назначено.</p>
+        <div class="row wrap">
+          ${hasTpl ? '<button class="btn btn-primary" id="main-tpl">▶ Поставить дела дня</button>' : ''}
+          <button class="btn btn-ghost" id="main-add">＋ Добавить задачу</button>
+        </div>`;
+      const b1 = $('#main-tpl'); if (b1) b1.onclick = () => { DayTpl.apply({}); UI.toast('Дела дня поставлены', 'success', '🗂️'); };
+      const b2 = $('#main-add'); if (b2) b2.onclick = () => App.go('tasks');
+      return;
+    }
+
+    if (badge) {
+      badge.textContent = `${done} из ${total}`;
+      badge.className = 'badge ' + (total && done === total ? 'badge-ok' : (done ? 'badge-mid' : ''));
+    }
+
+    const cur = list.find((x) => !x.done && x.at !== null && now >= x.at && now < x.end);
+    const next = list.find((x) => !x.done && x.at !== null && x.at > now);
+
+    el.innerHTML = `
+      <ul class="main-list">
+        ${list.map((x) => {
+          const isNow = cur && x.id === cur.id;
+          const isNext = !isNow && next && x.id === next.id;
+          const late = !x.done && x.at !== null && x.end !== null && x.end < now;
+          const cls = [x.done ? 'done' : '', isNow ? 'now' : '', isNext ? 'next' : '', late ? 'late' : '', x.big ? 'big' : ''].filter(Boolean).join(' ');
+          const when = x.at === null
+            ? (x.overdue ? 'просрочено' : 'без времени')
+            : `${Track.hhmm(x.at)}${x.end ? '–' + Track.hhmm(x.end) : ''}`;
+          return `
+            <li class="main-item ${cls}">
+              <button class="main-check" data-mdone="${x.id}" aria-label="${x.done ? 'Сделано' : 'Отметить сделанным'}">${x.done ? '✓' : ''}</button>
+              <span class="main-when">${when}</span>
+              <button class="main-title" data-mopen="${x.id}">${x.emoji} ${UI.esc(x.title)}</button>
+              ${x.pinned ? '<span class="main-tag pin">ровно</span>' : ''}
+              ${isNow ? '<span class="main-tag now">сейчас</span>' : ''}
+              ${isNext && !isNow ? '<span class="main-tag next">дальше</span>' : ''}
+              ${late ? '<span class="main-tag late">пропущено</span>' : ''}
+            </li>`;
+        }).join('')}
+      </ul>
+      ${lateCount > 2 ? `<p class="main-note">И ещё ${UI.plur(lateCount - 2, 'пропущенное дело', 'пропущенных дела', 'пропущенных дел')} — можно догнать или отпустить во вкладке «День».</p>` : ''}
+      <div class="main-actions">
+        <button class="btn btn-accent" id="main-verdict">🧠 Что сейчас главное</button>
+        <button class="btn btn-ghost" id="main-day">→ Весь день</button>
+      </div>`;
+
+    el.querySelectorAll('[data-mdone]').forEach((b) => { b.onclick = () => mainComplete(b.dataset.mdone); });
+    el.querySelectorAll('[data-mopen]').forEach((b) => { b.onclick = () => mainOpen(b.dataset.mopen); });
+    const v = $('#main-verdict'); if (v) v.onclick = () => Verdict.open();
+    const d = $('#main-day'); if (d) d.onclick = () => App.go('day');
+  }
+
+  function findMain(id) { return mainItems().list.find((x) => x.id === id); }
+
+  function mainComplete(id) {
+    const x = findMain(id);
+    if (!x) return;
+    if (x.habitId) {
+      const h = State.s.habits.find((y) => y.id === x.habitId);
+      if (h) Screens.habits.toggleDay(h, State.todayKey());
+      return;
+    }
+    if (x.pathId) { App.go('path'); setTimeout(() => Screens.path.openStep(x.pathId), 200); return; }
+    const t = State.s.tasks.find((y) => y.id === x.taskId);
+    if (t) Screens.tasks.complete(t, $('#coin-pill'));
+  }
+
+  function mainOpen(id) {
+    const x = findMain(id);
+    if (!x) return;
+    if (x.chill && typeof Chill !== 'undefined') { Chill.start(30, x.title, x.taskId); return; }
+    if (x.pathId) { App.go('path'); setTimeout(() => Screens.path.openStep(x.pathId), 200); return; }
+    if (x.habitId) { App.go('habits'); return; }
+    if (typeof Planner !== 'undefined' && Planner.plan() && Planner.blocks().some((b) => b.id === x.id)) {
+      App.go('day'); setTimeout(() => Screens.day.explain(x.id), 220); return;
+    }
+    App.go('tasks');
+  }
+
   /* карточка «сейчас по плану» на главной */
   function renderDayCard() {
     const el = $('#dash-day');
@@ -476,6 +644,7 @@ Screens.dashboard = (() => {
     renderSkills();
     renderStreak();
     renderFocusGoal();
+    renderMainCard();
     renderPathCard();
     renderDayCard();
     if (Screens.pledge) Screens.pledge.render();
@@ -486,7 +655,7 @@ Screens.dashboard = (() => {
     if (!$('#quote-text').dataset.ready) { showQuote(); $('#quote-text').dataset.ready = '1'; }
   }
 
-  return { bind, render, showQuote, renderPathCard, renderDayCard };
+  return { bind, render, showQuote, renderPathCard, renderDayCard, renderMainCard };
 })();
 
 /* =========================================================
@@ -520,7 +689,8 @@ Screens.tasks = (() => {
       xp: task.xp, skill: task.skill, urgent: task.urgent, done: false, rewarded: false,
       createdAt: Date.now(), doneAt: null, goalId: task.goalId || null,
       due: nextDue, repeat: task.repeat,
-      at: task.at === undefined ? null : task.at, estimate: task.estimate || null, chill: !!task.chill,
+      at: task.at === undefined ? null : task.at, prefer: task.prefer ?? null,
+      estimate: task.estimate || null, chill: !!task.chill,
       subtasks: (task.subtasks || []).map((st) => ({ id: State.uid(), text: st.text, done: false })),
     });
     UI.toast(`Повтор: вернётся ${UI.dateLabel(nextDue)} 🔁`, 'default', '🔁');
@@ -582,6 +752,7 @@ Screens.tasks = (() => {
       urgent: !!urgent, done: false, rewarded: false, createdAt: Date.now(), doneAt: null,
       goalId: extra.goalId || null, due: extra.due || null, repeat: extra.repeat || null, subtasks: [],
       at: extra.at === undefined ? null : extra.at,
+      prefer: extra.prefer === undefined ? null : extra.prefer,
       estimate: extra.estimate || null,
       chill: !!extra.chill,
     });

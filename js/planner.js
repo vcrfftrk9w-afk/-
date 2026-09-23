@@ -154,16 +154,34 @@ const Planner = (() => {
       out.push({ id: `f-${kind}-${start}`, kind, emoji, title, start: Math.round(start), end: Math.round(end), fixed: true, note });
     };
 
+    /* Часы еды можно задать своим графиком: у кого-то ужин в 17:40,
+       и вычисленный «за три часа до сна» просто съедал бы вечер. */
+    const mealsCfg = p.meals || {};
     add('wake', '☀️', 'Подъём и утренняя рутина', wake, wake + 30, 'Свет, вода, движение — разгоняют мозг быстрее кофе.');
-    add('meal', '🍳', 'Завтрак', wake + 30, wake + 60, 'Белок с утра держит концентрацию до обеда.');
-    const lunch = clamp(wake + 330, wake + 240, wake + 420);
+    const breakfast = mealsCfg.breakfast != null ? mealsCfg.breakfast : wake + 30;
+    add('meal', '🍳', 'Завтрак', breakfast, breakfast + 30, 'Белок с утра держит концентрацию до обеда.');
+    const lunch = mealsCfg.lunch != null ? mealsCfg.lunch
+      : (typeof Week !== 'undefined' && Week.installed() ? Week.lunchToday()
+        : clamp(wake + 330, wake + 240, wake + 420));
     add('meal', '🍽️', 'Обед', lunch, lunch + 40, 'После него будет спад — тяжёлое туда не ставим.');
-    const dinner = clamp(bed - 210, lunch + 240, bed - 150);
-    add('meal', '🥗', 'Ужин', dinner, dinner + 40, 'За 3 часа до сна — иначе сон будет хуже.');
+    const dinner = mealsCfg.dinner != null ? mealsCfg.dinner : clamp(bed - 210, lunch + 240, bed - 150);
+    add('meal', '🥗', 'Ужин', dinner, dinner + 30, 'За 3 часа до сна — иначе сон будет хуже.');
     if ((p.pills || []).length) {
       p.pills.forEach((x) => add('pill', '💊', x.name, x.at, x.at + 10, 'По расписанию.'));
     }
-    add('evening', '🌙', 'Вечерняя рутина и отбой', bed - 45, bed, 'Без экранов — засыпание быстрее на 20 минут.');
+    const windDown = p.windDown != null ? p.windDown : 45;
+    add('evening', '🌙', 'Вечерняя рутина и отбой', bed - windDown, bed, 'Без экранов — засыпание быстрее на 20 минут.');
+    // пары и дорога из недельного графика — такие же занятые часы
+    if (typeof Week !== 'undefined' && Week.installed()) {
+      Week.busyToday().forEach((x) => {
+        out.push({
+          id: 'week-' + x.id, kind: 'busy', emoji: x.id === 'pairs' ? '🎓' : '🚌',
+          title: x.title, start: x.start, end: x.end, fixed: true,
+          note: 'Учёба по недельному графику — сюда ничего не ставлю.',
+        });
+      });
+    }
+
     // занятые часы: встречи, работа, учёба — план их обходит
     (d.busy || []).forEach((x) => {
       const shift = x.start < wake ? MIN : 0;
@@ -180,7 +198,7 @@ const Planner = (() => {
   function freeSlots(fixed, fromMin) {
     const wake = wakeMin();
     const dayStart = Math.max(wake + 30, fromMin === undefined ? 0 : fromMin);
-    const dayEnd = sleepMin() - 45;
+    const dayEnd = sleepMin() - (Track.profile().windDown != null ? Track.profile().windDown : 45);
     const busy = fixed.filter((b) => b.end > dayStart && b.start < dayEnd)
       .map((b) => [b.start, b.end]).sort((a, b) => a[0] - b[0]);
 
@@ -236,6 +254,18 @@ const Planner = (() => {
     else if (task.due && task.due < State.todayKey()) pros.push('Просрочено — дальше тянуть некуда');
     else if (task.due === State.todayKey()) pros.push('Дедлайн сегодня');
     else if (task.urgent) pros.push('Отмечено как срочное');
+
+    // 3.5. предпочтительное время из недельного графика:
+    // сильная тяга к своему часу, но не гвоздь — день может сдвинуться
+    if (task.prefer !== null && task.prefer !== undefined) {
+      const off = Math.abs(start - task.prefer);
+      const fit = Math.max(0, 1 - off / 120);
+      score += fit * 55;               // своё место в графике весит больше, чем пик энергии
+      if (off > 180) score -= 25;      // уехать в другой конец дня — крайняя мера
+      if (off <= 20) pros.push(`Стоит в графике на ${Track.hhmm(task.prefer)}`);
+      else if (off <= 90) pros.push(`Рядом со своим местом в графике (${Track.hhmm(task.prefer)})`);
+      else cons.push(`По графику это в ${Track.hhmm(task.prefer)} — сдвинулось на ${Math.round(off / 60)} ч`);
+    }
 
     // 4. рабочие часы для рабочих задач
     const inWork = start >= p.workStart && end <= p.workEnd;
@@ -298,8 +328,18 @@ const Planner = (() => {
       }
     }
 
-    // сначала то, что горит
-    pool.sort((a, b) => urgency(b) - urgency(a) || (PRI_W[b.priority] || 0) - (PRI_W[a.priority] || 0));
+    /* Порядок разбора важен: кто первый, тот занимает час.
+       Дела из недельного графика идут по своему времени — иначе более
+       «важная» задача заберёт чужое окно, и подготовка ролика уедет
+       на другой конец дня. Остальное — по тому, что горит. */
+    const hasPrefer = (t) => t.prefer !== null && t.prefer !== undefined;
+    pool.sort((a, b) => {
+      const pa = hasPrefer(a), pb = hasPrefer(b);
+      if (pa && pb) return a.prefer - b.prefer;
+      if (pa) return -1;
+      if (pb) return 1;
+      return urgency(b) - urgency(a) || (PRI_W[b.priority] || 0) - (PRI_W[a.priority] || 0);
+    });
     if (o.max) pool = pool.slice(0, o.max);
 
     const placed = [];
@@ -326,30 +366,48 @@ const Planner = (() => {
         pros: ev.pros, cons: ev.cons, taskKind: ev.kind, duration: dur,
         chill: !!task.chill,
       });
-      // вырезаем это время из свободных слотов, чтобы вокруг ничего не налезло
+      /* У прибитого времени буфера нет: проверка ролика в 19:45 специально
+         стоит вплотную к публикации в 19:55. */
       for (let i = slots.length - 1; i >= 0; i--) {
         const sl = slots[i];
-        if (end + BUFFER <= sl.s || start - BUFFER >= sl.e) continue;
+        if (end <= sl.s || start >= sl.e) continue;
         const rest = [];
-        if ((start - BUFFER) - sl.s >= 20) rest.push({ s: sl.s, e: start - BUFFER });
-        if (sl.e - (end + BUFFER) >= 20) rest.push({ s: end + BUFFER, e: sl.e });
+        if (start - sl.s >= 10) rest.push({ s: sl.s, e: start });
+        if (sl.e - end >= 10) rest.push({ s: end, e: sl.e });
         slots.splice(i, 1, ...rest);
       }
     });
 
-    /* 2) остальное раскладываем по оценке */
+    /* 2) остальное раскладываем по оценке.
+       У дел из недельного графика есть своё время. Сначала ищем место
+       рядом с ним — человек расставил часы не случайно. И только если
+       рядом ничего не осталось, разрешаем уехать в другой конец дня. */
+    const WINDOW = 45;
+
     pool.forEach((task) => {
       const dur = taskDuration(task);
+      const prefer = (task.prefer === null || task.prefer === undefined) ? null : task.prefer;
+
+      const search = (lo, hi) => {
+        let best = null;
+        slots.forEach((slot, si) => {
+          const from = Math.max(slot.s, lo === null ? slot.s : lo);
+          const to = Math.min(slot.e, hi === null ? slot.e : hi + dur);
+          for (let start = from; start + dur <= to; start += 15) {
+            const ev = evaluate(task, start, start + dur);
+            const tie = (1440 - start) / 20000;
+            if (!best || ev.score + tie > best.score + best.tie) best = { ...ev, start, si, tie };
+          }
+        });
+        return best;
+      };
+
       let best = null;
-      slots.forEach((slot, si) => {
-        // пробуем каждые 15 минут внутри слота
-        for (let start = slot.s; start + dur <= slot.e; start += 15) {
-          const ev = evaluate(task, start, start + dur);
-          // небольшой бонус за то, что ставим пораньше в дне при равном счёте
-          const tie = (1440 - start) / 20000;
-          if (!best || ev.score + tie > best.score + best.tie) best = { ...ev, start, si, tie };
-        }
-      });
+      if (prefer !== null) {
+        best = search(prefer - WINDOW, prefer + WINDOW);           // своё окно
+        if (!best) best = search(prefer - 3 * WINDOW, prefer + 3 * WINDOW);  // рядом
+      }
+      if (!best) best = search(null, null);                        // где получится
       if (!best) return;
       const end = best.start + dur;
       placed.push({
@@ -362,12 +420,15 @@ const Planner = (() => {
         pros: best.pros, cons: best.cons, taskKind: best.kind,
         duration: dur, chill: !!task.chill,
       });
-      // вырезаем занятое время из слота
+      /* Буфер с обеих сторон: задачи спина к спине для СДВГ — верный способ
+         сорваться. Но если время задано графиком, человек уже решил, как
+         они стоят: там буфер только мешает и всё разъезжает. */
+      const buf = prefer === null ? BUFFER : 0;
       const slot = slots[best.si];
       const rest = [];
-      // буфер с обеих сторон: спина к спине задачи для СДВГ — верный способ сорваться
-      if ((best.start - BUFFER) - slot.s >= 20) rest.push({ s: slot.s, e: best.start - BUFFER });
-      if (slot.e - (end + BUFFER) >= 20) rest.push({ s: end + BUFFER, e: slot.e });
+      const minPiece = prefer === null ? 20 : 10;
+      if ((best.start - buf) - slot.s >= minPiece) rest.push({ s: slot.s, e: best.start - buf });
+      if (slot.e - (end + buf) >= minPiece) rest.push({ s: end + buf, e: slot.e });
       slots.splice(best.si, 1, ...rest);
     });
 

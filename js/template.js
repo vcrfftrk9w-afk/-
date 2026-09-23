@@ -34,6 +34,28 @@ const DayTpl = (() => {
     { title: 'Одно отложенное видео', cat: 'other', pri: 'low', est: 15, chill: true, note: 'Ровно одно. Таймер проследит.' },
   ];
 
+  const WD = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+  const todayDow = () => new Date().getDay();
+
+  /* дело может идти не каждый день и в разное время в разные дни */
+  function runsToday(x, dow) {
+    const d = dow === undefined ? todayDow() : dow;
+    if (!Array.isArray(x.days) || !x.days.length) return true;
+    return x.days.indexOf(d) !== -1;
+  }
+  function atFor(x, dow) {
+    const d = dow === undefined ? todayDow() : dow;
+    if (x.atByDay && x.atByDay[d] !== undefined && x.atByDay[d] !== null) return x.atByDay[d];
+    return x.at === undefined ? null : x.at;
+  }
+  function daysLabel(x) {
+    if (!Array.isArray(x.days) || x.days.length === 0 || x.days.length === 7) return 'каждый день';
+    const set = x.days.slice().sort();
+    if (set.join() === '1,2,3,4,5') return 'по будням';
+    if (set.join() === '0,6') return 'на выходных';
+    return set.map((d) => WD[d]).join(', ');
+  }
+
   function tpl() {
     const s = State.s;
     if (!s.dayTemplate) s.dayTemplate = { items: [], seeded: false, autoApply: true, appliedDate: null };
@@ -62,7 +84,8 @@ const DayTpl = (() => {
   }
 
   const items = () => tpl().items;
-  const active = () => items().filter((x) => x.on);
+  /* «активно» теперь означает «включено И сегодня по расписанию» */
+  const active = (dow) => items().filter((x) => x.on && runsToday(x, dow));
 
   function toggle(id) {
     const x = items().find((i) => i.id === id);
@@ -77,6 +100,9 @@ const DayTpl = (() => {
       at: data.at === undefined ? null : data.at,
       est: data.est || null, chill: !!data.chill, note: data.note || '',
       subs: Array.isArray(data.subs) ? data.subs : [],
+      days: Array.isArray(data.days) ? data.days : null,
+      atByDay: data.atByDay || null,
+      hard: !!data.hard,
     });
     State.commit();
   }
@@ -142,7 +168,11 @@ const DayTpl = (() => {
     active().forEach((x) => {
       if (existsToday(x.title)) return;
       Screens.tasks.add(x.title, x.cat, x.pri, false, {
-        at: x.at === undefined ? null : x.at,
+          /* «ровно в час» — только у того, что действительно не двигается
+           (публикации). Остальное из графика — предпочтительное время:
+           встал позже — план сдвинется, а не осыпется. */
+        at: x.hard ? atFor(x) : null,
+        prefer: x.hard ? null : atFor(x),
         estimate: x.est || null,
         chill: !!x.chill,
         due: State.todayKey(),
@@ -179,5 +209,5 @@ const DayTpl = (() => {
     return t.items.length;
   }
 
-  return { STARTER, tpl, seed, items, active, toggle, add, remove, update, apply, appliedToday, captureFromToday, progressToday, doneOn, streak };
+  return { STARTER, tpl, seed, items, active, toggle, add, remove, update, apply, appliedToday, captureFromToday, progressToday, doneOn, streak, runsToday, atFor, daysLabel, todayDow, WD };
 })();

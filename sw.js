@@ -21,6 +21,7 @@ const ASSETS = [
   './js/track.js',
   './js/planner.js',
   './js/template.js',
+  './js/week.js',
   './js/chill.js',
   './js/verdict.js',
   './js/path.js',

@@ -387,6 +387,12 @@ Screens.day = (() => {
       </div>`;
   }
 
+  /* тренировка, готовка и ИИ на сегодня */
+  function coachHTML() {
+    if (typeof Coach === 'undefined' || typeof Week === 'undefined' || !Week.installed()) return '';
+    return `<div class="card day-coach"><div class="card-head"><h3>💪🍲🤖 Тело, еда, голова</h3></div>${Coach.cardHTML()}</div>`;
+  }
+
   /* открыть в графике конкретный день недели */
   function showDay(dow) {
     weekDow = dow === new Date().getDay() ? null : dow;
@@ -445,6 +451,7 @@ Screens.day = (() => {
       <div class="why">
         <div class="why-tag">${Track.hhmm(b.start)} – ${Track.hhmm(b.end)}</div>
         <h2>${b.emoji} ${UI.esc(b.title)}</h2>
+        ${b.kind === 'task' && typeof Coach !== 'undefined' && Coach.noteFor(b) ? `<p class="coach-preview">${UI.esc(Coach.noteFor(b))}</p>` : ''}
         ${b.kind === 'task' ? `
           <div class="why-score">
             <div><b>${Math.round(b.energy * 100)}%</b><small>энергии в это время</small></div>
@@ -472,6 +479,7 @@ Screens.day = (() => {
     const pl = Planner.plan();
     const b = pl && pl.blocks.find((x) => x.id === id);
     if (!b || b.kind !== 'task') return;
+    if (typeof Coach !== 'undefined' && Coach.start(b)) return;
     if (b.habitId) {
       const h = State.s.habits.find((x) => x.id === b.habitId);
       if (h) { Screens.habits.toggleDay(h, State.todayKey()); UI.toast('Привычка отмечена', 'success', h.emoji || '🔥'); render(); }
@@ -858,9 +866,10 @@ Screens.day = (() => {
       badge.textContent = `режим ${sc}`;
       badge.className = 'badge ' + (sc >= 70 ? 'badge-ok' : (sc >= 40 ? 'badge-mid' : 'badge-bad'));
     }
-    root.innerHTML = setupHTML() + nowHTML() + weekHTML() + behindHTML() + statusHTML() + unplacedHTML() + nudgesHTML() + timelineHTML() + listHTML() + templateHTML() + historyHTML();
+    root.innerHTML = setupHTML() + nowHTML() + weekHTML() + coachHTML() + behindHTML() + statusHTML() + unplacedHTML() + nudgesHTML() + timelineHTML() + listHTML() + templateHTML() + historyHTML();
     UI.initTilt();
     if (!bound) bind(root);
+    if (typeof Coach !== 'undefined') Coach.bindCard(root);
   }
 
   function bind(root) {

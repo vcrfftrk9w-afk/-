@@ -121,6 +121,7 @@ Screens.dashboard = (() => {
     { id: 'now', name: 'СДВГ: большой экран «Сейчас» с таймером' },
     { id: 'main', name: 'Сегодня главное (первый экран)' },
     { id: 'week', name: 'Обычный режим: неделя одним взглядом' },
+    { id: 'coach', name: 'Тренировка, готовка и ИИ на сегодня' },
     { id: 'hero', name: 'Персонаж и уровень' },
     { id: 'next', name: 'Что дальше' },
     { id: 'path', name: 'Твой путь к деньгам' },
@@ -661,6 +662,7 @@ Screens.dashboard = (() => {
     renderFocusGoal();
     renderMainCard();
     if (typeof Modes !== 'undefined') Modes.render();
+    if (typeof Coach !== 'undefined') Coach.renderDash();
     renderPathCard();
     renderDayCard();
     if (Screens.pledge) Screens.pledge.render();

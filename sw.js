@@ -31,6 +31,7 @@ const ASSETS = [
   './js/pledge.js',
   './js/screens-day.js',
   './js/advisor.js',
+  './js/coach.js',
   './js/modes.js',
   './js/palette.js',
   './js/app.js'

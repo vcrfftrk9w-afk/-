@@ -54,6 +54,7 @@ const Modes = (() => {
 
   function noteFor(b) {
     if (!b) return '';
+    if (typeof Coach !== 'undefined') { const c = Coach.noteFor(b); if (c) return c; }
     if (typeof Week !== 'undefined') {
       const x = Week.PLAN.find((p) => p.title === (b.taskTitle || b.task || b.title));
       if (x && x.note) return x.note;
@@ -305,6 +306,11 @@ const Modes = (() => {
 
   function startBlock(b, minutes) {
     if (!b) return;
+    // тренировка, готовка и разбор с ИИ ведут по шагам, а не просто таймером
+    if (typeof Coach !== 'undefined' && Coach.start(b)) {
+      State.s.challenge = { taskId: b.taskId, until: Date.now() + Math.max(1, b.end - Track.nowMin()) * 60000, x2: !minutes };
+      return;
+    }
     if (b.habitId) {
       const h = State.s.habits.find((x) => x.id === b.habitId);
       if (h) Screens.habits.toggleDay(h, State.todayKey());

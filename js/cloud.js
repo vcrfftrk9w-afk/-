@@ -29,7 +29,7 @@ const Cloud = (() => {
 
   /* Состояние раскладываем по трём документам: ядро, задачи и история.
      Иначе через полгода пользования оно упрётся в предел одного документа. */
-  const HISTORY_KEYS = ['day', 'dailyTaskCounts', 'dailyFocusMinutes', 'focusByHour', 'moods', 'focusLog', 'weeklyReviews', 'doneLog', 'doneTitles'];
+  const HISTORY_KEYS = ['day', 'dailyTaskCounts', 'dailyFocusMinutes', 'focusByHour', 'moods', 'focusLog', 'weeklyReviews', 'doneLog', 'doneTitles', 'workouts', 'aiLog'];
 
   const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(undefined), ms))]);
 

@@ -268,8 +268,11 @@ const Verdict = (() => {
         <div class="why-actions">
           <button class="btn btn-primary btn-lg" id="v-go">Делаю это</button>
           <button class="btn btn-ghost" id="v-next">Не сейчас, что ещё?</button>
+          ${typeof Coach !== 'undefined' ? '<button class="btn btn-ghost" id="v-ai">🤖 Спросить ИИ</button>' : ''}
         </div>
       </div>`, { wide: true });
+    const ai = body.querySelector('#v-ai');
+    if (ai) ai.onclick = () => { UI.closeModal('#sheet-modal'); setTimeout(() => Coach.openAI(null), 220); };
 
     body.querySelector('#v-go').onclick = () => { UI.closeModal('#sheet-modal'); setTimeout(() => t.run(), 200); };
     body.querySelector('#v-next').onclick = () => {

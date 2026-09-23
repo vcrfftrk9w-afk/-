@@ -14,6 +14,7 @@ const SP=require('os').tmpdir()+'/';
   await p.goto('http://localhost:8792/index.html'); await p.waitForTimeout(1000);
   await p.evaluate(()=>{ State.s.onboarded=true; State.s.mode='adhd'; Math.random = () => 0.9; State.save(); });
   await p.reload(); await p.waitForTimeout(2600);
+  await p.evaluate(()=>{ Math.random = () => 0.9; });   // без случайных сюрпризов — проверяем комбо
   await p.evaluate(()=>document.querySelectorAll('.modal:not(.hidden)').forEach(m=>m.classList.add('hidden')));
   await p.waitForTimeout(4200);   // тосты улеглись
   const vis = (sel) => p.evaluate((s)=>{ const e=document.querySelector(s); return !!e && e.offsetParent!==null && getComputedStyle(e).display!=='none'; }, sel);
@@ -47,7 +48,7 @@ const SP=require('os').tmpdir()+'/';
   // второе дело подряд → комбо
   await p.evaluate(()=>{ const t=State.s.tasks.find(x=>x.title==='YouTube'); Screens.tasks.complete(t, document.body); });
   await p.waitForTimeout(500);
-  const C2 = await p.evaluate(()=>({combo: State.s.combo.n, toasts:[...document.querySelectorAll('.toast')].map(t=>t.textContent.trim()).slice(-2), badge:(document.querySelector('.an-combo')||{}).textContent}));
+  const C2 = await p.evaluate(()=>({combo: State.s.combo.n, toasts:[...document.querySelectorAll('.toast')].map(t=>t.textContent.trim()), badge:(document.querySelector('.an-combo')||{}).textContent}));
   console.log('комбо:', JSON.stringify(C2), C2.combo===2 && /комбо/.test(C2.toasts.join(' ')) ? '✓':'✗');
   // «не могу начать»
   await p.evaluate(()=>document.querySelectorAll('.modal.modal-open').forEach(m=>UI.closeModal('#'+m.id))); await p.waitForTimeout(400);

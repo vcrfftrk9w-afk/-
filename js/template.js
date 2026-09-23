@@ -165,7 +165,17 @@ const DayTpl = (() => {
     const o = opts || {};
     const t = tpl();
     let created = 0;
+    const today = State.todayKey();
     active().forEach((x) => {
+      /* ежедневное дело, не сделанное вчера, — это сегодняшнее дело,
+         а не «просроченное»: переносим его на сегодня с сегодняшним временем */
+      const open = State.s.tasks.find((tk) => tk.title === x.title && !tk.done);
+      if (open && open.due && open.due < today) {
+        open.due = today;
+        open.at = x.hard ? atFor(x) : null;
+        open.prefer = x.hard ? null : atFor(x);
+        return;
+      }
       if (existsToday(x.title)) return;
       Screens.tasks.add(x.title, x.cat, x.pri, false, {
           /* «ровно в час» — только у того, что действительно не двигается
@@ -176,6 +186,7 @@ const DayTpl = (() => {
         estimate: x.est || null,
         chill: !!x.chill,
         due: State.todayKey(),
+        silent: true,
       });
       // расплывчатое дело сразу приходит с шагами — иначе оно так и останется расплывчатым
       if (x.subs && x.subs.length) {

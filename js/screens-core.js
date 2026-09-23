@@ -426,8 +426,9 @@ Screens.dashboard = (() => {
 
     // 1) план дня — он уже разложил всё по часам
     if (typeof Planner !== 'undefined' && Planner.plan()) {
+      const skipped = Planner.plan().skipped || {};
       Planner.blocks().forEach((b) => {
-        if (b.kind !== 'task') return;
+        if (b.kind !== 'task' || skipped[b.id] === 'moved') return;
         const t = b.taskId ? s.tasks.find((x) => x.id === b.taskId) : null;
         const big = b.pinned || (t && (t.priority === 'boss' || t.priority === 'high')) || b.pathId || b.habitId;
         add({
@@ -471,7 +472,11 @@ Screens.dashboard = (() => {
     const untimed = undone.filter((x) => x.at === null);
     const late = undone.filter((x) => x.at !== null && x.end !== null && x.end < now);
 
-    const list = live.concat(untimed).slice(0, MAIN_LIMIT);
+    let list = live.concat(untimed).slice(0, MAIN_LIMIT);
+    /* публикации в 19:55 и 21:00 видны всегда, пока не сделаны, —
+       даже если до них ещё десяток дел */
+    const must = live.filter((x) => x.pinned && !list.includes(x));
+    if (must.length) list = list.slice(0, Math.max(1, MAIN_LIMIT - must.length)).concat(must).sort(byTime);
     if (list.length < MAIN_LIMIT && late.length) {
       list.push(...late.slice(-Math.min(2, MAIN_LIMIT - list.length)));
     }
@@ -510,7 +515,15 @@ Screens.dashboard = (() => {
     const cur = list.find((x) => !x.done && x.at !== null && now >= x.at && now < x.end);
     const next = list.find((x) => !x.done && x.at !== null && x.at > now);
 
-    el.innerHTML = `
+    const script = typeof Planner !== 'undefined' && Planner.plan() && Planner.plan().script && typeof Week !== 'undefined';
+    const dayLine = script ? (() => {
+      const sc = Week.scriptToday();
+      const pairs = sc.filter((b) => b.kind === 'pair');
+      const pub = sc.filter((b) => b.hard).map((b) => `${b.emoji} ${Track.hhmm(b.start)}`).join(' · ');
+      return `<p class="main-day">📅 ${Week.DAY_NAMES[new Date().getDay()]} по твоему графику${pairs.length ? ` · 🎓 ${Track.hhmm(pairs[0].start)}–${Track.hhmm(pairs[pairs.length - 1].end)}` : ''}${pub ? ` · ${pub}` : ''}</p>`;
+    })() : '';
+
+    el.innerHTML = `${dayLine}
       <ul class="main-list">
         ${list.map((x) => {
           const isNow = cur && x.id === cur.id;
@@ -756,8 +769,11 @@ Screens.tasks = (() => {
       estimate: extra.estimate || null,
       chill: !!extra.chill,
     });
-    Sound.sfx('click');
-    UI.toast('Задача добавлена', 'success', '📝');
+    // дела, которые приложение ставит само, не должны сыпать тостами
+    if (!extra.silent) {
+      Sound.sfx('click');
+      UI.toast('Задача добавлена', 'success', '📝');
+    }
     State.commit();
   }
 

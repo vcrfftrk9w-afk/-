@@ -407,7 +407,7 @@ const App = (() => {
 
     // смена дня
     setInterval(() => {
-      if (State.s.lastSeenDate && State.s.lastSeenDate !== State.todayKey()) dailyCheckIn();
+      if (State.s.lastSeenDate && State.s.lastSeenDate !== State.todayKey()) { dailyCheckIn(); ensureDaySetup(); }
       pathNudge();
       dayTick();
     }, 60000);
@@ -510,7 +510,10 @@ const App = (() => {
     });
 
     // блок начался — объявляем
-    if (cur && cur.id !== lastBlockId && !skipped[cur.id] && !Planner.isDone(cur)) {
+    // пары и перерывы между ними не объявляем: на паре телефон пищать не должен
+    const silent = cur && (cur.sub === 'pair' || cur.sub === 'break' || cur.sub === 'sleep');
+    if (cur && silent) lastBlockId = cur.id;
+    if (cur && !silent && cur.id !== lastBlockId && !skipped[cur.id] && !Planner.isDone(cur)) {
       lastBlockId = cur.id;
       const mins = cur.end - cur.start;
       Sound.sfx('start');
@@ -720,6 +723,7 @@ const App = (() => {
       $('#onboarding').classList.add('hidden');
       $('#app').classList.remove('hidden');
       dailyCheckIn();
+      ensureDaySetup();
       go('dashboard');
       Sound.ready();
       Sound.sfx('fanfare');
@@ -1091,22 +1095,94 @@ const App = (() => {
     State.tickPassive();
     startTicks();
 
-    setTimeout(() => {
+    /* Облако спрашиваем сразу, параллельно с заставкой. */
+    const cloudPromise = Cloud.init(8000);
+
+    const hideLoader = (then) => {
       const loader = $('#loader');
       loader.style.opacity = '0';
-      setTimeout(() => {
-        loader.classList.add('hidden');
-        if (State.s.onboarded) {
-          $('#app').classList.remove('hidden');
-          dailyCheckIn();
-          go('dashboard');
-          UI.initTilt();
-          offerGhostCleanup();
-        } else {
-          $('#onboarding').classList.remove('hidden');
+      setTimeout(() => { loader.classList.add('hidden'); then(); }, 450);
+    };
+
+    setTimeout(async () => {
+      if (State.s.onboarded) {
+        // браузер уже знает человека — не ждём облако, открываем сразу
+        hideLoader(showApp);
+        cloudPromise.then(reconcile);
+        return;
+      }
+      /* В браузере пусто. Это не значит, что человек новый: окно могло
+         просто не сохранить память. Спрашиваем облако, и только если там
+         никого нет — показываем анкету. */
+      const text = $('.loader-text');
+      if (text) text.textContent = 'Загружаю твой прогресс…';
+      const remote = await Promise.race([cloudPromise, new Promise((r) => setTimeout(() => r(undefined), 7000))]);
+      if (remote && remote.onboarded) {
+        State.adopt(remote);
+        applyAll();
+        hideLoader(showApp);
+        afterCloud();
+        return;
+      }
+      hideLoader(() => {
+        $('#onboarding').classList.remove('hidden');
+      });
+      // облако ответило позже анкеты — если человек там есть, пускаем в приложение
+      cloudPromise.then((late) => {
+        if (late && late.onboarded && !State.s.onboarded) {
+          State.adopt(late);
+          applyAll();
+          $('#onboarding').classList.add('hidden');
+          showApp();
+          UI.toast('Прогресс подтянулся из облака', 'success', '☁️');
         }
-      }, 450);
+        afterCloud();
+      });
     }, 850);
+  }
+
+  function showApp() {
+    $('#app').classList.remove('hidden');
+    dailyCheckIn();
+    ensureDaySetup();
+    go('dashboard');
+    UI.initTilt();
+    offerGhostCleanup();
+  }
+
+  /* облако ответило, а приложение уже открыто: берём то, что свежее */
+  function reconcile(remote) {
+    if (remote && (remote.savedAt || 0) > (State.s.savedAt || 0)) {
+      State.adopt(remote);
+      applyAll();
+      renderActive();
+    }
+    afterCloud();
+  }
+
+  function afterCloud() {
+    if (!Cloud.ready) return;
+    Cloud.bindTriggers();
+    Cloud.flush();                 // первая синхронизация: локальное — в облако
+    Cloud.watch((fresh) => {       // другое устройство сохранило новее
+      State.adopt(fresh);
+      applyAll();
+      renderActive();
+      UI.toast('Обновил прогресс с другого устройства', 'default', '☁️');
+    });
+  }
+
+  /* день настраивается сам: график недели и сегодняшние дела на месте,
+     без единой кнопки */
+  function ensureDaySetup() {
+    if (typeof Week === 'undefined' || typeof DayTpl === 'undefined') return;
+    // график ставится и обновляется сам — руками ничего нажимать не нужно
+    const fresh = !Week.installed() || Week.outdated();
+    if (fresh) Week.install();
+    if (fresh || !DayTpl.appliedToday()) DayTpl.apply({ quiet: true });
+    if (typeof Planner === 'undefined') return;
+    const pl = Planner.plan();
+    if (fresh || !pl || (Planner.inScript() && !pl.script)) Planner.build({});
   }
 
   return { init, go, showComeback, syncBottomInsets, applyAll, applyPalette, renderHeader, renderActive, openCapture, moveIndicator, paintMiniPlayIcon, focusTask: null };

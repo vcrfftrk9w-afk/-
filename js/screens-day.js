@@ -6,6 +6,7 @@ Screens.day = (() => {
   const { $, $$ } = UI;
   let bound = false;
   let tickTimer = null;
+  let weekDow = null;          // какой день открыт в графике недели; null — сегодня
 
   /* ---------- первый вход: настроить режим ---------- */
   function setupHTML() {
@@ -70,16 +71,17 @@ Screens.day = (() => {
         <h3>${b.emoji} ${UI.esc(b.title)}</h3>
         <p class="muted">${Track.hhmm(b.start)} – ${Track.hhmm(b.end)}${b.taskKind ? ` · ${Planner.KIND_LABEL[b.taskKind]}` : ''}${b.note ? ` · ${UI.esc(b.note)}` : ''}</p>
         <div class="day-now-bar"><span style="width:${Math.round(((now - b.start) / (b.end - b.start)) * 100)}%"></span></div>
-        ${done ? '' : `
+        ${done ? '' : (Planner.CHECKABLE[b.kind] || b.kind === 'sleep' ? `
         <div class="day-now-actions">
           ${b.kind === 'task' ? `<button class="btn btn-primary" data-do="${b.id}">▶ Делаю это сейчас</button>` : ''}
+          ${b.kind === 'task' ? `<button class="btn btn-ghost" data-wkdone="${b.id}">✓ Уже сделал</button>` : ''}
           ${b.kind === 'meal' ? `<button class="btn btn-primary" data-quick="meal">🍽️ Поел</button>` : ''}
           ${b.kind === 'wake' ? `<button class="btn btn-primary" data-quick="wake">☀️ Встал</button>` : ''}
           ${b.kind === 'pill' ? `<button class="btn btn-primary" data-quick="pills">💊 Отметить</button>` : ''}
-          ${b.kind === 'evening' ? `<button class="btn btn-primary" data-quick="sleep">🌙 Ложусь</button>` : ''}
-          <button class="btn btn-ghost" data-skip="${b.id}">Пропустить</button>
-          <button class="btn btn-ghost" data-why="${b.id}">Почему сюда?</button>
-        </div>`}
+          ${b.kind === 'evening' || b.kind === 'sleep' ? `<button class="btn btn-primary" data-quick="sleep">🌙 Ложусь</button>` : ''}
+          ${b.kind === 'task' && !b.hard ? `<button class="btn btn-ghost" data-skip="${b.id}">Пропустить</button>` : ''}
+          ${b.kind === 'task' ? `<button class="btn btn-ghost" data-why="${b.id}">Почему сюда?</button>` : ''}
+        </div>` : (next ? `<p class="day-now-next">Дальше в ${Track.hhmm(next.start)}: ${next.emoji} ${UI.esc(next.title)}</p>` : ''))}
       </div>`;
   }
 
@@ -182,7 +184,9 @@ Screens.day = (() => {
     return `
       <div class="card day-unplaced">
         <div class="card-head"><h3>🚫 Не поместилось в день</h3><span class="badge badge-mid">${list.length}</span></div>
-        <p class="muted small">${busy > 240
+        <p class="muted small">${Planner.plan() && Planner.plan().script
+          ? 'В свободное время по графику это не влезло: отдых я отдаю максимум наполовину — он тоже держит твой день.'
+          : busy > 240
           ? `Занятого времени сегодня ${Math.round(busy / 60)} ч — свободных окон под эти дела не осталось.`
           : 'Свободного времени между едой, сном и занятыми часами не хватило.'} Убери лишнее, укороти длительность или перенеси на завтра.</p>
         <ul class="behind-list">
@@ -291,10 +295,100 @@ Screens.day = (() => {
       </div>`;
   }
 
+  /* ---------- график недели: вкладки Пн–Вс ---------- */
+  const SUB_TAG = { pair: 'пара', break: 'перерыв', road: 'дорога', rest: 'отдых', meal: 'еда', sleep: 'сон', routine: 'режим' };
+
+  function planNote(title) {
+    const x = Week.PLAN.find((p) => p.title === title);
+    return x && x.note ? x.note : '';
+  }
+
+  /* короткое описание дня: когда пары, что вечером */
+  function daySummary(dow) {
+    const sc = Week.scriptFor(dow);
+    const pairs = sc.filter((b) => b.kind === 'pair');
+    const parts = [];
+    if (pairs.length) parts.push(`🎓 пары ${Track.hhmm(pairs[0].start)}–${Track.hhmm(pairs[pairs.length - 1].end)}`);
+    else parts.push('🌿 без пар');
+    if (sc.some((b) => b.task === 'Тренировка')) parts.push('💪 тренировка');
+    else if (sc.some((b) => b.task === 'Прогулка и восстановление')) parts.push('🚶 прогулка');
+    sc.filter((b) => b.hard).forEach((b) => parts.push(`${b.emoji} ${Track.hhmm(b.start)}`));
+    return parts.join(' · ');
+  }
+
+  function weekHTML() {
+    if (typeof Week === 'undefined' || !Planner.inScript()) return '';
+    const todayDow = new Date().getDay();
+    const dow = weekDow === null ? todayDow : weekDow;
+    const isToday = dow === todayDow;
+    const pl = Planner.plan();
+    const now = Track.nowMin();
+    const skipped = (pl && pl.skipped) || {};
+    const rows = isToday && pl && pl.script
+      ? pl.blocks
+      : Week.scriptFor(dow).map((x) => ({ ...x, id: 'x-' + x.id, sub: x.kind, kind: x.kind === 'task' ? 'task' : 'fixed' }));
+    const tasks = rows.filter((b) => b.kind === 'task');
+    const doneN = isToday ? tasks.filter((b) => Planner.isDone(b)).length : 0;
+
+    const chip = (d) => `<button class="wk-chip ${d === dow ? 'sel' : ''} ${d === todayDow ? 'today' : ''}" data-wkday="${d}" aria-pressed="${d === dow}">
+        <b>${Week.DAY_SHORT[d]}</b>${d === todayDow ? '<i>сегодня</i>' : ''}</button>`;
+
+    return `
+      <div class="card day-week" id="day-week">
+        <div class="card-head">
+          <h3>🗓️ ${isToday ? 'Сегодня' : 'График'} — ${Week.DAY_NAMES[dow].toLowerCase()}</h3>
+          ${isToday ? `<span class="badge ${doneN === tasks.length && tasks.length ? 'badge-ok' : (doneN ? 'badge-mid' : '')}">${doneN}/${tasks.length} дел</span>` : ''}
+        </div>
+        <div class="wk-chips" role="tablist" aria-label="Дни недели">${[1, 2, 3, 4, 5, 6, 0].map(chip).join('')}</div>
+        <p class="wk-sum">${daySummary(dow)}</p>
+        ${isToday ? '' : '<p class="muted small">Так будет в этот день. Всё поставится само — утром ничего нажимать не нужно.</p>'}
+        <ol class="wk-list">
+          ${rows.map((b) => {
+            const sub = b.sub || b.kind;
+            const isTask = b.kind === 'task';
+            const done = isToday && (isTask || Planner.CHECKABLE[b.kind]) && Planner.isDone(b);
+            const live = isToday && now >= b.start && now < b.end;
+            const past = isToday && b.end <= now;
+            const moved = skipped[b.id] === 'moved' || skipped[b.id] === 'tomorrow';
+            const miss = isToday && isTask && past && !done && !skipped[b.id];
+            const note = isTask ? (b.extra ? (b.moved ? 'перенесено из пропущенного' : 'дело вне графика — в свободное время') : planNote(b.task || b.taskTitle)) : '';
+            const cls = ['wk-row', 'k-' + sub, isTask ? 'is-task' : '', done ? 'done' : '', live ? 'live' : '', past && !live ? 'past' : '', miss ? 'miss' : '', moved ? 'moved' : '', b.hard ? 'hard' : ''].filter(Boolean).join(' ');
+            const pct = live ? Math.round(((now - b.start) / (b.end - b.start)) * 100) : 0;
+            return `
+              <li class="${cls}" ${live ? 'aria-current="true"' : ''}>
+                <span class="wk-time">${Track.hhmm(b.start)}<i>${Track.hhmm(b.end % 1440)}</i></span>
+                <span class="wk-emoji">${b.emoji || '•'}</span>
+                <${isToday && isTask ? `button class="wk-body" data-block="${b.id}"` : 'span class="wk-body"'}>
+                  <b>${UI.esc(b.title)}</b>
+                  <small>${b.end - b.start} мин${!isTask && SUB_TAG[sub] ? ' · ' + SUB_TAG[sub] : ''}${b.hard ? ' · ⏰ ровно в это время' : ''}${moved ? (skipped[b.id] === 'tomorrow' ? ' · отпущено на завтра' : ' · перенесено дальше') : ''}${note ? ' · ' + UI.esc(note) : ''}</small>
+                  ${live ? `<span class="wk-live"><span style="width:${pct}%"></span></span><small class="wk-left">идёт сейчас · осталось ${b.end - now} мин</small>` : ''}
+                </${isToday && isTask ? 'button' : 'span'}>
+                ${isToday && isTask && !moved ? `<button class="wk-check ${done ? 'on' : ''}" data-wkdone="${b.id}" aria-label="${done ? 'Сделано' : 'Отметить сделанным'}" ${done ? 'disabled' : ''}>${done ? '✓' : ''}</button>` : ''}
+              </li>`;
+          }).join('')}
+        </ol>
+      </div>`;
+  }
+
+  /* отметить дело из графика сделанным */
+  function completeBlock(id, el) {
+    const pl = Planner.plan();
+    const b = pl && pl.blocks.find((x) => x.id === id);
+    if (!b || b.kind !== 'task' || Planner.isDone(b)) return;
+    if (b.habitId) {
+      const h = State.s.habits.find((x) => x.id === b.habitId);
+      if (h) Screens.habits.toggleDay(h, State.todayKey(), el);
+      return;
+    }
+    if (b.pathId) { App.go('path'); setTimeout(() => Screens.path.openStep(b.pathId), 220); return; }
+    const t = State.s.tasks.find((x) => x.id === b.taskId);
+    if (t) Screens.tasks.complete(t, el);
+  }
+
   /* ---------- список плана ---------- */
   function listHTML() {
     const pl = Planner.plan();
-    if (!pl) return '';
+    if (!pl || pl.script) return '';
     const now = Track.nowMin();
     const skipped = pl.skipped || {};
     return `
@@ -740,7 +834,7 @@ Screens.day = (() => {
       badge.textContent = `режим ${sc}`;
       badge.className = 'badge ' + (sc >= 70 ? 'badge-ok' : (sc >= 40 ? 'badge-mid' : 'badge-bad'));
     }
-    root.innerHTML = setupHTML() + nowHTML() + statusHTML() + behindHTML() + unplacedHTML() + nudgesHTML() + timelineHTML() + listHTML() + templateHTML() + historyHTML();
+    root.innerHTML = setupHTML() + nowHTML() + weekHTML() + behindHTML() + statusHTML() + unplacedHTML() + nudgesHTML() + timelineHTML() + listHTML() + templateHTML() + historyHTML();
     UI.initTilt();
     if (!bound) bind(root);
   }
@@ -823,7 +917,12 @@ Screens.day = (() => {
       if (g('#day-catchup')) {
         Planner.catchUp();
         Sound.sfx('success');
-        UI.toast('Остаток дня пересобран под то время, что осталось', 'success', '🔁');
+        const pl = Planner.plan();
+        if (pl && pl.script) {
+          const moved = pl.blocks.filter((b) => b.moved).length;
+          const later = Object.values(pl.skipped || {}).filter((v) => v === 'tomorrow').length;
+          UI.toast(`${moved ? `Перенёс ${UI.plur(moved, 'дело', 'дела', 'дел')} в свободное время` : 'Свободного времени сегодня уже нет'}${later ? `, ${later} — на завтра, оно там и так стоит` : ''}`, 'success', '🔁');
+        } else UI.toast('Остаток дня пересобран под то время, что осталось', 'success', '🔁');
         render(); return;
       }
       if (g('#day-dropmiss')) {
@@ -835,6 +934,17 @@ Screens.day = (() => {
       const c = g('[data-coffee]'); if (c) { Track.coffee(Number(c.dataset.coffee), true); Sound.sfx('pop'); patchCounters(); return; }
       const wo = g('[data-workout]'); if (wo) { Track.workout(Number(wo.dataset.workout), true); Sound.sfx('check'); patchCounters(); return; }
       const pill = g('[data-pill]'); if (pill) { Track.pill(pill.dataset.pill); Sound.sfx('check'); return; }
+      const wd = g('[data-wkday]');
+      if (wd) {
+        const d = Number(wd.dataset.wkday);
+        weekDow = d === new Date().getDay() ? null : d;
+        Sound.sfx('pop');
+        const card = $('#day-week');
+        if (card) { card.outerHTML = weekHTML(); UI.initTilt(); }
+        return;
+      }
+      const wdn = g('[data-wkdone]');
+      if (wdn) { completeBlock(wdn.dataset.wkdone, wdn); return; }
       const q = g('[data-quick]'); if (q) { quick(q.dataset.quick); return; }
       const why = g('[data-why]'); if (why) { explain(why.dataset.why); return; }
       const blk = g('[data-block]'); if (blk) { explain(blk.dataset.block); return; }

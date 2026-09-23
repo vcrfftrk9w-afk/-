@@ -527,6 +527,16 @@ const State = (() => {
     ensureSkills();
     save();
   }
+  /* принять состояние из облака как есть — не перебивая его отметку времени,
+     иначе свежая копия с другого устройства выглядела бы «старше» */
+  function adopt(obj) {
+    s = deepMerge(defaults(), obj || {});
+    ensureSkills();
+    ensureRoutines();
+    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* ничего */ }
+    lastWrite = s.savedAt || Date.now();
+  }
+
   function replace(obj) {
     s = deepMerge(defaults(), obj || {});
     ensureSkills();
@@ -544,6 +554,6 @@ const State = (() => {
     ensureQuests, todayQuests, bumpQuest, ensureRoutines, routineProgress,
     weeklyChallenge, weeklyProgress, checkWeekly, weekKey,
     checkAchievements, unlockedAchievements, paletteUnlocked, api,
-    reset, replace,
+    reset, replace, adopt,
   };
 })();

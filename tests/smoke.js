@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
   await p.waitForTimeout(2200);
   const mods = await p.evaluate(()=>{
     const check = (n) => { try { return eval('typeof ' + n) !== 'undefined' ? 'ok' : 'НЕТ'; } catch(e) { return 'НЕТ'; } };
-    return ['Icons','Data','State','Sound','Music','FX','UI','Screens','Advisor','Palette','App','Path','Track','Planner','DayTpl','Chill','Verdict'].map(n => n+':'+check(n)).join(' ');
+    return ['Icons','Data','State','Sound','Music','FX','UI','Screens','Advisor','Palette','App','Path','Track','Planner','DayTpl','Chill','Verdict','Week','Cloud'].map(n => n+':'+check(n)).join(' ');
   });
   console.log(mods);
   console.log('ERRORS:', errors.length ? JSON.stringify(errors) : 'нет');

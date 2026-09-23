@@ -155,6 +155,147 @@ const Week = (() => {
     },
   ];
 
+  /* =========================================================
+     ГРАФИК ПО МИНУТАМ — ровно как он написан.
+     kind: routine | meal | road | pair | break | task | rest | sleep
+     task: название дела из шаблона — такой блок можно отметить сделанным.
+     hard: время не двигается (публикации).
+     ========================================================= */
+  const B = (from, to, title, kind, extra) => Object.assign({ from, to, title, kind }, extra || {});
+  const T = (from, to, title, task, extra) => B(from, to, title, 'task', Object.assign({ task: task || title }, extra || {}));
+
+  const MORNING_WEEKDAY = [
+    B(h(7), h(7, 15), 'Подъём, умывание, вода', 'routine', { emoji: '☀️' }),
+    B(h(7, 15), h(7, 30), 'Лёгкая разминка, заправить кровать', 'routine', { emoji: '🤸' }),
+    B(h(7, 30), h(8), 'Завтрак и сборы', 'meal', { emoji: '🍳' }),
+  ];
+
+  const pairs = (start) => [
+    B(start, start + 50, 'Первая пара', 'pair', { emoji: '🎓' }),
+    B(start + 50, start + 60, 'Перерыв', 'break', { emoji: '☕' }),
+    B(start + 60, start + 110, 'Вторая пара', 'pair', { emoji: '🎓' }),
+    B(start + 110, start + 120, 'Перерыв', 'break', { emoji: '☕' }),
+    B(start + 120, start + 170, 'Третья пара', 'pair', { emoji: '🎓' }),
+  ];
+
+  const EVENING_VIDEO = [
+    T(h(18, 45), h(19, 35), 'Создание и монтаж двух роликов: кино и orca', 'Смонтировать два ролика: кино и orca', { emoji: '🎬' }),
+    B(h(19, 35), h(19, 45), 'Отдых от экрана', 'rest', { emoji: '👀' }),
+    T(h(19, 45), h(19, 55), 'Проверить ролик «кино»: подпись, загрузка', 'Проверить ролик «кино»: подпись и загрузка', { emoji: '🔎' }),
+    T(h(19, 55), h(20, 5), 'Публикация «кино» в TikTok', 'ТТ видео — кино', { emoji: '🎞️', hard: true }),
+    B(h(20, 5), h(20, 35), 'Свободное время', 'rest', { emoji: '🎮' }),
+    T(h(20, 35), h(20, 50), 'Разбор с ИИ: что получилось, что мешает, следующий шаг', 'Разбор с ИИ: что получилось и что дальше', { emoji: '🧠' }),
+    T(h(20, 50), h(21), 'Проверить и подготовить ролик «orca»', 'Проверить и подготовить ролик «orca»', { emoji: '🔎' }),
+    T(h(21), h(21, 10), 'Публикация «orca» в TikTok', 'ТТ видео — orca', { emoji: '🐋', hard: true }),
+    B(h(21, 10), h(21, 45), 'Отдых, общение, свои дела', 'rest', { emoji: '💬' }),
+    T(h(21, 45), h(22), 'Собрать вещи, одежда, 3 главные задачи на завтра', 'Собрать вещи и записать 3 задачи на завтра', { emoji: '🎒' }),
+    B(h(22), h(22, 30), 'Гигиена и спокойное занятие без ленты', 'routine', { emoji: '🌙' }),
+    B(h(22, 30), h(24), 'Сон — 8 часов 30 минут', 'sleep', { emoji: '😴' }),
+  ];
+
+  /* EVENING_COMMON ссылается на EVENING_VIDEO — собираем лениво */
+  const eveningFor = (training) => [
+    training
+      ? T(h(16), h(16, 45), 'Тренировка', 'Тренировка', { emoji: '💪' })
+      : T(h(16), h(16, 45), 'Прогулка или восстановление', 'Прогулка и восстановление', { emoji: '🚶' }),
+    B(h(16, 45), h(17), 'Душ', 'routine', { emoji: '🚿' }),
+    T(h(17), h(17, 40), 'Готовка — по возможности сразу на два дня', 'Готовка', { emoji: '🍲' }),
+    B(h(17, 40), h(18), 'Ужин', 'meal', { emoji: '🍽️' }),
+    T(h(18), h(18, 45), 'Задания по учёбе (нет срочного — практика навыка)', 'Задания по учёбе', { emoji: '📚' }),
+    ...EVENING_VIDEO,
+  ];
+
+  const MONDAY = [
+    ...MORNING_WEEKDAY,
+    B(h(8), h(8, 30), 'Дорога на учёбу', 'road', { emoji: '🚌' }),
+    ...pairs(h(8, 30)),
+    B(h(11, 20), h(11, 50), 'Дорога домой', 'road', { emoji: '🚌' }),
+    B(h(11, 50), h(12, 10), 'Перекус и отдых', 'meal', { emoji: '🥪' }),
+    T(h(12, 10), h(12, 50), 'Английский', 'Английский', { emoji: '🇬🇧' }),
+    T(h(12, 50), h(13, 20), 'YouTube', 'YouTube', { emoji: '▶️' }),
+    B(h(13, 20), h(13, 50), 'Обед', 'meal', { emoji: '🍽️' }),
+    T(h(13, 50), h(14, 40), 'Поиск заработка: выбрать вариант и сделать шаг', 'Работа над заработком', { emoji: '💰' }),
+    T(h(14, 40), h(15, 10), 'OLX: объявления, сообщения, обмены', 'OLX: объявления и обмены', { emoji: '📦' }),
+    T(h(15, 10), h(15, 30), 'Одно сохранённое видео', 'Одно сохранённое видео', { emoji: '🍿' }),
+    B(h(15, 30), h(16), 'Свободный запас времени или отдых', 'rest', { emoji: '🛋️' }),
+    ...eveningFor(true),
+  ];
+
+  const WEDNESDAY = [
+    ...MORNING_WEEKDAY,
+    T(h(8), h(8, 40), 'Английский', 'Английский', { emoji: '🇬🇧' }),
+    T(h(8, 40), h(9, 10), 'YouTube', 'YouTube', { emoji: '▶️' }),
+    T(h(9, 10), h(9, 30), 'Одно сохранённое видео', 'Одно сохранённое видео', { emoji: '🍿' }),
+    T(h(9, 30), h(10), 'OLX', 'OLX: объявления и обмены', { emoji: '📦' }),
+    T(h(10), h(10, 40), 'Работа над заработком', 'Работа над заработком', { emoji: '💰' }),
+    B(h(10, 40), h(11), 'Перекус и сборы', 'meal', { emoji: '🥪' }),
+    B(h(11), h(11, 30), 'Дорога на учёбу', 'road', { emoji: '🚌' }),
+    ...pairs(h(11, 30)),
+    B(h(14, 20), h(14, 50), 'Дорога домой', 'road', { emoji: '🚌' }),
+    B(h(14, 50), h(15, 20), 'Обед', 'meal', { emoji: '🍽️' }),
+    B(h(15, 20), h(16), 'Отдых', 'rest', { emoji: '🛋️' }),
+    ...eveningFor(true),
+  ];
+
+  const TUE_THU_FRI = (training) => [
+    ...MORNING_WEEKDAY,
+    T(h(8), h(8, 40), 'Английский', 'Английский', { emoji: '🇬🇧' }),
+    T(h(8, 40), h(9, 10), 'YouTube', 'YouTube', { emoji: '▶️' }),
+    T(h(9, 10), h(9, 30), 'Одно сохранённое видео', 'Одно сохранённое видео', { emoji: '🍿' }),
+    T(h(9, 30), h(10), 'OLX', 'OLX: объявления и обмены', { emoji: '📦' }),
+    T(h(10), h(10, 50), 'Работа над заработком', 'Работа над заработком', { emoji: '💰' }),
+    B(h(10, 50), h(11), 'Перерыв', 'break', { emoji: '☕' }),
+    T(h(11), h(11, 30), 'Подготовка роликов для TikTok', 'Подготовка роликов для TikTok', { emoji: '🎬' }),
+    B(h(11, 30), h(12), 'Ранний обед и сборы', 'meal', { emoji: '🍽️' }),
+    B(h(12), h(12, 30), 'Дорога на учёбу', 'road', { emoji: '🚌' }),
+    ...pairs(h(12, 30)),
+    B(h(15, 20), h(15, 50), 'Дорога домой', 'road', { emoji: '🚌' }),
+    B(h(15, 50), h(16), 'Перекус, переодеться', 'meal', { emoji: '🥪' }),
+    ...eveningFor(training),
+  ];
+
+  const WEEKEND_DAY = (sat) => [
+    B(h(7, 30), h(8, 30), 'Подъём, завтрак, спокойное утро', 'routine', { emoji: '☀️' }),
+    T(h(8, 30), h(9, 10), 'Английский', 'Английский', { emoji: '🇬🇧' }),
+    T(h(9, 10), h(9, 30), 'Одно сохранённое видео', 'Одно сохранённое видео', { emoji: '🍿' }),
+    sat
+      ? T(h(9, 30), h(10, 30), 'Работа над заработком', 'Работа над заработком', { emoji: '💰' })
+      : T(h(9, 30), h(10, 30), 'Закрыть учебные задания', 'Задания по учёбе', { emoji: '📚' }),
+    B(h(10, 30), h(11), 'Отдых', 'rest', { emoji: '🛋️' }),
+    sat
+      ? T(h(11), h(12), 'OLX: фото вещей, объявления, обмены', 'OLX: объявления и обмены', { emoji: '📦' })
+      : T(h(11), h(12), 'Бытовые дела', 'Бытовые дела', { emoji: '🧹' }),
+    T(h(12), h(13), 'Готовка и обед', 'Готовка', { emoji: '🍲' }),
+    T(h(13), h(14, 30), 'Заготовить ролики на несколько дней', 'Смонтировать два ролика: кино и orca', { emoji: '🎬' }),
+    B(h(14, 30), h(17), 'Прогулка, друзья, хобби, свободное время', 'rest', { emoji: '🌳' }),
+    B(h(17), h(18), 'Приготовить ужин и поесть', 'meal', { emoji: '🍽️' }),
+    ...(sat
+      ? [T(h(18), h(19, 35), 'YouTube и отдых', 'YouTube', { emoji: '▶️' })]
+      : [T(h(18), h(18, 40), 'YouTube', 'YouTube', { emoji: '▶️' }),
+         T(h(18, 40), h(19), 'План на неделю — 20 минут', 'План на неделю', { emoji: '🗓️' }),
+         B(h(19), h(19, 35), 'Отдых', 'rest', { emoji: '🛋️' })]),
+    B(h(19, 35), h(19, 45), 'Отдых от экрана', 'rest', { emoji: '👀' }),
+    ...EVENING_VIDEO.slice(2),
+  ];
+
+  const SCRIPT = {
+    [MON]: MONDAY,
+    [TUE]: TUE_THU_FRI(false),
+    [WED]: WEDNESDAY,
+    [THU]: TUE_THU_FRI(false),
+    [FRI]: TUE_THU_FRI(true),
+    [SAT]: WEEKEND_DAY(true),
+    [SUN]: WEEKEND_DAY(false),
+  };
+
+  const DAY_NAMES = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+  const DAY_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+
+  function scriptFor(dow) {
+    return (SCRIPT[dow] || []).map((b, i) => Object.assign({ id: 'w' + dow + '-' + i, start: b.from, end: b.to }, b));
+  }
+  const scriptToday = () => scriptFor(new Date().getDay());
+
   /* ---------- режим дня под этот график ---------- */
   const PROFILE = {
     wakeTarget: h(7), sleepTarget: h(22, 30),
@@ -163,6 +304,14 @@ const Week = (() => {
     meals: { breakfast: h(7, 30), lunch: null, dinner: h(17, 40) },
     windDown: 30,          // 22:00–22:30 — сбор вещей и спокойное занятие
   };
+
+  /* версия графика: поменялся график — у всех, кто его уже ставил,
+     он обновится сам при следующем входе, без кнопок */
+  const VERSION = 3;
+
+  /* старые названия, которые график заменил: их хвосты — дубли */
+  const SUPERSEDED = new Set();
+  PLAN.forEach((x) => (x.replaces || []).forEach((r) => { if (r !== x.title) SUPERSEDED.add(r); }));
 
   /* установить график: дела в шаблон, режим в профиль */
   function install() {
@@ -198,15 +347,23 @@ const Week = (() => {
         if (dup) { DayTpl.update(dup.id, { on: false }); disabled += 1; }
       });
     });
+    /* незакрытые задачи под старыми названиями убираем: иначе рядом с
+       «Работой над заработком» висело бы ещё и «Искать и думать над заработком» */
+    const before = State.s.tasks.length;
+    State.s.tasks = State.s.tasks.filter((x) => x.done || !SUPERSEDED.has(x.title));
+    const cleaned = before - State.s.tasks.length;
+
     const p = Track.profile();
     Object.assign(p, PROFILE);
     p.set = true;
     p.weekStudy = true;
+    p.weekVersion = VERSION;
     State.commit();
-    return { added, updated, disabled, total: added + updated };
+    return { added, updated, disabled, cleaned, total: added + updated };
   }
 
   const installed = () => !!Track.profile().weekStudy;
+  const outdated = () => installed() && (Track.profile().weekVersion || 0) < VERSION;
 
   /* сколько учебных часов сегодня */
   function studyToday() {
@@ -215,5 +372,5 @@ const Week = (() => {
     return { from: b[0].start, to: b[b.length - 1].end, pairs: PAIRS };
   }
 
-  return { PLAN, PROFILE, STUDY, PAIRS, PAIR, GAP, LUNCH, busyFor, busyToday, lunchFor, lunchToday, install, installed, studyToday, WEEKDAYS, WEEKEND };
+  return { VERSION, SUPERSEDED, outdated, SCRIPT, DAY_NAMES, DAY_SHORT, scriptFor, scriptToday, PLAN, PROFILE, STUDY, PAIRS, PAIR, GAP, LUNCH, busyFor, busyToday, lunchFor, lunchToday, install, installed, studyToday, WEEKDAYS, WEEKEND };
 })();

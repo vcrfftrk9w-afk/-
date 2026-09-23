@@ -144,6 +144,7 @@ const Planner = (() => {
 
   /* ---------- каркас дня: сон, еда, рутины ---------- */
   function fixedBlocks() {
+    if (inScript()) return scriptSkeleton().filter((b) => b.kind !== 'task');
     const p = Track.profile();
     const d = Track.today();
     const wake = wakeMin();
@@ -293,9 +294,219 @@ const Planner = (() => {
     return { score, energy: e, pros, cons, kind };
   }
 
+  /* =========================================================
+     ПО НЕДЕЛЬНОМУ ГРАФИКУ
+     Если график загружен, день строится ровно по нему: каждый блок
+     на своей минуте, как ты его расписал. Оптимизатор здесь только
+     находит место делам, которых в графике нет, — и только внутри
+     свободного времени, не забирая его целиком.
+     ========================================================= */
+  const inScript = () => typeof Week !== 'undefined' && Week.installed() && Week.scriptToday().length > 0;
+
+  const SCRIPT_KIND = { meal: 'meal', road: 'busy', pair: 'busy', break: 'busy', rest: 'rest', sleep: 'sleep', routine: 'routine', task: 'task' };
+  const SCRIPT_NOTE = {
+    road: 'Дорога по графику. Выйди вовремя — опоздание съест первую пару.',
+    pair: 'Пара по графику — сюда ничего не ставлю.',
+    break: 'Перерыв между парами: вода, пройтись, не лента.',
+    rest: 'Отдых по графику — он тоже часть плана. Без него вечер развалится.',
+    sleep: '8,5 часа сна — завтрашний пик энергии делается здесь.',
+    routine: 'Часть твоего режима.',
+    meal: 'Еда по графику.',
+  };
+  const CHECKABLE = { task: 1, meal: 1, wake: 1, pill: 1, evening: 1 };
+
+  /* та самая задача на сегодня: открытая или закрытая сегодня */
+  function taskFor(title) {
+    const today = State.todayKey();
+    const open = State.s.tasks.find((t) => t.title === title && !t.done);
+    if (open) return open;
+    return State.s.tasks.find((t) => t.title === title && t.done
+      && State.dateKey(new Date(t.doneAt || t.createdAt)) === today) || null;
+  }
+
+  /* каркас графика: без оценок — его зовёт и fixedBlocks, и evaluate */
+  function scriptSkeleton() {
+    return Week.scriptToday().map((x, i) => {
+      let kind = SCRIPT_KIND[x.kind] || 'routine';
+      if (i === 0 && x.kind === 'routine') kind = 'wake';
+      else if (x.kind === 'routine' && /^Гигиена/.test(x.title)) kind = 'evening';
+      return {
+        id: 's-' + x.id, kind, sub: x.kind, emoji: x.emoji || '•', title: x.title,
+        start: x.start, end: x.end, fixed: kind !== 'task', script: true,
+        note: SCRIPT_NOTE[x.kind] || '', task: x.task || null, hard: !!x.hard,
+      };
+    });
+  }
+
+  function buildFromScript(o, prev) {
+    const today = State.todayKey();
+    const dayName = Week.DAY_NAMES[new Date().getDay()].toLowerCase();
+    const skipped = prev ? { ...(prev.skipped || {}) } : {};
+    const moved = prev ? { ...(prev.moved || {}) } : {};
+    const from = o.from === undefined ? null : o.from;
+
+    let blocks = scriptSkeleton().map((b) => {
+      if (b.kind !== 'task') return b;
+      const t = taskFor(b.task);
+      if (!t) {
+        return { ...b, kind: 'rest', sub: 'rest', fixed: true, emoji: '🛋️', title: 'Свободно',
+          note: `По графику здесь «${b.task}», но это дело выключено в шаблоне или удалено.` };
+      }
+      const ev = evaluate(t, b.start, b.end);
+      const pros = [`Так стоит в твоём графике на ${dayName === 'воскресенье' ? 'воскресенье' : dayName}`];
+      if (b.hard) pros.unshift('Время публикации — не двигается');
+      return {
+        ...b, fixed: false, taskId: t.id, src: 'task', taskTitle: t.title, pinned: b.hard,
+        score: Math.round(ev.score), energy: ev.energy, pros: pros.concat(ev.pros), cons: ev.cons,
+        taskKind: ev.kind, duration: b.end - b.start, chill: !!t.chill,
+      };
+    });
+
+    /* «догнать план»: упущенное из графика переезжает в свободное время впереди */
+    if (from !== null) {
+      blocks.forEach((b) => {
+        if (b.kind === 'task' && b.end <= from && !skipped[b.id] && !isDone(b)) moved[b.id] = true;
+      });
+    }
+
+    const linked = new Set(blocks.filter((b) => b.taskId).map((b) => b.taskId));
+    const extras = [];
+    // переезжающие дела — первыми: их время уже было обещано
+    blocks.forEach((b) => {
+      if (!moved[b.id] || b.kind !== 'task' || isDone(b)) return;
+      const t = State.s.tasks.find((x) => x.id === b.taskId);
+      if (t) extras.push({ ...t, _src: 'task', _movedFrom: b, estimate: Math.min(taskDuration(t), b.end - b.start) });
+    });
+    // дела вне графика
+    State.s.tasks.filter((t) => !t.done && !linked.has(t.id) && !Week.SUPERSEDED.has(t.title))
+      .forEach((t) => extras.push({ ...t, _src: 'task' }));
+    State.s.habits.filter((h) => !h.history[today]).forEach((h) => {
+      extras.push({
+        id: 'h-' + h.id, _src: 'habit', habitId: h.id, title: h.name, emoji: h.emoji || '🔁',
+        category: h.skill === 'health' ? 'health' : (h.skill === 'mind' ? 'study' : 'other'),
+        priority: 'mid', estimate: 15, due: today, urgent: false, subtasks: [],
+      });
+    });
+    if (typeof Path !== 'undefined') {
+      const n = Path.nextStep();
+      const doneToday = Path.ALL.some((x) => {
+        const ts = State.s.path.done[x.id];
+        return ts && State.dateKey(new Date(ts)) === today;
+      });
+      if (n && !doneToday) {
+        extras.push({
+          id: 'path-' + n.step.id, _src: 'path', pathId: n.step.id, title: `Шаг пути: ${n.step.t}`,
+          emoji: n.stage.emoji, category: 'money', priority: 'high', estimate: 30,
+          due: today, urgent: false, subtasks: [],
+        });
+      }
+    }
+    extras.sort((a, b) => (b._movedFrom ? 1 : 0) - (a._movedFrom ? 1 : 0)
+      || urgency(b) - urgency(a) || (PRI_W[b.priority] || 0) - (PRI_W[a.priority] || 0));
+
+    /* Запас свободного времени. «Свободный запас» отдаётся целиком,
+       обычный отдых — не больше половины: отдых тоже работает на план. */
+    const nowMin = Track.nowMin();
+    const lo = from !== null ? from : nowMin;
+    const slots = [];
+    blocks.forEach((b, i) => {
+      if (b.kind !== 'rest' || b.end - b.start < 20 || b.end <= lo) return;
+      const s0 = Math.max(b.start, Math.ceil(lo / 5) * 5);
+      if (b.end - s0 < 15) return;
+      const whole = /запас/i.test(b.title) || b.title === 'Свободно';
+      const cap = whole ? b.end - s0 : Math.floor((b.end - s0) / 2 / 5) * 5;
+      if (cap >= 10) slots.push({ blockId: b.id, s: s0, e: b.end, cap });
+    });
+
+    const placed = [];
+    const unplaced = [];
+    extras.forEach((task) => {
+      const full = taskDuration(task);
+      /* жёсткое время у дела вне графика: ставим, как ты сказал, даже поверх */
+      if (task.at !== null && task.at !== undefined && !task._movedFrom) {
+        const start = task.at, end = start + full;
+        const over = blocks.find((b) => b.kind !== 'rest' && b.start < end && b.end > start);
+        const ev = evaluate(task, start, end);
+        ev.pros.unshift('Ты сам назначил это время — оно не двигается');
+        if (over) ev.cons.unshift(`Накладывается на «${over.title}» из графика`);
+        placed.push(extraBlock(task, start, end, ev, { pinned: true }));
+        return;
+      }
+      let best = null;
+      slots.forEach((sl, si) => {
+        const room = Math.min(sl.cap, sl.e - sl.s);
+        if (room < 10) return;
+        const dur = Math.min(full, room);
+        if (dur < Math.min(full, 15)) return;
+        const lower = task._movedFrom ? Math.max(sl.s, task._movedFrom.end) : sl.s;
+        for (let start = lower; start + dur <= sl.e; start += 5) {
+          const ev = evaluate(task, start, start + dur);
+          const score = ev.score - (start - lo) / 60;     // раньше — лучше
+          if (!best || score > best.sc) best = { ...ev, sc: score, start, dur, si };
+          break;                                           // в слоте — с его начала
+        }
+      });
+      if (!best) {
+        unplaced.push(task.title);
+        // упущенное, которому сегодня места нет, честно отпускаем на завтра:
+        // в графике оно завтра и так стоит, а висеть «пропущенным» весь вечер — только давить
+        if (task._movedFrom) skipped[task._movedFrom.id] = 'tomorrow';
+        return;
+      }
+      const sl = slots[best.si];
+      const extra = { pros: best.pros.slice(), cons: best.cons.slice() };
+      if (task._movedFrom) extra.pros.unshift(`Переехало с ${hhmm(task._movedFrom.start)} — там не успел`);
+      extra.pros.unshift('Свободное время по графику — сюда можно без ущерба');
+      if (best.dur < full) extra.cons.unshift(`Влезает ${best.dur} мин из ${full} — остальное завтра или вместо отдыха`);
+      placed.push(extraBlock(task, best.start, best.start + best.dur, { ...best, pros: extra.pros, cons: extra.cons }, { moved: !!task._movedFrom }));
+      sl.s = best.start + best.dur;
+      sl.cap -= best.dur;
+      if (task._movedFrom) skipped[task._movedFrom.id] = 'moved';
+    });
+
+    /* отдых, в который встало дело, режем — чтобы блоки не накладывались */
+    placed.filter((x) => !x.pinned).forEach((x) => {
+      const i = blocks.findIndex((b) => b.kind === 'rest' && b.start <= x.start && b.end >= x.end);
+      if (i === -1) return;
+      const r = blocks[i];
+      const parts = [];
+      if (x.start - r.start >= 5) parts.push({ ...r, id: r.id + 'a' + x.start, end: x.start });
+      if (r.end - x.end >= 5) parts.push({ ...r, id: r.id + 'b' + x.end, start: x.end });
+      blocks.splice(i, 1, ...parts);
+    });
+
+    blocks = blocks.concat(placed).sort((a, b) => a.start - b.start || (a.kind === 'task' ? -1 : 1));
+    State.s.plan = {
+      date: today, blocks, generatedAt: Date.now(), script: true,
+      dow: new Date().getDay(), skipped, moved, unplaced,
+    };
+    State.s.totals.plansMade = (State.s.totals.plansMade || 0) + 1;
+    State.commit();
+    return blocks;
+  }
+
+  const hhmm = (m) => `${String(Math.floor((m % 1440) / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+  function extraBlock(task, start, end, ev, flags) {
+    return {
+      id: 'p-' + task.id, kind: 'task', src: task._src || 'task', extra: true,
+      pinned: !!(flags && flags.pinned), moved: !!(flags && flags.moved),
+      taskId: task._src === 'task' ? task.id : null,
+      habitId: task.habitId || null, pathId: task.pathId || null,
+      emoji: task.emoji || (Data.categoryById(task.category) || {}).emoji || '✅',
+      title: task.title, start, end,
+      score: Math.round(ev.score), energy: ev.energy,
+      pros: ev.pros, cons: ev.cons, taskKind: ev.kind, duration: end - start, chill: !!task.chill,
+    };
+  }
+
   /* ---------- сборка плана ---------- */
   function build(opts) {
     const o = opts || {};
+    if (inScript()) {
+      const prev = plan();
+      return buildFromScript(o, prev && prev.script && prev.dow === new Date().getDay() ? prev : null);
+    }
     const p = Track.profile();
     const fixed = fixedBlocks();
     const slots = freeSlots(fixed, o.from).map(([s, e]) => ({ s, e }));
@@ -488,7 +699,7 @@ const Planner = (() => {
       const pill = Track.profile().pills.find((x) => x.name === b.title);
       return !!(pill && Track.today().pills[pill.id]);
     }
-    if (b.kind === 'evening') return Track.today().sleepAt !== null;
+    if (b.kind === 'evening' || b.kind === 'sleep') return Track.today().sleepAt !== null;
     return false;
   }
 
@@ -515,7 +726,9 @@ const Planner = (() => {
 
   /* сколько по плану сделано */
   function progress() {
-    const bs = blocks();
+    // пары, дорога и отдых отметить нельзя — в счёт идёт только то, что делаешь сам
+    const skipped = (plan() && plan().skipped) || {};
+    const bs = blocks().filter((b) => CHECKABLE[b.kind] && skipped[b.id] !== 'moved');
     if (!bs.length) return { done: 0, total: 0, pct: 0 };
     const done = bs.filter(isDone).length;
     return { done, total: bs.length, pct: Math.round((done / bs.length) * 100) };
@@ -523,7 +736,7 @@ const Planner = (() => {
 
   return {
     energyAt, energyOver, build, plan, blocks, currentBlock, nextBlock,
-    isDone, skip, missed, catchUp, progress, evaluate, carriedOver, unplaced,
+    isDone, skip, missed, catchUp, progress, evaluate, carriedOver, unplaced, inScript, scriptSkeleton, CHECKABLE,
     taskDuration, taskKind, KIND_LABEL, NEED, fixedBlocks, freeSlots, wakeMin, sleepMin,
   };
 })();

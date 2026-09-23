@@ -1951,3 +1951,174 @@ button.wk-body { cursor: pointer; }
   .wk-chip b { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { .wk-chip, .wk-check, .wk-live span { transition: none; } }
+
+/* =========================================================
+   РЕЖИМЫ: СДВГ и обычный — разные главные экраны
+   ========================================================= */
+body:not([data-mode="adhd"]) [data-card="now"],
+body:not([data-mode="adhd"]) [data-card="more"],
+body:not([data-mode="adhd"]) .mini-clock { display: none !important; }
+body[data-mode="adhd"] [data-card="week"] { display: none !important; }
+/* СДВГ: на главной только «Сейчас» и главное, остальное — по кнопке */
+body[data-mode="adhd"]:not(.dash-all) .grid-dash > .card:not([data-card="now"]):not([data-card="main"]) { display: none; }
+body[data-mode="adhd"] .dash-toolbar { display: none; }
+.dash-more { display: block; }
+
+/* обычный режим — тише и ровнее */
+body:not([data-mode="adhd"]) .bg-aurora span { opacity: 0.18; }
+body:not([data-mode="adhd"]) .tilt { transform: none !important; }
+
+/* ---------- экран «Сейчас» ---------- */
+.card-now {
+  padding: 20px 20px 18px;
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 60%),
+    var(--surface);
+  box-shadow: 0 18px 50px -24px var(--accent);
+}
+.an-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.an-tag {
+  display: inline-block; padding: 5px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 800; letter-spacing: .05em;
+  background: var(--surface-2); color: var(--text-muted); max-width: 100%; overflow-wrap: anywhere;
+}
+.an-tag.live { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); }
+.an-tag.late { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--text); }
+.an-tag.ok { background: color-mix(in srgb, var(--success) 22%, transparent); color: var(--text); }
+.an-combo {
+  padding: 5px 11px; border-radius: 999px; font-weight: 900; font-size: 13px; color: #1b1206;
+  background: linear-gradient(135deg, #fbbf24, #f97316); box-shadow: 0 6px 18px -8px #f97316;
+  animation: an-pulse 1.6s ease-in-out infinite;
+}
+@keyframes an-pulse { 50% { transform: scale(1.07); } }
+.an-main { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; }
+/* тающий круг, как Time Timer: оставшееся время видно без цифр */
+.an-timer {
+  --p: 1;
+  position: relative; width: 132px; height: 132px; border-radius: 50%;
+  background: conic-gradient(var(--danger) calc(var(--p) * 1turn), color-mix(in srgb, var(--text) 8%, transparent) 0);
+  display: grid; place-items: center; align-content: center; text-align: center;
+  box-shadow: inset 0 0 0 6px color-mix(in srgb, var(--surface-solid) 70%, transparent);
+  transition: background .9s linear;
+}
+.an-timer::before {
+  content: ''; position: absolute; inset: 14px; border-radius: 50%;
+  background: var(--surface-solid); box-shadow: 0 4px 18px -6px rgba(0,0,0,.5);
+}
+.an-timer > * { position: relative; }
+.an-timer b { font-size: 30px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+.an-timer small { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.an-timer.calm { background: conic-gradient(var(--accent2, var(--accent)) calc(var(--p) * 1turn), color-mix(in srgb, var(--text) 8%, transparent) 0); }
+.an-timer.late { background: conic-gradient(var(--warn) 1turn, transparent 0); }
+.an-timer.hurry b { color: var(--danger); animation: an-pulse 1s ease-in-out infinite; }
+.an-what { min-width: 0; }
+.an-what.solo { margin-bottom: 14px; }
+.an-kicker { display: block; font-size: 12px; font-weight: 700; color: var(--accent2, var(--accent)); margin-bottom: 2px; }
+.an-emoji { font-size: 34px; line-height: 1; margin-bottom: 4px; }
+.an-emoji.big { font-size: 54px; }
+.an-what h2 { margin: 0 0 6px; font-size: clamp(22px, 5.4vw, 30px); line-height: 1.12; overflow-wrap: anywhere; }
+.an-what p { margin: 0; color: var(--text-muted); font-size: 13.5px; overflow-wrap: anywhere; }
+.an-free { text-align: center; padding: 6px 0 10px; }
+.an-free h2 { margin: 6px 0; }
+.an-challenge {
+  margin: 14px 0 0; padding: 9px 12px; border-radius: 12px; font-weight: 800; font-size: 13.5px;
+  background: color-mix(in srgb, var(--warn) 16%, transparent); border: 1px dashed color-mix(in srgb, var(--warn) 60%, transparent);
+}
+.an-actions { display: grid; grid-template-columns: 1.6fr 1fr; gap: 10px; margin-top: 14px; }
+.an-start { font-size: 1.15rem !important; font-weight: 900; letter-spacing: .04em; padding-block: 17px !important; border-radius: 16px; }
+.an-done {
+  font-weight: 800; border-radius: 16px; padding-block: 17px !important;
+  background: color-mix(in srgb, var(--success) 20%, transparent); color: var(--text);
+  border: 1.5px solid color-mix(in srgb, var(--success) 60%, transparent);
+}
+.an-sub { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+.an-sub .linkbtn { font-weight: 700; }
+.an-next { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-muted); overflow-wrap: anywhere; }
+@media (max-width: 420px) {
+  .an-main { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 12px; }
+  .an-timer { width: 150px; height: 150px; }
+  .an-timer b { font-size: 34px; }
+}
+
+/* ---------- идеальный день: градиент цели ---------- */
+.perfect { margin-top: 14px; }
+.perfect-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-bottom: 6px; }
+.perfect-head span { font-weight: 800; color: var(--text-muted); }
+.perfect-bar { height: 10px; border-radius: 999px; background: color-mix(in srgb, var(--text) 9%, transparent); overflow: hidden; }
+.perfect-bar span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent2, var(--accent))); transition: width .8s cubic-bezier(.2,.8,.2,1); }
+.perfect.close .perfect-bar span { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+.perfect.close .perfect-head b { color: color-mix(in srgb, var(--warn) 80%, var(--text)); }
+.perfect.compact .perfect-head { font-size: 12.5px; }
+
+/* ---------- часы в мини-плеере ---------- */
+.mini-clock {
+  flex: 0 1 auto; min-width: 58px; max-width: 124px;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  padding: 3px 10px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text); cursor: pointer; font: inherit;
+}
+.mini-clock b { font-size: 14px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.mini-clock small { font-size: 10px; color: var(--text-muted); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-clock.wait { background: var(--surface-2); border-color: var(--border); }
+.mini-clock.hurry { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 18%, transparent); }
+.mini-clock.hurry b { color: var(--danger); }
+@media (max-width: 420px) { .mini-clock { max-width: 92px; padding: 3px 8px; } }
+
+/* ---------- обычный режим: неделя ---------- */
+.wo-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.wo-col {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px;
+  border-radius: 12px; border: 1px solid transparent; background: none; color: var(--text); font: inherit; cursor: pointer;
+}
+.wo-col:hover { background: var(--surface-2); }
+.wo-col.today { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.wo-bar { position: relative; width: 16px; height: 64px; border-radius: 8px; background: color-mix(in srgb, var(--text) 8%, transparent); overflow: hidden; }
+.wo-bar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: inherit; transition: height .6s ease; }
+.wo-bar i.ok { background: var(--success); }
+.wo-bar i.mid { background: var(--warn); }
+.wo-bar i.low { background: color-mix(in srgb, var(--danger) 70%, transparent); }
+.wo-col b { font-size: 12.5px; }
+.wo-col small { font-size: 10.5px; color: var(--text-muted); }
+.wo-col.future { opacity: .7; }
+.wo-sum { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; font-size: 12.5px; color: var(--text-muted); }
+.wo-sum b { color: var(--text); }
+
+/* ---------- «не могу начать» ---------- */
+.stuck { text-align: center; }
+.stuck-move {
+  margin: 12px 0; padding: 16px; border-radius: 16px; font-size: 17px; font-weight: 800;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.wk-more { margin-top: 10px; }
+@media (prefers-reduced-motion: reduce) {
+  .an-combo, .an-timer.hurry b { animation: none; }
+  .an-timer, .perfect-bar span, .wo-bar i { transition: none; }
+}
+
+/* ---------- серии и «чистый лист» ---------- */
+.an-chain {
+  margin-top: 12px; padding: 8px 12px; border-radius: 12px; font-size: 13px; font-weight: 700;
+  background: color-mix(in srgb, #f97316 14%, transparent); border: 1px solid color-mix(in srgb, #f97316 45%, transparent);
+  overflow-wrap: anywhere;
+}
+.chains { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chain-chip {
+  padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; max-width: 100%;
+  background: color-mix(in srgb, #f97316 14%, transparent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.wk-chain { font-size: 11px; font-weight: 800; color: #f97316; white-space: nowrap; }
+.fresh-banner {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 18px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--success) 18%, transparent), color-mix(in srgb, var(--accent2, var(--accent)) 14%, transparent));
+  border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+  animation: fresh-in .5s cubic-bezier(.2,.8,.2,1);
+}
+.fresh-banner.hidden { display: none; }
+.fresh-emoji { font-size: 30px; }
+.fresh-text { flex: 1; min-width: 0; }
+.fresh-text b { display: block; font-size: 15px; }
+.fresh-text small { display: block; color: var(--text-muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.fresh-x { background: none; border: 0; color: var(--text-muted); font-size: 16px; padding: 8px; cursor: pointer; border-radius: 10px; }
+.fresh-x:hover { background: var(--surface-2); }
+@keyframes fresh-in { from { opacity: 0; transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) { .fresh-banner { animation: none; } }

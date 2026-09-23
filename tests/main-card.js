@@ -40,7 +40,7 @@ const { chromium } = require('playwright');
   console.log(`  выполнено задач: ${before} → ${after.done} ${after.done>before?'✓':'✗'} | счётчик: ${after.badge}`);
 
   await p.evaluate(()=>App.go('dashboard')); await p.waitForTimeout(600); await hide();
-  await p.locator('[data-card="main"]').screenshot({path:'/tmp/claude-0/-home-user--/0ce65798-8ce0-55df-9555-758bc4ae4080/scratchpad/v17_main.png'});
+  await p.locator('[data-card="main"]').screenshot({path:require('os').tmpdir()+'/v17_main.png'});
 
   console.log('\n=== НИЧЕГО НЕ УБРАНО ===');
   const all = await p.evaluate(()=>[...document.querySelectorAll('#tab-dashboard [data-card]')].map(c=>c.dataset.card));
@@ -50,7 +50,7 @@ const { chromium } = require('playwright');
   await p.setViewportSize({width:390,height:844}); await p.waitForTimeout(600); await hide();
   const ov = await p.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
   console.log('  горизонтальный скролл:', ov, ov===0?'✓':'✗');
-  await p.screenshot({path:'/tmp/claude-0/-home-user--/0ce65798-8ce0-55df-9555-758bc4ae4080/scratchpad/v17_main_mobile.png'});
+  await p.screenshot({path:require('os').tmpdir()+'/v17_main_mobile.png'});
   console.log('\nОШИБКИ:', errors.length?JSON.stringify(errors.slice(0,3)):'нет');
   await b.close();
 })();

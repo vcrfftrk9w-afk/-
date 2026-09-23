@@ -22,7 +22,7 @@ const { chromium } = require('playwright');
   await p.evaluate(()=>App.go('day')); await p.waitForTimeout(600); await hide();
   const card = await p.$('.day-unplaced');
   check('карточка показана пользователю', !!card, card?(await card.textContent()).replace(/\s+/g,' ').trim().slice(0,90):'');
-  if (card) await p.locator('.day-unplaced').screenshot({path:'/tmp/claude-0/-home-user--/0ce65798-8ce0-55df-9555-758bc4ae4080/scratchpad/v15_unplaced.png'});
+  if (card) await p.locator('.day-unplaced').screenshot({path:require('os').tmpdir()+'/v15_unplaced.png'});
 
   console.log('\n=== ДЛИННЫЕ СТРОКИ И ПЕРЕПОЛНЕНИЕ ===');
   r = await p.evaluate(()=>{

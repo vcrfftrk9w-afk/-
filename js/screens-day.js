@@ -276,8 +276,10 @@ Screens.day = (() => {
         <div class="tl-track">
           ${now >= from && now <= to ? `<i class="tl-now" style="left:${((now - from) / span) * 100}%"></i>` : ''}
           ${blocks.map((b) => {
-            const l = ((b.start - from) / span) * 100;
-            const w = Math.max(1.4, ((b.end - b.start) / span) * 100);
+            // блок сна до полуночи длиннее шкалы — режем по её краям
+            const s0 = Math.max(b.start, from), e0 = Math.min(b.end, to);
+            const l = ((s0 - from) / span) * 100;
+            const w = Math.min(100 - l, Math.max(1.4, ((e0 - s0) / span) * 100));
             const done = Planner.isDone(b);
             const past = b.end < now;
             const cls = skipped[b.id] ? 'skip' : (done ? 'done' : (past ? 'miss' : ''));
@@ -330,6 +332,18 @@ Screens.day = (() => {
     const tasks = rows.filter((b) => b.kind === 'task');
     const doneN = isToday ? tasks.filter((b) => Planner.isDone(b)).length : 0;
 
+    /* СДВГ: весь день из 35 строк — это стена. Показываем окно вокруг
+       «сейчас»: одна строка назад и пять вперёд, остальное — по кнопке. */
+    let shown = rows;
+    let hiddenN = 0;
+    const adhd = typeof Modes !== 'undefined' && Modes.isADHD();
+    if (adhd && isToday && !Modes.dayExpanded()) {
+      let i = rows.findIndex((b) => b.end > now);
+      if (i === -1) i = rows.length - 1;
+      shown = rows.slice(Math.max(0, i - 1), i + 5);
+      hiddenN = rows.length - shown.length;
+    }
+
     const chip = (d) => `<button class="wk-chip ${d === dow ? 'sel' : ''} ${d === todayDow ? 'today' : ''}" data-wkday="${d}" aria-pressed="${d === dow}">
         <b>${Week.DAY_SHORT[d]}</b>${d === todayDow ? '<i>сегодня</i>' : ''}</button>`;
 
@@ -343,7 +357,7 @@ Screens.day = (() => {
         <p class="wk-sum">${daySummary(dow)}</p>
         ${isToday ? '' : '<p class="muted small">Так будет в этот день. Всё поставится само — утром ничего нажимать не нужно.</p>'}
         <ol class="wk-list">
-          ${rows.map((b) => {
+          ${shown.map((b) => {
             const sub = b.sub || b.kind;
             const isTask = b.kind === 'task';
             const done = isToday && (isTask || Planner.CHECKABLE[b.kind]) && Planner.isDone(b);
@@ -352,6 +366,7 @@ Screens.day = (() => {
             const moved = skipped[b.id] === 'moved' || skipped[b.id] === 'tomorrow';
             const miss = isToday && isTask && past && !done && !skipped[b.id];
             const note = isTask ? (b.extra ? (b.moved ? 'перенесено из пропущенного' : 'дело вне графика — в свободное время') : planNote(b.task || b.taskTitle)) : '';
+            const chainN = isTask ? State.chain(b.taskTitle || b.task || b.title) : 0;
             const cls = ['wk-row', 'k-' + sub, isTask ? 'is-task' : '', done ? 'done' : '', live ? 'live' : '', past && !live ? 'past' : '', miss ? 'miss' : '', moved ? 'moved' : '', b.hard ? 'hard' : ''].filter(Boolean).join(' ');
             const pct = live ? Math.round(((now - b.start) / (b.end - b.start)) * 100) : 0;
             return `
@@ -359,7 +374,7 @@ Screens.day = (() => {
                 <span class="wk-time">${Track.hhmm(b.start)}<i>${Track.hhmm(b.end % 1440)}</i></span>
                 <span class="wk-emoji">${b.emoji || '•'}</span>
                 <${isToday && isTask ? `button class="wk-body" data-block="${b.id}"` : 'span class="wk-body"'}>
-                  <b>${UI.esc(b.title)}</b>
+                  <b>${UI.esc(b.title)}${chainN >= 2 ? ` <span class="wk-chain" title="${chainN} дней подряд">🔥${chainN}</span>` : ''}</b>
                   <small>${b.end - b.start} мин${!isTask && SUB_TAG[sub] ? ' · ' + SUB_TAG[sub] : ''}${b.hard ? ' · ⏰ ровно в это время' : ''}${moved ? (skipped[b.id] === 'tomorrow' ? ' · отпущено на завтра' : ' · перенесено дальше') : ''}${note ? ' · ' + UI.esc(note) : ''}</small>
                   ${live ? `<span class="wk-live"><span style="width:${pct}%"></span></span><small class="wk-left">идёт сейчас · осталось ${b.end - now} мин</small>` : ''}
                 </${isToday && isTask ? 'button' : 'span'}>
@@ -367,7 +382,17 @@ Screens.day = (() => {
               </li>`;
           }).join('')}
         </ol>
+        ${adhd && isToday && (hiddenN || Modes.dayExpanded())
+          ? `<button class="btn btn-ghost btn-block wk-more" id="wk-more">${Modes.dayExpanded() ? '▲ Только ближайшее' : `▼ Весь день · ещё ${hiddenN}`}</button>` : ''}
       </div>`;
+  }
+
+  /* открыть в графике конкретный день недели */
+  function showDay(dow) {
+    weekDow = dow === new Date().getDay() ? null : dow;
+    render();
+    const card = $('#day-week');
+    if (card) card.scrollIntoView({ block: 'start', behavior: State.s.reduceMotion ? 'auto' : 'smooth' });
   }
 
   /* отметить дело из графика сделанным */
@@ -456,8 +481,7 @@ Screens.day = (() => {
     if (b.chill) { Chill.start(b.end - b.start, b.title, b.taskId); return; }
     App.go('adhd');
     setTimeout(() => {
-      Screens.focus.setTask(b.taskId);
-      Screens.focus.quickStart(Math.min(90, b.end - b.start), b.title);
+      Screens.focus.quickStart(Math.min(90, b.end - b.start), b.title, b.taskId);
     }, 250);
   }
 
@@ -943,6 +967,12 @@ Screens.day = (() => {
         if (card) { card.outerHTML = weekHTML(); UI.initTilt(); }
         return;
       }
+      if (g('#wk-more')) {
+        Modes.toggleDay();
+        const card = $('#day-week');
+        if (card) card.outerHTML = weekHTML();
+        return;
+      }
       const wdn = g('[data-wkdone]');
       if (wdn) { completeBlock(wdn.dataset.wkdone, wdn); return; }
       const q = g('[data-quick]'); if (q) { quick(q.dataset.quick); return; }
@@ -960,5 +990,5 @@ Screens.day = (() => {
   }
   function onLeave() { clearInterval(tickTimer); tickTimer = null; }
 
-  return { render, onEnter, onLeave, quick, settings, explain, closeDay };
+  return { render, onEnter, onLeave, quick, settings, explain, closeDay, showDay };
 })();

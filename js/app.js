@@ -34,6 +34,7 @@ const App = (() => {
     if (label) label.textContent = State.s.mode === 'adhd' ? 'СДВГ' : 'Обычный';
     const toggle = $('#mode-toggle');
     if (toggle) toggle.setAttribute('aria-pressed', String(State.s.mode === 'adhd'));
+    if (typeof Modes !== 'undefined' && typeof Planner !== 'undefined') Modes.render();
   }
   function applyMotion() { document.body.setAttribute('data-reduce-motion', String(!!State.s.reduceMotion)); }
   function applyA11y() {
@@ -476,6 +477,7 @@ const App = (() => {
 
   function dayTick() {
     if (typeof Planner === 'undefined' || !Planner.plan()) return;
+    if (typeof Modes !== 'undefined') Modes.tick();
     const cur = Planner.currentBlock();
     const skipped = Planner.plan().skipped || {};
 
@@ -511,7 +513,10 @@ const App = (() => {
 
     // блок начался — объявляем
     // пары и перерывы между ними не объявляем: на паре телефон пищать не должен
-    const silent = cur && (cur.sub === 'pair' || cur.sub === 'break' || cur.sub === 'sleep');
+    const calm = State.s.mode !== 'adhd';
+    // обычный режим не дёргает на каждый отдых и перекус — только дела и дорога
+    const silent = cur && (cur.sub === 'pair' || cur.sub === 'break' || cur.sub === 'sleep'
+      || (calm && (cur.sub === 'rest' || cur.sub === 'routine' || cur.sub === 'meal')));
     if (cur && silent) lastBlockId = cur.id;
     if (cur && !silent && cur.id !== lastBlockId && !skipped[cur.id] && !Planner.isDone(cur)) {
       lastBlockId = cur.id;
@@ -793,8 +798,11 @@ const App = (() => {
       State.s.mode = State.s.mode === 'adhd' ? 'normal' : 'adhd';
       applyMode();
       Sound.sfx('pop');
-      UI.toast(State.s.mode === 'adhd' ? 'СДВГ-режим включён ⚡' : 'Обычный режим 🧘', 'default');
+      UI.toast(State.s.mode === 'adhd'
+        ? 'СДВГ: одно дело на экране, таймер, комбо и сюрпризы. Остальное свёрнуто.'
+        : 'Обычный: спокойный планер, вся неделя, меньше шума.', 'default', State.s.mode === 'adhd' ? '⚡' : '🧘');
       State.save();
+      renderActive();
     });
 
     $('#brand-btn').addEventListener('click', showCharacter);
@@ -1069,6 +1077,8 @@ const App = (() => {
     bindSwipe();
     Palette.bind();
     Advisor.bind();
+    Modes.bind();
+    $('#mini-clock').addEventListener('click', () => go('dashboard'));
     Chill.bind();
     DayTpl.seed();
     syncBottomInsets();
@@ -1176,6 +1186,8 @@ const App = (() => {
      без единой кнопки */
   function ensureDaySetup() {
     if (typeof Week === 'undefined' || typeof DayTpl === 'undefined') return;
+    // старые закрытые задачи — в журнал, чтобы память не пухла годами
+    if (State.compactDone(30)) State.save();
     // график ставится и обновляется сам — руками ничего нажимать не нужно
     const fresh = !Week.installed() || Week.outdated();
     if (fresh) Week.install();
@@ -1185,7 +1197,7 @@ const App = (() => {
     if (fresh || !pl || (Planner.inScript() && !pl.script)) Planner.build({});
   }
 
-  return { init, go, showComeback, syncBottomInsets, applyAll, applyPalette, renderHeader, renderActive, openCapture, moveIndicator, paintMiniPlayIcon, focusTask: null };
+  return { init, go, showComeback, syncBottomInsets, applyAll, applyPalette, renderHeader, renderActive, openCapture, moveIndicator, paintMiniPlayIcon, isQuietNow, focusTask: null };
 })();
 
 document.addEventListener('DOMContentLoaded', App.init);

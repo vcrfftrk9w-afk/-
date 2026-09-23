@@ -868,13 +868,14 @@ Screens.focus = (() => {
     bind, render, onEnter, onLeave, setTask, enterHyperfocus, renderHud, finishEarly, askCustom,
     startIfIdle: () => { if (!T.running) start(); },
     /* «двухминутный старт»: короткая сессия под конкретное дело */
-    quickStart: (minutes, label) => {
+    quickStart: (minutes, label, taskId) => {
       if (T.running) { UI.toast('Таймер уже идёт', 'warn', '⏱️'); return; }
       State.s.customTimer = { focus: minutes, break: Math.max(2, Math.round(minutes / 4)) };
       const sel = document.querySelector('#timer-mode');
       if (sel) sel.value = 'custom';
       setMode('custom');
-      T.taskId = null;
+      // таймер, запущенный под дело, должен знать своё дело — иначе фокус не засчитается ему
+      setTask(taskId || null);
       start();
       if (label) UI.toast(`${minutes} минут на: ${label}`, 'success', '⚡');
       State.save();

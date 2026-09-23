@@ -137,23 +137,27 @@ const DayTpl = (() => {
     return { done, total: items.length, pct: Math.round((done / items.length) * 100) };
   }
 
-  /* сколько дел шаблона было закрыто в конкретный день */
-  function doneOn(dateKey) {
-    const items = active();
+  /* сколько дел шаблона было закрыто в конкретный день — по журналу,
+     потому что старые закрытые задачи со временем убираются */
+  function doneOn(dateKey, dow) {
+    const items = active(dow);
     if (!items.length) return 0;
-    return items.filter((x) => State.s.tasks.some((t) =>
+    const logged = State.doneTitlesOn(dateKey);
+    return items.filter((x) => logged.has(x.title) || State.s.tasks.some((t) =>
       t.title === x.title && t.done && t.doneAt && State.dateKey(new Date(t.doneAt)) === dateKey)).length;
   }
 
   /* серия дней, когда закрыто хотя бы 80% шаблона */
   function streak() {
-    const items = active();
-    if (!items.length) return 0;
-    const need = Math.max(1, Math.ceil(items.length * 0.8));
+    if (!items().length) return 0;
     let n = 0;
     for (let i = 0; i < 400; i++) {
       const k = State.daysAgoKey(i);
-      if (doneOn(k) >= need) { n += 1; continue; }
+      // у каждого дня недели свой набор дел — и своя планка 80%
+      const dow = new Date(k + 'T12:00:00').getDay();
+      const count = active(dow).length;
+      if (!count) continue;                       // день без дел серию не рвёт
+      if (doneOn(k, dow) >= Math.max(1, Math.ceil(count * 0.8))) { n += 1; continue; }
       if (i === 0) continue;   // сегодня ещё не вечер
       break;
     }

@@ -309,7 +309,9 @@ const Sound = (() => {
     if (!ready()) return;
     const seq = PATTERNS[name] || PATTERNS.click;
     let t = ctx.currentTime;
-    seq.forEach(([freq, dur, wave, vol]) => {
+    const calm = State.s.mode !== 'adhd' ? 0.55 : 1;   // обычный режим тише
+    seq.forEach(([freq, dur, wave, vol0]) => {
+      const vol = Math.max(0.0002, vol0 * calm);
       const osc = ctx.createOscillator();
       const g = ctx.createGain();
       osc.type = wave;

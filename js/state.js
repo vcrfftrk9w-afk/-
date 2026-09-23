@@ -104,6 +104,11 @@ const State = (() => {
       dailyTaskCounts: {},
       dailyFocusMinutes: {},
       focusByHour: {},
+      /* журнал сделанного: день → номера названий. По нему считаются серии
+         («ТТ кино — 5 дней подряд»), а сами старые закрытые задачи можно
+         убирать: 16 дел в день за год — это тысячи записей */
+      doneTitles: [],
+      doneLog: {},
     };
   }
 
@@ -337,6 +342,52 @@ const State = (() => {
     emit('streak', s.streak);
   }
 
+  /* ---------- журнал сделанного ---------- */
+  function titleIndex(title) {
+    if (!Array.isArray(s.doneTitles)) s.doneTitles = [];
+    let i = s.doneTitles.indexOf(title);
+    if (i === -1) { s.doneTitles.push(title); i = s.doneTitles.length - 1; }
+    return i;
+  }
+  function logDone(title, key, off) {
+    if (!title) return;
+    if (!s.doneLog || typeof s.doneLog !== 'object') s.doneLog = {};
+    const k = key || todayKey();
+    const i = String(titleIndex(title));
+    const set = new Set(s.doneLog[k] ? s.doneLog[k].split(',') : []);
+    if (off) set.delete(i); else set.add(i);
+    if (set.size) s.doneLog[k] = Array.from(set).join(','); else delete s.doneLog[k];
+  }
+  function doneTitlesOn(key) {
+    const row = s.doneLog && s.doneLog[key];
+    if (!row) return new Set();
+    return new Set(row.split(',').map((i) => (s.doneTitles || [])[Number(i)]).filter(Boolean));
+  }
+  /* сколько дней подряд это дело было сделано; сегодня ещё можно успеть */
+  function chain(title) {
+    let n = 0;
+    for (let i = 0; i < 400; i++) {
+      if (doneTitlesOn(daysAgoKey(i)).has(title)) { n += 1; continue; }
+      if (i === 0) continue;
+      break;
+    }
+    return n;
+  }
+  /* перенести историю в журнал и убрать закрытые задачи старше месяца */
+  function compactDone(days) {
+    const keep = days || 30;
+    const cutoff = Date.now() - keep * 86400000;
+    (s.tasks || []).forEach((t) => {
+      if (t.done && t.doneAt) {
+        const k = dateKey(new Date(t.doneAt));
+        if (!doneTitlesOn(k).has(t.title)) logDone(t.title, k);
+      }
+    });
+    const before = s.tasks.length;
+    s.tasks = s.tasks.filter((t) => !t.done || !t.doneAt || t.doneAt >= cutoff);
+    return before - s.tasks.length;
+  }
+
   function habitStreak(h) {
     let streak = 0;
     let cursor = h.history[todayKey()] ? 0 : 1;
@@ -555,5 +606,6 @@ const State = (() => {
     weeklyChallenge, weeklyProgress, checkWeekly, weekKey,
     checkAchievements, unlockedAchievements, paletteUnlocked, api,
     reset, replace, adopt,
+    logDone, doneTitlesOn, chain, compactDone,
   };
 })();

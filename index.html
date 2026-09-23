@@ -203,12 +203,30 @@
       </div>
       <div class="grid grid-dash">
 
+        <div class="fresh-banner span-2 hidden" id="fresh-banner" role="status"></div>
+
+        <div class="card card-now span-2" data-card="now" aria-live="polite">
+          <div id="adhd-now"></div>
+        </div>
+
         <div class="card card-main span-2" data-card="main">
           <div class="card-head">
             <h3>📌 Сегодня главное</h3>
             <span class="badge" id="main-count">—</span>
           </div>
           <div id="main-today"></div>
+        </div>
+
+        <div class="card card-week span-2" data-card="week">
+          <div class="card-head">
+            <h3>🗓️ Неделя</h3>
+            <span class="badge" id="week-badge">план</span>
+          </div>
+          <div id="week-overview"></div>
+        </div>
+
+        <div class="dash-more span-2" data-card="more">
+          <button class="btn btn-ghost btn-block" id="dash-more-btn" aria-expanded="false">▼ Показать остальное</button>
         </div>
 
         <div class="card hero-card tilt span-2" data-card="hero">
@@ -839,6 +857,7 @@
   </button>
 
   <div id="mini-player" class="mini-player">
+    <button id="mini-clock" class="mini-clock hidden" type="button" aria-label="Сколько осталось до конца дела"></button>
     <button id="mini-play" class="mini-btn" title="Играть/пауза" aria-label="Играть или пауза"></button>
     <div class="mini-info">
       <div class="mini-station" id="mini-station">🎧 Lo-fi Chill</div>
@@ -1018,6 +1037,7 @@
 <script src="js/pledge.js"></script>
 <script src="js/screens-day.js"></script>
 <script src="js/advisor.js"></script>
+<script src="js/modes.js"></script>
 <script src="js/palette.js"></script>
 <script src="js/app.js"></script>
 <!-- ==================== BODY-END ==================== -->

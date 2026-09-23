@@ -24,19 +24,14 @@ const { chromium } = require('playwright');
   await p.click('#ob-start'); await p.waitForTimeout(1500); await hide();
   step('приложение открылось', await p.isVisible('#app'));
 
-  // 2. Идёт в День, настраивает режим
+  // 2–3. Ничего не настраивает руками: режим и дела уже стоят по недельному графику
   await p.evaluate(()=>App.go('day')); await p.waitForTimeout(700); await hide();
-  step('карточка настройки режима', await p.isVisible('.day-setup'));
-  await p.click('[data-su="owl"]'); await p.fill('#su-wake','09:00'); await p.fill('#su-sleep','01:00');
-  await p.click('#su-save'); await p.waitForTimeout(1200); await hide();
-  const prof = await p.evaluate(()=>({w:Track.hhmm(Track.profile().wakeTarget), c:Track.profile().chronotype, plan:Planner.blocks().length}));
-  step(`режим сохранён (${prof.w}, ${prof.c}) и план собран (${prof.plan} блоков)`, prof.c==='owl' && prof.plan>0);
-
-  // 3. Ставит дела из шаблона
-  await p.evaluate(()=>App.go('day')); await p.waitForTimeout(500); await hide();
-  await p.click('#tpl-apply'); await p.waitForTimeout(1200); await hide();
+  const prof = await p.evaluate(()=>({w:Track.hhmm(Track.profile().wakeTarget), s:Track.hhmm(Track.profile().sleepTarget),
+    script: !!(Planner.plan() && Planner.plan().script), plan:Planner.blocks().length, setup: !!document.querySelector('.day-setup'),
+    week: !!document.querySelector('#day-week')}));
+  step(`режим взят из графика (${prof.w}–${prof.s}), план по графику (${prof.plan} блоков), без анкеты`, prof.script && prof.plan>0 && !prof.setup && prof.week);
   const tasks = await p.evaluate(()=>State.s.tasks.filter(t=>!t.done).length);
-  step(`дела из шаблона поставлены (${tasks} задач)`, tasks>=10);
+  step(`дела дня поставлены сами (${tasks} задач)`, tasks>=10);
 
   // 4. Спрашивает «что сейчас главное»
   await p.evaluate(()=>App.go('day')); await p.waitForTimeout(500); await hide();
@@ -73,15 +68,15 @@ const { chromium } = require('playwright');
   const close = await p.evaluate(()=>{const e=document.querySelector('.day-close'); return e?e.textContent.replace(/\s+/g,' ').trim().slice(0,90):null;});
   step('итог дня показан', !!close);
   console.log('    ', close);
-  await p.screenshot({path:'/tmp/claude-0/-home-user--/0ce65798-8ce0-55df-9555-758bc4ae4080/scratchpad/v15_journey.png'});
+  await p.screenshot({path:require('os').tmpdir()+'/v15_journey.png'});
   await hide();
 
   // 9. Перезагрузка — всё на месте
   await p.reload(); await p.waitForTimeout(1800); await hide();
   const after = await p.evaluate(()=>({name:State.s.name, water:Track.today().water, tpl:DayTpl.items().length,
-    money:Path.money().income, chrono:Track.profile().chronotype, tasks:State.s.tasks.length, sleep:Track.today().sleepAt!==null}));
-  step(`после перезагрузки всё на месте (${after.name}, вода ${after.water}, ${after.tasks} задач, ${after.chrono})`,
-    after.name==='Саша' && after.water>=6 && after.tasks>=10 && after.chrono==='owl' && after.sleep);
+    money:Path.money().income, wake:Track.hhmm(Track.profile().wakeTarget), tasks:State.s.tasks.length, sleep:Track.today().sleepAt!==null}));
+  step(`после перезагрузки всё на месте (${after.name}, вода ${after.water}, ${after.tasks} задач, подъём ${after.wake})`,
+    after.name==='Саша' && after.water>=6 && after.tasks>=10 && after.wake==='07:00' && after.sleep);
 
   // 10. Горизонтальный скролл нигде
   let ovAll=0;

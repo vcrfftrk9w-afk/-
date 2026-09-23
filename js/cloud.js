@@ -29,7 +29,7 @@ const Cloud = (() => {
 
   /* Состояние раскладываем по трём документам: ядро, задачи и история.
      Иначе через полгода пользования оно упрётся в предел одного документа. */
-  const HISTORY_KEYS = ['day', 'dailyTaskCounts', 'dailyFocusMinutes', 'focusByHour', 'moods', 'focusLog', 'weeklyReviews'];
+  const HISTORY_KEYS = ['day', 'dailyTaskCounts', 'dailyFocusMinutes', 'focusByHour', 'moods', 'focusLog', 'weeklyReviews', 'doneLog', 'doneTitles'];
 
   const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(undefined), ms))]);
 
@@ -67,7 +67,7 @@ const Cloud = (() => {
       };
       let keep = 365;
       while (JSON.stringify(h).length > DOC_LIMIT && keep > 30) {
-        ['day', 'dailyTaskCounts', 'dailyFocusMinutes', 'moods'].forEach((k) => trimMap(h[k], keep));
+        ['day', 'dailyTaskCounts', 'dailyFocusMinutes', 'moods', 'doneLog'].forEach((k) => trimMap(h[k], keep));
         if (Array.isArray(h.focusLog)) h.focusLog = h.focusLog.slice(-keep);
         keep = Math.floor(keep * 0.7);
       }

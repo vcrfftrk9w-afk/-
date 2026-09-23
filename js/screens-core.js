@@ -118,7 +118,9 @@ Screens.dashboard = (() => {
 
   /* какие карточки показывать на главной */
   const CARDS = [
+    { id: 'now', name: 'СДВГ: большой экран «Сейчас» с таймером' },
     { id: 'main', name: 'Сегодня главное (первый экран)' },
+    { id: 'week', name: 'Обычный режим: неделя одним взглядом' },
     { id: 'hero', name: 'Персонаж и уровень' },
     { id: 'next', name: 'Что дальше' },
     { id: 'path', name: 'Твой путь к деньгам' },
@@ -658,6 +660,7 @@ Screens.dashboard = (() => {
     renderStreak();
     renderFocusGoal();
     renderMainCard();
+    if (typeof Modes !== 'undefined') Modes.render();
     renderPathCard();
     renderDayCard();
     if (Screens.pledge) Screens.pledge.render();
@@ -780,9 +783,13 @@ Screens.tasks = (() => {
   function complete(task, sourceEl) {
     const s = State.s;
     task.done = !task.done;
-    if (!task.done) { Sound.sfx('click'); State.commit(); return; }
+    if (!task.done) {
+      if (task.doneAt) State.logDone(task.title, State.dateKey(new Date(task.doneAt)), true);
+      Sound.sfx('click'); State.commit(); return;
+    }
 
     task.doneAt = Date.now();
+    State.logDone(task.title);
     const xp = Screens.helpers.taskXP(task);
     const skill = Screens.helpers.taskSkill(task);
 
@@ -807,6 +814,7 @@ Screens.tasks = (() => {
         UI.toast(`Дедлайн закрыт вовремя! +${bonus} XP сверху`, 'level', '📅');
       }
       respawn(task);
+      if (typeof Modes !== 'undefined') Modes.onComplete(task, sourceEl, xp, skill);
       Sound.sfx('success');
       FX.vibrate([12, 40, 18]);
       FX.confettiFrom(sourceEl, task.priority === 'boss' ? 70 : 34, { power: task.priority === 'boss' ? 12 : 9 });

@@ -156,6 +156,8 @@ const FX = (() => {
 
   function confetti(x, y, count = 60, opts = {}) {
     if (reduce() || !confCtx) return;
+    // обычный режим — спокойнее: праздник есть, салюта на полэкрана нет
+    if (State.s.mode !== 'adhd') count = Math.max(6, Math.round(count * 0.35));
     for (let i = 0; i < count; i++) {
       confParticles.push({
         x, y,
@@ -237,6 +239,7 @@ const FX = (() => {
 
   function fireworks(bursts = 6) {
     if (reduce()) return;
+    if (State.s.mode !== 'adhd') bursts = Math.ceil(bursts / 2);
     for (let i = 0; i < bursts; i++) {
       setTimeout(() => {
         confetti(

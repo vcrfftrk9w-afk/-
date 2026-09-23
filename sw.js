@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ldm-cache-v2';
+const CACHE_NAME = 'ldm-cache-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -31,6 +31,7 @@ const ASSETS = [
   './js/pledge.js',
   './js/screens-day.js',
   './js/advisor.js',
+  './js/modes.js',
   './js/palette.js',
   './js/app.js'
 ];
@@ -51,18 +52,19 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+/* Сначала сеть, кэш — только без интернета. Раньше было наоборот,
+   и установленное приложение навсегда застревало на старой версии. */
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.ok && new URL(event.request.url).origin === self.location.origin) {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
-          return response;
-        })
-        .catch(() => cached);
-    })
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('./index.html')))
   );
 });

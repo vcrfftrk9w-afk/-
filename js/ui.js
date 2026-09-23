@@ -146,7 +146,8 @@ const UI = (() => {
       if (card.dataset.tiltBound) return;
       card.dataset.tiltBound = '1';
       card.addEventListener('mousemove', (e) => {
-        if (State.s.reduceMotion) return;
+        // наклон карточек — игрушка для режима СДВГ, в обычном он только отвлекает
+        if (State.s.reduceMotion || State.s.mode !== 'adhd') return;
         const r = card.getBoundingClientRect();
         const px = (e.clientX - r.left) / r.width - 0.5;
         const py = (e.clientY - r.top) / r.height - 0.5;

@@ -231,7 +231,11 @@ export function Analysis() {
                   <Clock className="size-5 text-cyan" /> Длина ролика → просмотры
                 </div>
                 <p className="mb-3 text-xs text-white/45">Розовым — лучшая длина для тебя</p>
-                <DurationChart data={report.durationBuckets.filter((b) => b.count > 0)} />
+                {report.durationBuckets.some((b) => b.count > 0) ? (
+                  <DurationChart data={report.durationBuckets.filter((b) => b.count > 0)} />
+                ) : (
+                  <p className="text-sm text-white/50">Длительность роликов неизвестна. Добавь скрин или файл «Контент» из TikTok Studio.</p>
+                )}
               </Card>
               <Card>
                 <div className="mb-3 flex items-center gap-2 font-display font-bold">
@@ -254,9 +258,10 @@ export function Analysis() {
             <Card>
               <div className="mb-1 font-display font-bold">Когда твои ролики заходят лучше</div>
               <p className="mb-4 text-xs text-white/45">
-                Лучшие окна: <span className="text-white/80">{report.bestSlots.map((s) => s.label).join(" · ")}</span>
+                {report.slotsFromData ? "Лучшие окна по твоим роликам: " : "Мало роликов с датами — пока общие рекомендации: "}
+                <span className="text-white/80">{report.bestSlots.map((s) => s.label).join(" · ")}</span>
               </p>
-              <Heatmap cells={report.heatmap} />
+              {report.heatmap.length > 0 && <Heatmap cells={report.heatmap} />}
             </Card>
 
             <div className="grid gap-5 lg:grid-cols-2">

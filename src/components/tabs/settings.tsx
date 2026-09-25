@@ -9,6 +9,7 @@ import { extractHashtags, formatNum } from "@/lib/analytics";
 import type { NicheId, TikTokProfile, TikTokVideo, UserSettings } from "@/lib/types";
 import { Button, Card, Chip, SectionHeader, cn } from "../ui";
 import { toast } from "../toast";
+import { DataImport, mergeImport } from "../data-import";
 
 export function SettingsTab() {
   const router = useRouter();
@@ -180,11 +181,27 @@ export function SettingsTab() {
               badText="Не настроен. Добавь TIKTOK_CLIENT_KEY и TIKTOK_CLIENT_SECRET (developers.tiktok.com), чтобы загружать все видео со статистикой."
             />
             <div className="rounded-2xl bg-white/[0.03] p-3 text-xs text-white/50">
-              Источник данных сейчас: <span className="text-white/80">{{ oauth: "официальный API TikTok", public: "публичная страница профиля", demo: "демо-данные", manual: "ручной ввод" }[acc.source]}</span>
+              Источник данных сейчас: <span className="text-white/80">{{ oauth: "официальный API TikTok", public: "публичная страница профиля", demo: "демо-данные (пример)", manual: "ручной ввод", import: "скриншоты и файлы TikTok" }[acc.source]}</span>
             </div>
           </div>
         </Card>
       </div>
+
+      <Card className="mt-5" glow>
+        <div className="mb-1 flex items-center gap-2 font-display font-bold">
+          <RefreshCw className="size-5 text-pink" /> Обновить данные
+        </div>
+        <p className="mb-4 text-xs text-white/50">
+          Загружай свежие скриншоты или файл из TikTok Studio раз в несколько дней — я сохраню историю и покажу реальный рост. Новые ролики добавятся, старые обновятся.
+        </p>
+        <DataImport
+          compact
+          onDone={(r) => {
+            update((st) => ({ account: mergeImport(st.account, r), analysis: null }));
+            toast(`Обновлено: ${r.videos.length} видео${r.profile.followers ? `, ${formatNum(r.profile.followers)} подписчиков` : ""}. Анализ пересчитан.`);
+          }}
+        />
+      </Card>
 
       <Card className="mt-5">
         <div className="mb-4 font-display font-bold">Ниша и цели</div>
@@ -234,7 +251,7 @@ export function SettingsTab() {
 
       <Card className="mt-5">
         <div className="mb-1 flex items-center gap-2 font-display font-bold">
-          <Video className="size-5 text-cyan" /> Добавить видео вручную
+          <Video className="size-5 text-cyan" /> Добавить одно видео вручную
         </div>
         <p className="mb-4 text-xs text-white/50">Если вход через TikTok не настроен — добавь статистику своих роликов (TikTok → Студия автора → Аналитика). Чем больше видео, тем точнее анализ.</p>
         <div className="grid gap-2 md:grid-cols-2">

@@ -9,6 +9,8 @@ export async function GET() {
   const jar = await cookies();
   return NextResponse.json({
     ai: aiEnabled(),
+    vision: aiEnabled(),
+    webSearch: true,
     model: aiEnabled() ? MODEL : null,
     tiktokOAuth: oauthConfigured(),
     tiktokConnected: Boolean(jar.get("tt_token")?.value),

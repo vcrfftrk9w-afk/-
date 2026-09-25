@@ -14,6 +14,10 @@ import {
   PLAN_SHAPE,
   REVIEW_SHAPE,
   SCRIPT_SHAPE,
+  SCREENS_SHAPE,
+  screensPrompt,
+  videoReviewPrompt,
+  type ScreensImport,
   TOOL_SHAPE,
   TOOL_TASKS,
   TRENDS_SHAPE,
@@ -28,6 +32,7 @@ import {
   trendsPrompt,
 } from "@/lib/prompts";
 import { creatorBrief } from "@/lib/server/context";
+import { dataURLToBlob } from "@/lib/media";
 import type { Account, AIAnalysis, ChatMessage, ProductionPlan, Trend, TrendsResponse, UserSettings, VideoIdea } from "@/lib/types";
 
 // ── Доступ к Claude на странице ─────────────────────────────────────────────
@@ -37,11 +42,13 @@ interface SampleOpts {
   signal?: AbortSignal;
   modelTier?: Tier;
   cache?: boolean;
+  images?: Blob[];
 }
 type Turn = { role: "user" | "assistant"; content: string };
 interface Sample {
   (input: string | Turn[], opts?: SampleOpts): Promise<{ text: string; truncated: boolean }>;
   json<T>(input: string | Turn[], opts?: SampleOpts): Promise<T>;
+  limits(): Promise<{ maxPromptBytes: number; images?: { maxCount: number; maxInputBytes: number; mediaTypes: string[] } }>;
 }
 interface SampleError {
   code: string;
@@ -79,6 +86,10 @@ function describe(e: unknown): string {
       return "слишком много запросов к Claude, попробуй чуть позже";
     case "session_expired":
       return "нужно заново войти в Claude";
+    case "images_unavailable":
+      return "в этом окне Claude не может смотреть изображения";
+    case "image_rejected":
+      return "изображение не подошло — попробуй другой скриншот";
     case "invalid_json":
       return "ИИ ответил не в том формате";
     case "refused":
@@ -88,13 +99,27 @@ function describe(e: unknown): string {
   }
 }
 
-async function aiJSON<T>(prompt: string, shape: string, opts: { tier?: Tier; fresh?: boolean } = {}): Promise<T> {
+let maxImages: number | null | undefined;
+async function imageLimit(): Promise<number> {
+  if (maxImages !== undefined) return maxImages ?? 0;
+  const s = await getSample();
+  try {
+    maxImages = s ? ((await s.limits()).images?.maxCount ?? null) : null;
+  } catch {
+    maxImages = null;
+  }
+  return maxImages ?? 0;
+}
+
+async function aiJSON<T>(prompt: string, shape: string, opts: { tier?: Tier; fresh?: boolean; images?: string[]; system?: string } = {}): Promise<T> {
   const s = await getSample();
   if (!s || aiBlocked) throw new NoAI();
   try {
-    return await s.json<T>(`${BASE_SYSTEM}\n\n${prompt}\n\n${jsonInstruction(shape)}`, {
+    const images = opts.images?.length ? opts.images.slice(0, await imageLimit()).map(dataURLToBlob) : undefined;
+    return await s.json<T>(`${opts.system ?? BASE_SYSTEM}\n\n${prompt}\n\n${jsonInstruction(shape)}`, {
       modelTier: opts.tier ?? "default",
-      ...(opts.fresh ? { cache: false } : {}),
+      ...(opts.fresh || images ? { cache: false } : {}),
+      ...(images ? { images } : {}),
     });
   } catch (e) {
     if (BLOCKING.has((e as SampleError)?.code)) aiBlocked = true;
@@ -201,9 +226,22 @@ async function handleAI(name: string, body: Body): Promise<Response> {
       const description = String(body.description ?? "");
       const meta = body.meta as { title?: string } | undefined;
       const stats = body.stats as Parameters<typeof localReview>[2];
+      const frames = (body.frames as { t: number; dataUrl: string }[] | undefined) ?? [];
       return json(
         await aiOrLocal(
-          () => aiJSON(reviewPrompt({ description, metaTitle: meta?.title, stats, brief }), REVIEW_SHAPE),
+          async () => {
+            if (frames.length) {
+              const n = await imageLimit();
+              if (!n) throw { code: "images_unavailable", message: "no images" };
+              const use = frames.length > n ? frames.filter((_, i) => i < 2 || i % Math.ceil(frames.length / n) === 0).slice(0, n) : frames;
+              return aiJSON(
+                videoReviewPrompt({ frameTimes: use.map((f) => f.t), duration: Number(body.duration) || 0, description, stats, brief }),
+                REVIEW_SHAPE,
+                { images: use.map((f) => f.dataUrl) },
+              );
+            }
+            return aiJSON(reviewPrompt({ description, metaTitle: meta?.title, stats, brief }), REVIEW_SHAPE);
+          },
           () => localReview(`${meta?.title ?? ""} ${description}`.trim(), settings.niche, stats),
         ),
       );
@@ -248,12 +286,28 @@ async function chat(body: Body, brief: string, report: ReturnType<typeof buildLo
 async function handle(path: string, init?: RequestInit): Promise<Response> {
   if (path === "/api/status") {
     const s = await getSample();
-    return json({ ai: Boolean(s) && !aiBlocked, model: s ? "Claude" : null, tiktokOAuth: false, tiktokConnected: false, webSearch: false, static: true });
+    return json({ ai: Boolean(s) && !aiBlocked, vision: Boolean(s) && !aiBlocked && (await imageLimit()) > 0, model: s ? "Claude" : null, tiktokOAuth: false, tiktokConnected: false, webSearch: false, static: true });
   }
   if (path === "/api/tiktok/public") return json({ error: "В веб-версии TikTok не отдаёт профиль по нику" }, 502);
   if (path === "/api/tiktok/oembed") return json({ error: "в веб-версии ссылки на видео не открываются" }, 502);
   if (path === "/api/tiktok/me") return json({ error: "Вход через TikTok доступен в полной версии приложения" }, 401);
   if (path === "/api/tiktok/logout") return json({ ok: true });
+  if (path === "/api/ai/screens") {
+    const { images } = JSON.parse(String(init?.body ?? "{}")) as { images?: string[] };
+    if (!images?.length) return json({ error: "Загрузи хотя бы один скриншот" }, 400);
+    const s = await getSample();
+    if (!s || aiBlocked) return json({ error: "Для распознавания скриншотов разреши странице обращаться к Claude" }, 400);
+    if (!(await imageLimit())) return json({ error: "В этом окне Claude не может смотреть изображения. Загрузи файл аналитики из TikTok Studio." }, 400);
+    try {
+      const data = await aiJSON<ScreensImport>(screensPrompt(Math.min(images.length, await imageLimit())), SCREENS_SHAPE, {
+        images,
+        system: "Ты точно извлекаешь данные со скриншотов TikTok. Никогда не выдумываешь значения.",
+      });
+      return json({ data, mode: "ai" });
+    } catch (e) {
+      return json({ error: e instanceof NoAI ? "ИИ недоступен" : describe(e) }, 502);
+    }
+  }
   if (path.startsWith("/api/ai/")) {
     const body = JSON.parse(String(init?.body ?? "{}")) as Body;
     if (!body.settings) return json({ error: "settings required" }, 400);

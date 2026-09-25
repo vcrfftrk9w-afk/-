@@ -191,3 +191,51 @@ export const coachSystem = (brief: string) => `${BASE_SYSTEM}
 
 ДАННЫЕ АВТОРА:
 ${brief}`;
+
+// ── Распознавание скриншотов TikTok ─────────────────────────────────────────
+export interface ScreensImport {
+  profile: {
+    username: string | null;
+    displayName: string | null;
+    bio: string | null;
+    followers: number | null;
+    following: number | null;
+    likes: number | null;
+    videoCount: number | null;
+  };
+  videos: {
+    title: string | null;
+    views: number | null;
+    likes: number | null;
+    comments: number | null;
+    shares: number | null;
+    duration: number | null;
+    date: string | null; // YYYY-MM-DD или null
+    pinned: boolean | null;
+  }[];
+  period: { views: number | null; profileViews: number | null; likes: number | null; comments: number | null; shares: number | null; days: number | null } | null;
+  notes: string;
+}
+
+export const SCREENS_SHAPE = `{
+  "profile": { "username": string|null, "displayName": string|null, "bio": string|null, "followers": number|null, "following": number|null, "likes": number|null, "videoCount": number|null },
+  "videos": [{ "title": string|null, "views": number|null, "likes": number|null, "comments": number|null, "shares": number|null, "duration": number|null, "date": string|null, "pinned": boolean|null }],
+  "period": { "views": number|null, "profileViews": number|null, "likes": number|null, "comments": number|null, "shares": number|null, "days": number|null } | null,
+  "notes": string
+}`;
+
+export const screensPrompt = (count: number) => `Перед тобой ${count} скриншот(ов) из TikTok: профиль автора, сетка его видео и/или экраны TikTok Studio (аналитика аккаунта, аналитика отдельных роликов, список контента).
+Извлеки ТОЛЬКО то, что реально видно на скриншотах:
+- profile: ник (без @), имя, био, подписчики, подписки, лайки, число видео.
+- videos: каждый ролик, который видно (в сетке профиля — число просмотров на превью; в TikTok Studio — просмотры, лайки, комментарии, репосты, длительность, дата). Сохраняй порядок как на экране (сверху вниз, слева направо). title — подпись ролика, если видна, иначе короткое описание того, что на превью (например «танец у зеркала»). pinned — true для закреплённых.
+- period: итоги за период из аналитики (просмотры видео, просмотры профиля, лайки, комментарии, репосты, число дней периода), если такой экран есть, иначе null.
+- notes: 1–2 предложения, что было на скриншотах и чего не хватает для полного анализа.
+Числа переводи в целые: «1,2 млн»/«1.2M» → 1200000, «12,3 тыс.»/«12.3K» → 12300. Длительность «0:15» → 15. Если значения не видно — null. Ничего не выдумывай.`;
+
+// ── Разбор видео по кадрам ──────────────────────────────────────────────────
+export const videoReviewPrompt = (o: { frameTimes: number[]; duration: number; description: string; stats?: object; brief: string }) => `Это ${o.frameTimes.length} кадров из вертикального ролика автора для TikTok (длительность ${Math.round(o.duration)} с). Кадры по порядку взяты на секундах: ${o.frameTimes.map((t) => t.toFixed(1)).join(", ")}. Первые кадры — это хук (первые 1–3 секунды).
+Разбери ролик как топ-продюсер по тому, что реально видно: цепляет ли первый кадр, есть ли текст-хук на экране и читается ли он без звука, композиция и ракурс, свет, фон, лицо и эмоция, динамика между кадрами, безопасные зоны интерфейса TikTok (текст не должен уходить под кнопки справа и подпись снизу), обложка.
+Оцени потенциал и дай конкретные правки: что переснять, что вырезать, какой текст поставить, какой хук сказать.
+${o.description ? `Комментарий автора о ролике: ${o.description}\n` : ""}${o.stats ? `Статистика: ${JSON.stringify(o.stats)}\n` : ""}
+Об авторе:
+${o.brief}`;

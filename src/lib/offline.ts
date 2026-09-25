@@ -21,7 +21,8 @@ import { formatNum } from "./analytics";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const pick = <T,>(xs: T[], i: number) => xs[((i % xs.length) + xs.length) % xs.length];
-const shuffle = <T,>(xs: T[]) => [...xs].sort(() => Math.random() - 0.5);
+// Детерминированная перестановка: одинаковый вход → одинаковый результат, без случайных чисел
+const rotate = <T,>(xs: T[], by: number) => (xs.length ? [...xs.slice(by % xs.length), ...xs.slice(0, by % xs.length)] : xs);
 
 // ── Анализ ──────────────────────────────────────────────────────────────────
 export function localAnalysis(account: Account, settings: UserSettings, report: LocalReport): AIAnalysis {
@@ -81,7 +82,7 @@ export function localAnalysis(account: Account, settings: UserSettings, report: 
       { field: "Био", current: account.profile.bio || "пусто", suggestion: `${niche.emoji} ${niche.pillars[0].name} и ${niche.pillars[1].name.toLowerCase()} · новое видео каждый день · 👇 пиши, что снять` },
       { field: "Закреп", current: "—", suggestion: report.bestVideo ? `Закрепи «${report.bestVideo.title.slice(0, 40)}…» + 2 ролика-«визитки»` : "Закрепи 3 лучших ролика, объясняющих, о чём аккаунт" },
     ],
-    hookAdvice: shuffle(HOOK_FORMULAS)
+    hookAdvice: HOOK_FORMULAS
       .filter((h) => !h.template.startsWith("("))
       .slice(0, 5)
       .map((h) => `«${fillHook(h.template, niche.label.toLowerCase())}» — ${h.why.toLowerCase()}`),
@@ -99,7 +100,7 @@ export function localTrends(settings: UserSettings): TrendsResponse {
     return {
       ...rest,
       id: uid(),
-      nicheFit: fits ? 70 + Math.round(Math.random() * 28) : 35 + Math.round(Math.random() * 25),
+      nicheFit: fits ? (t.niches === "all" ? 80 : 92) : 45,
       exampleIdea: `${niche.emoji} ${adaptIdea(t.exampleIdea, niche.label)}`,
       hashtags: [...t.hashtags, ...niche.hashtags.slice(0, 2)],
     };
@@ -121,10 +122,10 @@ export function localTrends(settings: UserSettings): TrendsResponse {
         "В конце — вопрос или призыв к действию, в подписи — ключевые слова ниши.",
       ],
       hashtags: niche.hashtags.slice(0, 5),
-      heat: 55 + Math.round(Math.random() * 25),
+      heat: 74 - i * 3,
       lifecycle: "evergreen",
       difficulty: i % 2 ? "medium" : "easy",
-      nicheFit: 90 + Math.round(Math.random() * 10),
+      nicheFit: 96 - i,
       exampleIdea: seed.title,
     });
   });
@@ -143,11 +144,29 @@ function adaptIdea(text: string, nicheLabel: string) {
 }
 
 // ── Идеи ────────────────────────────────────────────────────────────────────
+/** Оценка потенциала идеи из её свойств (без случайности). */
+function ideaPotential(o: { trendHeat: number; nicheFit: number; durationSec: number; bestDuration?: string; effortIdx: number }) {
+  let p = 50;
+  p += o.trendHeat * 0.2; // вход в тренд
+  p += (o.nicheFit - 50) * 0.2; // попадание в нишу
+  if (o.durationSec <= 20) p += 6; // короткие проще досмотреть
+  if (o.bestDuration) {
+    const inBest =
+      (o.bestDuration === "до 15 с" && o.durationSec < 15) ||
+      (o.bestDuration === "15–30 с" && o.durationSec >= 15 && o.durationSec < 30) ||
+      (o.bestDuration === "30–60 с" && o.durationSec >= 30 && o.durationSec < 60) ||
+      (o.bestDuration === "1–3 мин" && o.durationSec >= 60);
+    if (inBest) p += 8; // совпадает с твоей лучшей длиной
+  }
+  return Math.max(40, Math.min(95, Math.round(p)));
+}
 export function localIdeas(settings: UserSettings, report: LocalReport | null, trends: Trend[], count = 8): VideoIdea[] {
   const niche = getNiche(settings.niche);
   const ideas: VideoIdea[] = [];
-  const seeds = shuffle(niche.ideaSeeds);
-  const hooks = shuffle(HOOK_FORMULAS);
+  // Каждый новый запрос сдвигает набор, чтобы идеи не повторялись
+  const round = Math.floor(Date.now() / 60000);
+  const seeds = rotate(niche.ideaSeeds, round);
+  const hooks = rotate(HOOK_FORMULAS, round * 3);
   const tr = trends.length ? trends : localTrends(settings).trends;
   const bestDuration = report?.durationBuckets.filter((b) => b.count >= 2).sort((a, b) => b.avgViews - a.avgViews)[0]?.label;
 
@@ -166,7 +185,7 @@ export function localIdeas(settings: UserSettings, report: LocalReport | null, t
         : `${seed.concept}.`,
       format: mixTrend ? trend.name : seed.format,
       trendRef: mixTrend ? trend.name : undefined,
-      viralPotential: Math.min(97, Math.round(55 + (mixTrend ? trend.heat * 0.25 : 12) + Math.random() * 18)),
+      viralPotential: ideaPotential({ trendHeat: mixTrend ? trend.heat : 0, nicheFit: mixTrend ? trend.nicheFit : 90, durationSec: dur, bestDuration, effortIdx: i % 4 }),
       effort: (["low", "medium", "low", "high"] as const)[i % 4],
       durationSec: dur,
       whyItWillWork: `${hook.why}. ${bestDuration ? `Твоя лучшая длина — ${bestDuration}.` : ""} Аудитория ниши: ${niche.audience}.`,
@@ -334,7 +353,7 @@ export function localCoachReply(message: string, settings: UserSettings, report:
 
 // ── Заполнение шаблонов хуков ───────────────────────────────────────────────
 export function fillHook(template: string, topic: string): string {
-  const n = () => String(3 + Math.floor(Math.random() * 5));
+  const n = () => "5";
   return template
     .replace("{действие}", `делал(а) ${topic}`)
     .replace("{делаешь X}", `делаешь ${topic}`)

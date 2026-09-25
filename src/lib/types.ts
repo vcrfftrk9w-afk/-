@@ -19,7 +19,7 @@ export type NicheId =
   | "business"
   | "art";
 
-export type DataSource = "oauth" | "public" | "demo" | "manual";
+export type DataSource = "oauth" | "public" | "demo" | "manual" | "import";
 
 export interface TikTokProfile {
   username: string;
@@ -39,8 +39,8 @@ export interface TikTokVideo {
   title: string; // описание / подпись
   coverUrl?: string;
   shareUrl?: string;
-  createTime: number; // unix seconds
-  duration: number; // seconds
+  createTime: number; // unix seconds, 0 = дата неизвестна
+  duration: number; // seconds, 0 = неизвестно
   views: number;
   likes: number;
   comments: number;
@@ -112,6 +112,7 @@ export interface LocalReport {
   durationBuckets: { label: string; avgViews: number; count: number }[];
   heatmap: HeatCell[];
   bestSlots: { day: number; hour: number; label: string }[];
+  slotsFromData: boolean; // false = общие рекомендации, а не твои данные
   insights: Insight[];
   timeline: { date: string; views: number; er: number; title: string }[];
 }

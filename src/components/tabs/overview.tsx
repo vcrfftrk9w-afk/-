@@ -1,6 +1,6 @@
 "use client";
 import { motion } from "framer-motion";
-import { ArrowRight, Bot, CheckCircle2, Circle, Eye, Flame, Heart, Lightbulb, RefreshCw, Sparkles, Target, TrendingUp, Trophy, Users, Zap, AlertTriangle, Info } from "lucide-react";
+import { ArrowRight, Upload, Bot, CheckCircle2, Circle, Eye, Flame, Heart, Lightbulb, RefreshCw, Sparkles, Target, TrendingUp, Trophy, Users, Zap, AlertTriangle, Info } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { useStore, xpLevel } from "@/lib/store";
 import { planDayIndex, useActions, useBusy, useToggleTask } from "@/lib/actions";
@@ -63,10 +63,31 @@ export function Overview() {
           <Chip tone="violet">
             {niche.emoji} {niche.label}
           </Chip>
-          <Chip tone={acc.source === "demo" ? "amber" : "cyan"}>{{ oauth: "TikTok подключён", public: "Публичные данные", demo: "Демо-режим", manual: "Ручной ввод" }[acc.source]}</Chip>
+          <Chip tone={acc.source === "demo" ? "amber" : "cyan"}>{{ oauth: "TikTok подключён", public: "Публичные данные", demo: "Демо: цифры-пример", manual: "Ручной ввод", import: "Твои данные" }[acc.source]}</Chip>
           <Chip tone={status?.ai ? "lime" : "default"}>{status?.ai ? "AI онлайн" : "Офлайн-движок"}</Chip>
         </div>
       </div>
+
+      {acc.source === "demo" && (
+        <Card className="flex flex-col gap-3 border-amber/30 bg-amber/[0.06] sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-white/80">
+            <span className="font-semibold text-amber">Это пример с выдуманными цифрами.</span> Загрузи скриншоты своего TikTok или файл из TikTok Studio — и всё пересчитается под тебя.
+          </div>
+          <Button size="sm" onClick={() => go("settings")} icon={<Upload className="size-4" />}>
+            Загрузить мои данные
+          </Button>
+        </Card>
+      )}
+      {acc.source !== "demo" && acc.videos.length === 0 && (
+        <Card className="flex flex-col gap-3 border-cyan/25 bg-cyan/[0.05] sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-white/80">
+            <span className="font-semibold text-cyan">Нет данных по роликам.</span> Добавь скрин профиля с сеткой видео или раздел «Контент» из TikTok Studio — анализ станет точным.
+          </div>
+          <Button size="sm" onClick={() => go("settings")} icon={<Upload className="size-4" />}>
+            Добавить ролики
+          </Button>
+        </Card>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
         {/* Score */}

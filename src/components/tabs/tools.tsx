@@ -1,6 +1,7 @@
 "use client";
 import { motion } from "framer-motion";
-import { FileText, Hash, Link2, ListVideo, MessageSquareQuote, PenLine, ScanSearch, Sparkles, UserRound, Wand2 } from "lucide-react";
+import { Film, FileText, Hash, Link2, ListVideo, Loader2, MessageSquareQuote, PenLine, ScanSearch, Sparkles, UserRound, Wand2, X } from "lucide-react";
+import { extractFrames, type Frame } from "@/lib/media";
 import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { callAI, getJSON } from "@/lib/api";
@@ -105,6 +106,23 @@ function Reviewer() {
   const [meta, setMeta] = useState<{ title: string; author: string; thumbnail: string } | null>(null);
   const [res, setRes] = useState<ReviewResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [video, setVideo] = useState<{ name: string; frames: Frame[]; duration: number } | null>(null);
+  const [cutting, setCutting] = useState(false);
+  const { status } = useStore();
+
+  async function pickVideo(f: File) {
+    setCutting(true);
+    setRes(null);
+    try {
+      const r = await extractFrames(f, 7);
+      setVideo({ name: f.name, frames: r.frames, duration: r.duration });
+      setStats((s) => ({ ...s, duration: s.duration || String(Math.round(r.duration)) }));
+    } catch (e) {
+      toast((e as Error).message, "warn");
+    } finally {
+      setCutting(false);
+    }
+  }
 
   async function run() {
     setLoading(true);
@@ -119,14 +137,14 @@ function Reviewer() {
           toast(`Ссылка: ${(e as Error).message}. Разберу по описанию.`, "warn");
         }
       }
-      if (!desc.trim() && !m) {
-        toast("Вставь ссылку на видео или опиши ролик", "warn");
+      if (!desc.trim() && !m && !video) {
+        toast("Загрузи видео, вставь ссылку или опиши ролик", "warn");
         return;
       }
       const num = (s: string) => (s ? Number(s) : undefined);
       const st = { views: num(stats.views), likes: num(stats.likes), comments: num(stats.comments), shares: num(stats.shares), duration: num(stats.duration) };
       const hasStats = Object.values(st).some((v) => v !== undefined);
-      const r = await callAI<ReviewResult>("review", { settings: state.settings!, account: state.account, description: desc, meta: m ?? undefined, stats: hasStats ? st : undefined });
+      const r = await callAI<ReviewResult>("review", { settings: state.settings!, account: state.account, description: desc, meta: m ?? undefined, stats: hasStats ? st : undefined, frames: video?.frames, duration: video?.duration });
       setRes(r.data);
       if (r.warning) toast(r.warning, "warn");
     } catch (e) {
@@ -141,8 +159,54 @@ function Reviewer() {
       <div className="mb-1 flex items-center gap-2 font-display font-bold">
         <ScanSearch className="size-5 text-cyan" /> Разбор ролика
       </div>
-      <p className="mb-4 text-xs text-white/50">Вставь ссылку на своё видео и/или опиши идею до съёмки — оценю потенциал и скажу, что поменять.</p>
+      <p className="mb-4 text-xs text-white/50">
+        {status?.vision ? "Загрузи сам ролик — я посмотрю кадры хука и всего видео и скажу, что переснять. Можно и просто описать идею до съёмки." : "Вставь ссылку на своё видео и/или опиши идею до съёмки — оценю потенциал и скажу, что поменять."}
+      </p>
       <div className="space-y-3">
+        {status?.vision && (
+          <label className={cn("flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed p-4 transition", video ? "border-cyan/40 bg-cyan/5" : "border-white/15 bg-black/20 hover:border-pink/50")}>
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-pink/30 to-violet/30">
+              {cutting ? <Loader2 className="size-5 animate-spin" /> : <Film className="size-5" />}
+            </div>
+            <div className="min-w-0 flex-1 text-sm">
+              <div className="truncate font-semibold">{video ? video.name : "Загрузить видео (MP4, MOV)"}</div>
+              <div className="text-xs text-white/50">{video ? `${Math.round(video.duration)} с · ${video.frames.length} кадров для разбора` : "Видео не покидает браузер — ИИ получает только кадры"}</div>
+            </div>
+            {video && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  setVideo(null);
+                }}
+                className="rounded-lg p-1 text-white/50 hover:bg-white/10 hover:text-white"
+                title="Убрать видео"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+            <input
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) pickVideo(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )}
+        {video && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            {video.frames.map((f) => (
+              <div key={f.t} className="relative shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={f.dataUrl} alt={`кадр ${f.t.toFixed(1)} с`} className="h-24 w-auto rounded-lg object-cover" />
+                <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1 text-[10px] tabular-nums">{f.t.toFixed(1)}с</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="relative">
           <Link2 className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-white/40" />
           <input
@@ -256,7 +320,7 @@ export function Tools() {
   return (
     <div>
       <SectionHeader icon={<Wand2 className="size-7 text-violet" />} title="Инструменты" subtitle="Хуки, подписи, хэштеги, био и разбор роликов за секунды." />
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid items-start gap-5 xl:grid-cols-2">
         <Generator />
         <Reviewer />
       </div>

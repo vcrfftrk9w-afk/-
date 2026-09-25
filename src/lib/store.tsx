@@ -10,6 +10,7 @@ export interface AppStatus {
   tiktokOAuth: boolean;
   tiktokConnected: boolean;
   webSearch?: boolean; // false в веб-версии: ИИ без доступа к интернету
+  vision?: boolean; // ИИ видит изображения (скриншоты, кадры видео)
   static?: boolean; // веб-версия без своего сервера
 }
 

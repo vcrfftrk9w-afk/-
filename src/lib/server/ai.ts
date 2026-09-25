@@ -39,6 +39,7 @@ export async function askJSON<T>(opts: {
   webSearch?: boolean;
   effort?: Effort;
   maxTokens?: number;
+  images?: string[]; // data URL (jpeg/png/webp)
 }): Promise<JSONResult<T>> {
   const client = getClient();
   if (!client) throw new Error("AI не настроен");
@@ -51,7 +52,14 @@ ${jsonInstruction(opts.shape)}`;
     ? [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }]
     : undefined;
 
-  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: opts.prompt }];
+  const imageBlocks: Anthropic.Beta.BetaContentBlockParam[] = (opts.images ?? []).map((url) => {
+    const [head, data] = url.split(",");
+    const media = (head.match(/data:([^;]+)/)?.[1] ?? "image/jpeg") as "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+    return { type: "image", source: { type: "base64", media_type: media, data } };
+  });
+  const messages: Anthropic.Beta.BetaMessageParam[] = [
+    { role: "user", content: imageBlocks.length ? [...imageBlocks, { type: "text", text: opts.prompt }] : opts.prompt },
+  ];
   const sources: { title: string; url: string }[] = [];
   let text = "";
 

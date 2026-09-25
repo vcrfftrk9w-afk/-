@@ -38,7 +38,9 @@ export function levelFor(score: number): string {
 
 export function buildLocalReport(account: Account, settings: UserSettings): LocalReport {
   const { profile } = account;
-  const videos = [...account.videos].sort((a, b) => b.createTime - a.createTime);
+  // Сначала датированные (новые первыми), затем без даты — в порядке импорта (с экрана профиля: новые первыми)
+  const videos = [...account.videos.filter((v) => v.createTime > 0).sort((a, b) => b.createTime - a.createTime), ...account.videos.filter((v) => !v.createTime)];
+  const dated = videos.filter((v) => v.createTime > 0);
   const niche = getNiche(settings.niche);
   const now = Date.now() / 1000;
 
@@ -54,9 +56,9 @@ export function buildLocalReport(account: Account, settings: UserSettings): Loca
   const viewsPerFollower = profile.followers > 0 ? medianViews / profile.followers : medianViews > 0 ? 5 : 0;
 
   // Регулярность: публикации за последние 28 дней
-  const last28 = videos.filter((v) => now - v.createTime < 28 * 86400);
-  const postsPerWeek = videos.length ? last28.length / 4 : 0;
-  const daysSinceLastPost = videos.length ? Math.floor((now - videos[0].createTime) / 86400) : null;
+  const last28 = dated.filter((v) => now - v.createTime < 28 * 86400);
+  const postsPerWeek = dated.length ? last28.length / 4 : 0;
+  const daysSinceLastPost = dated.length ? Math.floor((now - dated[0].createTime) / 86400) : null;
 
   // Хэштеги
   const tagMap = new Map<string, { views: number; uses: number }>();
@@ -84,13 +86,13 @@ export function buildLocalReport(account: Account, settings: UserSettings): Loca
     { label: "3+ мин", min: 180, max: 1e9 },
   ];
   const durationBuckets = buckets.map((b) => {
-    const vs = videos.filter((v) => v.duration >= b.min && v.duration < b.max);
+    const vs = videos.filter((v) => v.duration > 0 && v.duration >= b.min && v.duration < b.max);
     return { label: b.label, avgViews: Math.round(avg(vs.map((v) => v.views))), count: vs.length };
   });
 
   // Тепловая карта день×час (по медиане просмотров относительно общей медианы)
   const cellMap = new Map<string, number[]>();
-  for (const v of videos) {
+  for (const v of dated) {
     const d = new Date(v.createTime * 1000);
     const day = (d.getDay() + 6) % 7;
     const hour = d.getHours();
@@ -108,8 +110,9 @@ export function buildLocalReport(account: Account, settings: UserSettings): Loca
     heatRaw.push({ day, hour, value: val, count: arr.length });
   }
   const heatmap = heatRaw.map((c) => ({ ...c, value: maxVal ? c.value / maxVal : 0 }));
+  const slotsFromData = heatmap.length >= 4;
   const bestSlots =
-    heatmap.length >= 4
+    slotsFromData
       ? [...heatmap]
           .filter((c) => c.count >= 1)
           .sort((a, b) => b.value - a.value)
@@ -125,7 +128,7 @@ export function buildLocalReport(account: Account, settings: UserSettings): Loca
   const reachScore = clamp(logScale(Math.max(viewsPerFollower, 0.001), 0.05, 3));
   const erScore = clamp((engagementRate / (niche.benchmarkER * 1.4)) * 100);
   const conversationScore = clamp(((commentRate + shareRate * 1.5) / 1.2) * 100);
-  const consistencyScore = clamp(
+  const consistencyScore = !dated.length && videos.length ? 50 : clamp(
     (Math.min(postsPerWeek, settings.postsPerWeek || 7) / Math.max(settings.postsPerWeek || 7, 3)) * 80 +
       (daysSinceLastPost === null ? 0 : daysSinceLastPost <= 2 ? 20 : daysSinceLastPost <= 7 ? 10 : 0),
   );
@@ -148,7 +151,7 @@ export function buildLocalReport(account: Account, settings: UserSettings): Loca
     { key: "reach", label: "Охват", score: Math.round(reachScore), hint: `Медиана просмотров = ${(viewsPerFollower * 100).toFixed(0)}% от подписчиков` },
     { key: "engagement", label: "Вовлечённость", score: Math.round(erScore), hint: `ER ${engagementRate.toFixed(1)}% (норма ниши ≈ ${niche.benchmarkER}%)` },
     { key: "conversation", label: "Обсуждаемость", score: Math.round(conversationScore), hint: `Комменты ${commentRate.toFixed(2)}%, репосты ${shareRate.toFixed(2)}%` },
-    { key: "consistency", label: "Регулярность", score: Math.round(consistencyScore), hint: `${postsPerWeek.toFixed(1)} видео/нед · цель ${settings.postsPerWeek}` },
+    { key: "consistency", label: "Регулярность", score: Math.round(consistencyScore), hint: dated.length || !videos.length ? `${postsPerWeek.toFixed(1)} видео/нед · цель ${settings.postsPerWeek}` : "Даты публикаций неизвестны — добавь скрин «Контент» из TikTok Studio" },
     { key: "seo", label: "Хэштеги и SEO", score: Math.round(tagsScore), hint: `${avgTagsPerVideo.toFixed(1)} хэштега на видео` },
     { key: "profile", label: "Упаковка профиля", score: Math.round(profileScore), hint: bio ? "Био заполнено" : "Био пустое — теряешь подписки" },
   ];
@@ -167,7 +170,7 @@ export function buildLocalReport(account: Account, settings: UserSettings): Loca
   if (daysSinceLastPost !== null && daysSinceLastPost > 4) {
     insights.push({ type: "warn", title: `Ты не публиковал(а) ${daysSinceLastPost} дн.`, text: "Перерывы охлаждают аккаунт: алгоритм реже показывает новые ролики. Вернись с серией из 3 видео за 3 дня.", impact: "high" });
   }
-  if (postsPerWeek < Math.min(settings.postsPerWeek, 5) && videos.length) {
+  if (dated.length && postsPerWeek < Math.min(settings.postsPerWeek, 5)) {
     insights.push({ type: "warn", title: "Мало публикаций", text: `Сейчас ${postsPerWeek.toFixed(1)} видео в неделю. Для быстрого роста нужно минимум ${Math.max(5, settings.postsPerWeek)}: больше попыток — больше шансов на вирусный ролик.`, impact: "high" });
   }
   if (videos.length && viewsPerFollower < 0.3 && profile.followers > 500) {
@@ -203,8 +206,8 @@ export function buildLocalReport(account: Account, settings: UserSettings): Loca
   const timeline = [...videos]
     .reverse()
     .slice(-30)
-    .map((v) => ({
-      date: new Date(v.createTime * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" }),
+    .map((v, i, arr) => ({
+      date: v.createTime ? new Date(v.createTime * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" }) : `№${arr.length - i}`,
       views: v.views,
       er: Number(er(v).toFixed(2)),
       title: v.title,
@@ -229,6 +232,7 @@ export function buildLocalReport(account: Account, settings: UserSettings): Loca
     durationBuckets,
     heatmap,
     bestSlots,
+    slotsFromData,
     insights: insights.sort((a, b) => rank(b.impact) - rank(a.impact)),
     timeline,
   };

@@ -13,7 +13,8 @@ export async function GET() {
     webSearch: true,
     model: aiEnabled() ? MODEL : null,
     tiktokOAuth: oauthConfigured(),
-    scan: scanConfigured() ? "full" : "profile",
+    scan: "full",
+    scanVia: scanConfigured() ? "apify" : "direct",
     tiktokConnected: Boolean(jar.get("tt_token")?.value),
   });
 }

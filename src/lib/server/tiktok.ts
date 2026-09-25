@@ -196,16 +196,18 @@ export async function fetchPublicProfile(usernameRaw: string): Promise<{ profile
   }
 
   const num = (x: unknown) => Number(x ?? 0) || 0;
+  const v2 = detail?.userInfo?.statsV2 ?? {};
+  const pick = (a: unknown, b: unknown) => (num(a) > 0 ? num(a) : Math.max(0, num(b)));
   const profile: TikTokProfile = {
     username: user.uniqueId ?? username,
     displayName: user.nickname ?? username,
     avatarUrl: user.avatarLarger || user.avatarMedium || user.avatarThumb,
     bio: user.signature ?? "",
     verified: Boolean(user.verified),
-    followers: num(stats?.followerCount),
-    following: num(stats?.followingCount),
-    likes: num(stats?.heartCount ?? stats?.heart),
-    videoCount: num(stats?.videoCount),
+    followers: pick(v2.followerCount, stats?.followerCount),
+    following: pick(v2.followingCount, stats?.followingCount),
+    likes: pick(v2.heart ?? v2.heartCount, stats?.heart ?? stats?.heartCount),
+    videoCount: pick(v2.videoCount, stats?.videoCount),
     profileUrl: `https://www.tiktok.com/@${user.uniqueId ?? username}`,
   };
 
@@ -284,30 +286,32 @@ interface ApifyItem {
   error?: string;
 }
 
-export async function scanWithApify(usernameRaw: string, limit = 30): Promise<{ profile: TikTokProfile; videos: TikTokVideo[] }> {
-  const username = normalizeUsername(usernameRaw);
-  if (!username) throw new Error("Укажи @username");
-  const base = process.env.APIFY_BASE_URL || "https://api.apify.com";
-  const actor = process.env.APIFY_TIKTOK_ACTOR || "clockworks~tiktok-scraper";
-  const res = await fetch(`${base}/v2/acts/${actor}/run-sync-get-dataset-items?token=${encodeURIComponent(process.env.APIFY_TOKEN!)}&timeout=240`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      profiles: [username],
-      resultsPerPage: limit,
-      profileScrapeSections: ["videos"],
-      shouldDownloadVideos: false,
-      shouldDownloadCovers: false,
-      shouldDownloadSubtitles: false,
-      shouldDownloadSlideshowImages: false,
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(280_000),
-  });
+const apifyBase = () => process.env.APIFY_BASE_URL || "https://api.apify.com";
+const apifyActor = () => process.env.APIFY_TIKTOK_ACTOR || "clockworks~tiktok-scraper";
+const apifyToken = () => encodeURIComponent(process.env.APIFY_TOKEN!);
+
+function apifyInput(username: string, limit: number) {
+  return {
+    profiles: [username],
+    resultsPerPage: limit,
+    profileScrapeSections: ["videos"],
+    shouldDownloadVideos: false,
+    shouldDownloadCovers: false,
+    shouldDownloadSubtitles: false,
+    shouldDownloadSlideshowImages: false,
+  };
+}
+
+async function apifyFetch(path: string, init?: RequestInit) {
+  const res = await fetch(`${apifyBase()}${path}${path.includes("?") ? "&" : "?"}token=${apifyToken()}`, { ...init, cache: "no-store", signal: AbortSignal.timeout(30_000) });
   if (res.status === 401 || res.status === 403) throw new Error("Apify отклонил токен — проверь APIFY_TOKEN");
   if (res.status === 402) throw new Error("На аккаунте Apify закончились бесплатные кредиты");
   if (!res.ok) throw new Error(`Сканер ответил ${res.status}`);
-  const items = (await res.json()) as ApifyItem[];
+  return res.json();
+}
+
+/** Превращает ответ сканера в профиль и ролики. */
+export function parseApifyItems(items: ApifyItem[], username: string): { profile: TikTokProfile; videos: TikTokVideo[] } {
   const real = items.filter((i) => !i.error && i.id);
   if (!real.length) {
     const err = items.find((i) => i.error)?.error;
@@ -343,6 +347,155 @@ export async function scanWithApify(usernameRaw: string, limit = 30): Promise<{ 
       hashtags: tags.length ? tags : extractHashtags(text),
       sound: i.musicMeta?.musicName ? `${i.musicMeta.musicName}${i.musicMeta.musicAuthor ? ` — ${i.musicMeta.musicAuthor}` : ""}` : undefined,
       pinned: i.isPinned || undefined,
+    };
+  });
+  return { profile, videos };
+}
+
+/** Запускает сканирование и сразу возвращает id запуска (без долгого ожидания). */
+export async function startApifyScan(usernameRaw: string, limit = 30): Promise<{ runId: string; datasetId: string; username: string }> {
+  const username = normalizeUsername(usernameRaw);
+  if (!username) throw new Error("Укажи @username");
+  const j = await apifyFetch(`/v2/acts/${apifyActor()}/runs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(apifyInput(username, limit)),
+  });
+  return { runId: j.data.id, datasetId: j.data.defaultDatasetId, username };
+}
+
+export type ScanPoll =
+  | { status: "running"; found: number }
+  | { status: "done"; profile: TikTokProfile; videos: TikTokVideo[] }
+  | { status: "failed"; error: string };
+
+/** Проверяет запуск: сколько роликов уже найдено, готово ли. */
+export async function pollApifyScan(runId: string, datasetId: string, username: string): Promise<ScanPoll> {
+  const run = await apifyFetch(`/v2/actor-runs/${encodeURIComponent(runId)}`);
+  const st: string = run.data.status;
+  if (st === "SUCCEEDED") {
+    const items = (await apifyFetch(`/v2/datasets/${encodeURIComponent(datasetId)}/items?clean=true&format=json`)) as ApifyItem[];
+    try {
+      return { status: "done", ...parseApifyItems(items, normalizeUsername(username)) };
+    } catch (e) {
+      return { status: "failed", error: (e as Error).message };
+    }
+  }
+  if (st === "FAILED" || st === "ABORTED" || st === "TIMED-OUT") {
+    return { status: "failed", error: st === "TIMED-OUT" ? "Сканирование заняло слишком долго" : "Сканер не смог открыть аккаунт" };
+  }
+  const ds = await apifyFetch(`/v2/datasets/${encodeURIComponent(datasetId)}`).catch(() => null);
+  return { status: "running", found: ds?.data?.itemCount ?? 0 };
+}
+
+/** Синхронный вариант (для скриптов и обновления из «Профиля»). */
+export async function scanWithApify(usernameRaw: string, limit = 30): Promise<{ profile: TikTokProfile; videos: TikTokVideo[] }> {
+  const { runId, datasetId, username } = await startApifyScan(usernameRaw, limit);
+  const until = Date.now() + 240_000;
+  while (Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const p = await pollApifyScan(runId, datasetId, username);
+    if (p.status === "done") return { profile: p.profile, videos: p.videos };
+    if (p.status === "failed") throw new Error(p.error);
+  }
+  throw new Error("Сканирование заняло слишком долго");
+}
+
+
+// ── Сканирование без ключей: профиль + виджет профиля + страницы роликов ────
+// Проверено с серверов Vercel: TikTok отдаёт профиль, виджет /embed/@user
+// (последние ~10 роликов) и страницы роликов с полной статистикой.
+
+/** Дата публикации из id ролика TikTok (старшие 32 бита — unix-время). */
+export function timeFromVideoId(id: string): number {
+  try {
+    return Number(BigInt(id) >> BigInt(32));
+  } catch {
+    return 0;
+  }
+}
+
+interface EmbedVideo {
+  id: string;
+  desc?: string;
+  coverUrl?: string;
+  originCoverUrl?: string;
+  playCount?: number;
+  privateItem?: boolean;
+}
+
+async function fetchEmbedVideos(username: string): Promise<EmbedVideo[]> {
+  const res = await fetch(`https://www.tiktok.com/embed/@${encodeURIComponent(username)}`, {
+    headers: BROWSER_HEADERS,
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) return [];
+  const html = await res.text();
+  const m = html.match(/<script[^>]*id="__FRONTITY_CONNECT_STATE__"[^>]*>([\s\S]*?)<\/script>/);
+  if (!m) return [];
+  const data = JSON.parse(m[1])?.source?.data ?? {};
+  const key = Object.keys(data).find((k) => k.includes("/embed/")) ?? "";
+  const list = (data[key]?.videoList ?? []) as EmbedVideo[];
+  return list.filter((v) => v?.id && !v.privateItem);
+}
+
+interface ItemStruct {
+  id?: string;
+  desc?: string;
+  createTime?: string | number;
+  stats?: Record<string, unknown>;
+  statsV2?: Record<string, unknown>;
+  video?: { duration?: number; cover?: string; originCover?: string };
+  music?: { title?: string; authorName?: string; original?: boolean };
+  textExtra?: { hashtagName?: string }[];
+  isPinnedItem?: boolean;
+}
+
+async function fetchVideoItem(username: string, id: string): Promise<ItemStruct | null> {
+  try {
+    const res = await fetch(`https://www.tiktok.com/@${encodeURIComponent(username)}/video/${id}`, {
+      headers: BROWSER_HEADERS,
+      cache: "no-store",
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const m = html.match(/<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/);
+    if (!m) return null;
+    return (JSON.parse(m[1])?.__DEFAULT_SCOPE__?.["webapp.video-detail"]?.itemInfo?.itemStruct as ItemStruct) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Полное сканирование по нику без внешних сервисов. */
+export async function scanDirect(usernameRaw: string): Promise<{ profile: TikTokProfile; videos: TikTokVideo[] }> {
+  const username = normalizeUsername(usernameRaw);
+  const [{ profile }, embed] = await Promise.all([fetchPublicProfile(username), fetchEmbedVideos(username).catch(() => [] as EmbedVideo[])]);
+  const items = await Promise.all(embed.slice(0, 12).map((v) => fetchVideoItem(profile.username || username, v.id)));
+  const num = (x: unknown) => Number(x ?? 0) || 0;
+  const videos: TikTokVideo[] = embed.slice(0, 12).map((e, i) => {
+    const it = items[i];
+    const st = { ...(it?.stats ?? {}), ...(it?.statsV2 ?? {}) };
+    const text = it?.desc ?? e.desc ?? "";
+    const tags = (it?.textExtra ?? []).map((t) => (t.hashtagName ? `#${t.hashtagName.toLowerCase()}` : "")).filter(Boolean);
+    const music = it?.music?.title ? `${it.music.title}${it.music.authorName ? ` — ${it.music.authorName}` : ""}` : undefined;
+    return {
+      id: e.id,
+      title: text,
+      coverUrl: e.coverUrl || e.originCoverUrl || it?.video?.cover,
+      shareUrl: `https://www.tiktok.com/@${profile.username || username}/video/${e.id}`,
+      createTime: num(it?.createTime) || timeFromVideoId(e.id),
+      duration: num(it?.video?.duration),
+      views: num(st.playCount) || num(e.playCount),
+      likes: num(st.diggCount),
+      comments: num(st.commentCount),
+      shares: num(st.shareCount),
+      saves: num(st.collectCount) || undefined,
+      hashtags: tags.length ? tags : extractHashtags(text),
+      sound: music,
+      pinned: it?.isPinnedItem || undefined,
     };
   });
   return { profile, videos };

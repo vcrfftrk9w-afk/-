@@ -23,6 +23,8 @@ export function ScanAccount({ onDone, onFail, full }: { onDone: (r: ScanResult) 
   const [res, setRes] = useState<ScanResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const runRef = useRef<{ runId: string; datasetId: string } | null>(null);
+  const [found, setFound] = useState(0);
 
   useEffect(() => () => {
     if (timer.current) clearInterval(timer.current);
@@ -35,11 +37,28 @@ export function ScanAccount({ onDone, onFail, full }: { onDone: (r: ScanResult) 
     setPhase("scan");
     setStep(0);
     // Шаги прогресса: сканирование роликов занимает 20–90 секунд
-    timer.current = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 2)), full ? 9000 : 1500);
+    setFound(0);
+    runRef.current = null;
+    timer.current = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 2)), 2500);
     try {
-      const r = await fetch(`/api/tiktok/scan?u=${encodeURIComponent(name)}`, { cache: "no-store" });
-      const j = await r.json();
+      const r = await fetch("/api/tiktok/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ u: name }), cache: "no-store" });
+      let j = await r.json();
       if (!r.ok || j.error) throw new Error(j.error || `Ошибка ${r.status}`);
+      // Долгое сканирование (Apify): опрашиваем статус и показываем, сколько роликов уже найдено
+      const until = Date.now() + 5 * 60_000;
+      while (j.status === "running" && Date.now() < until) {
+        if (j.found > 0) {
+          setFound(j.found);
+          setStep((s) => Math.max(s, 2));
+        }
+        await new Promise((ok) => setTimeout(ok, 3000));
+        const q = new URLSearchParams({ run: j.runId ?? runRef.current?.runId ?? "", dataset: j.datasetId ?? runRef.current?.datasetId ?? "", u: j.username ?? name });
+        if (j.runId) runRef.current = { runId: j.runId, datasetId: j.datasetId };
+        const p = await fetch(`/api/tiktok/scan?${q}`, { cache: "no-store" });
+        j = { ...(await p.json()), runId: runRef.current?.runId, datasetId: runRef.current?.datasetId, username: j.username ?? name };
+      }
+      if (j.status === "running") throw new Error("Сканирование заняло слишком долго, попробуй ещё раз");
+      if (j.status === "failed" || j.error) throw new Error(j.error || "Не удалось просканировать аккаунт");
       setStep(STEPS.length - 1);
       setRes(j as ScanResult);
       setPhase("done");
@@ -101,7 +120,7 @@ export function ScanAccount({ onDone, onFail, full }: { onDone: (r: ScanResult) 
         )}
         {(res.warning || res.mode === "profile") && (
           <p className="mt-3 rounded-xl bg-amber/10 p-2.5 text-xs text-amber">
-            {res.warning ?? "Загружены цифры профиля. Ролики со статистикой подтянутся, если добавить APIFY_TOKEN (см. README), или загрузи скриншоты во вкладке «Профиль»."}
+            {res.warning ?? "Загружены цифры профиля, а ролики TikTok сейчас не отдал. Попробуй ещё раз через минуту или добавь скриншоты во вкладке «Профиль»."}
           </p>
         )}
         <div className="mt-4 flex flex-wrap gap-2">
@@ -151,7 +170,7 @@ export function ScanAccount({ onDone, onFail, full }: { onDone: (r: ScanResult) 
                   <div key={s} className={cn("flex items-center gap-2 text-sm transition", i < step ? "text-white/50" : i === step ? "text-white" : "text-white/25")}>
                     {i < step ? <Check className="size-4 text-cyan" /> : i === step ? <Loader2 className="size-4 animate-spin text-pink" /> : <span className="size-4" />}
                     {s}
-                    {i === 1 && i === step && full && <span className="text-xs text-white/40">— до минуты</span>}
+                    {i === 2 && found > 0 && <span className="text-xs tabular-nums text-cyan">{found} найдено</span>}
                   </div>
                 ))}
               </div>
@@ -162,7 +181,7 @@ export function ScanAccount({ onDone, onFail, full }: { onDone: (r: ScanResult) 
 
       {err && <p className="mt-3 rounded-xl bg-pink/10 p-3 text-sm text-[#ff9db0]">{err}</p>}
       {phase === "idle" && !err && (
-        <p className="mt-2 text-xs text-white/40">{full ? "Загружу профиль и последние 30 роликов со статистикой. Аккаунт должен быть открытым." : "Загружу цифры профиля. Аккаунт должен быть открытым."}</p>
+        <p className="mt-2 text-xs text-white/40">Загружу профиль и последние ролики со статистикой: просмотры, лайки, комментарии, репосты. Аккаунт должен быть открытым.</p>
       )}
     </div>
   );

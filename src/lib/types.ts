@@ -46,6 +46,7 @@ export interface TikTokVideo {
   comments: number;
   shares: number;
   hashtags: string[];
+  saves?: number; // сохранения (в избранное)
   sound?: string; // название звука/трека
   pinned?: boolean;
 }

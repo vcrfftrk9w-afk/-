@@ -1,8 +1,9 @@
 "use client";
 // Глобальное состояние приложения, сохраняется в localStorage.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { AIAnalysis, Account, ChatMessage, GrowthPlan, LocalReport, ProductionPlan, TrendsResponse, UserSettings, VideoIdea } from "./types";
+import type { AIAnalysis, Account, ChatMessage, ContentDNA, DeepAnalysis, GrowthPlan, LocalReport, Mission, ProductionPlan, TrendsResponse, UserSettings, VideoIdea } from "./types";
 import { buildLocalReport } from "./analytics";
+import { buildContentDNA } from "./content";
 
 export interface AppStatus {
   ai: boolean;
@@ -13,6 +14,7 @@ export interface AppStatus {
   vision?: boolean; // ИИ видит изображения (скриншоты, кадры видео)
   static?: boolean; // веб-версия без своего сервера
   scan?: "full" | "profile"; // сканирование по @: профиль+ролики или только профиль
+  aiVia?: "direct" | "gateway" | null; // как подключён ИИ: свой ключ или Vercel AI Gateway
 }
 
 export interface AppState {
@@ -27,6 +29,9 @@ export interface AppState {
   chat: ChatMessage[];
   xp: number;
   streak: { count: number; lastDay: string | null };
+  deep: DeepAnalysis | null; // глубокий разбор контента
+  mission: Mission | null; // текущая миссия дня
+  missionLog: { id: string; number: number; title: string; completedAt: number }[];
 }
 
 const EMPTY: AppState = {
@@ -41,6 +46,9 @@ const EMPTY: AppState = {
   chat: [],
   xp: 0,
   streak: { count: 0, lastDay: null },
+  deep: null,
+  mission: null,
+  missionLog: [],
 };
 
 const KEY = "viralpilot:v1";
@@ -50,6 +58,7 @@ interface Ctx {
   hydrated: boolean;
   status: AppStatus | null;
   report: LocalReport | null;
+  dna: ContentDNA | null;
   update: (fn: (s: AppState) => Partial<AppState>) => void;
   reset: () => void;
   addXp: (n: number) => void;
@@ -131,9 +140,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [state.account, state.settings],
   );
 
+  const dna = useMemo(
+    () => (state.account && state.settings ? buildContentDNA(state.account, state.settings, report) : null),
+    [state.account, state.settings, report],
+  );
+
   const value = useMemo(
-    () => ({ state, hydrated, status, report, update, reset, addXp, refreshStatus }),
-    [state, hydrated, status, report, update, reset, addXp, refreshStatus],
+    () => ({ state, hydrated, status, report, dna, update, reset, addXp, refreshStatus }),
+    [state, hydrated, status, report, dna, update, reset, addXp, refreshStatus],
   );
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

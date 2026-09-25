@@ -446,10 +446,44 @@ interface ItemStruct {
   createTime?: string | number;
   stats?: Record<string, unknown>;
   statsV2?: Record<string, unknown>;
-  video?: { duration?: number; cover?: string; originCover?: string };
+  video?: {
+    duration?: number;
+    cover?: string;
+    originCover?: string;
+    width?: number;
+    height?: number;
+    VQScore?: string | number;
+    volumeInfo?: { Loudness?: number; Peak?: number };
+    claInfo?: { hasOriginalAudio?: boolean; captionInfos?: { url?: string; language?: string; languageCode?: string }[] };
+    subtitleInfos?: { Url?: string; LanguageCodeName?: string }[];
+  };
   music?: { title?: string; authorName?: string; original?: boolean };
   textExtra?: { hashtagName?: string }[];
   isPinnedItem?: boolean;
+  diversificationLabels?: string[];
+  suggestedWords?: string[];
+  stickersOnItem?: { stickerText?: string[] }[];
+  textLanguage?: string;
+  locationCreated?: string;
+  imagePost?: unknown;
+}
+
+/** Текст автосубтитров ролика (WebVTT → строка). */
+async function fetchTranscript(it: ItemStruct): Promise<string | undefined> {
+  const url = it.video?.claInfo?.captionInfos?.find((c) => c.url)?.url ?? it.video?.subtitleInfos?.find((c) => c.Url)?.Url;
+  if (!url) return undefined;
+  try {
+    const res = await fetch(url, { headers: BROWSER_HEADERS, cache: "no-store", signal: AbortSignal.timeout(6_000) });
+    if (!res.ok) return undefined;
+    const lines = (await res.text())
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l && l !== "WEBVTT" && !l.includes("-->") && !/^\d+$/.test(l) && !/^(NOTE|STYLE|Kind:|Language:)/.test(l));
+    const text = Array.from(new Set(lines)).join(" ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    return text ? text.slice(0, 800) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function fetchVideoItem(username: string, id: string): Promise<ItemStruct | null> {
@@ -474,6 +508,7 @@ export async function scanDirect(usernameRaw: string): Promise<{ profile: TikTok
   const username = normalizeUsername(usernameRaw);
   const [{ profile }, embed] = await Promise.all([fetchPublicProfile(username), fetchEmbedVideos(username).catch(() => [] as EmbedVideo[])]);
   const items = await Promise.all(embed.slice(0, 12).map((v) => fetchVideoItem(profile.username || username, v.id)));
+  const transcripts = await Promise.all(items.map((it) => (it ? fetchTranscript(it) : Promise.resolve(undefined))));
   const num = (x: unknown) => Number(x ?? 0) || 0;
   const videos: TikTokVideo[] = embed.slice(0, 12).map((e, i) => {
     const it = items[i];
@@ -481,6 +516,8 @@ export async function scanDirect(usernameRaw: string): Promise<{ profile: TikTok
     const text = it?.desc ?? e.desc ?? "";
     const tags = (it?.textExtra ?? []).map((t) => (t.hashtagName ? `#${t.hashtagName.toLowerCase()}` : "")).filter(Boolean);
     const music = it?.music?.title ? `${it.music.title}${it.music.authorName ? ` — ${it.music.authorName}` : ""}` : undefined;
+    const onScreen = (it?.stickersOnItem ?? []).flatMap((s) => s.stickerText ?? []).map((t) => t.trim()).filter(Boolean);
+    const vq = Number(it?.video?.VQScore);
     return {
       id: e.id,
       title: text,
@@ -496,6 +533,18 @@ export async function scanDirect(usernameRaw: string): Promise<{ profile: TikTok
       hashtags: tags.length ? tags : extractHashtags(text),
       sound: music,
       pinned: it?.isPinnedItem || undefined,
+      labels: it?.diversificationLabels?.length ? Array.from(new Set(it.diversificationLabels)) : undefined,
+      keywords: it?.suggestedWords?.length ? it.suggestedWords.slice(0, 8) : undefined,
+      quality: Number.isFinite(vq) && vq > 0 ? Math.round(vq) : undefined,
+      loudness: typeof it?.video?.volumeInfo?.Loudness === "number" ? it.video.volumeInfo.Loudness : undefined,
+      voice: typeof it?.video?.claInfo?.hasOriginalAudio === "boolean" ? it.video.claInfo.hasOriginalAudio : undefined,
+      originalSound: typeof it?.music?.original === "boolean" ? it.music.original : undefined,
+      onScreenText: onScreen.length ? onScreen.slice(0, 6) : undefined,
+      transcript: transcripts[i],
+      photo: it?.imagePost ? true : undefined,
+      width: num(it?.video?.width) || undefined,
+      height: num(it?.video?.height) || undefined,
+      lang: it?.textLanguage || undefined,
     };
   });
   return { profile, videos };

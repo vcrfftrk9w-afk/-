@@ -8,6 +8,10 @@ import { getNiche } from "@/lib/knowledge";
 import { localAnalysis, localCoachReply, localGrowthPlan, localIdeas, localProductionPlan, localReview, localTool, localTrends } from "@/lib/offline";
 import { normalizePlan, type RawPlan } from "@/lib/plan";
 import {
+  DEEP_SHAPE,
+  deepPrompt,
+  MISSION_SHAPE,
+  missionPrompt,
   ANALYZE_SHAPE,
   BASE_SYSTEM,
   IDEAS_SHAPE,
@@ -33,7 +37,9 @@ import {
 } from "@/lib/prompts";
 import { creatorBrief } from "@/lib/server/context";
 import { dataURLToBlob } from "@/lib/media";
-import type { Account, AIAnalysis, ChatMessage, ProductionPlan, Trend, TrendsResponse, UserSettings, VideoIdea } from "@/lib/types";
+import type { Account, AIAnalysis, ChatMessage, DeepAnalysis, Mission, ProductionPlan, Trend, TrendsResponse, UserSettings, VideoIdea } from "@/lib/types";
+import { buildContentDNA } from "@/lib/content";
+import { localDeep, localMission, nextPostTime } from "@/lib/mission";
 
 // ── Доступ к Claude на странице ─────────────────────────────────────────────
 type Tier = "default" | "complex" | "quick";
@@ -243,6 +249,64 @@ async function handleAI(name: string, body: Body): Promise<Response> {
             return aiJSON(reviewPrompt({ description, metaTitle: meta?.title, stats, brief }), REVIEW_SHAPE);
           },
           () => localReview(`${meta?.title ?? ""} ${description}`.trim(), settings.niche, stats),
+        ),
+      );
+    }
+    case "deep": {
+      if (!account) return json({ error: "Нет данных аккаунта" }, 400);
+      const dna = buildContentDNA(account, settings, report);
+      return json(
+        await aiOrLocal<DeepAnalysis>(
+          async () => {
+            const d = await aiJSON<Omit<DeepAnalysis, "createdAt" | "source">>(deepPrompt({ brief, covers: [] }), DEEP_SHAPE, { fresh: true });
+            const known = new Set(account.videos.map((v) => v.id));
+            return { ...d, videos: (d.videos ?? []).filter((v) => known.has(String(v.id))), more: d.more ?? [], stop: d.stop ?? [], nextVideos: d.nextVideos ?? [], createdAt: Date.now(), source: "ai" };
+          },
+          () => localDeep(dna, account, settings),
+        ),
+      );
+    }
+    case "mission": {
+      if (!account) return json({ error: "Нет данных аккаунта" }, 400);
+      const dna = buildContentDNA(account, settings, report);
+      const trends = (body.trends as Trend[]) ?? [];
+      const deep = (body.deep as DeepAnalysis | null) ?? null;
+      const number = Number(body.number) || 1;
+      const shift = Number(body.shift) || 0;
+      const local = localMission({ account, settings, report, dna, trends, deep, number, shift });
+      return json(
+        await aiOrLocal<Mission>(
+          async () => {
+            const d = await aiJSON<Partial<Mission>>(
+              missionPrompt({
+                brief,
+                number,
+                kindHint: local.kind,
+                postAt: nextPostTime(report),
+                trends: trends.slice(0, 8).map((t) => t.name).join("; "),
+                deep: deep?.source === "ai" ? `${deep.whatYouFilm} Формула: ${deep.formula}` : undefined,
+                avoid: shift ? "Автор попросил другую идею — предложи что-то заметно другое." : undefined,
+              }),
+              MISSION_SHAPE,
+              { fresh: true },
+            );
+            return {
+              ...local,
+              ...d,
+              id: rid(),
+              number,
+              createdAt: Date.now(),
+              kind: local.kind,
+              prep: d.prep?.length ? d.prep : local.prep,
+              shots: d.shots?.length ? d.shots : local.shots,
+              edit: d.edit?.length ? d.edit : local.edit,
+              afterPost: d.afterPost?.length ? d.afterPost : local.afterPost,
+              hashtags: d.hashtags?.length ? d.hashtags : local.hashtags,
+              bonus: d.bonus?.length ? d.bonus : local.bonus,
+              source: "ai",
+            } as Mission;
+          },
+          () => local,
         ),
       );
     }

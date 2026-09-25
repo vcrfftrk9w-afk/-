@@ -9,6 +9,8 @@ import { getNiche } from "@/lib/knowledge";
 import { AnimatedNumber, Button, Card, Chip, Progress, ScoreRing, Thinking, cn } from "../ui";
 import { ForecastChart } from "../charts";
 import { useNav } from "../nav";
+import { MissionCard } from "../mission-card";
+import { ContentSummary } from "../content-dna";
 
 export function Overview() {
   const { state, report, status } = useStore();
@@ -88,6 +90,10 @@ export function Overview() {
           </Button>
         </Card>
       )}
+
+      <MissionCard />
+
+      <ContentSummary compact />
 
       <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
         {/* Score */}

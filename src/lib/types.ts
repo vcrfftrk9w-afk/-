@@ -49,6 +49,19 @@ export interface TikTokVideo {
   saves?: number; // сохранения (в избранное)
   sound?: string; // название звука/трека
   pinned?: boolean;
+  // ── Что внутри ролика (из данных TikTok при сканировании) ──
+  labels?: string[]; // категории TikTok (Comedy, Dance, Daily Life…)
+  keywords?: string[]; // поисковые запросы, по которым TikTok показывает ролик
+  quality?: number; // оценка качества видео TikTok (VQScore), 0..100
+  loudness?: number; // громкость, LUFS (тише −24 — ролик звучит тихо)
+  voice?: boolean; // есть свой голос/речь в оригинальной дорожке
+  originalSound?: boolean; // свой звук (true) или чужой/трендовый трек (false)
+  onScreenText?: string[]; // текст-стикеры на экране
+  transcript?: string; // автосубтитры: что говорится в ролике
+  photo?: boolean; // фото-карусель
+  width?: number;
+  height?: number;
+  lang?: string;
 }
 
 export interface UserSettings {
@@ -230,4 +243,77 @@ export interface GrowthPlan {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+}
+
+// ── Разбор контента ────────────────────────────────────────────────────────
+
+export type VideoFormat = "talk" | "trend-sound" | "own-sound" | "photo" | "unknown";
+
+export interface VideoBreakdown {
+  id: string;
+  rank: "top" | "good" | "weak" | "flop";
+  perf: number; // просмотры / медиана автора
+  format: VideoFormat;
+  formatLabel: string;
+  topics: string[];
+  signals: { ok: boolean; text: string }[];
+  fixes: string[];
+  verdict: string;
+}
+
+export interface ContentDNA {
+  summary: string; // «Ты снимаешь …»
+  topics: { label: string; count: number }[];
+  formats: { key: VideoFormat; label: string; count: number; avgViews: number }[];
+  keywords: string[];
+  avgDuration: number;
+  quality?: number;
+  loudness?: number;
+  formula?: string;
+  doMore: string[];
+  stopDoing: string[];
+  videos: VideoBreakdown[];
+  suggestedNiche?: NicheId;
+}
+
+/** Глубокий разбор ИИ: смотрит обложки роликов, подписи, звук, субтитры. */
+export interface DeepAnalysis {
+  whatYouFilm: string; // что автор снимает, простыми словами
+  style: string; // подача, манера, как выглядят ролики
+  audience: string; // кому это интересно
+  strongest: string; // что получается лучше всего (с опорой на конкретный ролик)
+  formula: string; // формула удачного ролика этого автора
+  videos: { id: string; inside: string; hook: string; whyResult: string; fix: string }[];
+  more: string[];
+  stop: string[];
+  nextVideos: { title: string; hook: string; why: string }[];
+  createdAt: number;
+  source: "ai" | "local";
+}
+
+/** Миссия дня: одно конкретное видео, которое нужно снять, с пошаговой инструкцией. */
+export interface Mission {
+  id: string;
+  number: number; // порядковый номер миссии
+  createdAt: number;
+  kind: "repeat-best" | "trend" | "series" | "reply" | "seed" | "starter";
+  title: string; // что снимаем
+  why: string; // почему именно это — с опорой на данные автора
+  basedOn?: string; // «повторяем формулу ролика …» / «тренд …»
+  format: string;
+  durationSec: number;
+  hook: string; // что сказать/написать в первые 2 секунды
+  onScreenText: string; // текст на экране в первом кадре
+  prep: string[]; // перед съёмкой
+  shots: { t: string; what: string; say?: string }[]; // кадры по секундам
+  edit: string[]; // монтаж
+  caption: string;
+  hashtags: string[];
+  sound: string;
+  postAt: string; // когда выложить
+  afterPost: string[]; // первый час после публикации
+  bonus?: string[]; // быстрые правки профиля
+  source: "ai" | "local";
+  doneSteps?: Record<string, boolean>;
+  completedAt?: number;
 }

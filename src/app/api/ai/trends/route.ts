@@ -23,7 +23,7 @@ export async function POST(req: Request) {
         webSearch: true,
         effort: "medium",
       });
-      return { trends: (data.trends ?? []).map((t) => ({ ...t, id: rid(), sources })), fetchedAt: Date.now(), live: true, origin: "web" as const, note: data.note };
+      return { trends: (data.trends ?? []).map((t) => ({ ...t, id: rid(), sources })), fetchedAt: Date.now(), live: sources.length > 0, origin: sources.length ? ("web" as const) : ("ai" as const), note: data.note };
     },
     () => localTrends(settings),
   );

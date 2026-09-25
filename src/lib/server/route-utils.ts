@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Account, UserSettings } from "../types";
 import { buildLocalReport } from "../analytics";
-import { aiEnabled, errorMessage } from "./ai";
+import { aiReady, errorMessage } from "./ai";
 
 export interface BaseBody {
   settings: UserSettings;
@@ -17,7 +17,7 @@ export async function readBody<T extends BaseBody>(req: Request): Promise<T & { 
 
 /** Выполняет AI-функцию, при отсутствии ключа или ошибке — офлайн-фолбэк. */
 export async function aiOrLocal<T>(ai: () => Promise<T>, local: () => T) {
-  if (!aiEnabled()) return NextResponse.json({ data: local(), mode: "local" });
+  if (!(await aiReady()).ok) return NextResponse.json({ data: local(), mode: "local" });
   try {
     return NextResponse.json({ data: await ai(), mode: "ai" });
   } catch (e) {

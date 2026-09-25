@@ -1,6 +1,7 @@
 import type { Account, LocalReport, UserSettings } from "../types";
 import { formatNum } from "../analytics";
 import { getNiche } from "../knowledge";
+import { buildContentDNA, dnaBrief, formatLabel, labelRu, videoFormat } from "../content";
 
 const EXP = { new: "новичок", some: "есть опыт", pro: "опытный автор" } as const;
 
@@ -29,12 +30,21 @@ export function creatorBrief(settings: UserSettings, account?: Account | null, r
     );
   }
   if (account?.videos.length) {
+    lines.push(dnaBrief(buildContentDNA(account, settings, report ?? null)));
     const vids = [...account.videos].sort((a, b) => b.createTime - a.createTime).slice(0, 25);
-    lines.push("ПОСЛЕДНИЕ ВИДЕО (дата | длит | просмотры | лайки | комменты | репосты | сохранения | подпись | звук):");
+    lines.push("ПОСЛЕДНИЕ ВИДЕО (id | дата | длит | просмотры | лайки | комменты | репосты | сохранения | формат | категории TikTok | подпись | звук):");
     for (const v of vids) {
       lines.push(
-        `- ${(v.createTime ? new Date(v.createTime * 1000).toISOString().slice(0, 10) : "дата ?")} | ${v.duration}с | ${v.views} | ${v.likes} | ${v.comments} | ${v.shares} | ${v.saves ?? "?"} | ${v.title.slice(0, 120).replace(/\n/g, " ")}${v.sound ? ` | ${v.sound}` : ""}${v.pinned ? " | закреп" : ""}`,
+        `- ${v.id} | ${(v.createTime ? new Date(v.createTime * 1000).toISOString().slice(0, 10) : "дата ?")} | ${v.duration}с | ${v.views} | ${v.likes} | ${v.comments} | ${v.shares} | ${v.saves ?? "?"} | ${formatLabel(videoFormat(v))} | ${(v.labels ?? []).map(labelRu).join(", ") || "—"} | ${v.title.slice(0, 120).replace(/\n/g, " ") || "без подписи"}${v.sound ? ` | ${v.sound}` : ""}${v.pinned ? " | закреп" : ""}`,
       );
+      const extra = [
+        v.keywords?.length ? `поиск TikTok: ${v.keywords.slice(0, 5).join(", ")}` : "",
+        v.onScreenText?.length ? `текст на экране: «${v.onScreenText.join(" / ").slice(0, 120)}»` : "",
+        v.transcript ? `речь в ролике: «${v.transcript.slice(0, 300)}»` : "",
+        v.quality !== undefined ? `качество картинки ${v.quality}/100` : "",
+        v.loudness !== undefined ? `громкость ${v.loudness} LUFS` : "",
+      ].filter(Boolean);
+      if (extra.length) lines.push(`    ${extra.join("; ")}`);
     }
   }
   return lines.join("\n");

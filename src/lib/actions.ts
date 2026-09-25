@@ -4,10 +4,11 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { callAI } from "./api";
 import { useStore } from "./store";
-import type { AIAnalysis, GrowthPlan, ProductionPlan, TrendsResponse, VideoIdea } from "./types";
+import { getJSON } from "./api";
+import type { AIAnalysis, Account, DeepAnalysis, GrowthPlan, Mission, ProductionPlan, TikTokProfile, TikTokVideo, TrendsResponse, VideoIdea } from "./types";
 import { toast } from "@/components/toast";
 
-type Job = "analysis" | "trends" | "ideas" | "script" | "plan";
+type Job = "analysis" | "trends" | "ideas" | "script" | "plan" | "deep" | "mission" | "refresh";
 
 const busy = new Set<string>();
 const subs = new Set<() => void>();
@@ -120,7 +121,92 @@ export function useActions() {
     [settings, account, update],
   );
 
-  return { runAnalysis, fetchTrends, genIdeas, makeScript, makePlan };
+  const runDeep = useCallback(
+    (silent = false) =>
+      run("deep", async () => {
+        if (!settings || !account) return;
+        const r = await callAI<DeepAnalysis>("deep", { settings, account });
+        if (!silent) note(r.mode, r.warning);
+        update(() => ({ deep: r.data }));
+        if (!silent) toast(r.data.source === "ai" ? "ИИ посмотрел твои ролики — разбор готов 🔍" : "Разбор роликов готов");
+        return r.data;
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [settings, account, update],
+  );
+
+  const newMission = useCallback(
+    (shift = 0) =>
+      run("mission", async () => {
+        if (!settings || !account) return;
+        const number = (state.missionLog?.length ?? 0) + 1;
+        const r = await callAI<Mission>("mission", { settings, account, trends: state.trends?.trends ?? [], deep: state.deep, number, shift });
+        note(r.mode, r.warning);
+        update(() => ({ mission: r.data }));
+        return r.data;
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [settings, account, state.trends, state.deep, state.missionLog, update],
+  );
+
+  /** Свежие данные аккаунта из TikTok (новые ролики, рост подписчиков). */
+  const refreshAccount = useCallback(
+    () =>
+      run("refresh", async () => {
+        if (!account) return;
+        let profile: TikTokProfile;
+        let videos: TikTokVideo[];
+        if (account.source === "oauth") ({ profile, videos } = await getJSON<{ profile: TikTokProfile; videos: TikTokVideo[] }>("/api/tiktok/me"));
+        else if (account.source === "public") ({ profile, videos } = await getJSON<{ profile: TikTokProfile; videos: TikTokVideo[] }>(`/api/tiktok/scan?u=${encodeURIComponent(account.profile.username)}`));
+        else {
+          toast("Обнови данные в «Профиле»: загрузи свежие скриншоты или файл", "info");
+          return;
+        }
+        const before = account.profile.followers;
+        const prevIds = new Set(account.videos.map((v) => v.id));
+        const fresh = videos.filter((v) => !prevIds.has(v.id)).length;
+        const merged: Account = {
+          ...account,
+          profile,
+          videos: videos.length ? [...videos, ...account.videos.filter((v) => !videos.some((x) => x.id === v.id))].slice(0, 60) : account.videos,
+          history: [...(account.history ?? []), { t: Date.now(), followers: profile.followers, likes: profile.likes }].slice(-120),
+        };
+        update(() => ({ account: merged, deep: null, analysis: null }));
+        const diff = profile.followers - before;
+        toast(`Обновлено: ${diff >= 0 ? "+" : ""}${diff} подписчиков${fresh ? `, новых роликов: ${fresh}` : ""}`);
+        return merged;
+      }),
+    [account, update],
+  );
+
+  return { runAnalysis, fetchTrends, genIdeas, makeScript, makePlan, runDeep, newMission, refreshAccount };
+}
+
+/** Отметки шагов миссии и её завершение. */
+export function useMissionControls() {
+  const { state, update, addXp } = useStore();
+  const toggleStep = useCallback(
+    (key: string) => {
+      const m = state.mission;
+      if (!m) return;
+      const done = !m.doneSteps?.[key];
+      update(() => ({ mission: { ...m, doneSteps: { ...(m.doneSteps ?? {}), [key]: done } } }));
+      if (done) addXp(5);
+    },
+    [state.mission, update, addXp],
+  );
+  const complete = useCallback(() => {
+    const m = state.mission;
+    if (!m || m.completedAt) return;
+    update((s) => ({
+      mission: { ...m, completedAt: Date.now() },
+      missionLog: [...(s.missionLog ?? []), { id: m.id, number: m.number, title: m.title, completedAt: Date.now() }],
+    }));
+    addXp(120);
+    import("@/components/ui").then((x) => x.fireConfetti());
+    toast(`Миссия №${m.number} выполнена! +120 XP 🎉 Первый час — отвечай на комментарии`);
+  }, [state.mission, update, addXp]);
+  return { toggleStep, complete };
 }
 
 /** Индекс текущего дня плана (0..29). */

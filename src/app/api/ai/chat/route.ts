@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { aiEnabled, streamChat } from "@/lib/server/ai";
+import { aiReady, streamChat } from "@/lib/server/ai";
 import { coachSystem } from "@/lib/prompts";
 import { creatorBrief } from "@/lib/server/context";
 import { readBody, type BaseBody } from "@/lib/server/route-utils";
@@ -17,8 +17,9 @@ export async function POST(req: Request) {
   const history = (messages ?? []).filter((m) => m.content.trim()).slice(-20);
   const last = history[history.length - 1]?.content ?? "";
 
-  const headers = { "Content-Type": "text/plain; charset=utf-8", "X-Mode": aiEnabled() ? "ai" : "local" };
-  if (!aiEnabled()) {
+  const ready = (await aiReady()).ok;
+  const headers = { "Content-Type": "text/plain; charset=utf-8", "X-Mode": ready ? "ai" : "local" };
+  if (!ready) {
     return new Response(localCoachReply(last, settings, report), { headers });
   }
 

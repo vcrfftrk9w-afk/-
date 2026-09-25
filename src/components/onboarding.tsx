@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Camera, CameraOff, Check, LogIn, PenLine, ScanLine, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { NICHES, guessNiche } from "@/lib/knowledge";
+import { NICHES } from "@/lib/knowledge";
+import { detectNiche } from "@/lib/content";
 import type { Account, NicheId, UserSettings } from "@/lib/types";
 import { useStore } from "@/lib/store";
 import { makeDemoAccount } from "@/lib/demo";
@@ -32,7 +33,7 @@ export function Onboarding({ initialAccount }: { initialAccount?: Account | null
   const { update, status } = useStore();
   const [step, setStep] = useState<Step>(initialAccount ? "niche" : "connect");
   const [account, setAccount] = useState<Account | null>(initialAccount ?? null);
-  const guessed = initialAccount ? guessNiche(initialAccount.videos, initialAccount.profile.bio) : null;
+  const guessed = initialAccount ? detectNiche(initialAccount.videos, initialAccount.profile.bio) : null;
   const [settings, setSettings] = useState<UserSettings>(() => (guessed ? { ...DEFAULT_SETTINGS, niche: guessed } : DEFAULT_SETTINGS));
   const [autoNiche, setAutoNiche] = useState<boolean>(Boolean(guessed));
   const [username, setUsername] = useState("");
@@ -48,7 +49,7 @@ export function Onboarding({ initialAccount }: { initialAccount?: Account | null
   function onScanned(r: ScanResult) {
     setAccount({ source: "public", profile: r.profile, videos: r.videos, connectedAt: Date.now(), history: [{ t: Date.now(), followers: r.profile.followers, likes: r.profile.likes }] });
     setUsername(r.profile.username);
-    const g = guessNiche(r.videos, r.profile.bio);
+    const g = detectNiche(r.videos, r.profile.bio);
     if (g) {
       set("niche", g);
       setAutoNiche(true);

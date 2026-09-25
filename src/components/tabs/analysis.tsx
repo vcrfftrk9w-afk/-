@@ -8,6 +8,7 @@ import type { TikTokVideo } from "@/lib/types";
 import { Button, Card, Chip, CopyButton, Empty, Progress, SectionHeader, Skeleton, Thinking } from "../ui";
 import { DurationChart, Heatmap, SERIES_A, SERIES_B, ViewsChart } from "../charts";
 import { useNav } from "../nav";
+import { ContentSummary, VideoBreakdowns } from "../content-dna";
 
 const IMPACT = { high: { t: "Высокий эффект", tone: "pink" }, medium: { t: "Средний", tone: "amber" }, low: { t: "Низкий", tone: "default" } } as const;
 
@@ -58,6 +59,11 @@ export function Analysis() {
           </Button>
         }
       />
+
+      <div className="mb-5 space-y-5">
+        <ContentSummary />
+        <VideoBreakdowns />
+      </div>
 
       {busy && !a && (
         <Card className="mb-5">

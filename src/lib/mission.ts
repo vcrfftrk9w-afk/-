@@ -220,7 +220,7 @@ export function localMission(opts: {
 export function localDeep(dna: ContentDNA, account: Account, settings: UserSettings): DeepAnalysis {
   const niche = getNiche(settings.niche);
   const byId = new Map(account.videos.map((v) => [v.id, v]));
-  const bestB = dna.videos.find((b) => b.rank === "top") ?? dna.videos[0];
+  const bestB = [...dna.videos].sort((a, b) => b.perf - a.perf)[0];
   const bestV = bestB ? byId.get(bestB.id) : undefined;
   return {
     whatYouFilm: dna.summary,

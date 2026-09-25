@@ -585,8 +585,13 @@ const State = (() => {
   }
   /* принять состояние из облака как есть — не перебивая его отметку времени,
      иначе свежая копия с другого устройства выглядела бы «старше» */
+  /* Данные из облака на iPhone приходят замороженными (только чтение):
+     любая попытка поменять задачу или шаблон падала, и день не собирался.
+     Поэтому чужое состояние всегда берём глубокой копией. */
+  const thaw = (o) => { try { return JSON.parse(JSON.stringify(o || {})); } catch (e) { return {}; } };
+
   function adopt(obj) {
-    s = deepMerge(defaults(), obj || {});
+    s = deepMerge(defaults(), thaw(obj));
     ensureSkills();
     ensureRoutines();
     try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* ничего */ }
@@ -594,7 +599,7 @@ const State = (() => {
   }
 
   function replace(obj) {
-    s = deepMerge(defaults(), obj || {});
+    s = deepMerge(defaults(), thaw(obj));
     ensureSkills();
     save();
   }

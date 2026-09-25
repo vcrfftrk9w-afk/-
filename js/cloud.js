@@ -12,6 +12,7 @@
    ========================================================= */
 
 const Cloud = (() => {
+  const thaw = (o) => JSON.parse(JSON.stringify(o));
   let db = null;
   let uid = null;
   let status = 'off';          // off | connecting | on | absent | error
@@ -104,7 +105,8 @@ const Cloud = (() => {
       status = 'on';
       const [c, t, h] = snaps;
       if (!c.exists) return null;
-      const parts = { core: c.data(), tasks: t.exists ? t.data() : null, history: h.exists ? h.data() : null };
+      // копия: снимки облака на iPhone заморожены, менять их нельзя
+      const parts = thaw({ core: c.data(), tasks: t.exists ? t.data() : null, history: h.exists ? h.data() : null });
       lastPayload = {
         core: JSON.stringify(parts.core),
         tasks: parts.tasks ? JSON.stringify(parts.tasks) : '',
@@ -178,7 +180,7 @@ const Cloud = (() => {
       if (JSON.stringify(remote) === lastPayload.core) return;
       // подтягиваем задачи и историю к новому ядру
       Promise.all([ref('tasks').get(), ref('history').get()]).then(([t, h]) => {
-        const parts = { core: remote, tasks: t.exists ? t.data() : null, history: h.exists ? h.data() : null };
+        const parts = thaw({ core: remote, tasks: t.exists ? t.data() : null, history: h.exists ? h.data() : null });
         lastPayload = {
           core: JSON.stringify(parts.core),
           tasks: parts.tasks ? JSON.stringify(parts.tasks) : '',

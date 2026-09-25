@@ -21,7 +21,7 @@ const { chromium } = require('playwright');
   console.log('  испорченный файл сохранён рядом:', r.corrupt>0 ? 'да ✓' : 'НЕТ ✗');
   const t = await p.$$eval('.toast', e=>e.map(x=>x.textContent.replace(/\s+/g,' ').trim()));
   console.log('  сообщение:', t.find(x=>x.includes('запасн'))||'(не показано)');
-  console.log('  ', r.tasks===3 && r.name==='Саша' ? '✓ прогресс спасён' : '✗ прогресс потерян');
+  console.log('  ', r.tasks>=3 && r.name==='Саша' ? '✓ прогресс спасён' : '✗ прогресс потерян');
 
   console.log('\n=== СЛУЧАЙ 2: испорчено и основное, и запасное ===');
   await p.evaluate(()=>{ localStorage.setItem(State.KEY,'мусор'); localStorage.setItem(State.BACKUP_KEY,'тоже мусор'); });

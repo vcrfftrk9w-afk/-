@@ -30,6 +30,13 @@ const Modes = (() => {
         .sort((a, b) => (b.priority === 'boss') - (a.priority === 'boss') || (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0))[0];
       return t ? { kind: 'loose', task: t } : { kind: 'empty' };
     }
+    /* ночь: после отбоя и до первого блока графика — время сна, а не отсчёт
+       до завтрашнего английского. Ночью в телефоне с СДВГ залипают легче всего */
+    const prof = Track.profile();
+    const first = pl.blocks.length ? pl.blocks[0].start : prof.wakeTarget;
+    const bed = prof.sleepTarget != null ? prof.sleepTarget : 23 * 60;
+    const night = bed > first ? (now >= bed || now < first - 30) : (now >= bed && now < first - 30);
+    if (night) return { kind: 'sleep', bed, wake: first };
     const sk = pl.skipped || {};
     const open = (b) => b.kind === 'task' && !sk[b.id] && !Planner.isDone(b);
     const here = pl.blocks.filter((b) => now >= b.start && now < b.end);
@@ -38,7 +45,9 @@ const Modes = (() => {
     const next = pl.blocks.find((b) => b.start > now && open(b)) || null;
     if (curTask) return { kind: 'task', block: curTask, next: pl.blocks.find((b) => b.start >= curTask.end && open(b)) || null };
     const late = pl.blocks.filter((b) => open(b) && b.end <= now && now - b.end < 120).pop();
-    if (late && (!next || next.start - now > 20)) return { kind: 'late', block: late, next };
+    // в дороге и на паре пропущенное не сделать — не дёргаем, просто ждём следующего
+    const busyNow = here.some((b) => b.kind === 'busy');
+    if (late && !busyNow && (!next || next.start - now > 20)) return { kind: 'late', block: late, next };
     if (next) return { kind: 'between', ctx, next };
     const left = pl.blocks.filter(open).length;
     return left ? { kind: 'late', block: pl.blocks.filter(open).pop(), next: null } : { kind: 'done', ctx };
@@ -177,6 +186,23 @@ const Modes = (() => {
     const combo = comboNow();
     const comboHTML = combo >= 2 ? `<span class="an-combo">🔥 Комбо ×${combo}</span>` : '';
 
+    if (tg.kind === 'sleep') {
+      const asleep = Track.today().sleepAt !== null;
+      const lateNight = Track.nowMin() < tg.wake;
+      el.innerHTML = `
+        <div class="an-top"><span class="an-tag">🌙 ВРЕМЯ СНА · подъём в ${Track.hhmm(tg.wake)}</span>${comboHTML}</div>
+        <div class="an-free">
+          <div class="an-emoji big">😴</div>
+          <h2>${lateNight ? 'Сейчас ночь — спи' : 'Отбой. Телефон — в сторону'}</h2>
+          <p class="muted">${lateNight
+            ? 'Каждый час сна сейчас — это энергия на пары, заработок и ролики завтра. Всё, что не сделано, подождёт до утра.'
+            : 'Сон — 8,5 часа. Завтрашний пик энергии делается прямо сейчас. Лента подождёт.'}</p>
+        </div>
+        ${asleep || lateNight ? '' : `<div class="an-actions one"><button class="btn btn-primary an-start" data-an="sleep">🌙 Ложусь спать</button></div>`}
+        ${perfectHTML(true)}`;
+      return;
+    }
+
     if (tg.kind === 'empty' || tg.kind === 'done') {
       el.innerHTML = `
         <div class="an-top"><span class="an-tag ok">${tg.kind === 'done' ? 'ВСЁ ЗАКРЫТО' : 'СЕЙЧАС СВОБОДНО'}</span>${comboHTML}</div>
@@ -209,7 +235,7 @@ const Modes = (() => {
       const span = Math.max(60, (n.start - (ctx ? ctx.start : n.start - 60)) * 60);
       const rest = ctx && (ctx.kind === 'rest' || ctx.sub === 'rest');
       el.innerHTML = `
-        <div class="an-top"><span class="an-tag">${ctx ? `СЕЙЧАС · ${ctx.emoji} ${UI.esc(ctx.title)} · до ${Track.hhmm(ctx.end)}` : 'СЕЙЧАС · ПАУЗА'}</span>${comboHTML}</div>
+        <div class="an-top"><span class="an-tag">${ctx ? `СЕЙЧАС · ${ctx.emoji} ${UI.esc(ctx.title)} · до ${Track.hhmm(ctx.end)}` : (Planner.plan() && Planner.plan().blocks.length && Track.nowMin() < Planner.plan().blocks[0].start ? '☀️ СКОРО ПОДЪЁМ' : 'СЕЙЧАС · ПАУЗА')}</span>${comboHTML}</div>
         <div class="an-main">
           <div class="an-timer calm" style="--p:${Math.min(1, until / span).toFixed(4)}" data-until="${n.start * 60}" data-span="${span}">
             <b class="an-mm">${mmss(until)}</b><small>до старта</small>
@@ -397,6 +423,7 @@ const Modes = (() => {
       if (act === 'early') { startBlock(blockById(id), 25); return; }
       if (act === 'done') { completeBlock(blockById(id), a); return; }
       if (act === 'skip') { Planner.skip(id); UI.toast('Ок, дальше', 'default', '⏭️'); renderNow(); return; }
+      if (act === 'sleep') { Screens.day.closeDay(); return; }
       if (act === 'why') { App.go('day'); setTimeout(() => Screens.day.explain(id), 220); return; }
       if (act === 'stuck') { const b = blockById(id); if (b) stuck(b.taskId, b.title); return; }
       if (act === 'start-loose') { const t = State.s.tasks.find((x) => x.id === id); App.go('adhd'); setTimeout(() => Screens.focus.quickStart(15, t ? t.title : '', id), 250); return; }

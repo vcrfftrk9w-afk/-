@@ -2232,3 +2232,5 @@ button.wk-body { min-height: 40px; }
 .remind-clock ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; display: grid; gap: 4px; }
 .remind-note { padding: 12px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
 .remind-note p { margin: 4px 0 0; }
+
+.an-actions.one { grid-template-columns: 1fr; }

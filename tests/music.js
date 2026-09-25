@@ -16,8 +16,9 @@ const { chromium } = require('playwright');
       const bpmBefore = Music.bpm;
       Music.setStation(st);
       // уровень сразу после переключения (шина приглушена) и через секунду
-      await new Promise(r=>setTimeout(r,120));
-      const ducked = Math.max(...Sound.levels(8));
+      // провал длится ~0,5 с, а анализатор сглаживает — берём самую тихую точку окна
+      let ducked = 1;
+      for (let i = 0; i < 12; i++) { await new Promise(r=>setTimeout(r,35)); ducked = Math.min(ducked, Math.max(...Sound.levels(8))); }
       await new Promise(r=>setTimeout(r,1600));
       const back = Math.max(...Sound.levels(8));
       let notes=0; const ctx=Sound.context(); const o=ctx.createOscillator.bind(ctx);

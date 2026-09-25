@@ -318,6 +318,10 @@
     height: 3px; border-radius: 3px;
   }
   .tab-badge { position: absolute; top: 2px; right: calc(50% - 21px); margin: 0; }
+  /* внизу активная вкладка — это полоска сверху, а не заливка: белый текст
+     на светлой теме пропадал целиком. Красим акцентом */
+  body[data-theme="light"] .tab-btn.active { color: var(--accent); }
+  body[data-theme="light"] .tab-btn.active .tab-badge { background: var(--accent); color: #fff; }
   .tab-badge.dot { margin: 0; }
 }
 

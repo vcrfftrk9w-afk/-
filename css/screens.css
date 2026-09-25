@@ -643,9 +643,7 @@
 }
 @media (max-width: 640px) {
   .topbar { padding: 8px 12px; gap: 8px; }
-  .tab-btn em { display: none; }
-  .tab-btn { padding: 10px 14px; }
-  .tab-btn span { font-size: 1.2rem; }
+  /* подписи вкладок на телефоне не прячем: внизу без них непонятно, какая кнопка что делает */
   .hero-card { flex-direction: column; text-align: center; }
   .hero-right { min-width: 0; width: 100%; }
   .timer-wrap { width: 196px; height: 196px; }

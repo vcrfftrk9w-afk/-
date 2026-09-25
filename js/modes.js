@@ -221,8 +221,11 @@ const Modes = (() => {
             <p>${rest ? 'Сейчас отдых по графику — он тоже часть плана. Я позову за 2 минуты.' : UI.esc(noteFor(n)) || 'Я напомню заранее — пока занимайся тем, что по графику.'}</p>
           </div>
         </div>
+        <div class="an-actions">
+          <button class="btn btn-primary an-start" data-an="early" data-id="${n.id}">▶ Начать сейчас</button>
+          <button class="btn an-done" data-an="done" data-id="${n.id}">✓ Уже сделал</button>
+        </div>
         <div class="an-sub">
-          <button class="linkbtn" data-an="early" data-id="${n.id}">⚡ Начать раньше</button>
           <button class="linkbtn" data-an="why" data-id="${n.id}">Почему в ${Track.hhmm(n.start)}?</button>
         </div>
         ${perfectHTML(true)}`;

@@ -31,11 +31,15 @@ const { chromium } = require('playwright');
       const lastHidden = last ? last.getBoundingClientRect().bottom > tb.top + 4 && last.getBoundingClientRect().top < tb.top : false;
       // все видимые кнопки в одном ряду — иначе «Ещё» уезжает на вторую строку
       const rows = new Set([...document.querySelectorAll('.tab-btn')].filter(x=>x.offsetParent!==null && x.getBoundingClientRect().width>0).map(x=>Math.round(x.getBoundingClientRect().top)));
-      return { зазор: Math.round(tb.top - mp.bottom), заблокировано: blocked, рядов: rows.size,
+      // у каждой видимой кнопки есть видимая подпись — иначе внизу одни значки
+      const безПодписи = [...document.querySelectorAll('.tab-btn')].filter(x=>x.offsetParent!==null && x.getBoundingClientRect().width>0)
+        .filter(x=>{ const e=x.querySelector('em'); return !e || e.getBoundingClientRect().width===0; }).length;
+      return { зазор: Math.round(tb.top - mp.bottom), заблокировано: blocked, рядов: rows.size, безПодписи,
                высотаПанели: Math.round(tb.height),
                tabbarH: getComputedStyle(document.documentElement).getPropertyValue('--tabbar-h').trim() };
     });
     console.log(`${cfg.name.padEnd(15)} панель ${r.высотаПанели}px (--tabbar-h: ${r.tabbarH}), зазор до плеера ${r.зазор}px, заблокировано: ${r.заблокировано.length?r.заблокировано.join(','):'ничего ✓'}, рядов кнопок: ${r.рядов}${r.рядов===1?' ✓':' ✗'}`);
+    if (r.безПодписи) errs.push(cfg.name + ': кнопок без подписи — ' + r.безПодписи);
     if (r.рядов !== 1) errs.push(cfg.name + ': кнопки панели в ' + r.рядов + ' ряда');
     await p.close();
   }

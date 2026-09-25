@@ -673,3 +673,16 @@
   .switch-row input[type="checkbox"],
   .check-inline input[type="checkbox"] { width: 24px; height: 24px; }
 }
+
+/* Внутри просмотрщика Claude на телефоне нижний край страницы бывает за
+   пределами экрана: фиксированная панель внизу пропадала целиком.
+   Там вкладки закреплены сверху — верх страницы виден всегда. */
+@media (max-width: 760px) {
+  body.in-frame .tabbar {
+    position: sticky; top: 0; bottom: auto;
+    border-top: none; border-bottom: 1px solid var(--border);
+    box-shadow: 0 10px 24px -18px rgba(0, 0, 0, 0.6);
+    padding: 4px 6px 5px;
+  }
+  body.in-frame .tab-indicator { top: auto; bottom: 0; }
+}

@@ -5,6 +5,8 @@ const { chromium } = require('playwright');
   const errors=[]; p.on('pageerror',e=>errors.push(e.message));
   p.on('console',m=>{ if(m.type()==='error'&&!m.text().includes('ERR_')&&!m.text().includes('Failed to load')) errors.push(m.text()); });
   const hide=()=>p.evaluate(()=>{document.querySelectorAll('.modal:not(.hidden)').forEach(m=>{m.classList.add('hidden');m.classList.remove('modal-open');});document.body.classList.remove('modal-lock');document.querySelectorAll('.toast').forEach(t=>t.remove());});
+  // время закреплено: среда 12:20 — посреди дня, есть и сделанное, и впереди
+  await p.addInitScript(()=>{ const R=Date,f=new R('2026-09-23T12:20:00').getTime(),s=R.now(); class FD extends R{constructor(...a){a.length?super(...a):super(f+R.now()-s)} static now(){return f+R.now()-s}} window.Date=FD; });
   await p.goto('http://localhost:8792/index.html'); await p.waitForTimeout(1500);
   await p.evaluate(()=>{ State.s.onboarded=true; State.s.name='Саша'; State.save(); });
   await p.reload(); await p.waitForTimeout(1800); await hide();
@@ -23,19 +25,17 @@ const { chromium } = require('playwright');
   await p.evaluate(()=>{ Week.install(); Track.wake(7*60); DayTpl.apply({}); }); await p.waitForTimeout(1200); await hide();
   await p.evaluate(()=>App.go('dashboard')); await p.waitForTimeout(700); await hide();
   const card = await p.evaluate(()=>{
-    const items=[...document.querySelectorAll('.main-item')].map(li=>({
-      when: li.querySelector('.main-when').textContent,
-      title: li.querySelector('.main-title').textContent.trim(),
-      теги: [...li.querySelectorAll('.main-tag')].map(t=>t.textContent),
-      классы: li.className.replace('main-item','').trim() }));
+    const items=[...document.querySelectorAll('#main-today .mt-row')].map(li=>({
+      when: li.querySelector('.mt-time').textContent, title: li.querySelector('.mt-main b').textContent.trim(),
+      классы: li.className.replace('mt-row','').trim() }));
     return { счётчик: document.querySelector('#main-count').textContent, items };
   });
   console.log('  счётчик:', card.счётчик);
-  card.items.forEach(i=>console.log(`   ${i.when.padEnd(12)} ${i.title}${i.теги.length?'  ['+i.теги.join('][')+']':''}${i.классы?'  {'+i.классы+'}':''}`));
+  card.items.forEach(i=>console.log(`   ${i.when.padEnd(24)} ${i.title}${i.классы?'  {'+i.классы+'}':''}`));
 
   console.log('\n=== ОТМЕТИТЬ ДЕЛО ПРЯМО С ГЛАВНОЙ ===');
   const before = await p.evaluate(()=>State.s.tasks.filter(t=>t.done).length);
-  await p.click('.main-item:not(.done) .main-check'); await p.waitForTimeout(900); await hide();
+  await p.evaluate(()=>document.querySelector('#main-today .mt-row:not(.done) [data-mdone]').click()); await p.waitForTimeout(900); await hide();
   const after = await p.evaluate(()=>({done:State.s.tasks.filter(t=>t.done).length, badge:document.querySelector('#main-count').textContent}));
   console.log(`  выполнено задач: ${before} → ${after.done} ${after.done>before?'✓':'✗'} | счётчик: ${after.badge}`);
 

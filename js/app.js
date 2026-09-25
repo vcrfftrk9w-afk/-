@@ -274,6 +274,7 @@ const App = (() => {
   }
 
   function renderActive() {
+    safely('heal', healDay);
     UI.preserveFocus(() => {
       renderHeader();
       const screen = screenByTab[currentTab] && screenByTab[currentTab]();
@@ -442,7 +443,9 @@ const App = (() => {
     const player = $('#mini-player');
     if (bar) {
       const fixed = getComputedStyle(bar).position === 'fixed';
-      root.style.setProperty('--tabbar-h', fixed ? Math.round(bar.getBoundingClientRect().height) + 'px' : '0px');
+      // внутри просмотрщика низ может быть срезан — держим плеер повыше
+      const gap = document.body.classList.contains('in-frame') ? 46 : 0;
+      root.style.setProperty('--tabbar-h', fixed ? Math.round(bar.getBoundingClientRect().height) + 'px' : gap + 'px');
     }
     if (player) {
       root.style.setProperty('--miniplayer-h', Math.round(player.getBoundingClientRect().height) + 'px');
@@ -1046,49 +1049,51 @@ const App = (() => {
 
   /* ---------- запуск ---------- */
   function init() {
+    // внутри просмотрщика Claude низ страницы может уходить за экран телефона
+    try { document.body.classList.toggle('in-frame', window.self !== window.top); } catch (e) { document.body.classList.add('in-frame'); }
     State.load();
-    State.watchOtherTabs();
-    applyAll();
+    safely('State.watchOtherTabs', () => State.watchOtherTabs());
+    safely('applyAll', () => applyAll());
 
-    FX.initBackground($('#bg-canvas'));
-    FX.initConfetti($('#confetti-canvas'));
-    UI.initRipple();
+    safely('FX.initBackground', () => FX.initBackground($('#bg-canvas')));
+    safely('FX.initConfetti', () => FX.initConfetti($('#confetti-canvas')));
+    safely('UI.initRipple', () => UI.initRipple());
 
-    bindStateEvents();
-    bindOnboarding();
-    bindSettings();
-    bindKeys();
-    bindFirstGesture();
+    safely('bindStateEvents', () => bindStateEvents());
+    safely('bindOnboarding', () => bindOnboarding());
+    safely('bindSettings', () => bindSettings());
+    safely('bindKeys', () => bindKeys());
+    safely('bindFirstGesture', () => bindFirstGesture());
 
-    Screens.dashboard.bind();
-    Screens.tasks.bind();
-    Screens.habits.bind();
-    Screens.goals.bind();
-    Screens.focus.bind();
-    Screens.rewards.bind();
-    Screens.stats.bind();
-    Screens.routines.bind();
-    Screens.music.bind();
-    Screens.review.bind();
-    bindCapture();
-    bindPresence();
-    bindEmptyStates();
-    bindInstall();
-    bindSwipe();
-    Palette.bind();
-    Advisor.bind();
-    Modes.bind();
-    $('#mini-clock').addEventListener('click', () => go('dashboard'));
-    Chill.bind();
-    DayTpl.seed();
-    syncBottomInsets();
+    safely('Screens.dashboard.bind', () => Screens.dashboard.bind());
+    safely('Screens.tasks.bind', () => Screens.tasks.bind());
+    safely('Screens.habits.bind', () => Screens.habits.bind());
+    safely('Screens.goals.bind', () => Screens.goals.bind());
+    safely('Screens.focus.bind', () => Screens.focus.bind());
+    safely('Screens.rewards.bind', () => Screens.rewards.bind());
+    safely('Screens.stats.bind', () => Screens.stats.bind());
+    safely('Screens.routines.bind', () => Screens.routines.bind());
+    safely('Screens.music.bind', () => Screens.music.bind());
+    safely('Screens.review.bind', () => Screens.review.bind());
+    safely('bindCapture', () => bindCapture());
+    safely('bindPresence', () => bindPresence());
+    safely('bindEmptyStates', () => bindEmptyStates());
+    safely('bindInstall', () => bindInstall());
+    safely('bindSwipe', () => bindSwipe());
+    safely('Palette.bind', () => Palette.bind());
+    safely('Advisor.bind', () => Advisor.bind());
+    safely('Modes.bind', () => Modes.bind());
+    safely('$', () => $('#mini-clock').addEventListener('click', () => go('dashboard')));
+    safely('Chill.bind', () => Chill.bind());
+    safely('DayTpl.seed', () => DayTpl.seed());
+    safely('syncBottomInsets', () => syncBottomInsets());
     window.addEventListener('resize', syncBottomInsets);
     window.addEventListener('orientationchange', () => setTimeout(syncBottomInsets, 250));
-    setTimeout(syncBottomInsets, 400);
-    reportLoadProblem();
+    safely('setTimeout', () => setTimeout(syncBottomInsets, 400));
+    safely('reportLoadProblem', () => reportLoadProblem());
     $('#shortcuts-btn').addEventListener('click', () => { UI.closeModal('#settings-modal'); setTimeout(showShortcuts, 200); });
 
-    paintIcons();
+    safely('paintIcons', () => paintIcons());
     $$('.tab-btn').forEach((b) => b.addEventListener('click', () => {
       if (b.id === 'tab-more') {
         const inOverflow = OVERFLOW.some((o) => o.tab === currentTab);
@@ -1100,7 +1105,7 @@ const App = (() => {
       Sound.sfx('click');
     }));
     window.addEventListener('resize', moveIndicator);
-    $('#tabbar').addEventListener('scroll', moveIndicator, { passive: true });
+    safely('$', () => $('#tabbar').addEventListener('scroll', moveIndicator, { passive: true }));
 
     State.tickPassive();
     startTicks();
@@ -1151,13 +1156,50 @@ const App = (() => {
     }, 850);
   }
 
+  /* Каждый шаг запуска — отдельно: если один упал, остальные всё равно
+     отработают. Раньше ошибка в сборке дня оставляла приложение без плана. */
+  function safely(name, fn) {
+    try { return fn(); } catch (e) { logError(name, e); return undefined; }
+  }
+
+  /* ошибки пишем в сохранение (оно уходит в облако) — так их видно,
+     даже если телефон не показывает консоль */
+  function logError(where, e) {
+    try {
+      const s = State.s;
+      s.errLog = (s.errLog || []).concat({
+        at: Date.now(), where: String(where).slice(0, 40),
+        msg: String((e && e.message) || e).slice(0, 200),
+        stack: String((e && e.stack) || '').split('\n').slice(0, 3).join(' | ').slice(0, 300),
+      }).slice(-12);
+      State.save();
+    } catch (err) { /* даже журнал не записался — молчим */ }
+  }
+
   function showApp() {
     $('#app').classList.remove('hidden');
-    dailyCheckIn();
-    ensureDaySetup();
-    go('dashboard');
-    UI.initTilt();
-    offerGhostCleanup();
+    safely('dailyCheckIn', dailyCheckIn);
+    safely('ensureDaySetup', ensureDaySetup);
+    safely('go', () => go('dashboard'));
+    safely('tilt', () => UI.initTilt());
+    safely('ghosts', offerGhostCleanup);
+    safely('env', noteEnv);
+  }
+
+  /* размеры экрана внутри просмотрщика — чтобы понять, куда девается нижняя панель */
+  function noteEnv() {
+    setTimeout(() => {
+      const bar = $('#tabbar');
+      const r = bar ? bar.getBoundingClientRect() : null;
+      State.s.envNote = {
+        at: Date.now(), w: innerWidth, h: innerHeight,
+        vv: window.visualViewport ? Math.round(window.visualViewport.height) : null,
+        framed: (() => { try { return window.self !== window.top; } catch (e) { return true; } })(),
+        bar: r ? { top: Math.round(r.top), h: Math.round(r.height), pos: getComputedStyle(bar).position } : null,
+        ua: navigator.userAgent.slice(0, 160),
+      };
+      State.save();
+    }, 1500);
   }
 
   /* облако ответило, а приложение уже открыто: берём то, что свежее */
@@ -1165,6 +1207,10 @@ const App = (() => {
     if (remote && (remote.savedAt || 0) > (State.s.savedAt || 0)) {
       State.adopt(remote);
       applyAll();
+      // в облаке мог лежать вчерашний план — собираем сегодняшний
+      lastHeal = 0;
+      safely('dailyCheckIn', dailyCheckIn);
+      safely('ensureDaySetup', ensureDaySetup);
       renderActive();
     }
     afterCloud();
@@ -1177,6 +1223,8 @@ const App = (() => {
     Cloud.watch((fresh) => {       // другое устройство сохранило новее
       State.adopt(fresh);
       applyAll();
+      lastHeal = 0;
+      safely('ensureDaySetup', ensureDaySetup);
       renderActive();
       UI.toast('Обновил прогресс с другого устройства', 'default', '☁️');
     });
@@ -1184,22 +1232,39 @@ const App = (() => {
 
   /* день настраивается сам: график недели и сегодняшние дела на месте,
      без единой кнопки */
+  let settingUp = false;
   function ensureDaySetup() {
-    if (typeof Week === 'undefined' || typeof DayTpl === 'undefined') return;
-    // старые закрытые задачи — в журнал, чтобы память не пухла годами
-    if (State.compactDone(30)) State.save();
-    // график ставится и обновляется сам — руками ничего нажимать не нужно
-    const fresh = !Week.installed() || Week.outdated();
-    if (fresh) Week.install();
-    if (fresh || !DayTpl.appliedToday()) DayTpl.apply({ quiet: true });
-    if (typeof Planner === 'undefined') return;
-    const pl = Planner.plan();
-    if (fresh || !pl || (Planner.inScript() && !pl.script)) Planner.build({});
+    if (typeof Week === 'undefined' || typeof DayTpl === 'undefined' || settingUp) return;
+    settingUp = true;
+    try {
+      // старые закрытые задачи — в журнал, чтобы память не пухла годами
+      safely('compact', () => { if (State.compactDone(30)) State.save(); });
+      // график ставится и обновляется сам — руками ничего нажимать не нужно
+      const fresh = safely('weekCheck', () => !Week.installed() || Week.outdated());
+      if (fresh) safely('weekInstall', () => Week.install());
+      if (fresh || !DayTpl.appliedToday()) safely('tplApply', () => DayTpl.apply({ quiet: true }));
+      if (typeof Planner === 'undefined') return;
+      const pl = Planner.plan();
+      if (fresh || !pl || (Planner.inScript() && !pl.script)) safely('planBuild', () => Planner.build({}));
+    } finally { settingUp = false; }
   }
 
-  return { init, go, showComeback, syncBottomInsets, applyAll, applyPalette, renderHeader, renderActive, openCapture, moveIndicator, paintMiniPlayIcon, isQuietNow, focusTask: null };
+  /* план на сегодня должен быть всегда: если его нет (новый день, облако
+     подсунуло старое сохранение) — собираем тихо, не чаще раза в 20 секунд */
+  let lastHeal = 0;
+  function healDay() {
+    if (typeof Planner === 'undefined' || !State.s.onboarded || $('#app').classList.contains('hidden')) return;
+    if (Planner.plan() && DayTpl.appliedToday()) return;
+    if (Date.now() - lastHeal < 20000) return;
+    lastHeal = Date.now();
+    ensureDaySetup();
+  }
+
+  return { init, go, showComeback, syncBottomInsets, applyAll, applyPalette, renderHeader, renderActive, openCapture, moveIndicator, paintMiniPlayIcon, isQuietNow, logError, ensureDaySetup, focusTask: null };
 })();
 
+window.addEventListener('error', (e) => { try { App.logError('window', e.error || e.message); } catch (err) {} });
+window.addEventListener('unhandledrejection', (e) => { try { App.logError('promise', e.reason); } catch (err) {} });
 document.addEventListener('DOMContentLoaded', App.init);
 
 if ('serviceWorker' in navigator) {

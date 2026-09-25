@@ -490,73 +490,114 @@ Screens.dashboard = (() => {
              now, lateCount: late.length, aheadCount: live.length };
   }
 
+  /* ---------- главные дела ----------
+     Главная — это твой список: то, что ты сам назвал главным. У каждого
+     дела одна кнопка «Начать» — и сразу сессия со звуком и голосом.
+     Подготовительные дела графика не пропадают: они свёрнуты ниже. */
+  const CORE = new Set([
+    'ТТ видео — orca', 'ТТ видео — кино', 'YouTube', 'Английский', 'OLX: объявления и обмены',
+    'Готовка', 'Одно сохранённое видео', 'Работа над заработком',
+    'Разбор с ИИ: что получилось и что дальше', 'Тренировка', 'Прогулка и восстановление',
+  ]);
+
+  function coreSplit() {
+    const pl = typeof Planner !== 'undefined' ? Planner.plan() : null;
+    if (!pl) return null;
+    const sk = pl.skipped || {};
+    const rows = pl.blocks.filter((b) => b.kind === 'task' && sk[b.id] !== 'moved' && sk[b.id] !== 'tomorrow');
+    const titleOf = (b) => b.taskTitle || b.task || b.title;
+    const isCore = (b) => {
+      if (CORE.has(titleOf(b))) return true;
+      const t = b.taskId && State.s.tasks.find((x) => x.id === b.taskId);
+      return !!(t && b.extra && t.priority === 'boss');    // главное от ИИ на сегодня
+    };
+    return { core: rows.filter(isCore), other: rows.filter((b) => !isCore(b)) };
+  }
+
+  function rowHTML(b, now) {
+    const done = Planner.isDone(b);
+    const live = !done && now >= b.start && now < b.end;
+    const late = !done && b.end <= now;
+    const left = b.end - now;
+    const note = live ? `идёт сейчас · ещё ${left} мин`
+      : late ? 'можно коротко, 15 мин'
+        : done ? 'сделано' : `${b.end - b.start} мин${b.hard ? ' · ровно' : ''}`;
+    return `
+      <li class="mt-row ${done ? 'done' : ''} ${live ? 'now' : ''} ${late ? 'late' : ''}">
+        <button class="mt-main" data-mopen="${b.id}"><small class="mt-time">${Track.hhmm(b.start)} · ${note}</small><b>${b.emoji || '✅'} ${UI.esc(b.title)}</b></button>
+        ${done
+          ? '<span class="mt-ok" aria-label="Сделано">✓</span>'
+          : `<button class="mt-go ${live ? 'hot' : ''}" data-mgo="${b.id}" aria-label="Начать: ${UI.esc(b.title)}">▶</button>
+             <button class="mt-check" data-mdone="${b.id}" aria-label="Отметить сделанным"></button>`}
+      </li>`;
+  }
+
   function renderMainCard() {
     const el = $('#main-today');
     if (!el) return;
     const badge = $('#main-count');
-    const { list, total, done, now, lateCount, aheadCount } = mainItems();
+    const split = coreSplit();
+    const now = Track.nowMin();
 
-    if (!list.length) {
+    if (!split || (!split.core.length && !split.other.length)) {
       if (badge) badge.textContent = '—';
-      const hasTpl = typeof DayTpl !== 'undefined' && DayTpl.active().length;
       el.innerHTML = `
-        <p class="muted small">На сегодня ещё ничего не назначено.</p>
-        <div class="row wrap">
-          ${hasTpl ? '<button class="btn btn-primary" id="main-tpl">▶ Поставить дела дня</button>' : ''}
-          <button class="btn btn-ghost" id="main-add">＋ Добавить задачу</button>
-        </div>`;
-      const b1 = $('#main-tpl'); if (b1) b1.onclick = () => { DayTpl.apply({}); UI.toast('Дела дня поставлены', 'success', '🗂️'); };
-      const b2 = $('#main-add'); if (b2) b2.onclick = () => App.go('tasks');
+        <p class="muted small">Собираю твой день по графику…</p>
+        <button class="btn btn-primary btn-block" id="main-fix">▶ Поставить дела на сегодня</button>`;
+      const f = $('#main-fix');
+      if (f) f.onclick = () => { App.ensureDaySetup(); App.renderActive(); UI.toast('День собран по графику', 'success', '🗓️'); };
       return;
     }
 
+    const { core, other } = split;
+    const doneN = core.filter((b) => Planner.isDone(b)).length;
+    const pct = core.length ? Math.round((doneN / core.length) * 100) : 0;
     if (badge) {
-      badge.textContent = `${done} из ${total}`;
-      badge.className = 'badge ' + (total && done === total ? 'badge-ok' : (done ? 'badge-mid' : ''));
+      badge.textContent = `${doneN} из ${core.length}`;
+      badge.className = 'badge ' + (core.length && doneN === core.length ? 'badge-ok' : (doneN ? 'badge-mid' : ''));
     }
+    const open = !!State.s.mainMore;
+    const otherLeft = other.filter((b) => !Planner.isDone(b)).length;
 
-    const cur = list.find((x) => !x.done && x.at !== null && now >= x.at && now < x.end);
-    const next = list.find((x) => !x.done && x.at !== null && x.at > now);
-
-    const script = typeof Planner !== 'undefined' && Planner.plan() && Planner.plan().script && typeof Week !== 'undefined';
-    const dayLine = script ? (() => {
-      const sc = Week.scriptToday();
-      const pairs = sc.filter((b) => b.kind === 'pair');
-      const pub = sc.filter((b) => b.hard).map((b) => `${b.emoji} ${Track.hhmm(b.start)}`).join(' · ');
-      return `<p class="main-day">📅 ${Week.DAY_NAMES[new Date().getDay()]} по твоему графику${pairs.length ? ` · 🎓 ${Track.hhmm(pairs[0].start)}–${Track.hhmm(pairs[pairs.length - 1].end)}` : ''}${pub ? ` · ${pub}` : ''}</p>`;
-    })() : '';
-
-    el.innerHTML = `${dayLine}
-      <ul class="main-list">
-        ${list.map((x) => {
-          const isNow = cur && x.id === cur.id;
-          const isNext = !isNow && next && x.id === next.id;
-          const late = !x.done && x.at !== null && x.end !== null && x.end < now;
-          const cls = [x.done ? 'done' : '', isNow ? 'now' : '', isNext ? 'next' : '', late ? 'late' : '', x.big ? 'big' : ''].filter(Boolean).join(' ');
-          const when = x.at === null
-            ? (x.overdue ? 'просрочено' : 'без времени')
-            : `${Track.hhmm(x.at)}${x.end ? '–' + Track.hhmm(x.end) : ''}`;
-          return `
-            <li class="main-item ${cls}">
-              <button class="main-check" data-mdone="${x.id}" aria-label="${x.done ? 'Сделано' : 'Отметить сделанным'}">${x.done ? '✓' : ''}</button>
-              <span class="main-when">${when}</span>
-              <button class="main-title" data-mopen="${x.id}">${x.emoji} ${UI.esc(x.title)}</button>
-              ${x.pinned ? '<span class="main-tag pin">ровно</span>' : ''}
-              ${isNow ? '<span class="main-tag now">сейчас</span>' : ''}
-              ${isNext && !isNow ? '<span class="main-tag next">дальше</span>' : ''}
-              ${late ? '<span class="main-tag late">пропущено</span>' : ''}
-            </li>`;
-        }).join('')}
-      </ul>
-      ${lateCount > 2 ? `<p class="main-note">И ещё ${UI.plur(lateCount - 2, 'пропущенное дело', 'пропущенных дела', 'пропущенных дел')} — можно догнать или отпустить во вкладке «День».</p>` : ''}
-      <div class="main-actions">
-        <button class="btn btn-accent" id="main-verdict">🧠 Что сейчас главное</button>
-        <button class="btn btn-ghost" id="main-day">→ Весь день</button>
-        <button class="btn btn-ghost" id="main-remind">⏰ В телефон</button>
+    /* сверху — сейчас и дальше; пропущенное и сделанное свёрнуты в строку,
+       чтобы вечером экран не был стеной красного */
+    const ahead = core.filter((b) => !Planner.isDone(b) && b.end > now);
+    const missed = core.filter((b) => !Planner.isDone(b) && b.end <= now);
+    const doneList = core.filter((b) => Planner.isDone(b));
+    const lateOpen = !!State.s.mainLate;
+    el.innerHTML = `
+      <div class="mt-bar" aria-hidden="true"><span style="width:${pct}%"></span></div>
+      ${ahead.length ? `<ul class="mt-list">${ahead.map((b) => rowHTML(b, now)).join('')}</ul>`
+        : `<p class="mt-empty">${missed.length ? 'На сегодня по времени всё. Можно добить пропущенное — коротко.' : '🏆 Главное на сегодня сделано.'}</p>`}
+      ${missed.length ? `
+        <button class="mt-fold" id="main-late" aria-expanded="${lateOpen}">${lateOpen ? '▴' : '▾'} Пропущено · ${missed.length}</button>
+        ${lateOpen ? `<ul class="mt-list mt-other">${missed.map((b) => rowHTML(b, now)).join('')}</ul>` : ''}` : ''}
+      ${doneList.length ? `<p class="mt-done-line">✓ Сделано: ${doneList.map((b) => UI.esc((b.taskTitle || b.title).replace(/^ТТ видео — /, 'ТТ '))).join(', ')}</p>` : ''}
+      ${other.length ? `
+        <button class="mt-more" id="main-more" aria-expanded="${open}">${open ? '▴ Свернуть' : `▾ Ещё по графику · ${otherLeft ? `${otherLeft} осталось` : 'всё сделано'}`}</button>
+        ${open ? `<ul class="mt-list mt-other">${other.map((b) => rowHTML(b, now)).join('')}</ul>` : ''}` : ''}
+      <div class="mt-links">
+        <button class="linkbtn" id="main-verdict">🧠 Что главное</button>
+        <button class="linkbtn" id="main-remind">⏰ В телефон</button>
+        <button class="linkbtn" id="main-day">🗓️ Весь день</button>
       </div>`;
 
-    el.querySelectorAll('[data-mdone]').forEach((b) => { b.onclick = () => mainComplete(b.dataset.mdone); });
-    el.querySelectorAll('[data-mopen]').forEach((b) => { b.onclick = () => mainOpen(b.dataset.mopen); });
+    const block = (id) => Planner.blocks().find((x) => x.id === id);
+    el.querySelectorAll('[data-mgo]').forEach((btn) => { btn.onclick = () => {
+      const b = block(btn.dataset.mgo);
+      if (b && typeof Modes !== 'undefined') {
+        if (typeof Coach !== 'undefined' && Coach.start(b, { direct: true })) return;
+        Sound.sfx('fanfare');
+        Modes.startBlock(b);
+      }
+    }; });
+    el.querySelectorAll('[data-mdone]').forEach((btn) => { btn.onclick = () => {
+      const b = block(btn.dataset.mdone);
+      if (b && typeof Modes !== 'undefined') Modes.completeBlock(b, btn);
+    }; });
+    el.querySelectorAll('[data-mopen]').forEach((btn) => { btn.onclick = () => { App.go('day'); setTimeout(() => Screens.day.explain(btn.dataset.mopen), 220); }; });
+    const lateBtn = $('#main-late'); if (lateBtn) lateBtn.onclick = () => { State.s.mainLate = !State.s.mainLate; State.save(); renderMainCard(); };
+    const more = $('#main-more'); if (more) more.onclick = () => { State.s.mainMore = !State.s.mainMore; State.save(); renderMainCard(); };
     const v = $('#main-verdict'); if (v) v.onclick = () => Verdict.open();
     const d = $('#main-day'); if (d) d.onclick = () => App.go('day');
     const rm = $('#main-remind'); if (rm) rm.onclick = () => Remind.open();

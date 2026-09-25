@@ -2234,3 +2234,60 @@ button.wk-body { min-height: 40px; }
 .remind-note p { margin: 4px 0 0; }
 
 .an-actions.one { grid-template-columns: 1fr; }
+
+/* =========================================================
+   ГЛАВНАЯ: твои главные дела — просто и спокойно
+   ========================================================= */
+[data-card="now"] { display: none !important; }        /* большая карточка «Сейчас» убрана с главной */
+body[data-mode="adhd"] .bg-aurora span, body .bg-aurora span { opacity: 0.16; }
+.card-main { border: 1px solid var(--border); box-shadow: 0 12px 30px -24px rgba(0, 0, 0, .55); }
+.mt-bar { height: 6px; border-radius: 6px; background: color-mix(in srgb, var(--text) 9%, transparent); overflow: hidden; margin: 2px 0 10px; }
+.mt-bar span { display: block; height: 100%; background: var(--success); border-radius: inherit; transition: width .6s ease; }
+.mt-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.mt-row {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px 36px; align-items: center; gap: 8px;
+  padding: 8px 8px; border-radius: 14px; background: var(--surface-2); border: 1px solid transparent;
+}
+.mt-time { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px; color: var(--text-muted); }
+.mt-main { display: block; min-width: 0; text-align: left; background: none; border: 0; padding: 0; color: var(--text); font: inherit; cursor: pointer; }
+.mt-main b { display: block; font-size: 15px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.mt-main small { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.mt-go {
+  width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer; font-size: 16px; color: #fff;
+  background: var(--accent); display: grid; place-items: center; box-shadow: 0 6px 16px -8px var(--accent);
+}
+.mt-go.hot { background: linear-gradient(135deg, var(--accent), var(--accent2, var(--accent))); animation: an-pulse 1.8s ease-in-out infinite; }
+.mt-go:active { transform: scale(.92); }
+.mt-check {
+  width: 34px; height: 34px; border-radius: 50%; cursor: pointer; background: transparent;
+  border: 2px solid color-mix(in srgb, var(--success) 60%, var(--border));
+}
+.mt-check:hover { background: color-mix(in srgb, var(--success) 15%, transparent); }
+.mt-ok { grid-column: 3 / 5; justify-self: end; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--success); color: #fff; font-weight: 900; }
+.mt-row.now { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); }
+.mt-row.now .mt-time { color: var(--accent2, var(--accent)); }
+.mt-row.now small { color: var(--accent2, var(--accent)); font-weight: 700; }
+.mt-row.done { opacity: .55; }
+.mt-row.done .mt-main b { text-decoration: line-through; }
+.mt-row.late .mt-time { color: var(--danger); }
+.mt-more { display: block; width: 100%; margin: 10px 0 6px; padding: 10px; border-radius: 12px; border: 1px dashed var(--border-strong, var(--border)); background: none; color: var(--text-muted); font: inherit; font-weight: 700; cursor: pointer; }
+.mt-other .mt-row { background: transparent; border-color: var(--border); }
+.mt-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; margin-top: 10px; }
+.mt-links .linkbtn { font-weight: 700; font-size: 13px; padding: 8px 4px; }
+@media (max-width: 360px) { .mt-row { grid-template-columns: 38px minmax(0, 1fr) 40px 32px; gap: 6px; } .mt-go { width: 40px; height: 40px; } }
+@media (prefers-reduced-motion: reduce) { .mt-go.hot { animation: none; } }
+.run-top-btns { display: inline-flex; gap: 12px; align-items: center; }
+.mt-row { grid-template-columns: 42px minmax(0, 1fr) 42px 32px; padding: 7px 8px; }
+.mt-main b { font-size: 14.5px; }
+.mt-go { width: 42px; height: 42px; }
+.mt-check { width: 32px; height: 32px; }
+.mt-row.late .mt-time { color: var(--text-muted); }
+.mt-fold { display: block; width: 100%; margin: 8px 0 4px; padding: 9px 12px; border-radius: 12px; border: 0; text-align: left;
+  background: var(--surface-2); color: var(--text-muted); font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; }
+.mt-done-line { margin: 8px 2px 0; font-size: 12.5px; color: var(--success); overflow-wrap: anywhere; }
+.mt-empty { margin: 4px 2px 8px; font-size: 14px; color: var(--text-muted); }
+.mt-row { grid-template-columns: minmax(0, 1fr) 42px 32px; padding: 8px 10px; }
+.mt-main .mt-time { display: block; margin: 0 0 2px; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+.mt-main b { overflow-wrap: break-word; word-break: normal; hyphens: auto; }
+.mt-ok { grid-column: 2 / 4; }
+.mt-row.now .mt-time { color: var(--accent2, var(--accent)); }

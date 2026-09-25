@@ -28,10 +28,10 @@ async function page(b, iso, opts={}) {
 
   // 1. Понедельник 16:05 — тренировка A по шагам
   let p = await page(b, '2026-09-21T16:05:00');
-  const note = await p.evaluate(()=>document.querySelector('#adhd-now p') && document.querySelector('#adhd-now p').textContent);
-  check('на «Сейчас» видно, какая тренировка', /Тренировка A: приседания/.test(note||''), note);
-  await p.click('[data-an="start"]'); await p.waitForTimeout(400);
-  check('СТАРТ открыл тренировку', await p.evaluate(()=>/Тренировка A/.test(document.querySelector('#sheet-body').textContent)));
+  const note = await p.evaluate(()=>Coach.noteFor(Planner.blocks().find(b=>b.taskTitle==='Тренировка')));
+  check('видно, какая сегодня тренировка', /Тренировка A: приседания/.test(note||''), note);
+  await p.evaluate(()=>{ const b=Planner.blocks().find(x=>x.taskTitle==='Тренировка'); Coach.openTraining(b); }); await p.waitForTimeout(400);
+  check('окно тренировки открывается', await p.evaluate(()=>/Тренировка A/.test(document.querySelector('#sheet-body').textContent)));
   await p.screenshot({path:SP+'v21_train.png'});
   await p.click('#co-go'); await p.waitForTimeout(300);
   const steps = await p.evaluate(()=>Coach.strengthSteps('A').length);
@@ -45,7 +45,7 @@ async function page(b, iso, opts={}) {
 
   // 2. Вторник 16:05 — прогулка
   p = await page(b, '2026-09-22T16:05:00');
-  await p.click('[data-an="start"]'); await p.waitForTimeout(400);
+  await p.evaluate(()=>Coach.openWalk(Planner.blocks().find(x=>x.taskTitle==='Прогулка и восстановление'))); await p.waitForTimeout(400);
   const W = await p.evaluate(()=>document.querySelector('#sheet-body h2').textContent);
   check('во вторник — прогулка', /Прогулка/.test(W), W);
   await p.click('#co-go'); await p.waitForTimeout(200);
@@ -85,9 +85,9 @@ async function page(b, iso, opts={}) {
 
   // 4. Понедельник 20:40 — разбор с ИИ (имитация ИИ)
   p = await page(b, '2026-09-21T20:40:00', {ai:true});
-  const an = await p.evaluate(()=>document.querySelector('#adhd-now h2').textContent);
-  check('в 20:40 «Сейчас» — продуктивное время с ИИ', /ИИ/.test(an), an);
-  await p.click('[data-an="start"]'); await p.waitForTimeout(400);
+  const an = await p.evaluate(()=>(document.querySelector('.mt-row.now b')||{}).textContent);
+  check('в 20:40 на главной идёт продуктивное время с ИИ', /ИИ/.test(an||''), an);
+  await p.evaluate(()=>document.querySelector('.mt-row.now [data-mgo]').click()); await p.waitForTimeout(400);
   await p.click('#ai-run'); await p.waitForTimeout(900);
   const A = await p.evaluate(()=>({ main: (document.querySelector('.ai-main b')||{}).textContent, prompt: (window.__prompts[0]||'').slice(0,4000) }));
   check('ИИ ответил, главное на завтра показано', /Kwork/.test(A.main||''), A.main);

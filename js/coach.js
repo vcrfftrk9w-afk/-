@@ -270,11 +270,37 @@ const Coach = (() => {
     if (body) body.onclick = null;
   }
   const sheetOpen = () => { const m = $('#sheet-modal'); return m && !m.classList.contains('hidden') && m.classList.contains('modal-open'); };
-  const mmss = (s) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.max(0, Math.ceil(s)) % 60).padStart(2, '0')}`;
+  const mmss = (s) => { const t = Math.max(0, Math.ceil(s)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+
+  /* ---------- голос: говорит, что делать, — не надо смотреть в экран ---------- */
+  const voiceOn = () => State.s.voice !== false;
+  function say(text) {
+    if (!voiceOn() || typeof window === 'undefined' || !window.speechSynthesis) return;
+    try {
+      const u = new SpeechSynthesisUtterance(String(text).replace(/[«»]/g, '').replace(/\s*·\s*/g, '. '));
+      u.lang = 'ru-RU'; u.rate = 1.05;
+      const v = speechSynthesis.getVoices().find((x) => /^ru/i.test(x.lang));
+      if (v) u.voice = v;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(u);
+    } catch (e) { /* нет голоса — есть звук и экран */ }
+  }
+  function stepSpeech(st) {
+    if (st.kind === 'rest') return `${st.t}. ${Math.round(st.sec)} секунд.`;
+    let t = st.t;
+    if (st.reps) t += `. ${st.reps.replace('–', ' до ')}`;
+    if (st.sec && st.kind !== 'rest') t += `. ${st.sec >= 60 ? Math.round(st.sec / 60) + ' минут' : st.sec + ' секунд'}`;
+    return t;
+  }
 
   function startRun(kind, steps, title, block) {
     stopRun();
     run = { kind, steps, i: 0, endsAt: 0, timer: null, started: Date.now(), block, title, paused: false };
+    // старт — это событие: звук, вибрация и голос, как у тренера
+    Sound.sfx('fanfare');
+    FX.vibrate([60, 40, 120]);
+    say(`Начинаем: ${title}. ${stepSpeech(steps[0])}`);
+    run.spoken = 0;
     renderRun();
     run.timer = setInterval(tickRun, 250);
   }
@@ -290,7 +316,8 @@ const Coach = (() => {
     const body = UI.sheet(`
       <div class="run run-${st.kind}">
         <div class="run-top"><span>${UI.esc(run.title)} · шаг ${run.i + 1} из ${run.steps.length}</span>
-          <button class="linkbtn" data-run="stop">Закончить</button></div>
+          <span class="run-top-btns"><button class="linkbtn" data-run="voice" aria-label="Голос">${voiceOn() ? '🔊' : '🔇'}</button>
+          <button class="linkbtn" data-run="stop">Закончить</button></span></div>
         <div class="run-bar"><span style="width:${pct}%"></span></div>
         ${st.label ? `<div class="run-label">${UI.esc(st.label)}</div>` : ''}
         <h2 class="run-title">${UI.esc(st.t)}</h2>
@@ -312,6 +339,7 @@ const Coach = (() => {
       if (!a || !run) return;
       const k = a.dataset.run;
       if (k === 'stop') { finishRun(run.i >= run.steps.length * 0.6); return; }
+      if (k === 'voice') { State.s.voice = !voiceOn(); State.save(); if (!voiceOn() && window.speechSynthesis) speechSynthesis.cancel(); renderRun(); return; }
       if (k === 'pause') {
         if (run.paused) { run.endsAt = Date.now() + run.pausedLeft; run.paused = false; }
         else { run.pausedLeft = run.endsAt - Date.now(); run.paused = true; }
@@ -334,6 +362,10 @@ const Coach = (() => {
       clock.style.setProperty('--p', Math.max(0, Math.min(1, left / st.sec)).toFixed(3));
       clock.classList.toggle('hurry', left <= 5);
     }
+    if (left <= 3.2 && left > 0 && run.beeped !== run.i + ':' + Math.ceil(left)) {
+      run.beeped = run.i + ':' + Math.ceil(left);
+      Sound.sfx('tick');
+    }
     if (left <= 0) {
       Sound.sfx(st.kind === 'rest' ? 'start' : 'tick');
       FX.vibrate(st.kind === 'rest' ? [60, 40, 60] : 40);
@@ -348,6 +380,7 @@ const Coach = (() => {
     run.endsAt = 0;
     run.paused = false;
     if (run.i >= run.steps.length) { finishRun(true); return; }
+    say(stepSpeech(run.steps[run.i]));
     renderRun();
   }
 
@@ -359,7 +392,7 @@ const Coach = (() => {
     if (!complete) {
       UI.closeModal('#sheet-modal');
       UI.toast(`Остановились на шаге ${r.i + 1}. Даже часть — лучше, чем ничего.`, 'default', '👍');
-      if (r.kind !== 'cook') Track.workout(minutes, true);
+      if (r.kind === 'train' || r.kind === 'walk') Track.workout(minutes, true);
       return;
     }
     if (r.kind === 'train' || r.kind === 'walk') {
@@ -367,15 +400,18 @@ const Coach = (() => {
       Track.workout(Math.max(minutes, r.kind === 'walk' ? 30 : 20), true);
     }
     completeTask(r.block, r.kind);
+    say(r.kind === 'train' ? 'Тренировка сделана. Красавчик.' : 'Готово. Отличная работа.');
     Sound.sfx('fanfare');
     FX.fireworks(3);
     const body = UI.sheet(`
       <div class="run-done">
         <div class="demand-emoji">${r.kind === 'cook' ? '🍽️' : '🏆'}</div>
-        <h2>${r.kind === 'cook' ? 'Еда на два дня готова' : r.kind === 'walk' ? 'Прогулка засчитана' : 'Тренировка сделана'}</h2>
+        <h2>${r.kind === 'cook' ? 'Еда на два дня готова' : r.kind === 'walk' ? 'Прогулка засчитана' : r.kind === 'train' ? 'Тренировка сделана' : `Сделано: ${UI.esc(r.title)}`}</h2>
         <p class="muted">${r.kind === 'cook'
           ? 'Остынет — сразу в холодильник. Завтра готовить не нужно — освободившееся время твоё.'
-          : `${minutes} мин движения. Силовых всего: ${strengthCount()}. ${trainingWeek() <= 2 ? 'Первые две недели — два круга, потом станет три.' : 'Когда во всех подходах выходит верх диапазона — бери вариант потяжелее.'}`}</p>
+          : (r.kind === 'train' || r.kind === 'walk')
+            ? `${minutes} мин движения. Силовых всего: ${strengthCount()}. ${trainingWeek() <= 2 ? 'Первые две недели — два круга, потом станет три.' : 'Когда во всех подходах выходит верх диапазона — бери вариант потяжелее.'}`
+            : `${minutes} мин. Одно дело закрыто — следующее уже ждёт на главной.`}</p>
         <button class="btn btn-primary btn-lg btn-block" id="run-ok">Отлично</button>
       </div>`);
     body.querySelector('#run-ok').onclick = () => UI.closeModal('#sheet-modal');
@@ -403,7 +439,52 @@ const Coach = (() => {
     if (title === 'Готовка' || /^Готовк/i.test(title)) return 'cook';
     if (title === TITLES.ai || /Разбор с ИИ|спросить ИИ/i.test(title)) return 'ai';
     if (title === 'Бытовые дела') return 'shop';
+    if (SESSIONS[title]) return 'session';
     return null;
+  }
+
+  /* ---------- сессии для остальных главных дел ---------- */
+  const PUBLISH = (name, at) => [
+    { t: `Открой TikTok и загрузи ролик «${name}»`, label: 'Шаг 1 · загрузка' },
+    { t: 'Подпись: одна фраза-крючок и 3–5 хэштегов', sec: 120, label: 'Шаг 2 · подпись' },
+    { t: 'Обложка — самый яркий кадр', label: 'Шаг 3 · обложка' },
+    { t: `Опубликовать — ровно в ${at}`, label: 'Шаг 4 · публикация' },
+    { t: 'Через 10 минут ответь на первые комментарии', label: 'Бонус' },
+  ];
+  const SESSIONS = {
+    'Английский': [
+      { t: 'Повторить слова', sec: 600, how: 'Карточки или список — вслух, не глазами.', label: 'Шаг 1 из 3 · слова' },
+      { t: 'Послушать или почитать', sec: 900, how: 'Подкаст, видео с субтитрами или короткий текст.', label: 'Шаг 2 из 3 · вход' },
+      { t: 'Сказать или написать вслух', sec: 900, how: 'Расскажи о своём дне или напиши 5 предложений.', label: 'Шаг 3 из 3 · речь' },
+    ],
+    'ТТ видео — кино': PUBLISH('кино', '19:55'),
+    'ТТ видео — orca': PUBLISH('orca', '21:00'),
+    'Работа над заработком': [
+      { t: 'Найти 3 конкретных предложения', sec: 900, how: 'Заказы, вакансии, объявления — с ценой.', label: 'Шаг 1 из 4' },
+      { t: 'Написать одному заказчику', sec: 600, how: 'Коротко: что умеешь, пример работы, цена.', label: 'Шаг 2 из 4' },
+      { t: 'Сделать или доделать пример работы', sec: 1200, label: 'Шаг 3 из 4' },
+      { t: 'Записать вывод: что пробую дальше', label: 'Шаг 4 из 4' },
+    ],
+    'YouTube': [
+      { t: 'Открой проект: съёмка или монтаж', label: 'Шаг 1 из 3' },
+      { t: 'Работаешь над роликом', sec: 1500, how: 'Телефон — в режим «не беспокоить».', label: 'Шаг 2 из 3 · 25 минут' },
+      { t: 'Сохрани и запиши, что делать дальше', label: 'Шаг 3 из 3' },
+    ],
+    'OLX: объявления и обмены': [
+      { t: 'Ответь на все сообщения', sec: 600, label: 'Шаг 1 из 3' },
+      { t: 'Сфотографируй одну вещь при дневном свете', label: 'Шаг 2 из 3' },
+      { t: 'Выложи объявление: цена чуть ниже рынка', sec: 600, label: 'Шаг 3 из 3' },
+    ],
+    'Смонтировать два ролика: кино и orca': [
+      { t: 'Ролик «кино»: нарезка и текст', sec: 1200, label: 'Шаг 1 из 3' },
+      { t: 'Ролик «orca»: нарезка и текст', sec: 1200, label: 'Шаг 2 из 3' },
+      { t: 'Экспорт обоих — и в папку «к публикации»', label: 'Шаг 3 из 3' },
+    ],
+  };
+  function openSession(b) {
+    const title = b.taskTitle || b.task || b.title;
+    const steps = SESSIONS[title].map((x) => ({ kind: 'task', ...x }));
+    startRun('session', steps, title, b);
   }
 
   function noteFor(b) {
@@ -416,13 +497,18 @@ const Coach = (() => {
     return '';
   }
 
-  function start(b) {
+  function start(b, opts) {
     const k = kindFor(b);
+    const direct = opts && opts.direct;
+    // с главной — сразу в дело, без лишнего окна: меньше шагов до старта
+    if (k === 'train' && direct) { const type = typeFor(); startRun('train', strengthSteps(type), WORKOUTS[type].name, b); return true; }
+    if (k === 'walk' && direct) { startRun('walk', walkSteps(), 'Прогулка', b); return true; }
     if (k === 'train') { openTraining(b); return true; }
     if (k === 'walk') { openWalk(b); return true; }
     if (k === 'cook') { openCook(b); return true; }
     if (k === 'ai') { openAI(b); return true; }
     if (k === 'shop') { openShop(); return true; }
+    if (k === 'session') { openSession(b); return true; }
     return false;
   }
 
@@ -801,6 +887,7 @@ ${digest()}
     openTraining, openWalk, openCook, openShop, openAI,
     recipeFor, shopList, shopWeek, strengthSteps, walkSteps, trainingWeek, roundsNow, typeFor,
     WORKOUTS, RECIPES, MENUS, weekIndex, digest, prompt,
+    say, SESSIONS,
     get running() { return !!run; },
   };
 })();

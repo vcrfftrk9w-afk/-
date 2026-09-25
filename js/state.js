@@ -113,6 +113,7 @@ const State = (() => {
       workouts: {},
       shop: null,
       aiLog: [],
+      remind: { set: 'important', before: 5 },
     };
   }
 

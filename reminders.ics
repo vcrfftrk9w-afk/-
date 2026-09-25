@@ -1,0 +1,355 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Lenivec//Iz Lenivca v Millionery//RU
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Из Ленивца в Миллионеры
+BEGIN:VEVENT
+UID:ldm-12345-420-973387946@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260928T070000
+DTEND:20260928T071500
+RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
+SUMMARY:☀️ Подъём
+DESCRIPTION:Вода\, умывание\, открой приложение
+  — план дня уже готов.\n\nОткрыть приложен
+ ие: https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:☀️ Подъём
+TRIGGER:PT0M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-60-450-973387946@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20261003T073000
+DTEND:20261003T083000
+RRULE:FREQ=WEEKLY;BYDAY=SA,SU
+SUMMARY:☀️ Подъём
+DESCRIPTION:Вода\, умывание\, открой приложение
+  — план дня уже готов.\n\nОткрыть приложен
+ ие: https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:☀️ Подъём
+TRIGGER:PT0M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-1-480-875222746@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260928T080000
+DTEND:20260928T083000
+RRULE:FREQ=WEEKLY;BYDAY=MO
+SUMMARY:🚌 Выходи на пары
+DESCRIPTION:Дорога 30 минут — выйдешь сейчас\, у
+ спеешь к первой паре.\n\nОткрыть приложен
+ ие: https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 🚌 Выходи на пары
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-2345-480-516922382@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260929T080000
+DTEND:20260929T084000
+RRULE:FREQ=WEEKLY;BYDAY=TU,WE,TH,FR
+SUMMARY:🇬🇧 Английский
+DESCRIPTION:10 мин слова · 15 мин слушать или чит
+ ать · 15 мин говорить или писать\n\nОткрыть
+  приложение: https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 🇬🇧 Английский
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-60-510-516922382@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20261003T083000
+DTEND:20261003T091000
+RRULE:FREQ=WEEKLY;BYDAY=SA,SU
+SUMMARY:🇬🇧 Английский
+DESCRIPTION:10 мин слова · 15 мин слушать или чит
+ ать · 15 мин говорить или писать\n\nОткрыть
+  приложение: https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 🇬🇧 Английский
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-6-570-2503913513@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20261003T093000
+DTEND:20261003T103000
+RRULE:FREQ=WEEKLY;BYDAY=SA
+SUMMARY:💰 Работа над заработком
+DESCRIPTION:Не «думать»\, а сделать шаг: найти 3 
+ предложения\, написать заказчику\, собра
+ ть пример работы.\n\nОткрыть приложение: ht
+ tps://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 💰 Работа над заработк
+ ом
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-245-600-2503913513@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260929T100000
+DTEND:20260929T105000
+RRULE:FREQ=WEEKLY;BYDAY=TU,TH,FR
+SUMMARY:💰 Работа над заработком
+DESCRIPTION:Не «думать»\, а сделать шаг: найти 3 
+ предложения\, написать заказчику\, собра
+ ть пример работы.\n\nОткрыть приложение: ht
+ tps://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 💰 Работа над заработк
+ ом
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-3-600-2503913513@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260930T100000
+DTEND:20260930T104000
+RRULE:FREQ=WEEKLY;BYDAY=WE
+SUMMARY:💰 Работа над заработком
+DESCRIPTION:Не «думать»\, а сделать шаг: найти 3 
+ предложения\, написать заказчику\, собра
+ ть пример работы.\n\nОткрыть приложение: ht
+ tps://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 💰 Работа над заработк
+ ом
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-3-660-875222746@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260930T110000
+DTEND:20260930T113000
+RRULE:FREQ=WEEKLY;BYDAY=WE
+SUMMARY:🚌 Выходи на пары
+DESCRIPTION:Дорога 30 минут — выйдешь сейчас\, у
+ спеешь к первой паре.\n\nОткрыть приложен
+ ие: https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 🚌 Выходи на пары
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-245-720-875222746@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260929T120000
+DTEND:20260929T123000
+RRULE:FREQ=WEEKLY;BYDAY=TU,TH,FR
+SUMMARY:🚌 Выходи на пары
+DESCRIPTION:Дорога 30 минут — выйдешь сейчас\, у
+ спеешь к первой паре.\n\nОткрыть приложен
+ ие: https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 🚌 Выходи на пары
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-60-720-4249031790@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20261003T120000
+DTEND:20261003T130000
+RRULE:FREQ=WEEKLY;BYDAY=SA,SU
+SUMMARY:🍲 Готовка и обед
+DESCRIPTION:По возможности сразу на два дня.\n\n
+ Открыть приложение: https://claude.ai/artifact/DE7DjuVVbd
+ RMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 🍲 Готовка и обед
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-1-730-516922382@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260928T121000
+DTEND:20260928T125000
+RRULE:FREQ=WEEKLY;BYDAY=MO
+SUMMARY:🇬🇧 Английский
+DESCRIPTION:10 мин слова · 15 мин слушать или чит
+ ать · 15 мин говорить или писать\n\nОткрыть
+  приложение: https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 🇬🇧 Английский
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-1-830-915876786@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260928T135000
+DTEND:20260928T144000
+RRULE:FREQ=WEEKLY;BYDAY=MO
+SUMMARY:💰 Поиск заработка: выбрать вариант 
+ и сделать шаг
+DESCRIPTION:Не «думать»\, а сделать шаг: найти 3 
+ предложения\, написать заказчику\, собра
+ ть пример работы.\n\nОткрыть приложение: ht
+ tps://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 💰 Поиск заработка: выб
+ рать вариант и сделать шаг
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-135-960-2590820021@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260928T160000
+DTEND:20260928T164500
+RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR
+SUMMARY:💪 Тренировка
+DESCRIPTION:Открыть приложение: https://claude.ai/artifact
+ /DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 💪 Тренировка
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-24-960-1590501215@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260929T160000
+DTEND:20260929T164500
+RRULE:FREQ=WEEKLY;BYDAY=TU,TH
+SUMMARY:🚶 Прогулка или восстановление
+DESCRIPTION:Открыть приложение: https://claude.ai/artifact
+ /DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 🚶 Прогулка или восста
+ новление
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-12345-1020-632311810@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260928T170000
+DTEND:20260928T174000
+RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
+SUMMARY:🍲 Готовка — по возможности сразу на
+  два дня
+DESCRIPTION:По возможности сразу на два дня.\n\n
+ Открыть приложение: https://claude.ai/artifact/DE7DjuVVbd
+ RMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 🍲 Готовка — по возмож
+ ности сразу на два дня
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-1234560-1195-3284598620@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260928T195500
+DTEND:20260928T200500
+RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR,SA,SU
+SUMMARY:🎞️ Публикация «кино» в TikTok
+DESCRIPTION:Время публикации. Не двигается.\n\nО
+ ткрыть приложение: https://claude.ai/artifact/DE7DjuVVbdRM
+ KDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 15 минут: 🎞️ Публикация «кин
+ о» в TikTok
+TRIGGER:-PT15M
+END:VALARM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Сейчас: 🎞️ Публикация «кино» в TikT
+ ok
+TRIGGER:PT0M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-1234560-1235-3333098734@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260928T203500
+DTEND:20260928T205000
+RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR,SA,SU
+SUMMARY:🤖 Продуктивное время с ИИ: разбор дн
+ я и главное на завтра
+DESCRIPTION:Одно главное действие на завтра\, а
+  не бесконечное планирование.\n\nОткрыть 
+ приложение: https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 5 мин: 🤖 Продуктивное время 
+ с ИИ: разбор дня и главное на завтра
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ldm-1234560-1260-804549394@lenivec
+DTSTAMP:20260925T163400Z
+DTSTART:20260928T210000
+DTEND:20260928T211000
+RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR,SA,SU
+SUMMARY:🐋 Публикация «orca» в TikTok
+DESCRIPTION:Время публикации. Не двигается.\n\nО
+ ткрыть приложение: https://claude.ai/artifact/DE7DjuVVbdRM
+ KDwWyUD5UM
+URL:https://claude.ai/artifact/DE7DjuVVbdRMKDwWyUD5UM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Через 15 минут: 🐋 Публикация «orca» в
+  TikTok
+TRIGGER:-PT15M
+END:VALARM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Сейчас: 🐋 Публикация «orca» в TikTok
+TRIGGER:PT0M
+END:VALARM
+END:VEVENT
+END:VCALENDAR

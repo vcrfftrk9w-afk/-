@@ -552,12 +552,14 @@ Screens.dashboard = (() => {
       <div class="main-actions">
         <button class="btn btn-accent" id="main-verdict">🧠 Что сейчас главное</button>
         <button class="btn btn-ghost" id="main-day">→ Весь день</button>
+        <button class="btn btn-ghost" id="main-remind">⏰ В телефон</button>
       </div>`;
 
     el.querySelectorAll('[data-mdone]').forEach((b) => { b.onclick = () => mainComplete(b.dataset.mdone); });
     el.querySelectorAll('[data-mopen]').forEach((b) => { b.onclick = () => mainOpen(b.dataset.mopen); });
     const v = $('#main-verdict'); if (v) v.onclick = () => Verdict.open();
     const d = $('#main-day'); if (d) d.onclick = () => App.go('day');
+    const rm = $('#main-remind'); if (rm) rm.onclick = () => Remind.open();
   }
 
   function findMain(id) { return mainItems().list.find((x) => x.id === id); }

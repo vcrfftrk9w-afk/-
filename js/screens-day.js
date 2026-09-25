@@ -170,7 +170,8 @@ Screens.day = (() => {
             : (d.sleepAt === null ? `<button class="btn btn-ghost" data-quick="sleep">🌙 Ложусь спать</button>` : `<span class="muted small">День закрыт в ${Track.hhmm(d.sleepAt)}</span>`)}
           <button class="btn btn-accent" id="day-verdict">🧠 Что сейчас главное</button>
           <button class="btn btn-ghost" id="day-busy-add">📌 Занятое время</button>
-          ${typeof Notification !== 'undefined' && Notification.permission !== 'granted' ? '<button class="btn btn-ghost" id="day-notify">🔔 Включить напоминания</button>' : ''}
+          <button class="btn btn-primary" id="day-remind">⏰ Напоминания в телефон</button>
+          ${typeof Notification !== 'undefined' && Notification.permission !== 'granted' ? '<button class="btn btn-ghost" id="day-notify">🔔 Уведомления, пока открыто</button>' : ''}
           <button class="btn btn-ghost" id="day-settings">⚙️ Мой режим</button>
         </div>
       </div>`;
@@ -935,6 +936,7 @@ Screens.day = (() => {
       }
       if (g('#day-verdict')) { Verdict.open(); return; }
       if (g('#day-busy-add')) { busyDialog(); return; }
+      if (g('#day-remind')) { Remind.open(); return; }
       if (g('#day-notify')) {
         try {
           Notification.requestPermission().then((r) => {

@@ -1,17 +1,17 @@
 "use client";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, AtSign, Camera, CameraOff, Check, Loader2, LogIn, PenLine, ScanLine, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, CameraOff, Check, LogIn, PenLine, ScanLine, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { NICHES } from "@/lib/knowledge";
-import type { Account, NicheId, TikTokProfile, TikTokVideo, UserSettings } from "@/lib/types";
+import { NICHES, guessNiche } from "@/lib/knowledge";
+import type { Account, NicheId, UserSettings } from "@/lib/types";
 import { useStore } from "@/lib/store";
-import { getJSON } from "@/lib/api";
 import { makeDemoAccount } from "@/lib/demo";
 import { formatNum } from "@/lib/analytics";
 import { Button, Card, cn } from "./ui";
 import { toast } from "./toast";
 import { DataImport, mergeImport } from "./data-import";
+import { ScanAccount, type ScanResult } from "./scan-account";
 
 const DEFAULT_SETTINGS: UserSettings = {
   niche: "dance",
@@ -32,10 +32,10 @@ export function Onboarding({ initialAccount }: { initialAccount?: Account | null
   const { update, status } = useStore();
   const [step, setStep] = useState<Step>(initialAccount ? "niche" : "connect");
   const [account, setAccount] = useState<Account | null>(initialAccount ?? null);
-  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const guessed = initialAccount ? guessNiche(initialAccount.videos, initialAccount.profile.bio) : null;
+  const [settings, setSettings] = useState<UserSettings>(() => (guessed ? { ...DEFAULT_SETTINGS, niche: guessed } : DEFAULT_SETTINGS));
+  const [autoNiche, setAutoNiche] = useState<boolean>(Boolean(guessed));
   const [username, setUsername] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [manual, setManual] = useState(false);
   const [manualData, setManualData] = useState({ followers: "", likes: "", videos: "" });
   const [demo, setDemo] = useState(false);
 
@@ -43,20 +43,18 @@ export function Onboarding({ initialAccount }: { initialAccount?: Account | null
   const steps: Step[] = ["connect", "niche", "goals", "about"];
   const idx = steps.indexOf(step);
 
-  async function importPublic() {
-    if (!username.trim()) return toast("Введи свой @username", "warn");
-    setLoading(true);
-    try {
-      const r = await getJSON<{ profile: TikTokProfile; videos: TikTokVideo[] }>(`/api/tiktok/public?u=${encodeURIComponent(username)}`);
-      setAccount({ source: "public", profile: r.profile, videos: r.videos, connectedAt: Date.now(), history: [{ t: Date.now(), followers: r.profile.followers, likes: r.profile.likes }] });
-      toast(`Нашёл @${r.profile.username}: ${formatNum(r.profile.followers)} подписчиков`);
-      setStep("niche");
-    } catch (e) {
-      toast(`${(e as Error).message}. Введи цифры вручную — это займёт 10 секунд.`, "warn");
-      setManual(true);
-    } finally {
-      setLoading(false);
+  const [others, setOthers] = useState(false);
+
+  function onScanned(r: ScanResult) {
+    setAccount({ source: "public", profile: r.profile, videos: r.videos, connectedAt: Date.now(), history: [{ t: Date.now(), followers: r.profile.followers, likes: r.profile.likes }] });
+    setUsername(r.profile.username);
+    const g = guessNiche(r.videos, r.profile.bio);
+    if (g) {
+      set("niche", g);
+      setAutoNiche(true);
     }
+    toast(r.videos.length ? `Аккаунт отсканирован: ${formatNum(r.profile.followers)} подписчиков, ${r.videos.length} роликов` : `Нашёл @${r.profile.username}: ${formatNum(r.profile.followers)} подписчиков`);
+    setStep("niche");
   }
 
   function continueManual() {
@@ -100,99 +98,75 @@ export function Onboarding({ initialAccount }: { initialAccount?: Account | null
         <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.3 }}>
           {step === "connect" && (
             <div>
-              <h2 className="font-display text-2xl font-bold">Покажи мне свой TikTok</h2>
-              <p className="mt-2 text-sm text-white/55">Я разберу твои настоящие цифры и ролики, чтобы советы были про тебя, а не «в общем».</p>
-
-              <div className="mt-6 space-y-3">
-                {(status?.tiktokOAuth || !status?.static) && (
-                  <a
-                    href={status?.tiktokOAuth ? "/api/tiktok/login" : undefined}
-                    onClick={(e) => {
-                      if (!status?.tiktokOAuth) {
-                        e.preventDefault();
-                        toast("Вход через TikTok ещё не настроен: добавь TIKTOK_CLIENT_KEY и TIKTOK_CLIENT_SECRET в .env (инструкция в README)", "info");
-                      }
-                    }}
-                    className={cn(
-                      "group flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-cyan/50 hover:bg-white/[0.07]",
-                      !status?.tiktokOAuth && "opacity-60",
-                    )}
-                  >
-                    <div className="flex size-12 items-center justify-center rounded-2xl bg-black">
-                      <svg viewBox="0 0 48 48" className="size-7">
-                        <path fill="#25f4ee" d="M20 18.5v-1.9a12 12 0 1 0 8.6 11.5V14.9a15.3 15.3 0 0 0 9 2.9v-5.6a9 9 0 0 1-9-9h-5.4v25a5.4 5.4 0 1 1-3.2-5z" transform="translate(-1 -1)" />
-                        <path fill="#fe2c55" d="M20 18.5v-1.9a12 12 0 1 0 8.6 11.5V14.9a15.3 15.3 0 0 0 9 2.9v-5.6a9 9 0 0 1-9-9h-5.4v25a5.4 5.4 0 1 1-3.2-5z" transform="translate(1 1)" />
-                        <path fill="#fff" d="M20 18.5v-1.9a12 12 0 1 0 8.6 11.5V14.9a15.3 15.3 0 0 0 9 2.9v-5.6a9 9 0 0 1-9-9h-5.4v25a5.4 5.4 0 1 1-3.2-5z" />
-                      </svg>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 font-semibold">
-                        Войти через TikTok <span className="rounded-full bg-cyan/15 px-2 py-0.5 text-[10px] font-bold text-cyan">ВСЁ АВТОМАТИЧЕСКИ</span>
-                      </div>
-                      <div className="text-xs text-white/50">Официальный вход: все видео, просмотры, лайки, комменты и репосты</div>
-                    </div>
-                    <LogIn className="size-5 text-white/40 transition group-hover:translate-x-1 group-hover:text-white" />
-                  </a>
-                )}
-
-                <div className="rounded-2xl border border-pink/25 bg-gradient-to-br from-pink/[0.07] to-violet/[0.05] p-4">
-                  <div className="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold">
-                    <ScanLine className="size-4 text-pink" /> Загрузи скриншоты или файл аналитики
-                    <span className="rounded-full bg-lime/15 px-2 py-0.5 text-[10px] font-bold text-lime">БЕЗ РУЧНОГО ВВОДА</span>
+              {!status?.static ? (
+                <>
+                  <h2 className="font-display text-2xl font-bold">Введи свой ник — остальное сделаю я</h2>
+                  <p className="mt-2 text-sm text-white/55">Просканирую профиль и ролики, посчитаю, что у тебя залетает, и сразу дам план.</p>
+                  <div className="mt-6">
+                    <ScanAccount full={status?.scan === "full"} onDone={onScanned} onFail={() => setOthers(true)} />
                   </div>
-                  <DataImport
-                    onDone={(r) => {
-                      const acc = mergeImport(null, r, username.trim().replace(/^@/, "") || "me");
-                      setAccount(acc);
-                      if (acc.profile.username) setUsername(acc.profile.username);
-                      toast(`Данные загружены: ${formatNum(acc.profile.followers)} подписчиков, ${acc.videos.length} видео`);
-                      setStep("niche");
-                    }}
-                  />
-                </div>
-
-                {!status?.static && (
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                      <AtSign className="size-4 text-pink" /> Или найди профиль по нику
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40">@</span>
-                        <input
-                          value={username}
-                          onChange={(e) => setUsername(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && importPublic()}
-                          placeholder="username или ссылка на профиль"
-                          className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 pl-9 pr-4 text-sm outline-none transition focus:border-pink/60"
-                        />
-                      </div>
-                      <Button onClick={importPublic} loading={loading} className="h-12" icon={!loading && <ArrowRight className="size-4" />}>
-                        Найти
-                      </Button>
-                    </div>
+                </>
+              ) : (
+                <>
+                  <h2 className="font-display text-2xl font-bold">Покажи мне свой TikTok</h2>
+                  <p className="mt-2 text-sm text-white/55">
+                    Сканирование по @нику работает в полной версии со своим сервером: эта страница не может обращаться к TikTok. Здесь загрузи скриншоты или файл — цифры я прочитаю сам.
+                  </p>
+                  <div className="mt-6 rounded-2xl border border-pink/25 bg-gradient-to-br from-pink/[0.07] to-violet/[0.05] p-4">
+                    <DataImport
+                      onDone={(r) => {
+                        const acc = mergeImport(null, r, "me");
+                        setAccount(acc);
+                        setUsername(acc.profile.username);
+                        toast(`Данные загружены: ${formatNum(acc.profile.followers)} подписчиков, ${acc.videos.length} видео`);
+                        setStep("niche");
+                      }}
+                    />
                   </div>
-                )}
+                </>
+              )}
 
-                <div className="text-center">
-                  <button onClick={() => setManual((m) => !m)} className="text-xs text-white/45 underline-offset-4 transition hover:text-white hover:underline">
-                    Нет скриншотов под рукой? Ввести 3 цифры профиля
-                  </button>
-                </div>
-                <AnimatePresence>
-                  {manual && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+              <div className="mt-5 text-center">
+                <button onClick={() => setOthers((o) => !o)} className="text-xs text-white/45 underline-offset-4 transition hover:text-white hover:underline">
+                  {others ? "Скрыть другие способы" : "Другие способы подключения"}
+                </button>
+              </div>
+              <AnimatePresence>
+                {others && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                    <div className="mt-4 space-y-3">
+                      {status?.tiktokOAuth && (
+                        <a href="/api/tiktok/login" className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-cyan/50">
+                          <LogIn className="size-5 text-cyan" />
+                          <div className="flex-1">
+                            <div className="font-semibold">Войти через TikTok</div>
+                            <div className="text-xs text-white/50">Официальный вход: все ролики и статистика</div>
+                          </div>
+                          <ArrowRight className="size-4 text-white/40" />
+                        </a>
+                      )}
+                      {!status?.static && (
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                          <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                            <ScanLine className="size-4 text-pink" /> Скриншоты или файл аналитики TikTok Studio
+                          </div>
+                          <DataImport
+                            compact
+                            onDone={(r) => {
+                              const acc = mergeImport(null, r, "me");
+                              setAccount(acc);
+                              toast(`Данные загружены: ${formatNum(acc.profile.followers)} подписчиков, ${acc.videos.length} видео`);
+                              setStep("niche");
+                            }}
+                          />
+                        </div>
+                      )}
                       <div className="rounded-2xl bg-black/30 p-4">
                         <div className="mb-3 flex items-center gap-2 text-xs text-white/60">
-                          <PenLine className="size-3.5" /> Цифры из своего профиля в TikTok (видео можно добавить позже):
+                          <PenLine className="size-3.5" /> Ввести цифры профиля
                         </div>
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                          <input
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            placeholder="@ник"
-                            className="h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none focus:border-cyan/60"
-                          />
+                          <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="@ник" className="h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none focus:border-cyan/60" />
                           {(["followers", "likes", "videos"] as const).map((k) => (
                             <input
                               key={k}
@@ -208,14 +182,13 @@ export function Onboarding({ initialAccount }: { initialAccount?: Account | null
                           Продолжить
                         </Button>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <button onClick={startDemo} className="flex w-full items-center justify-center gap-2 rounded-2xl py-2 text-xs text-white/40 transition hover:text-white">
-                  <Sparkles className="size-3.5" /> Посмотреть на примере (демо-цифры, не твои)
-                </button>
-              </div>
+                      <button onClick={startDemo} className="flex w-full items-center justify-center gap-2 rounded-2xl py-2 text-xs text-white/40 transition hover:text-white">
+                        <Sparkles className="size-3.5" /> Посмотреть на примере (демо-цифры, не твои)
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
 
@@ -239,7 +212,9 @@ export function Onboarding({ initialAccount }: { initialAccount?: Account | null
                 </div>
               )}
               <h2 className="font-display text-2xl font-bold">Что ты снимаешь?</h2>
-              <p className="mt-2 text-sm text-white/55">Под нишу я подберу тренды, форматы и стратегию.</p>
+              <p className="mt-2 text-sm text-white/55">
+                {autoNiche ? "Определил нишу по твоим роликам — поменяй, если не так." : "Под нишу я подберу тренды, форматы и стратегию."}
+              </p>
               <div className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {NICHES.map((n) => (
                   <motion.button
@@ -353,7 +328,7 @@ export function Onboarding({ initialAccount }: { initialAccount?: Account | null
             Назад
           </Button>
           {step === "about" ? (
-            <Button onClick={finish} size="lg" icon={loading ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}>
+            <Button onClick={finish} size="lg" icon={<Sparkles className="size-4" />}>
               Запустить ViralPilot
             </Button>
           ) : (

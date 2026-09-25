@@ -661,3 +661,35 @@ export const ALGORITHM_RULES = [
   "Используй 3–5 точных хэштегов вместо 20 общих; ключевые слова в подписи и тексте на экране работают как SEO.",
   "Не удаляй «неудачные» видео — они могут выстрелить через недели.",
 ];
+
+// ── Определение ниши по роликам ─────────────────────────────────────────────
+const NICHE_KEYWORDS: Record<NicheId, string[]> = {
+  dance: ["dance", "танц", "choreo", "хореограф", "kpop", "k-pop", "shuffle", "tutorial"],
+  comedy: ["comedy", "юмор", "skit", "скетч", "прикол", "funny", "смешн", "relatable", "жиза", "pov"],
+  beauty: ["makeup", "макияж", "beauty", "бьюти", "skincare", "уход", "grwm", "косметик"],
+  fashion: ["ootd", "outfit", "мода", "стиль", "fashion", "образ", "одежд", "haul"],
+  fitness: ["gym", "fitness", "фитнес", "workout", "трениров", "спорт", "качалк", "пресс"],
+  food: ["food", "recipe", "рецепт", "еда", "cooking", "готов", "вкусн", "foodtok"],
+  gaming: ["gaming", "game", "игр", "minecraft", "fortnite", "roblox", "cs2", "standoff", "brawl", "pubg", "dota"],
+  education: ["learn", "учись", "факт", "education", "english", "английск", "урок", "school", "знания"],
+  lifestyle: ["vlog", "влог", "dayinmylife", "routine", "рутин", "aesthetic", "лайфстайл"],
+  music: ["cover", "кавер", "singing", "вокал", "music", "песн", "guitar", "гитар", "бит", "beat"],
+  tech: ["tech", "iphone", "android", "гаджет", "нейросет", "ai", "техник", "setup"],
+  travel: ["travel", "путешеств", "trip", "отпуск", "traveltok", "страна"],
+  pets: ["cat", "dog", "кот", "собак", "pets", "питом", "котик", "щен"],
+  business: ["business", "бизнес", "деньги", "money", "финанс", "заработ", "инвест"],
+  art: ["art", "drawing", "рисун", "арт", "painting", "рисую", "artist"],
+};
+
+/** Определяет нишу по подписям и хэштегам (с весом по просмотрам). null — не уверен. */
+export function guessNiche(videos: { title: string; hashtags: string[]; views: number }[], bio = ""): NicheId | null {
+  const score = new Map<NicheId, number>();
+  const texts = [...videos.map((v) => ({ t: `${v.title} ${v.hashtags.join(" ")}`.toLowerCase(), w: 1 + Math.log10(1 + v.views) })), { t: bio.toLowerCase(), w: 3 }];
+  for (const { t, w } of texts) {
+    for (const [niche, keys] of Object.entries(NICHE_KEYWORDS) as [NicheId, string[]][]) {
+      if (keys.some((k) => t.includes(k))) score.set(niche, (score.get(niche) ?? 0) + w);
+    }
+  }
+  const best = [...score.entries()].sort((a, b) => b[1] - a[1])[0];
+  return best && best[1] >= 3 ? best[0] : null;
+}

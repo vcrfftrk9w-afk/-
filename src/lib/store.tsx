@@ -12,6 +12,7 @@ export interface AppStatus {
   webSearch?: boolean; // false в веб-версии: ИИ без доступа к интернету
   vision?: boolean; // ИИ видит изображения (скриншоты, кадры видео)
   static?: boolean; // веб-версия без своего сервера
+  scan?: "full" | "profile"; // сканирование по @: профиль+ролики или только профиль
 }
 
 export interface AppState {

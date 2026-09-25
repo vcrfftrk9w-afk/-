@@ -246,3 +246,104 @@ export async function fetchOEmbed(url: string) {
     hashtags: extractHashtags(String(j.title ?? "")),
   };
 }
+
+// ── Полное сканирование аккаунта по @username ───────────────────────────────
+// С APIFY_TOKEN: актор clockworks/tiktok-scraper отдаёт профиль и последние ролики
+// со статистикой (просмотры, лайки, комментарии, репосты, длительность, звук).
+// Без токена: только публичные цифры профиля со страницы TikTok.
+
+export const scanConfigured = () => Boolean(process.env.APIFY_TOKEN);
+
+interface ApifyItem {
+  id?: string;
+  text?: string;
+  createTime?: number;
+  createTimeISO?: string;
+  webVideoUrl?: string;
+  playCount?: number;
+  diggCount?: number;
+  commentCount?: number;
+  shareCount?: number;
+  collectCount?: number;
+  isPinned?: boolean;
+  hashtags?: { name?: string }[];
+  videoMeta?: { duration?: number; coverUrl?: string; originalCoverUrl?: string };
+  musicMeta?: { musicName?: string; musicAuthor?: string; musicOriginal?: boolean };
+  authorMeta?: {
+    name?: string;
+    nickName?: string;
+    verified?: boolean;
+    signature?: string;
+    avatar?: string;
+    originalAvatarUrl?: string;
+    fans?: number;
+    following?: number;
+    heart?: number;
+    video?: number;
+  };
+  error?: string;
+}
+
+export async function scanWithApify(usernameRaw: string, limit = 30): Promise<{ profile: TikTokProfile; videos: TikTokVideo[] }> {
+  const username = normalizeUsername(usernameRaw);
+  if (!username) throw new Error("Укажи @username");
+  const base = process.env.APIFY_BASE_URL || "https://api.apify.com";
+  const actor = process.env.APIFY_TIKTOK_ACTOR || "clockworks~tiktok-scraper";
+  const res = await fetch(`${base}/v2/acts/${actor}/run-sync-get-dataset-items?token=${encodeURIComponent(process.env.APIFY_TOKEN!)}&timeout=240`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      profiles: [username],
+      resultsPerPage: limit,
+      profileScrapeSections: ["videos"],
+      shouldDownloadVideos: false,
+      shouldDownloadCovers: false,
+      shouldDownloadSubtitles: false,
+      shouldDownloadSlideshowImages: false,
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(280_000),
+  });
+  if (res.status === 401 || res.status === 403) throw new Error("Apify отклонил токен — проверь APIFY_TOKEN");
+  if (res.status === 402) throw new Error("На аккаунте Apify закончились бесплатные кредиты");
+  if (!res.ok) throw new Error(`Сканер ответил ${res.status}`);
+  const items = (await res.json()) as ApifyItem[];
+  const real = items.filter((i) => !i.error && i.id);
+  if (!real.length) {
+    const err = items.find((i) => i.error)?.error;
+    throw new Error(err ? `TikTok: ${err}` : "У аккаунта нет публичных видео или он закрыт");
+  }
+  const a = real.find((i) => i.authorMeta)?.authorMeta ?? {};
+  const profile: TikTokProfile = {
+    username: a.name || username,
+    displayName: a.nickName || a.name || username,
+    avatarUrl: a.originalAvatarUrl || a.avatar,
+    bio: a.signature ?? "",
+    verified: Boolean(a.verified),
+    followers: a.fans ?? 0,
+    following: a.following ?? 0,
+    likes: a.heart ?? 0,
+    videoCount: a.video ?? real.length,
+    profileUrl: `https://www.tiktok.com/@${a.name || username}`,
+  };
+  const videos: TikTokVideo[] = real.map((i) => {
+    const text = i.text ?? "";
+    const tags = (i.hashtags ?? []).map((h) => (h.name ? `#${h.name.toLowerCase()}` : "")).filter(Boolean);
+    return {
+      id: String(i.id),
+      title: text,
+      coverUrl: i.videoMeta?.coverUrl || i.videoMeta?.originalCoverUrl,
+      shareUrl: i.webVideoUrl,
+      createTime: i.createTime ?? (i.createTimeISO ? Math.floor(Date.parse(i.createTimeISO) / 1000) : 0),
+      duration: i.videoMeta?.duration ?? 0,
+      views: i.playCount ?? 0,
+      likes: i.diggCount ?? 0,
+      comments: i.commentCount ?? 0,
+      shares: i.shareCount ?? 0,
+      hashtags: tags.length ? tags : extractHashtags(text),
+      sound: i.musicMeta?.musicName ? `${i.musicMeta.musicName}${i.musicMeta.musicAuthor ? ` — ${i.musicMeta.musicAuthor}` : ""}` : undefined,
+      pinned: i.isPinned || undefined,
+    };
+  });
+  return { profile, videos };
+}

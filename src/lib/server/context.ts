@@ -30,10 +30,10 @@ export function creatorBrief(settings: UserSettings, account?: Account | null, r
   }
   if (account?.videos.length) {
     const vids = [...account.videos].sort((a, b) => b.createTime - a.createTime).slice(0, 25);
-    lines.push("ПОСЛЕДНИЕ ВИДЕО (дата | длит | просмотры | лайки | комменты | репосты | подпись):");
+    lines.push("ПОСЛЕДНИЕ ВИДЕО (дата | длит | просмотры | лайки | комменты | репосты | подпись | звук):");
     for (const v of vids) {
       lines.push(
-        `- ${new Date(v.createTime * 1000).toISOString().slice(0, 10)} | ${v.duration}с | ${v.views} | ${v.likes} | ${v.comments} | ${v.shares} | ${v.title.slice(0, 120).replace(/\n/g, " ")}`,
+        `- ${(v.createTime ? new Date(v.createTime * 1000).toISOString().slice(0, 10) : "дата ?")} | ${v.duration}с | ${v.views} | ${v.likes} | ${v.comments} | ${v.shares} | ${v.title.slice(0, 120).replace(/\n/g, " ")}${v.sound ? ` | ${v.sound}` : ""}${v.pinned ? " | закреп" : ""}`,
       );
     }
   }

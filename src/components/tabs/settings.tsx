@@ -30,11 +30,11 @@ export function SettingsTab() {
       let videos: TikTokVideo[];
       if (acc.source === "oauth") {
         ({ profile, videos } = await getJSON<{ profile: TikTokProfile; videos: TikTokVideo[] }>("/api/tiktok/me"));
-      } else if (acc.source === "public") {
-        ({ profile, videos } = await getJSON<{ profile: TikTokProfile; videos: TikTokVideo[] }>(`/api/tiktok/public?u=${encodeURIComponent(acc.profile.username)}`));
-        if (!videos.length) videos = acc.videos; // публичная страница может не отдавать видео — сохраняем добавленные вручную
+      } else if (acc.source === "public" && !status?.static) {
+        ({ profile, videos } = await getJSON<{ profile: TikTokProfile; videos: TikTokVideo[] }>(`/api/tiktok/scan?u=${encodeURIComponent(acc.profile.username)}`));
+        if (!videos.length) videos = acc.videos; // сканер не отдал ролики — сохраняем уже загруженные
       } else {
-        toast("Для демо/ручного режима обновление недоступно — подключи TikTok", "info");
+        toast("Загрузи свежие скриншоты или файл в блоке «Обновить данные» ниже", "info");
         return;
       }
       update((st) => ({

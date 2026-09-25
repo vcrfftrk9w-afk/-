@@ -5,6 +5,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Aurora, Button, Logo, AnimatedNumber } from "@/components/ui";
 import { Onboarding } from "@/components/onboarding";
+import { ScanAccount } from "@/components/scan-account";
 import { useStore } from "@/lib/store";
 import { getJSON } from "@/lib/api";
 import { toast } from "@/components/toast";
@@ -83,7 +84,7 @@ function PhoneMock() {
 function Landing() {
   const router = useRouter();
   const params = useSearchParams();
-  const { state, hydrated, refreshStatus } = useStore();
+  const { state, hydrated, refreshStatus, status } = useStore();
   const [oauthAccount, setOauthAccount] = useState<Account | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const onboardRef = useRef<HTMLDivElement>(null);
@@ -141,12 +142,25 @@ function Landing() {
             <br />в TikTok <span className="text-gradient-anim">в разы быстрее</span>
           </motion.h1>
           <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-6 max-w-xl text-lg text-white/60">
-            Подключи аккаунт — ViralPilot разберёт твой контент, найдёт горячие тренды в твоей нише, придумает следующие видео с готовым сценарием и поведёт тебя по плану к цели.
+            {status && !status.static
+              ? "Введи свой ник — ViralPilot просканирует аккаунт и ролики, найдёт, что у тебя залетает, подберёт тренды, придумает следующие видео с готовым сценарием и поведёт по плану к цели."
+              : "Подключи аккаунт — ViralPilot разберёт твой контент, найдёт горячие тренды в твоей нише, придумает следующие видео с готовым сценарием и поведёт тебя по плану к цели."}
           </motion.p>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mt-8 flex flex-wrap gap-3">
-            <Button size="lg" onClick={start} icon={<Rocket className="size-5" />}>
-              Подключить TikTok
-            </Button>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mt-8 max-w-xl">
+            {status && !status.static ? (
+              <ScanAccount
+                full={status.scan === "full"}
+                onDone={(r) => {
+                  setOauthAccount({ source: "public", profile: r.profile, videos: r.videos, connectedAt: Date.now(), history: [{ t: Date.now(), followers: r.profile.followers, likes: r.profile.likes }] });
+                  setShowOnboarding(true);
+                  setTimeout(() => onboardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+                }}
+              />
+            ) : (
+              <Button size="lg" onClick={start} icon={<Rocket className="size-5" />}>
+                Подключить TikTok
+              </Button>
+            )}
           </motion.div>
           <div className="mt-10 grid max-w-md grid-cols-3 gap-4">
             {[
@@ -190,7 +204,7 @@ function Landing() {
       <section className="mx-auto max-w-6xl px-5 pb-24">
         <div className="grid gap-4 md:grid-cols-3">
           {[
-            ["1", "Подключи аккаунт", "Вход через TikTok, по нику или демо."],
+            ["1", "Введи свой @ник", "Я сам просканирую профиль и ролики."],
             ["2", "Получи разбор", "Что работает, что мешает расти и что делать прямо сегодня."],
             ["3", "Снимай по плану", "Тренды, идеи и сценарии каждый день — растёшь, отмечаешь задачи и получаешь XP."],
           ].map(([n, t, d]) => (

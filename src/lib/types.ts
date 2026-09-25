@@ -46,6 +46,8 @@ export interface TikTokVideo {
   comments: number;
   shares: number;
   hashtags: string[];
+  sound?: string; // название звука/трека
+  pinned?: boolean;
 }
 
 export interface UserSettings {

@@ -152,6 +152,11 @@ const Remind = (() => {
     } catch (e) { return false; }
   }
 
+  /* внутри просмотрщика Claude скачивание файлов со страницы заблокировано */
+  function framed() {
+    try { return window.self !== window.top; } catch (e) { return true; }
+  }
+
   const DAYS_RU = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
   const daysLabel = (ds) => (ds.length === 7 ? 'каждый день' : ds.join() === '1,2,3,4,5' ? 'Пн–Пт' : ds.map((d) => DAYS_RU[d]).join(', '));
 
@@ -179,8 +184,9 @@ const Remind = (() => {
             ${list.map((e) => `<li><b>${Track.hhmm(e.start)}</b><span>${UI.esc(e.title)}</span><small>${daysLabel(e.days)}${e.hard ? ' · за 15 мин и ровно' : ''}</small></li>`).join('')}
           </ul>
 
-          <button class="btn btn-primary btn-lg btn-block" id="rm-ics">📅 Скачать календарь (${list.length} ${UI.plural(list.length, 'событие', 'события', 'событий')})</button>
-          <a class="btn btn-ghost btn-block" id="rm-static" href="reminders.ics" download="lenivec-reminders.ics" target="_blank" rel="noopener">Не скачалось? Готовый файл (важное, за 5 мин)</a>
+          ${framed()
+            ? `<div class="remind-note"><b>📅 Файл календаря</b><p class="muted small">Внутри Claude страница не может скачивать файлы. Готовый файл «важное, за 5 минут» лежит в чате, где мы делали приложение, — открой его на телефоне. Или добавь дела по одной кнопке ниже.</p></div>`
+            : `<button class="btn btn-primary btn-lg btn-block" id="rm-ics">📅 Скачать календарь (${list.length} ${UI.plural(list.length, 'событие', 'события', 'событий')})</button>`}
 
           <details class="remind-how">
             <summary>Как добавить на телефон</summary>
@@ -189,7 +195,7 @@ const Remind = (() => {
             <p>Чтобы не было дублей, при следующем импорте сначала удали старый календарь «Из Ленивца в Миллионеры».</p>
           </details>
 
-          <details class="remind-how">
+          <details class="remind-how" ${framed() ? 'open' : ''}>
             <summary>По одному в Google Календарь</summary>
             <div class="remind-g">
               ${events({ set: 'important' }).map((e) => `<a class="chip" target="_blank" rel="noopener" href="${UI.esc(googleLink(e))}">${Track.hhmm(e.start)} ${UI.esc(e.title)}</a>`).join('')}
@@ -211,7 +217,7 @@ const Remind = (() => {
           const ok = download(ics(st), 'lenivec-reminders.ics');
           State.s.totals.remindersExported = (State.s.totals.remindersExported || 0) + 1;
           State.save();
-          UI.toast(ok ? 'Файл календаря скачан — открой его на телефоне' : 'Не получилось скачать — возьми готовый файл ниже', ok ? 'success' : 'warn', '📅');
+          UI.toast(ok ? 'Файл календаря скачан — открой его на телефоне' : 'Не получилось скачать — добавь дела кнопками Google Календаря ниже', ok ? 'success' : 'warn', '📅');
         }
       };
     };

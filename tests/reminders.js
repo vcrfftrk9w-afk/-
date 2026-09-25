@@ -25,8 +25,15 @@ const { chromium } = require('playwright');
   await p.evaluate(()=>{ UI.closeModal('#sheet-modal'); App.go('day'); }); await p.waitForTimeout(500);
   check('кнопка на экране «День»', await p.evaluate(()=>!!document.querySelector('#day-remind')));
   const r = await p.request.get('http://localhost:8792/reminders.ics');
-  check('готовый файл лежит рядом с приложением', r.ok() && /BEGIN:VCALENDAR/.test(await r.text()));
+  check('готовый файл reminders.ics собран в репозитории', r.ok() && /BEGIN:VCALENDAR/.test(await r.text()));
   check('без ошибок', !errs.length, errs);
+  // внутри просмотрщика (в рамке) — на чистой вкладке, чтобы таймеры прошлой страницы не мешали — без кнопки, которая всё равно не скачает
+  const p2 = await ctx.newPage(); const errs2=[]; p2.on('pageerror',e=>errs2.push(e.message));
+  await p2.setContent('<iframe src="http://localhost:8792/index.html" style="width:390px;height:800px"></iframe>'); await p2.waitForTimeout(3500);
+  const fr = p2.frames()[1];
+  await fr.evaluate(()=>{ document.querySelectorAll('.modal.modal-open').forEach(m=>UI.closeModal('#'+m.id)); Remind.open(); }); await p2.waitForTimeout(400);
+  check('в рамке: вместо скачивания — подсказка и кнопки Google', await fr.evaluate(()=>!document.querySelector('#rm-ics') && !!document.querySelector('.remind-note') && document.querySelectorAll('.remind-g a').length>=10));
+  check('в рамке без ошибок', !errs2.length, errs2);
   console.log(ok ? '\n✓ напоминания в телефон работают' : '\n✗ есть проблемы');
   await b.close();
 })();

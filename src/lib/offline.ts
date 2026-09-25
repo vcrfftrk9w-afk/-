@@ -16,6 +16,7 @@ import type {
   VideoIdea,
 } from "./types";
 import { ALGORITHM_RULES, EVERGREEN_TRENDS, HOOK_FORMULAS, getNiche } from "./knowledge";
+import type { ReviewResult } from "./prompts";
 import { formatNum } from "./analytics";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -132,6 +133,7 @@ export function localTrends(settings: UserSettings): TrendsResponse {
     trends,
     fetchedAt: Date.now(),
     live: false,
+    origin: "local",
     note: "Офлайн-база проверенных форматов. Добавь ANTHROPIC_API_KEY, чтобы ИИ искал актуальные тренды в интернете в реальном времени.",
   };
 }
@@ -385,4 +387,41 @@ export function localTool(tool: string, topic: string, settings: UserSettings): 
     default:
       return [];
   }
+}
+
+// ── Разбор ролика (офлайн) ──────────────────────────────────────────────────
+export function localReview(
+  desc: string,
+  nicheId: string,
+  stats?: { views?: number; likes?: number; comments?: number; shares?: number; duration?: number },
+): ReviewResult {
+  const niche = getNiche(nicheId);
+  const hasHook = /\?|!|pov|как|почему|секрет|ошибк|никогда|часть/i.test(desc.slice(0, 80));
+  const tags = (desc.match(/#\S+/g) ?? []).length;
+  const er = stats?.views ? (((stats.likes ?? 0) + (stats.comments ?? 0) + (stats.shares ?? 0)) / stats.views) * 100 : null;
+  const hookS = hasHook ? 70 : 40;
+  const seoS = tags >= 3 && tags <= 6 ? 75 : tags ? 50 : 25;
+  const engS = er === null ? 55 : Math.min(95, Math.round(er * 9));
+  const lenS = stats?.duration ? (stats.duration <= 35 ? 75 : stats.duration <= 90 ? 62 : 50) : 60;
+  const score = Math.round(hookS * 0.35 + engS * 0.3 + seoS * 0.15 + lenS * 0.2);
+  return {
+    score,
+    verdict: `Потенциал ${score}/100. ${hasHook ? "Есть зацепка в начале" : "Нет явного хука в начале"}, ${tags ? `${tags} хэштегов` : "хэштегов нет"}${er !== null ? `, ER ${er.toFixed(1)}%` : ""}.`,
+    scores: [
+      { name: "Хук", score: hookS, comment: hasHook ? "Начало цепляет вопросом/обещанием" : "Начни с результата, конфликта или вопроса" },
+      { name: "Удержание", score: lenS, comment: "Короче = выше досматриваемость. Смена кадра каждые 2–3 сек" },
+      { name: "Вовлечение", score: engS, comment: er === null ? "Добавь статистику для точной оценки" : `ER ${er.toFixed(1)}% (норма ниши ≈${niche.benchmarkER}%)` },
+      { name: "SEO", score: seoS, comment: "3–5 точных хэштегов + ключевые слова в подписи" },
+    ],
+    improvements: [
+      "Первый кадр — самый интересный момент ролика + крупный текст-хук",
+      "Убери приветствие и любые паузы в начале",
+      "Добавь вопрос в конце и закрепи свой комментарий",
+      "Субтитры в безопасной зоне экрана",
+      "Закольцуй концовку с началом для пересмотров",
+    ],
+    betterHooks: [`Никто не говорит об этом: ${desc.slice(0, 40)}…`, "Смотри до конца — такого ты не ожидал(а)", "3 секунды, которые изменят твой взгляд на это"],
+    betterCaption: `${desc.replace(/#\S+/g, "").trim().slice(0, 100)} — а ты что думаешь? 👇`,
+    hashtags: niche.hashtags.slice(0, 5),
+  };
 }

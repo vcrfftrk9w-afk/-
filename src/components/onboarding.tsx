@@ -108,7 +108,12 @@ export function Onboarding({ initialAccount }: { initialAccount?: Account | null
                   onClick={(e) => {
                     if (!status?.tiktokOAuth) {
                       e.preventDefault();
-                      toast("Вход через TikTok ещё не настроен: добавь TIKTOK_CLIENT_KEY и TIKTOK_CLIENT_SECRET в .env (инструкция в README)", "info");
+                      toast(
+                        status?.static
+                          ? "Вход через TikTok работает в полной версии приложения со своим сервером. Здесь введи ник и цифры профиля — или открой демо."
+                          : "Вход через TikTok ещё не настроен: добавь TIKTOK_CLIENT_KEY и TIKTOK_CLIENT_SECRET в .env (инструкция в README)",
+                        "info",
+                      );
                     }
                   }}
                   className={cn(

@@ -45,7 +45,11 @@ function Dashboard() {
   const go = useCallback((t: TabId, opts?: { focus?: string }) => {
     setTab(t);
     setPendingFocus(opts?.focus ?? null);
-    window.history.replaceState(null, "", `/dashboard?tab=${t}`);
+    try {
+      if (!(window as { __VP_STATIC__?: boolean }).__VP_STATIC__) window.history.replaceState(null, "", `/dashboard?tab=${t}`);
+    } catch {
+      /* адрес страницы менять нельзя — не важно */
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
   const clearFocus = useCallback(() => setPendingFocus(null), []);
@@ -90,7 +94,7 @@ function Dashboard() {
                 )}
                 <t.icon className="relative size-[18px]" />
                 <span className="relative">{t.label}</span>
-                {t.id === "trends" && status?.ai && <span className="relative ml-auto rounded-full bg-lime/15 px-1.5 py-0.5 text-[9px] font-bold text-lime">LIVE</span>}
+                {t.id === "trends" && status?.ai && status.webSearch !== false && <span className="relative ml-auto rounded-full bg-lime/15 px-1.5 py-0.5 text-[9px] font-bold text-lime">LIVE</span>}
                 {t.id === "studio" && Object.keys(state.scripts).length > 0 && (
                   <span className="relative ml-auto rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-white/70">{Object.keys(state.scripts).length}</span>
                 )}

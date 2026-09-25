@@ -152,6 +152,7 @@ export interface TrendsResponse {
   trends: Trend[];
   fetchedAt: number;
   live: boolean; // true = найдены в интернете через AI-поиск
+  origin?: "web" | "ai" | "local"; // web = поиск в интернете, ai = подбор ИИ без поиска, local = офлайн-база
   note?: string;
 }
 

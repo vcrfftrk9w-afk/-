@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { aiEnabled, BASE_SYSTEM, streamChat } from "@/lib/server/ai";
+import { aiEnabled, streamChat } from "@/lib/server/ai";
+import { coachSystem } from "@/lib/prompts";
 import { creatorBrief } from "@/lib/server/context";
 import { readBody, type BaseBody } from "@/lib/server/route-utils";
 import { localCoachReply } from "@/lib/offline";
@@ -21,12 +22,7 @@ export async function POST(req: Request) {
     return new Response(localCoachReply(last, settings, report), { headers });
   }
 
-  const system = `${BASE_SYSTEM}
-
-Ты — личный AI-коуч автора в приложении ViralPilot. Отвечай в Markdown: коротко, структурно, с конкретикой (готовые хуки, тексты, тайминги, цифры). Если автор просит идею — давай готовый сценарий. Задавай уточняющий вопрос только если без него ответ будет бесполезен.
-
-ДАННЫЕ АВТОРА:
-${creatorBrief(settings, account, report)}`;
+  const system = coachSystem(creatorBrief(settings, account, report));
 
   const msgs: Anthropic.Beta.BetaMessageParam[] = history.map((m) => ({ role: m.role, content: m.content }));
   // API требует, чтобы диалог начинался с user

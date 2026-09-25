@@ -9,6 +9,8 @@ export interface AppStatus {
   model: string | null;
   tiktokOAuth: boolean;
   tiktokConnected: boolean;
+  webSearch?: boolean; // false в веб-версии: ИИ без доступа к интернету
+  static?: boolean; // веб-версия без своего сервера
 }
 
 export interface AppState {

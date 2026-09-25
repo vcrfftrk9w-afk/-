@@ -170,7 +170,7 @@ export function buildLocalReport(account: Account, settings: UserSettings): Loca
   if (postsPerWeek < Math.min(settings.postsPerWeek, 5) && videos.length) {
     insights.push({ type: "warn", title: "Мало публикаций", text: `Сейчас ${postsPerWeek.toFixed(1)} видео в неделю. Для быстрого роста нужно минимум ${Math.max(5, settings.postsPerWeek)}: больше попыток — больше шансов на вирусный ролик.`, impact: "high" });
   }
-  if (viewsPerFollower < 0.3 && profile.followers > 500) {
+  if (videos.length && viewsPerFollower < 0.3 && profile.followers > 500) {
     insights.push({ type: "warn", title: "Подписчики не видят ролики", text: "Медиана просмотров ниже 30% от подписчиков — хуки слабые или контент ушёл от ниши, на которую подписывались. Усиль первые 2 секунды.", impact: "high" });
   }
   if (viewsPerFollower > 1.5) {

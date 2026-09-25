@@ -154,7 +154,13 @@ export function Trends() {
       <SectionHeader
         icon={<Flame className="size-7 text-pink" />}
         title="Тренды"
-        subtitle={status?.ai ? "AI ищет в интернете, что залетает прямо сейчас в твоей нише, и объясняет, как это снять." : "Проверенные форматы для твоей ниши. Подключи AI-ключ, чтобы искать свежие тренды в интернете."}
+        subtitle={
+          status?.ai
+            ? status.webSearch === false
+              ? "ИИ подбирает тренды и форматы под твою нишу и объясняет, как их снять."
+              : "AI ищет в интернете, что залетает прямо сейчас в твоей нише, и объясняет, как это снять."
+            : "Проверенные форматы для твоей ниши. Подключи AI-ключ, чтобы искать свежие тренды в интернете."
+        }
       />
 
       <Card className="mb-5">
@@ -169,13 +175,19 @@ export function Trends() {
               className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-sm outline-none focus:border-pink/60"
             />
           </div>
-          <Button className="h-12" onClick={() => fetchTrends(focus)} loading={busy} icon={status?.ai ? <Globe className="size-4" /> : <RefreshCw className="size-4" />}>
-            {status?.ai ? "Искать в интернете" : "Обновить"}
+          <Button className="h-12" onClick={() => fetchTrends(focus)} loading={busy} icon={status?.ai && status.webSearch !== false ? <Globe className="size-4" /> : <RefreshCw className="size-4" />}>
+            {status?.ai ? (status.webSearch === false ? "Подобрать тренды" : "Искать в интернете") : "Обновить"}
           </Button>
         </div>
         {tr && (
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-white/50">
-            {tr.live ? <Chip tone="lime">● LIVE · найдено в интернете</Chip> : <Chip>Офлайн-база</Chip>}
+            {tr.live || tr.origin === "web" ? (
+              <Chip tone="lime">● LIVE · найдено в интернете</Chip>
+            ) : tr.origin === "ai" ? (
+              <Chip tone="violet">Подбор ИИ</Chip>
+            ) : (
+              <Chip>Офлайн-база</Chip>
+            )}
             <span>обновлено {new Date(tr.fetchedAt).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
           </div>
         )}

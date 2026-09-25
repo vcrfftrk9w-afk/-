@@ -70,7 +70,7 @@ export function useActions() {
         const r = await callAI<TrendsResponse>("trends", { settings, account, focus });
         note(r.mode, r.warning);
         update(() => ({ trends: r.data }));
-        toast(r.data.live ? `Найдено ${r.data.trends.length} свежих трендов в интернете 🔥` : "Загружены проверенные форматы", r.data.live ? "ok" : "info");
+        toast(r.data.live ? `Свежие тренды из интернета: ${r.data.trends.length} 🔥` : r.data.origin === "ai" ? `Тренды под твою нишу готовы: ${r.data.trends.length} 🔥` : "Загружены проверенные форматы", r.data.origin === "local" ? "info" : "ok");
         return r.data;
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

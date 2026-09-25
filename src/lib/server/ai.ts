@@ -6,6 +6,7 @@
 // • Веб-поиск (web_search) — для поиска актуальных трендов TikTok.
 // ─────────────────────────────────────────────────────────────────────────────
 import Anthropic from "@anthropic-ai/sdk";
+import { BASE_SYSTEM, jsonInstruction } from "../prompts";
 
 export const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5";
 const BETAS: Anthropic.Beta.AnthropicBeta[] = ["server-side-fallback-2026-07-01"];
@@ -21,11 +22,7 @@ export const aiEnabled = () => getClient() !== null;
 
 export class AIRefusalError extends Error {}
 
-export const BASE_SYSTEM = `Ты — ViralPilot, топовый TikTok-продюсер и стратег роста с опытом вывода сотен авторов в миллионники.
-Ты глубоко понимаешь алгоритм рекомендаций TikTok: удержание первых 1–3 секунд, досматриваемость, пересмотры, комментарии, сохранения, репосты, SEO по ключевым словам, регулярность и нишевость.
-Твой стиль: конкретно, по делу, с цифрами и готовыми к применению шагами. Никакой воды и общих фраз — каждое предложение автор может сразу применить.
-Пиши на русском языке (если не попросили иначе), живо и мотивирующе, но честно.
-Не выдумывай статистику аккаунта — опирайся только на переданные данные. Если данных мало, скажи об этом и дай лучшие практики.`;
+export { BASE_SYSTEM };
 
 type Effort = "low" | "medium" | "high";
 
@@ -48,8 +45,7 @@ export async function askJSON<T>(opts: {
 
   const system = `${opts.system ?? BASE_SYSTEM}
 
-ФОРМАТ ОТВЕТА: верни ТОЛЬКО валидный JSON (без markdown, без комментариев, без текста до или после), строго такой формы:
-${opts.shape}`;
+${jsonInstruction(opts.shape)}`;
 
   const tools: Anthropic.Beta.BetaToolUnion[] | undefined = opts.webSearch
     ? [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }]

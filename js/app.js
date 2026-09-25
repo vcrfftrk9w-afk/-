@@ -189,7 +189,10 @@ const App = (() => {
     const stage = State.stage();
     $('#avatar-emoji').textContent = stage.emoji;
     $('#user-title').textContent = stage.title;
-    $('#user-name').textContent = s.name || 'Гость';
+    // вместо безликого «Гость» — приветствие по времени суток
+    const hr = new Date().getHours();
+    const greet = hr >= 5 && hr < 12 ? 'Доброе утро' : hr < 17 && hr >= 12 ? 'Добрый день' : hr >= 17 && hr < 23 ? 'Добрый вечер' : 'Доброй ночи';
+    $('#user-name').textContent = s.name ? `${greet}, ${s.name}` : greet;
     $('#stat-level').textContent = s.level;
     const need = State.xpToNext(s.level);
     $('#stat-xp').textContent = `${s.xp}/${need}`;

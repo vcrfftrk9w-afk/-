@@ -514,6 +514,19 @@ Screens.dashboard = (() => {
     return { core: rows.filter(isCore), other: rows.filter((b) => !isCore(b)) };
   }
 
+  /* на главной — коротко и понятно; полное название видно в «Дне» */
+  const SHORT = {
+    'ТТ видео — кино': 'TikTok · кино', 'ТТ видео — orca': 'TikTok · orca',
+    'Разбор с ИИ: что получилось и что дальше': 'Разбор дня с ИИ',
+    'Работа над заработком': 'Заработок', 'OLX: объявления и обмены': 'OLX',
+    'Одно сохранённое видео': 'Одно видео из сохранённых', 'Готовка': 'Готовка на два дня',
+    'Прогулка и восстановление': 'Прогулка', 'Смонтировать два ролика: кино и orca': 'Монтаж: кино и orca',
+    'Проверить ролик «кино»: подпись и загрузка': 'Проверить «кино»', 'Проверить и подготовить ролик «orca»': 'Проверить «orca»',
+    'Задания по учёбе': 'Учёба', 'Собрать вещи и записать 3 задачи на завтра': 'Сборы и 3 дела на завтра',
+    'Подготовка роликов для TikTok': 'Подготовка роликов',
+  };
+  const shortTitle = (b) => SHORT[b.taskTitle || b.task] || b.title;
+
   function rowHTML(b, now) {
     const done = Planner.isDone(b);
     const live = !done && now >= b.start && now < b.end;
@@ -524,10 +537,10 @@ Screens.dashboard = (() => {
         : done ? 'сделано' : `${b.end - b.start} мин${b.hard ? ' · ровно' : ''}`;
     return `
       <li class="mt-row ${done ? 'done' : ''} ${live ? 'now' : ''} ${late ? 'late' : ''}">
-        <button class="mt-main" data-mopen="${b.id}"><small class="mt-time">${Track.hhmm(b.start)} · ${note}</small><b>${b.emoji || '✅'} ${UI.esc(b.title)}</b></button>
+        <button class="mt-main" data-mopen="${b.id}"><small class="mt-time">${Track.hhmm(b.start)} · ${note}</small><b>${b.emoji || '✅'} ${UI.esc(shortTitle(b))}</b></button>
         ${done
           ? '<span class="mt-ok" aria-label="Сделано">✓</span>'
-          : `<button class="mt-go ${live ? 'hot' : ''}" data-mgo="${b.id}" aria-label="Начать: ${UI.esc(b.title)}">▶</button>
+          : `<button class="mt-go ${live ? 'hot' : ''}" data-mgo="${b.id}" aria-label="Начать: ${UI.esc(shortTitle(b))}">▶</button>
              <button class="mt-check" data-mdone="${b.id}" aria-label="Отметить сделанным"></button>`}
       </li>`;
   }
@@ -565,10 +578,22 @@ Screens.dashboard = (() => {
     const missed = core.filter((b) => !Planner.isDone(b) && b.end <= now);
     const doneList = core.filter((b) => Planner.isDone(b));
     const lateOpen = !!State.s.mainLate;
-    el.innerHTML = `
+    /* ночью — не список дел, а «спи»: первое дело утром и во сколько */
+    let night = '';
+    if (typeof Modes !== 'undefined' && Modes.target().kind === 'sleep') {
+      let first = ahead[0];
+      let when = first ? Track.hhmm(first.start) : '';
+      let title = first ? `${first.emoji || ''} ${shortTitle(first)}`.trim() : '';
+      if (!first && typeof Week !== 'undefined') {
+        const t = Week.scriptFor((new Date().getDay() + 1) % 7).find((x) => x.kind === 'task' && CORE.has(x.task));
+        if (t) { when = Track.hhmm(t.start); title = `${t.emoji} ${SHORT[t.task] || t.title}`; }
+      }
+      night = `<div class="mt-night"><b>🌙 Сейчас ночь — лучшее дело: спать</b><span>${title ? `Первое дело — в ${when}: ${UI.esc(title)}` : 'Утром план будет готов.'}</span></div>`;
+    }
+    el.innerHTML = `${night}
       <div class="mt-bar" aria-hidden="true"><span style="width:${pct}%"></span></div>
       ${ahead.length ? `<ul class="mt-list">${ahead.map((b) => rowHTML(b, now)).join('')}</ul>`
-        : `<p class="mt-empty">${missed.length ? 'На сегодня по времени всё. Можно добить пропущенное — коротко.' : '🏆 Главное на сегодня сделано.'}</p>`}
+        : (night ? '' : `<p class="mt-empty">${missed.length ? 'На сегодня по времени всё. Можно добить пропущенное — коротко.' : '🏆 Главное на сегодня сделано.'}</p>`)}
       ${missed.length ? `
         <button class="mt-fold" id="main-late" aria-expanded="${lateOpen}">${lateOpen ? '▴' : '▾'} Пропущено · ${missed.length}</button>
         ${lateOpen ? `<ul class="mt-list mt-other">${missed.map((b) => rowHTML(b, now)).join('')}</ul>` : ''}` : ''}

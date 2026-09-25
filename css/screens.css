@@ -2291,3 +2291,37 @@ body[data-mode="adhd"] .bg-aurora span, body .bg-aurora span { opacity: 0.16; }
 .mt-main b { overflow-wrap: break-word; word-break: normal; hyphens: auto; }
 .mt-ok { grid-column: 2 / 4; }
 .mt-row.now .mt-time { color: var(--accent2, var(--accent)); }
+
+/* ---------- шапка на телефоне: два ряда вместо трёх ---------- */
+@media (max-width: 640px) {
+  .topbar { padding: 8px 12px 10px; row-gap: 8px; column-gap: 8px; }
+  .brand { flex: 1 1 auto; min-width: 0; padding: 2px 2px; gap: 8px; }
+  .brand .avatar-emoji { font-size: 1.9rem; }
+  .brand-text strong { font-size: 1rem; }
+  .brand-text small { font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; display: block; }
+  #cmd-btn { display: none; }
+  .topbar-actions { gap: 6px; }
+  .topbar-actions .icon-btn { width: 38px; height: 38px; }
+  .mode-switch { padding: 4px 10px 4px 5px; font-size: .74rem; gap: 6px; }
+  .mode-track { width: 34px; height: 20px; }
+  .mode-thumb { width: 14px; height: 14px; }
+  [data-mode="adhd"] .mode-thumb { transform: translateX(14px); }
+  .stat-pills { order: 3; width: 100%; flex-wrap: nowrap; overflow-x: auto; gap: 6px; scrollbar-width: none; }
+  .stat-pills::-webkit-scrollbar { display: none; }
+  .stat-pills .pill { flex: 0 0 auto; padding: 5px 11px; font-size: .78rem; }
+  .pill-passive { display: none; }
+}
+
+/* ---------- ночь на главной ---------- */
+.mt-night { display: grid; gap: 3px; padding: 12px 14px; margin-bottom: 10px; border-radius: 14px;
+  background: linear-gradient(135deg, color-mix(in srgb, #6366f1 22%, transparent), color-mix(in srgb, #0ea5e9 12%, transparent));
+  border: 1px solid color-mix(in srgb, #6366f1 35%, transparent); }
+.mt-night b { font-size: 15px; }
+.mt-night span { font-size: 13px; color: var(--text-muted); }
+
+/* ---------- ссылки карточки — чипы, а не подчёркнутый текст ---------- */
+.mt-links { justify-content: flex-start; gap: 6px; }
+.mt-links .linkbtn { text-decoration: none; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px;
+  padding: 7px 12px; font-size: 12.5px; color: var(--text); }
+.mt-links .linkbtn:hover { border-color: var(--accent); }
+.mt-links .linkbtn { display: inline-flex; align-items: center; gap: 4px; line-height: 1.2; margin: 0; }

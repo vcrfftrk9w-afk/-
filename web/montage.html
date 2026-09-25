@@ -298,6 +298,8 @@ svg { display: block; }
   display: grid; place-items: center;
 }
 .trn span { transform: rotate(-45deg); font: 700 8px/1 var(--mono); color: var(--cyan); }
+.trn.mini { width: 9px; height: 9px; margin-left: -4.5px; top: 27px; border-radius: 2px; }
+.trn.mini span { display: none; }
 .trn.on { background: #0b2b33; border-color: var(--cyan); }
 
 .tchip {
@@ -333,6 +335,28 @@ svg { display: block; }
   clip-path: polygon(0 0, 100% 0, 100% 55%, 50% 100%, 0 55%);
 }
 .snapline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--amber); box-shadow: 0 0 6px var(--amber); z-index: 7; pointer-events: none; }
+
+.stylebar {
+  display: flex; gap: 6px;
+  overflow-x: auto;
+  padding: 10px 10px 9px;
+  border-bottom: 1px solid var(--line);
+  scrollbar-width: none;
+}
+.stylebar::-webkit-scrollbar { display: none; }
+.sbtn {
+  flex: none;
+  height: 34px; padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line2);
+  background: var(--s1);
+  color: var(--dim);
+  font: 700 12px/1 var(--ui);
+  white-space: nowrap;
+}
+.sbtn:hover { color: var(--text); }
+.sbtn.on { background: var(--red); border-color: var(--red); color: #fff; box-shadow: 0 6px 18px -8px var(--red); }
+.sbtn.dice { display: inline-flex; align-items: center; gap: 6px; color: var(--cyan); border-color: #1ee3ff55; }
 
 /* контекстная панель клипа */
 .ctx {
@@ -692,6 +716,7 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   </section>
 
   <section class="tl" id="tl">
+    <div class="stylebar" id="stylebar" role="group" aria-label="Стиль эдита"></div>
     <div class="tl-head">
       <button class="iconbtn" id="tl-play" aria-label="Воспроизвести"></button>
       <span class="tc" id="tl-tc">00:00.00 <i>/ 00:00.00</i></span>
@@ -835,9 +860,10 @@ const LOOKS = {
   sunset: { name: "Закат",    css: (a) => `saturate(${1 + .25 * a})`, tint: (a) => ["#ff8a3d", .2 * a] },
   ice:    { name: "Лёд",      css: (a) => `contrast(${1 + .12 * a}) saturate(${1 - .1 * a})`, tint: (a) => ["#3f8cff", .22 * a] },
   faded:  { name: "Выцветший", css: (a) => `contrast(${1 - .14 * a}) saturate(${1 - .22 * a}) brightness(${1 + .07 * a})`, tint: (a) => ["#c8b8a8", .16 * a] },
-  phonk:  { name: "Фонк",     css: (a) => `contrast(${1 + .45 * a}) saturate(${1 - .35 * a}) brightness(${1 - .06 * a})`, tint: (a) => ["#ff1a3c", .28 * a] },
+  phonk:  { name: "Фонк",     css: (a) => `grayscale(${.92 * a}) contrast(${1 + .55 * a}) brightness(${1 - .05 * a})`, tint: (a) => ["#ff1a3c", .34 * a] },
   dream:  { name: "Мечта",    css: (a) => `brightness(${1 + .06 * a}) saturate(${1 + .18 * a}) contrast(${1 - .05 * a})`, tint: (a) => ["#ff7ac8", .18 * a], bloom: (a) => .32 * a },
   vhs:    { name: "VHS",      css: (a) => `sepia(${.22 * a}) saturate(${1 + .3 * a}) contrast(${1 + .12 * a})`, tint: (a) => ["#ffb36b", .1 * a] },
+  anime:  { name: "Аниме",    css: (a) => `saturate(${1 + .55 * a}) contrast(${1 + .16 * a}) brightness(${1 + .04 * a})`, bloom: (a) => .34 * a },
   matrix: { name: "Матрица",  css: (a) => `contrast(${1 + .2 * a}) saturate(${1 - .2 * a})`, tint: (a) => ["#2bff7a", .24 * a] },
 };
 
@@ -883,6 +909,7 @@ const RAMPS = {
   rampup:   { name: "Разгон",     r: (u) => .28 + 2.9 * u * u },
   rampdown: { name: "Торможение", r: (u) => .28 + 2.9 * (1 - u) * (1 - u) },
   hitslow:  { name: "Удар → слоумо", r: (u) => .22 + 3.2 * Math.exp(-u / .1) },
+  freeze:   { name: "Фриз",       r: (u) => (u < .5 ? 1.3 : .015) },
 };
 const RAMP_IDS = Object.keys(RAMPS);
 
@@ -920,6 +947,7 @@ const TEXT_STYLES = {
 };
 const TEXT_ANIMS = {
   beat:  { name: "По слову на бит" },
+  slam:  { name: "Удар" },
   pop:   { name: "Прыжок" },
   type:  { name: "Печать" },
   slide: { name: "Выезд" },
@@ -930,75 +958,120 @@ const TEXT_ANIMS = {
 const TEXT_COLORS = ["#ffffff", "#ff3358", "#1ee3ff", "#ffbb3d", "#b6ff3d", "#c084fc"];
 
 /**
- * Стили эдита. Это не набор фильтров, а правила монтажа:
- * как часто резать, где рвать скорость, чем бить по сильной доле.
+ * Удары — приёмы, которые монтажёр вешает на доли. Каждый живёт dur секунд
+ * (для «долгих» — доля берётся из сетки) и гаснет с постоянной decay.
+ */
+const HITS = {
+  punch:    { name: "Панч-зум",      decay: .15, dur: .4 },
+  punchOut: { name: "Отъезд",        decay: .2,  dur: .45 },
+  shake:    { name: "Тряска",        decay: .13, dur: .36 },
+  spin:     { name: "Спин",          decay: .17, dur: .42 },
+  zoomblur: { name: "Зум-блюр",      decay: .14, dur: .36 },
+  flash:    { name: "Вспышка",       decay: .08, dur: .26 },
+  black:    { name: "Чёрный блинк",  decay: .05, dur: .08 },
+  invert:   { name: "Инверт",        decay: .05, dur: .07 },
+  rgb:      { name: "RGB",           decay: .12, dur: .32 },
+  blur:     { name: "Блюр",          decay: .12, dur: .3 },
+  wobble:   { name: "Волна",         decay: .22, dur: .5 },
+  lines:    { name: "Спидлайны",     decay: .22, dur: .5 },
+  strobe:   { name: "Строб",         beat: 1 },
+  echo:     { name: "Эхо-шлейф",     beat: 2 },
+  split:    { name: "Сплит",         beat: 1 },
+  kaleido:  { name: "Калейдоскоп",   beat: 1 },
+  stutter:  { name: "Стоп-моушен",   beat: 1 },
+};
+const HIT_COLORS = {
+  punch: "#ffffff", punchOut: "#ffffff", shake: "#ffbb3d", spin: "#ffbb3d", zoomblur: "#ffffff",
+  flash: "#ffffff", black: "#6d6d82", invert: "#c084fc", rgb: "#ff3358", blur: "#1ee3ff",
+  wobble: "#c084fc", lines: "#1ee3ff", strobe: "#ff3358", echo: "#1ee3ff", split: "#b6ff3d",
+  kaleido: "#b6ff3d", stutter: "#b6ff3d",
+};
+
+/**
+ * Стили эдита. Это не фильтр, а правила монтажа: как часто резать, где рвать
+ * скорость, какие переходы, и главное — хореография ударов по долям:
+ * pattern идёт по кругу на обычных долях, drop — комбо на дропе,
+ * phrase — «фишка» на смене фразы (раз в 8 долей), half — добивка между долями.
  */
 const STYLES = {
   velocity: {
-    name: "Velocity", tag: "Рывки скорости на бите",
-    cut: [2, 2], look: ["punch", .8], speed: 1,
-    ramp: (i, s) => (s.kind === "video" || s.kind === "gen" ? (i % 4 === 3 ? "hitslow" : "velocity") : "none"),
-    tr: (i, s) => (s.phrase ? "zoomin" : s.down && i % 3 === 2 ? "whip" : "cut"),
-    beat: { zoom: .55, shake: .18, flash: .22, rgb: .25, blur: .3, every: 1 },
-    overlay: { grain: .08, vignette: .28, leak: 0, bars: 0, vhs: 0 },
+    name: "Velocity", tag: "Слоумо → рывок на бите",
+    cut: [2, 2], look: ["punch", .85], speed: 1,
+    ramps: ["velocity", "velocity", "hitslow", "velocity", "rampup"],
+    trPhrase: ["zoomin", "whip"], tr: ["cut", "cut", "cut", "whip"],
+    hits: { every: [1, 2], pattern: ["punch", "shake", "punch+rgb", "zoomblur", "punch", "spin"], drop: ["flash", "punch", "rgb", "shake"], phrase: ["stutter", "spin", "echo"] },
+    overlay: { grain: .08, vignette: .32, leak: 0, bars: 0, vhs: 0, lines: 0 },
     text: ["bold", "beat"], keepOrig: false,
   },
   phonk: {
-    name: "Фонк", tag: "Агрессия, тряска, красный",
-    cut: [1, 2], look: ["phonk", .9], speed: 1.05,
-    ramp: (i, s) => (s.kind !== "image" && i % 4 === 2 ? "rampup" : "none"),
-    tr: (i, s) => (s.phrase ? "flash" : s.down && i % 2 ? "glitch" : "cut"),
-    fx: (i) => (i % 5 === 4 ? ["strobe"] : []),
-    beat: { zoom: .75, shake: .8, flash: .55, rgb: .65, blur: .2, every: 1 },
-    overlay: { grain: .2, vignette: .55, leak: 0, bars: 0, vhs: 0 },
-    text: ["y2k", "beat"], keepOrig: false,
+    name: "Фонк", tag: "Ч/б, красный, тряска на каждую долю",
+    cut: [1, 2], look: ["phonk", 1], speed: 1.05,
+    ramps: ["none", "rampup", "none", "hitslow"],
+    trPhrase: ["flash", "glitch"], tr: ["cut", "cut", "glitch", "cut"],
+    hits: { every: [1, 1], pattern: ["shake+rgb", "punch", "shake", "black+punch", "shake+rgb", "invert+shake"], drop: ["flash", "punch", "rgb", "shake", "strobe"], phrase: ["stutter", "strobe", "wobble"], half: "shake" },
+    overlay: { grain: .22, vignette: .62, leak: 0, bars: 0, vhs: 0, lines: 0 },
+    text: ["y2k", "slam"], keepOrig: false, flash: "#ff1a3c",
+  },
+  amv: {
+    name: "Аниме / AMV", tag: "Свечение, спидлайны, вспышки",
+    cut: [1, 2], look: ["anime", 1], speed: 1,
+    ramps: ["velocity", "hitslow", "none", "velocity"],
+    trPhrase: ["flash", "spin"], tr: ["cut", "flash", "zoomin", "cut"],
+    hits: { every: [1, 2], pattern: ["punch+lines", "flash", "spin", "punch+rgb", "zoomblur+lines"], drop: ["flash", "punch", "lines", "rgb"], phrase: ["echo", "spin", "zoomblur"] },
+    overlay: { grain: .05, vignette: .28, leak: 0, bars: 0, vhs: 0, lines: .25 },
+    text: ["neon", "slam"], keepOrig: false,
+  },
+  hard: {
+    name: "Хард-шейк", tag: "Всё на максимум: строб и спины",
+    cut: [1, 1], look: ["punch", 1], speed: 1.1,
+    ramps: ["rampup", "none", "velocity", "hitslow"],
+    trPhrase: ["spin", "flash"], tr: ["flash", "zoomin", "cut", "spin", "cut"],
+    hits: { every: [1, 1], pattern: ["punch+shake", "zoomblur+rgb", "spin+shake", "strobe", "punch+invert", "shake+rgb"], drop: ["flash", "punch", "shake", "rgb", "zoomblur"], phrase: ["strobe", "stutter", "split"], half: "shake" },
+    overlay: { grain: .12, vignette: .5, leak: 0, bars: 0, vhs: 0, lines: 0 },
+    text: ["bold", "shake"], keepOrig: false,
+  },
+  glitch: {
+    name: "Глитч / Y2K", tag: "Калейдоскоп, сплиты, сбои",
+    cut: [1, 2], look: ["punch", .8], speed: 1,
+    ramps: ["velocity", "none", "none"],
+    trPhrase: ["pixelize", "glitch"], tr: ["glitch", "cut", "pixelize", "cut"],
+    hits: { every: [1, 1], pattern: ["rgb", "kaleido", "rgb+wobble", "split", "stutter", "invert+rgb"], drop: ["invert", "rgb", "split"], phrase: ["kaleido", "stutter"], half: "rgb" },
+    overlay: { grain: .1, vignette: .32, leak: 0, bars: 0, vhs: 0, lines: 0 },
+    text: ["neon", "type"], keepOrig: false,
+  },
+  vhs: {
+    name: "VHS", tag: "Кассета, волна, дата в углу",
+    cut: [2, 4], look: ["vhs", .95], speed: 1,
+    ramps: ["none"],
+    trPhrase: ["whip"], tr: ["cut"],
+    hits: { every: [2, 2], pattern: ["wobble", "rgb", "punchOut", "wobble+rgb"], drop: ["wobble", "rgb", "black"], phrase: ["stutter"] },
+    overlay: { grain: .26, vignette: .42, leak: .2, bars: 0, vhs: 1, lines: 0 },
+    text: ["subtitle", "type"], keepOrig: false,
   },
   aesthetic: {
-    name: "Эстетика", tag: "Мягко, слоумо, засветы",
-    cut: [4, 4], look: ["dream", .8], speed: .6,
-    ramp: () => "none",
-    tr: () => "fade",
-    fx: (i) => (i % 3 === 1 ? ["glow"] : []),
-    beat: { zoom: .1, shake: 0, flash: 0, rgb: 0, blur: 0, every: 4 },
-    overlay: { grain: .12, vignette: .22, leak: .7, bars: 0, vhs: 0 },
+    name: "Эстетика", tag: "Слоумо, засветы, эхо",
+    cut: [4, 4], look: ["dream", .85], speed: .6,
+    ramps: ["none"],
+    trPhrase: ["fade"], tr: ["fade"],
+    hits: { every: [4, 4], pattern: ["echo", "punchOut", "blur"], drop: ["echo", "punchOut"], phrase: ["echo"] },
+    overlay: { grain: .14, vignette: .25, leak: .75, bars: 0, vhs: 0, lines: 0 },
     text: ["minimal", "fade"], keepOrig: false,
   },
   cinematic: {
     name: "Кино", tag: "Полосы, тил-оранж, паузы",
     cut: [4, 4], look: ["teal", .9], speed: .8,
-    ramp: (i, s) => (s.kind !== "image" && i % 3 === 1 ? "rampdown" : "none"),
-    tr: (i, s) => (s.phrase ? "fadeblack" : "cut"),
-    fx: (i) => (i % 2 ? ["zoomin"] : []),
-    beat: { zoom: .06, shake: 0, flash: 0, rgb: 0, blur: 0, every: 4 },
-    overlay: { grain: .1, vignette: .4, leak: 0, bars: .9, vhs: 0 },
+    ramps: ["none", "rampdown", "none"],
+    trPhrase: ["fadeblack"], tr: ["cut"],
+    hits: { every: [4, 4], pattern: ["punchOut", "zoomblur"], drop: ["black", "punch"], phrase: ["echo"] },
+    overlay: { grain: .1, vignette: .45, leak: 0, bars: .9, vhs: 0, lines: 0 },
     text: ["minimal", "fade"], keepOrig: false,
   },
-  glitch: {
-    name: "Глитч", tag: "Цифровые сбои, RGB",
-    cut: [1, 2], look: ["punch", .7], speed: 1,
-    ramp: (i, s) => (s.kind !== "image" && i % 3 === 0 ? "velocity" : "none"),
-    tr: (i) => (i % 3 === 1 ? "glitch" : i % 5 === 3 ? "pixelize" : "cut"),
-    fx: (i) => (i % 4 === 2 ? ["glitch"] : i % 6 === 5 ? ["pixelate"] : []),
-    beat: { zoom: .35, shake: .3, flash: .3, rgb: .95, blur: 0, every: 1 },
-    overlay: { grain: .1, vignette: .3, leak: 0, bars: 0, vhs: 0 },
-    text: ["neon", "type"], keepOrig: false,
-  },
-  vhs: {
-    name: "VHS", tag: "Кассета, плёнка, 2002",
-    cut: [2, 4], look: ["vhs", .9], speed: 1,
-    ramp: () => "none",
-    tr: (i, s) => (s.phrase ? "whip" : "cut"),
-    beat: { zoom: .15, shake: .12, flash: .1, rgb: .3, blur: 0, every: 2 },
-    overlay: { grain: .24, vignette: .4, leak: .2, bars: 0, vhs: 1 },
-    text: ["subtitle", "type"], keepOrig: false,
-  },
   clean: {
-    name: "Чистый", tag: "Резы по биту, без эффектов",
+    name: "Чистый", tag: "Только резы по битам",
     cut: [2, 2], look: ["none", 1], speed: 1,
-    ramp: () => "none",
-    tr: () => "cut",
-    beat: { zoom: 0, shake: 0, flash: 0, rgb: 0, blur: 0, every: 1 },
-    overlay: { grain: 0, vignette: 0, leak: 0, bars: 0, vhs: 0 },
+    ramps: ["none"], trPhrase: ["cut"], tr: ["cut"],
+    hits: null,
+    overlay: { grain: 0, vignette: 0, leak: 0, bars: 0, vhs: 0, lines: 0 },
     text: ["bold", "pop"], keepOrig: true,
   },
 };
@@ -1384,6 +1457,98 @@ function analyzeBeats(buffer) {
    ================================================================ */
 
 const GENS = {
+  city: {
+    name: "Ночной город",
+    draw(g, t, W, H) {
+      const sky = g.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, "#05030d"); sky.addColorStop(.6, "#1a0b2e"); sky.addColorStop(1, "#2d0f2a");
+      g.fillStyle = sky; g.fillRect(0, 0, W, H);
+      const pan = t * W * .05;
+      for (let layer = 0; layer < 2; layer += 1) {
+        const depth = layer ? 1 : .55;
+        const base = H * (layer ? .78 : .7);
+        for (let i = -2; i < 16; i += 1) {
+          const bw = W * (.1 + hash(i * 3 + layer) * .12);
+          const x = ((i * W * .13 - pan * depth) % (W * 2.1) + W * 2.1) % (W * 2.1) - W * .3;
+          const bh = H * (.25 + hash(i * 7 + layer * 11) * .45) * (layer ? 1 : .8);
+          g.fillStyle = layer ? "#0b0714" : "#150d24";
+          g.fillRect(x, base - bh, bw, bh + H);
+          if (layer) {
+            for (let wy = base - bh + 10; wy < base - 8; wy += H * .022) {
+              for (let wx = x + 6; wx < x + bw - 6; wx += W * .022) {
+                const on = hash(Math.floor(wx) * .13 + Math.floor(wy) * .71 + i) > .58;
+                if (!on) continue;
+                g.fillStyle = hash(wx + wy) > .5 ? "#ffd27a" : "#7ad8ff";
+                g.globalAlpha = .55 + .45 * Math.abs(Math.sin(t * 2 + wx));
+                g.fillRect(wx, wy, W * .01, H * .008);
+              }
+            }
+            g.globalAlpha = 1;
+            if (hash(i * 5) > .55) {
+              const on = Math.sin(t * 9 + i) > -.6;
+              g.fillStyle = hash(i) > .5 ? "#ff2d8a" : "#1ee3ff";
+              g.shadowColor = g.fillStyle; g.shadowBlur = on ? 22 : 0;
+              g.globalAlpha = on ? 1 : .25;
+              g.fillRect(x + bw * .15, base - bh * .6, bw * .7, H * .018);
+              g.shadowBlur = 0; g.globalAlpha = 1;
+            }
+          }
+        }
+      }
+      g.fillStyle = "#07050c"; g.fillRect(0, H * .78, W, H * .22);
+      for (let k = 0; k < 16; k += 1) {
+        const dir = k % 2 ? 1 : -1;
+        const x = ((hash(k * 3.3) * W * 2 + dir * t * W * (.5 + hash(k) * .6)) % (W * 2) + W * 2) % (W * 2) - W * .5;
+        const y = H * (.82 + (k % 4) * .035);
+        const gr = g.createLinearGradient(x - dir * W * .25, 0, x, 0);
+        const c = dir > 0 ? "255,60,80" : "255,240,200";
+        gr.addColorStop(0, `rgba(${c},0)`); gr.addColorStop(1, `rgba(${c},.95)`);
+        g.fillStyle = gr; g.fillRect(Math.min(x, x - dir * W * .25), y, W * .25, H * .006);
+      }
+      g.strokeStyle = "rgba(170,200,255,.35)"; g.lineWidth = 1;
+      g.beginPath();
+      for (let r = 0; r < 90; r += 1) {
+        const x = hash(r * 1.7) * W, y = ((hash(r * 5.1) * H + t * H * 1.4) % H);
+        g.moveTo(x, y); g.lineTo(x - W * .01, y + H * .035);
+      }
+      g.stroke();
+    },
+  },
+  road: {
+    name: "Трасса",
+    draw(g, t, W, H) {
+      const hz = H * .42;
+      const sky = g.createLinearGradient(0, 0, 0, hz);
+      sky.addColorStop(0, "#0a0616"); sky.addColorStop(1, "#ff4a3c");
+      g.fillStyle = sky; g.fillRect(0, 0, W, hz);
+      g.fillStyle = "#0c0a10"; g.fillRect(0, hz, W, H - hz);
+      const cx = W / 2 + Math.sin(t * .6) * W * .08;
+      g.fillStyle = "#18151d";
+      g.beginPath(); g.moveTo(cx - W * .02, hz); g.lineTo(cx + W * .02, hz); g.lineTo(W * 1.3, H); g.lineTo(-W * .3, H); g.fill();
+      const speed = 3.2;
+      for (let k = 0; k < 18; k += 1) {
+        const z = ((k / 18 + t * speed / 18) % 1);
+        const z2 = Math.min(1, z + .025);
+        const y1 = hz + (H - hz) * z * z, y2 = hz + (H - hz) * z2 * z2;
+        const w1 = W * .004 + z * z * W * .02;
+        const xm = cx + (W / 2 - cx) * z * z;
+        g.fillStyle = "#ffe8a3"; g.globalAlpha = .3 + z * .7;
+        g.fillRect(xm - w1 / 2, y1, w1, Math.max(1, y2 - y1));
+        for (const side of [-1, 1]) {
+          const px = xm + side * (W * .03 + z * z * W * 1.1);
+          const ph = (H - hz) * .06 + z * z * H * .5;
+          g.fillStyle = side > 0 ? "#1ee3ff" : "#ff2d8a";
+          g.shadowColor = g.fillStyle; g.shadowBlur = 12;
+          g.fillRect(px, y1 - ph, Math.max(1.5, z * W * .012), ph);
+          g.shadowBlur = 0;
+        }
+      }
+      g.globalAlpha = 1;
+      const sun = g.createRadialGradient(cx, hz, 0, cx, hz, W * .6);
+      sun.addColorStop(0, "rgba(255,200,120,.55)"); sun.addColorStop(1, "rgba(255,120,80,0)");
+      g.fillStyle = sun; g.fillRect(0, 0, W, H);
+    },
+  },
   synthwave: {
     name: "Закат",
     draw(g, t, W, H) {
@@ -1766,6 +1931,60 @@ function chooseWindow(asset, need, used, rand) {
 }
 
 /**
+ * Хореография: какой удар на какой доле.
+ * Дроп (резкий рост громкости на сильной доле или громкий старт) — комбо.
+ * Смена фразы — «фишка» стиля. Обычные доли — узор стиля по кругу,
+ * сила зависит от громкости доли; в горячих местах добивка между долями.
+ */
+function choreograph(style, grid, length, rand) {
+  const C = style.hits;
+  if (!C) return [];
+  const beatLen = 60 / grid.bpm;
+  const hits = [];
+  const B = grid.beats, E = grid.strength;
+  const avg = (a, b) => { let s = 0, n = 0; for (let i = Math.max(0, a); i < Math.min(B.length, b); i += 1) { s += E[i] ?? .7; n += 1; } return n ? s / n : .7; };
+  const shift = Math.floor(rand() * C.pattern.length);
+  let lastDrop = -99;
+  const add = (t, type, amt) => {
+    const def = HITS[type];
+    if (!def || t > length - .03) return;
+    const dur = def.beat ? def.beat * beatLen : def.dur;
+    hits.push({ t: Math.round(t * 1000) / 1000, type, amt: Math.round(clamp(amt, 0, 1.4) * 100) / 100, dur: Math.round(Math.min(dur, length - t) * 1000) / 1000 });
+  };
+  for (let i = 0; i < B.length; i += 1) {
+    const t = B[i];
+    if (t > length - .05) break;
+    const e = E[i] ?? .7;
+    const rel = grid.index[i];
+    const down = grid.down[i];
+    const phrase = ((rel % 8) + 8) % 8 === 0;
+    const drop = (i === 0 && e > .5) || (down && avg(i, i + 4) - avg(i - 4, i) > .16 && i - lastDrop > 8);
+    if (drop) {
+      lastDrop = i;
+      for (const type of C.drop) add(t, type, 1.1);
+      continue;
+    }
+    if (phrase && i > 0 && C.phrase?.length) add(t, C.phrase[Math.floor(rand() * C.phrase.length)], .95);
+    const every = e > .68 ? C.every[0] : C.every[1];
+    if (((rel % every) + every) % every !== 0) continue;
+    const combo = C.pattern[(Math.floor(i / every) + shift) % C.pattern.length];
+    const amt = (.5 + .6 * e) * (down ? 1.12 : .9);
+    for (const type of combo.split("+")) add(t, type, amt);
+    if (C.half && e > .78 && i + 1 < B.length) add((t + B[i + 1]) / 2, C.half, .45);
+  }
+  hits.sort((a, b) => a.t - b.t);
+  return hits;
+}
+
+/** Перемешать только удары, не трогая резы. */
+function reChoreograph(plan, seed) {
+  const style = STYLES[plan.style];
+  if (!style) return;
+  const total = plan.clips.reduce((s, c) => s + c.len, 0);
+  plan.hits = choreograph(style, gridFor(plan, total), total, rng(seed));
+}
+
+/**
  * Собирает план с нуля.
  * opts: {style, length, look?, lookAmt?, power, texts:[{text, style?, anim?, pos?}], order?, keepOrig?, output?, seed}
  */
@@ -1831,7 +2050,12 @@ function autoEdit(opts) {
       energy: bi >= 0 ? grid.strength[bi] : .7,
     };
 
-    const ramp = asset.kind === "image" ? "none" : style.ramp(k, info);
+    const pickOf = (pool) => pool[Math.floor(rand() * pool.length)];
+    let ramp = asset.kind === "image" ? "none" : pickOf(style.ramps);
+    // перед сменой фразы — фриз-кадр: классический «стоп» перед ударом
+    const nextBi = beatIndexAt(grid, at + len + .01);
+    const nextPhrase = nextBi >= 0 && ((grid.index[nextBi] % 8) + 8) % 8 === 0 && k + 2 < cuts.length;
+    if (nextPhrase && asset.kind !== "image" && style.hits && style.speed >= 1 && rand() < .45) ramp = "freeze";
     const baseSpeed = style.speed * (asset.kind === "video" ? 1 : 1);
     let span = len * baseSpeed * rampMean(ramp);
     let src = 0;
@@ -1845,8 +2069,9 @@ function autoEdit(opts) {
       src = chooseWindow(asset, span, [], rand);
     }
 
-    const trType = k === 0 ? "cut" : style.tr(k, info);
-    const effects = (style.fx ? style.fx(k, info) : []).map((type) => ({ type, amt: .7 }));
+    const trType = k === 0 ? "cut" : pickOf(info.phrase ? style.trPhrase : style.tr);
+    const effects = [];
+    if (style.hits && asset.kind !== "image" && rand() < .12) effects.push({ type: "mirror", amt: 1 });
     if (asset.kind === "image") effects.push({ type: k % 2 ? "zoomout" : "zoomin", amt: .6 });
 
     clips.push({
@@ -1880,7 +2105,8 @@ function autoEdit(opts) {
   }
 
   const lookId = LOOKS[opts.look] ? opts.look : style.look[0];
-  const scaled = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, k === "every" ? v : clamp(v * power, 0, 1)]));
+  const scaled = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, clamp(v * power, 0, 1)]));
+  const hits = choreograph(style, grid, length, rand);
 
   return {
     v: 2,
@@ -1890,7 +2116,10 @@ function autoEdit(opts) {
     music: musicAsset ? { assetId: musicAsset.id, offset, vol: .9, fadeIn: offset > .5 ? .25 : 0, fadeOut: 1.2 } : null,
     orig: { keep: opts.keepOrig ?? (musicAsset ? style.keepOrig : true), vol: musicAsset ? .35 : 1 },
     look: { id: lookId, amt: opts.lookAmt ?? style.look[1] },
-    beat: scaled(style.beat),
+    beat: { zoom: 0, shake: 0, flash: 0, rgb: 0, blur: 0, every: 1 },
+    hits,
+    hitPower: power,
+    flashColor: style.flash || "#ffffff",
     overlay: scaled(style.overlay),
     style: opts.style,
     power,
@@ -1917,11 +2146,13 @@ function orderVisuals(order) {
    ================================================================ */
 
 const STYLE_WORDS = [
-  ["phonk", ["фонк", "phonk", "дрифт", "агрессив", "жёстк", "жестк", "злой", "brazil", "бразил"]],
+  ["phonk", ["фонк", "phonk", "дрифт", "агрессив", "злой", "brazil", "бразил"]],
+  ["amv", ["аниме", "anime", "amv", "амв", "манга", "джоджо"]],
+  ["hard", ["хард", "шейк", "shake", "жёстк", "жестк", "мощн", "имб", "разнос"]],
   ["velocity", ["velocity", "велосити", "велоcити", "рывк", "скорост", "ускор"]],
   ["aesthetic", ["эстетик", "aesthetic", "нежн", "мягк", "сон", "мечт", "романт", "лофи", "lofi", "чилл", "chill"]],
   ["cinematic", ["кино", "киношн", "cinematic", "фильм", "трейлер", "эпичн"]],
-  ["glitch", ["глитч", "glitch", "y2k", "цифров", "сбой", "киберпанк", "cyber"]],
+  ["glitch", ["глитч", "glitch", "y2k", "цифров", "сбой", "киберпанк", "cyber", "калейдоскоп"]],
   ["vhs", ["vhs", "вхс", "кассет", "ретро", "винтаж", "плёнк", "пленк", "90-е", "90х", "2000"]],
   ["clean", ["чисто", "просто", "без эффект", "минимал", "clean"]],
 ];
@@ -2500,7 +2731,7 @@ function drawOverlays(seq, t, bfx) {
   if (bfx.flash > .01) {
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = clamp(bfx.flash, 0, 1);
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = seq.plan.flashColor || "#fff"; ctx.fillRect(0, 0, W, H);
     ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
   }
   ctx.restore();
@@ -2569,6 +2800,14 @@ function drawTextItem(g, tx, local, t, seq, W, H, bfx) {
       const since = t - marks[idx];
       scale = 1 + .38 * Math.exp(-since / .07);
       alpha = tail;
+      break;
+    }
+    case "slam": {
+      const k = clamp(local / .16, 0, 1);
+      scale = lerp(2.6, 1, ease(k));
+      alpha = Math.min(clamp(k * 3, 0, 1), tail);
+      const e = Math.exp(-Math.max(0, local - .16) / .12) * (k >= 1 ? 1 : 0);
+      dx = Math.sin(local * 90) * e * size * .12; dy = Math.cos(local * 80) * e * size * .1;
       break;
     }
     case "shake": {
@@ -2657,6 +2896,107 @@ function roundRect(g, x, y, w, hh, r) {
   g.fill();
 }
 
+/* ---------- удары по долям ---------- */
+
+const [frameCan, gF] = mk();
+const [echoCan, gE] = mk();
+let echoAt = -1;
+
+function hitsAt(seq, t) {
+  const H = seq.plan.hits || [];
+  const out = [];
+  if (!H.length) return out;
+  let lo = 0, hi = H.length - 1, last = -1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (H[mid].t <= t) { last = mid; lo = mid + 1; } else hi = mid - 1; }
+  for (let i = last; i >= 0 && t - H[i].t < 2.5; i -= 1) if (t - H[i].t < H[i].dur) out.push(H[i]);
+  return out;
+}
+
+/** Сводит все активные удары в параметры «камеры» и пост-эффектов. */
+function cameraAt(seq, t) {
+  const cam = { zoom: 1, rot: 0, dx: 0, dy: 0, vx: 0, vy: 0, zoomBlur: 0, rgb: 0, blur: 0, flash: 0, black: 0, invert: false, strobe: 0, echo: 0, split: 0, kaleido: false, wobble: 0, stutter: 0, lines: 0, hit: 0 };
+  const power = seq.plan.hitPower ?? 1;
+  const m = Math.min(seq.w, seq.h);
+  for (const h of hitsAt(seq, t)) {
+    const local = t - h.t;
+    const def = HITS[h.type] || {};
+    const e = def.decay ? Math.exp(-local / def.decay) : 1;
+    const a = h.amt * power;
+    cam.hit = Math.max(cam.hit, e * Math.min(1, a));
+    switch (h.type) {
+      case "punch": { const inK = clamp(local / .045, 0, 1); cam.zoom *= 1 + .3 * a * inK * e; break; }
+      case "punchOut": cam.zoom *= 1 + .38 * a * e; cam.zoomBlur = Math.max(cam.zoomBlur, .5 * a * e); break;
+      case "shake": {
+        const ang = hash(h.t * 13.7) * Math.PI * 2;
+        const w = Math.sin(local * 62), dw = Math.cos(local * 62);
+        const amp = a * e * m * .055;
+        cam.dx += Math.cos(ang) * amp * w; cam.dy += Math.sin(ang) * amp * w;
+        cam.vx += Math.cos(ang) * amp * dw; cam.vy += Math.sin(ang) * amp * dw;
+        cam.rot += (hash(h.t * 3.1) - .5) * .09 * a * e * w;
+        break;
+      }
+      case "spin": { const dir = hash(h.t * 5.3) > .5 ? 1 : -1; cam.rot += dir * .2 * a * e; cam.zoom *= 1 + .16 * a * e; cam.zoomBlur = Math.max(cam.zoomBlur, .35 * a * e); break; }
+      case "zoomblur": cam.zoomBlur = Math.max(cam.zoomBlur, a * e); cam.zoom *= 1 + .08 * a * e; break;
+      case "flash": cam.flash = Math.max(cam.flash, a * e * clamp(local / .03, 0, 1)); break;
+      case "black": if (local > .012) cam.black = Math.max(cam.black, Math.min(1, a)); break;
+      case "invert": if (local > .012) cam.invert = true; break;
+      case "rgb": cam.rgb = Math.max(cam.rgb, a * e); break;
+      case "blur": cam.blur = Math.max(cam.blur, a * e); break;
+      case "wobble": cam.wobble = Math.max(cam.wobble, a * e); break;
+      case "lines": cam.lines = Math.max(cam.lines, a * e); break;
+      case "strobe": cam.strobe = Math.max(cam.strobe, Math.min(1, a)) * (Math.floor(local * 16) % 2 ? 1 : -1); break;
+      case "echo": cam.echo = Math.max(cam.echo, Math.min(.85, a * .8) * (1 - local / h.dur * .4)); break;
+      case "split": cam.split = 3; break;
+      case "kaleido": cam.kaleido = true; break;
+      case "stutter": cam.stutter = Math.max(cam.stutter, h.t + .0001); break;
+      default: break;
+    }
+  }
+  // ручные удары из панели «Эффекты» — поверх хореографии
+  const b = beatFxAt(seq, t);
+  cam.zoom *= 1 + b.zoom; cam.dx += b.sx; cam.dy += b.sy; cam.rot += b.rot;
+  cam.flash = Math.max(cam.flash, b.flash); cam.rgb = Math.max(cam.rgb, b.rgb); cam.blur = Math.max(cam.blur, b.blur / 7);
+  cam.hit = Math.max(cam.hit, b.hit * ((seq.plan.beat?.zoom || 0) + (seq.plan.beat?.shake || 0) > 0 ? 1 : 0));
+  return cam;
+}
+
+/** Собирает клипы и переход в кадр без «камеры». */
+function composeClips(g, seq, t, extra) {
+  const W = seq.w, H = seq.h;
+  const live = liveClips(seq, t);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalAlpha = 1; g.globalCompositeOperation = "source-over"; g.filter = "none";
+  g.fillStyle = "#000"; g.fillRect(0, 0, W, H);
+  if (live.length >= 2) {
+    const a = live[live.length - 2], b = live[live.length - 1];
+    drawClip(gA, a, t, seq);
+    drawClip(gB, b, t, seq);
+    const p = clamp((t - b.tIn) / Math.max(.01, b.trIn), 0, 1);
+    drawTransition(g, layA, layB, b.tr.type, p, W, H, extra);
+  } else if (live.length === 1) {
+    drawClip(g, live[0], t, seq);
+  }
+}
+
+function drawSpeedLines(W, H, amt, t) {
+  const cx = W / 2, cy = H / 2, R = Math.hypot(W, H) * .6;
+  const f = Math.floor(t * 24);
+  ctx.save();
+  ctx.globalAlpha = clamp(amt, 0, 1) * .75;
+  ctx.fillStyle = "#fff";
+  for (let i = 0; i < 70; i += 1) {
+    const ang = hash(f * 1.3 + i * 7.7) * Math.PI * 2;
+    const r0 = R * (.34 + hash(f + i * 3.3) * .3);
+    const wdt = .004 + hash(i * 9.1 + f) * .012;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(ang - wdt) * R, cy + Math.sin(ang - wdt) * R);
+    ctx.lineTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0);
+    ctx.lineTo(cx + Math.cos(ang + wdt) * R, cy + Math.sin(ang + wdt) * R);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 /* ---------- кадр целиком ---------- */
 
 let liveHint = 0;
@@ -2677,51 +3017,108 @@ function drawAt(t) {
   const seq = S.seq;
   if (!seq) return;
   const W = seq.w, H = seq.h;
-  const bfx = beatFxAt(seq, t);
-  const live = liveClips(seq, t);
+  if (frameCan.width !== W || frameCan.height !== H) { frameCan.width = W; frameCan.height = H; echoCan.width = W; echoCan.height = H; }
+  const cam = cameraAt(seq, t);
   const extra = { flash: 0, rgb: 0 };
+
+  // стоп-моушен: картинка обновляется рывками по 1/8 секунды
+  const tv = cam.stutter ? cam.stutter + Math.floor((t - cam.stutter) / .125) * .125 : t;
+  composeClips(gF, seq, tv, extra);
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none";
   ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
 
   const m = Math.min(W, H);
-  const zs = 1 + bfx.zoom + (bfx.shake ? (Math.abs(bfx.sx) + Math.abs(bfx.sy)) * 2.2 / m + Math.abs(bfx.rot) * 1.3 : 0);
+  const cover = cam.zoom + (Math.abs(cam.dx) + Math.abs(cam.dy)) * 2.1 / m + Math.abs(cam.rot) * 1.25;
+  const place = (g) => { g.translate(W / 2 + cam.dx, H / 2 + cam.dy); g.rotate(cam.rot); g.scale(cover, cover); g.translate(-W / 2, -H / 2); };
+  const filters = [];
+  if (cam.invert) filters.push("invert(1)");
+  if (cam.blur > .05) filters.push(`blur(${(cam.blur * m * .012).toFixed(1)}px)`);
+  ctx.filter = filters.join(" ") || "none";
 
-  if (live.length >= 2) {
-    const a = live[live.length - 2], b = live[live.length - 1];
-    drawClip(gA, a, t, seq);
-    drawClip(gB, b, t, seq);
-    const p = clamp((t - b.tIn) / Math.max(.01, b.trIn), 0, 1);
-    ctx.save();
-    ctx.translate(W / 2 + bfx.sx, H / 2 + bfx.sy); ctx.rotate(bfx.rot); ctx.scale(zs, zs); ctx.translate(-W / 2, -H / 2);
-    drawTransition(ctx, layA, layB, b.tr.type, p, W, H, extra);
-    ctx.restore();
-  } else if (live.length === 1) {
-    if (zs !== 1 || bfx.sx || bfx.sy) {
-      drawClip(gA, live[0], t, seq);
-      ctx.save();
-      ctx.translate(W / 2 + bfx.sx, H / 2 + bfx.sy); ctx.rotate(bfx.rot); ctx.scale(zs, zs); ctx.translate(-W / 2, -H / 2);
-      ctx.drawImage(layA, 0, 0);
+  if (cam.split) {
+    const n = cam.split, vertical = H >= W;
+    for (let k = 0; k < n; k += 1) {
+      const rx = vertical ? 0 : (W / n) * k, ry = vertical ? (H / n) * k : 0;
+      const rw = vertical ? W : W / n, rh = vertical ? H / n : H;
+      const s = Math.max(rw / W, rh / H) * cover;
+      ctx.save(); ctx.beginPath(); ctx.rect(rx, ry, rw, rh); ctx.clip();
+      if (k === 1) { ctx.translate(rx + rw, ry); ctx.scale(-1, 1); ctx.translate(-rx, -ry); }
+      ctx.drawImage(frameCan, rx + (rw - W * s) / 2, ry + (rh - H * s) / 2, W * s, H * s);
       ctx.restore();
-    } else {
-      drawClip(ctx, live[0], t, seq);
+    }
+  } else if (cam.kaleido) {
+    const hw = W / 2, hh = H / 2;
+    for (let k = 0; k < 4; k += 1) {
+      ctx.save();
+      ctx.translate(k % 2 ? W : 0, k > 1 ? H : 0);
+      ctx.scale(k % 2 ? -1 : 1, k > 1 ? -1 : 1);
+      ctx.beginPath(); ctx.rect(0, 0, hw, hh); ctx.clip();
+      ctx.translate(hw / 2, hh / 2); ctx.rotate(cam.rot); ctx.scale(cover, cover); ctx.translate(-hw / 2, -hh / 2);
+      ctx.drawImage(frameCan, W * .25, H * .25, hw, hh, 0, 0, hw, hh);
+      ctx.restore();
+    }
+  } else if (cam.wobble > .03) {
+    const slices = 48, sh = H / slices;
+    ctx.save(); place(ctx);
+    for (let k = 0; k < slices; k += 1) {
+      const off = Math.sin(k * .45 + t * 22) * cam.wobble * W * .05;
+      ctx.drawImage(frameCan, 0, k * sh, W, sh + 1, off, k * sh, W, sh + 1);
+    }
+    ctx.restore();
+  } else {
+    ctx.save(); place(ctx); ctx.drawImage(frameCan, 0, 0); ctx.restore();
+    // смаз по направлению тряски
+    const v = Math.hypot(cam.vx, cam.vy);
+    if (v > m * .004) {
+      for (let k = 1; k <= 2; k += 1) {
+        ctx.save(); ctx.globalAlpha = .3 / k;
+        ctx.translate(-cam.vx * .35 * k, -cam.vy * .35 * k); place(ctx);
+        ctx.drawImage(frameCan, 0, 0); ctx.restore();
+      }
+    }
+    // радиальный зум-блюр
+    if (cam.zoomBlur > .04) {
+      for (let k = 1; k <= 3; k += 1) {
+        const z = 1 + .045 * k * cam.zoomBlur;
+        ctx.save(); ctx.globalAlpha = .28 * cam.zoomBlur / k;
+        ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-W / 2, -H / 2); place(ctx);
+        ctx.drawImage(frameCan, 0, 0); ctx.restore();
+      }
     }
   }
-
+  ctx.filter = "none";
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  if (bfx.blur > .5) {
-    gX.globalCompositeOperation = "copy"; gX.drawImage(canvas, 0, 0);
-    ctx.filter = `blur(${bfx.blur.toFixed(1)}px)`; ctx.drawImage(tmpX, 0, 0); ctx.filter = "none";
-  }
-  const rgb = Math.max(bfx.rgb, extra.rgb);
-  const px = Math.round(rgb * W * .014);
+
+  // эхо-шлейф: поверх — прошлые кадры, постепенно гаснущие
+  if (cam.echo > .02) {
+    if (echoAt < 0 || Math.abs(t - echoAt) > .25) { gE.globalCompositeOperation = "copy"; gE.drawImage(canvas, 0, 0); }
+    ctx.globalAlpha = cam.echo;
+    ctx.drawImage(echoCan, 0, 0);
+    ctx.globalAlpha = 1;
+    gE.globalCompositeOperation = "copy"; gE.drawImage(canvas, 0, 0);
+    echoAt = t;
+  } else echoAt = -1;
+
+  const rgb = Math.max(cam.rgb, extra.rgb);
+  const px = Math.round(rgb * W * .018);
   if (px >= 1) rgbSplit(W, H, px);
 
-  drawOverlays(seq, t, { ...bfx, flash: Math.max(bfx.flash, extra.flash) });
-  drawTexts(seq, t, bfx);
-}
+  if (cam.lines > .03 || (seq.plan.overlay?.lines || 0) > .01) drawSpeedLines(W, H, Math.max(cam.lines, (seq.plan.overlay?.lines || 0) * (.4 + .6 * cam.hit)), t);
 
+  drawOverlays(seq, t, { flash: Math.max(cam.flash, extra.flash) });
+
+  if (cam.strobe) {
+    ctx.globalCompositeOperation = cam.strobe > 0 ? "lighter" : "source-over";
+    ctx.globalAlpha = Math.abs(cam.strobe) * (cam.strobe > 0 ? .55 : .6);
+    ctx.fillStyle = cam.strobe > 0 ? "#fff" : "#000"; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+  if (cam.black > .01) { ctx.globalAlpha = cam.black; ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+
+  drawTexts(seq, t, { sx: cam.dx, sy: cam.dy, hit: cam.hit });
+}
 /* ================================================================
    11. звук: всё через буферы Web Audio с точным расписанием.
    Видео играют беззвучно — только картинка. Так синхрон не плывёт,
@@ -3239,6 +3636,15 @@ function renderStage() {
   $("bpm").textContent = seq ? `${Math.round(seq.grid.bpm)} BPM` : "—";
 }
 
+function renderStyleBar() {
+  const bar = $("stylebar");
+  const cur = S.plan?.style;
+  bar.replaceChildren(
+    ...STYLE_IDS.map((id) => h("button", { type: "button", class: id === cur ? "sbtn on" : "sbtn", onclick: () => applyStyle(id), title: STYLES[id].tag }, STYLES[id].name)),
+    h("button", { type: "button", class: "sbtn dice", onclick: reroll, disabled: !cur, title: "Тот же стиль — другие куски, порядок и удары" }, icon("dice", "s"), "Ещё вариант"),
+  );
+}
+
 function fitCanvas() {
   const wrap = $("screen-wrap");
   const r = wrap.getBoundingClientRect();
@@ -3340,7 +3746,7 @@ function renderTimeline(force = false) {
       const on = c.tr.type !== "cut";
       if (c.index > 0 && (on || c.len * S.pps > 44 || sel)) {
         const b = h("button", {
-          class: on ? "trn on" : "trn", style: `left:${X(c.at)}px`, type: "button",
+          class: `${on ? "trn on" : "trn"}${c.len * S.pps < 34 && !sel ? " mini" : ""}`, style: `left:${X(c.at)}px`, type: "button",
           title: `Переход: ${TRANSITIONS[c.tr.type].name}`, "aria-label": `Переход перед клипом ${c.index + 1}`,
           onclick: (e) => { e.stopPropagation(); S.sel = { kind: "clip", id: c.id }; S.tab = "trans"; renderAll(); },
         }, h("span", null, on ? "◆" : "+"));
@@ -3390,6 +3796,12 @@ function paintRuler(cv, width) {
     g.fillStyle = "#3a3a4d"; g.fillRect(x, 16, 1, 8);
     g.fillStyle = "#6d6d82"; g.fillText(fmtDur(s).replace(".0с", "с"), x + 3, 4);
   }
+  for (const hit of seq.plan.hits || []) {
+    g.fillStyle = HIT_COLORS[hit.type] || "#fff";
+    g.globalAlpha = .9;
+    g.beginPath(); g.arc(X(hit.t), 7 + (hit.type.length % 3) * 3, 1.8, 0, Math.PI * 2); g.fill();
+  }
+  g.globalAlpha = 1;
   const grid = seq.grid;
   for (let i = 0; i < grid.beats.length; i += 1) {
     const x = X(grid.beats[i]);
@@ -3808,7 +4220,7 @@ function reroll() {
   if (!S.plan?.style) return;
   const d = S.lastAI || { style: S.plan.style, texts: currentTexts(), power: S.plan.power, length: S.plan.length, by: "local" };
   buildFromDecision({ ...d, style: S.plan.style, texts: currentTexts() }, ++S.seed);
-  toast("Новый вариант — те же правила, другие куски и порядок");
+  toast("Новый вариант: другие куски, порядок, переходы и удары");
 }
 
 function currentTexts() {
@@ -3844,6 +4256,8 @@ function paintPreview(cv, lookId, amt, extras = {}) {
   if (extras.vhs) { g.fillStyle = g.createPattern(scanTile, "repeat"); g.fillRect(0, 0, W, H); g.fillStyle = "#fff"; g.font = '700 13px "JetBrains Mono", monospace'; g.fillText("PLAY ▶", 12, 22); }
   if (extras.rgb) { g.globalCompositeOperation = "screen"; g.globalAlpha = .35; g.drawImage(cv, 5, 0); g.globalCompositeOperation = "source-over"; g.globalAlpha = 1; }
   if (extras.leak) { const gr = g.createRadialGradient(W * .9, H * .1, 0, W * .9, H * .1, W); gr.addColorStop(0, "rgba(255,140,60,.55)"); gr.addColorStop(1, "rgba(255,140,60,0)"); g.globalCompositeOperation = "screen"; g.fillStyle = gr; g.fillRect(0, 0, W, H); g.globalCompositeOperation = "source-over"; }
+  if (extras.split) { const src2 = document.createElement("canvas"); src2.width = W; src2.height = H; src2.getContext("2d").drawImage(cv, 0, 0); for (let k = 0; k < 3; k += 1) { g.save(); g.beginPath(); g.rect(0, (H / 3) * k, W, H / 3); g.clip(); g.drawImage(src2, 0, (H / 3) * k - H / 3, W, H); g.restore(); } g.fillStyle = "#000"; g.fillRect(0, H / 3 - 1, W, 2); g.fillRect(0, (2 * H) / 3 - 1, W, 2); }
+  if (extras.lines) { g.fillStyle = "#fff"; g.globalAlpha = .5; for (let i = 0; i < 40; i += 1) { const a = hash(i) * Math.PI * 2, w = .01 + hash(i + 4) * .02; g.beginPath(); g.moveTo(W / 2 + Math.cos(a - w) * W, H / 2 + Math.sin(a - w) * W); g.lineTo(W / 2 + Math.cos(a) * W * .45, H / 2 + Math.sin(a) * W * .45); g.lineTo(W / 2 + Math.cos(a + w) * W, H / 2 + Math.sin(a + w) * W); g.fill(); } g.globalAlpha = 1; }
   if (extras.vignette) { const gr = g.createRadialGradient(W / 2, H / 2, W * .3, W / 2, H / 2, W * .85); gr.addColorStop(0, "rgba(0,0,0,0)"); gr.addColorStop(1, `rgba(0,0,0,${extras.vignette})`); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
 }
 
@@ -3854,7 +4268,8 @@ function panelStyles() {
     h("div", { class: "cards" }, STYLE_IDS.map((id) => {
       const st = STYLES[id];
       const cv = h("canvas");
-      paintPreview(cv, st.look[0], st.look[1], { bars: st.overlay.bars > .3, vhs: st.overlay.vhs > .3, rgb: st.beat.rgb > .5, leak: st.overlay.leak > .3, vignette: st.overlay.vignette });
+      const pat = st.hits ? st.hits.pattern.join("+") : "";
+      paintPreview(cv, st.look[0], st.look[1], { bars: st.overlay.bars > .3, vhs: st.overlay.vhs > .3, rgb: /rgb/.test(pat), leak: st.overlay.leak > .3, vignette: st.overlay.vignette, lines: st.overlay.lines > .1, split: /split|kaleido/.test(pat) });
       return h("button", { type: "button", class: id === cur ? "card on" : "card", onclick: () => applyStyle(id) },
         cv, h("div", { class: "cap" }, h("b", null, st.name), h("span", null, st.tag)));
     })),
@@ -3879,10 +4294,8 @@ function applyPower(v) {
   const p = S.plan;
   const base = STYLES[p.style];
   p.power = v;
-  if (base) {
-    p.beat = Object.fromEntries(Object.entries(base.beat).map(([k, x]) => [k, k === "every" ? x : clamp(x * v, 0, 1)]));
-    p.overlay = Object.fromEntries(Object.entries(base.overlay).map(([k, x]) => [k, clamp(x * v, 0, 1)]));
-  }
+  p.hitPower = v;
+  if (base) p.overlay = Object.fromEntries(Object.entries(base.overlay).map(([k, x]) => [k, clamp(x * v, 0, 1)]));
 }
 
 /* ---------- цвет ---------- */
@@ -3926,8 +4339,14 @@ function panelFx() {
   return h("div", null,
     panelTitle("Эффекты", "На бите, атмосфера и эффекты клипа"),
     clipSec,
+    S.plan.style && STYLES[S.plan.style]?.hits ? h("div", { class: "sec stack" },
+      h("h3", null, `Хореография «${STYLES[S.plan.style].name}» · ${(p.hits || []).length} ударов`),
+      slider({ label: "Сила ударов", value: p.hitPower ?? 1, min: 0, max: 1.8, step: .05, onInput: (v) => { p.hitPower = v; softRefresh(); } }),
+      h("button", { type: "button", class: "cta ghost big", onclick: () => { commit((pl) => reChoreograph(pl, ++S.seed)); toast("Удары перемешаны — резы на месте"); } }, icon("dice", "s"), "Перемешать удары"),
+      h("div", { class: "chips" }, Object.entries(countHits(p.hits)).map(([type, n]) => h("span", { class: "chip", style: `border-color:${HIT_COLORS[type]}55` }, `${HITS[type].name} ×${n}`))),
+    ) : null,
     h("div", { class: "sec stack" },
-      h("h3", null, "Удар на бит"),
+      h("h3", null, "Дополнительно на каждый бит"),
       seg([[1, "Каждый бит"], [2, "Через бит"], [4, "Раз в такт"]], B.every || 1, (v) => commit((pl) => { pl.beat.every = v; }), "Частота"),
       beatSlider("zoom", "Зум-панч"), beatSlider("shake", "Тряска"), beatSlider("flash", "Вспышка на сильную долю"),
       beatSlider("rgb", "RGB-сдвиг"), beatSlider("blur", "Размытие удара"),
@@ -3938,6 +4357,12 @@ function panelFx() {
       h("div", { class: "chips" }, h("button", { type: "button", class: O.vhs > .5 ? "chip on" : "chip", onclick: () => commit((pl) => { pl.overlay.vhs = pl.overlay.vhs > .5 ? 0 : 1; }) }, "VHS: полосы и дата")),
     ),
   );
+}
+
+function countHits(list) {
+  const out = {};
+  for (const hh of list || []) out[hh.type] = (out[hh.type] || 0) + 1;
+  return out;
 }
 
 /* ---------- скорость (для выбранного клипа) ---------- */
@@ -4403,6 +4828,7 @@ function renderPanel() {
 function renderAll() {
   renderTop();
   renderStage();
+  renderStyleBar();
   renderTabs();
   renderTimeline();
   renderCtx();
@@ -4418,6 +4844,7 @@ listeners.add(() => {
     renderQueued = false;
     renderTop();
     renderStage();
+    renderStyleBar();
     renderTimeline();
     renderCtx();
     // панель с полями ввода не трогаем, пока в ней печатают
@@ -4522,8 +4949,8 @@ async function boot() {
   setBusy("Синтезирую бит и собираю демо-эдит…");
   try { await Promise.race([document.fonts?.load?.('900 40px "Unbounded"').then(() => document.fonts.ready), sleep(2500)]); } catch { /* шрифты подтянутся позже */ }
   await loadDemo();
-  S.lastAI = { style: "velocity", texts: [{ text: "монтаж под бит", anim: "beat", style: "bold", pos: "center" }], power: 1, length: 15, by: "local",
-    notes: "Демо: графика и фонк-бит сгенерированы в браузере. Резы стоят на битах, на сильных долях — вспышки и зум, клипы рвутся по скорости (Velocity)." };
+  S.lastAI = { style: "amv", texts: [{ text: "монтаж под бит", anim: "beat", style: "neon", pos: "center", color: "#1ee3ff" }], power: 1, length: 15, by: "local",
+    notes: "Демо: графика и фонк-бит сгенерированы в браузере. Резы — на битах, на дропе комбо из вспышки, панча и RGB, на смене фразы — эхо и спин. Переключай стили в полоске над таймлайном." };
   const plan = autoEdit({ ...S.lastAI, seed: 7 });
   plan.by = "demo";
   S.plan = plan;
@@ -4539,6 +4966,8 @@ async function boot() {
     renderAll();
   }
 }
+
+if (location.hash === "#debug") window.__montage = { S, seekTo, drawAt, applyStyle, cameraAt };
 
 boot();
 })();

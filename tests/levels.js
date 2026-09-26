@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./_browser');
 // Уровни «Моих дел»: старт — 2 дела; все дела N дней подряд → новый уровень; пропуск — счёт заново.
 (async () => {
   const b = await chromium.launch({ executablePath:'/opt/pw-browsers/chromium' });

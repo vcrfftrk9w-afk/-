@@ -1,0 +1,58 @@
+plugins {
+    id 'com.android.application'
+}
+
+// номер сборки приходит из GitHub Actions (-PversionCode=N), чтобы новый APK ставился поверх старого
+def buildNumber = (project.findProperty('versionCode') ?: '1').toString().toInteger()
+
+android {
+    namespace 'app.lenivec'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'app.lenivec'
+        minSdk 24
+        targetSdk 34
+        versionCode buildNumber
+        versionName "1.${buildNumber}"
+    }
+
+    // ключ подписи лежит в репозитории: так каждое обновление ставится поверх, без потери прогресса
+    signingConfigs {
+        release {
+            storeFile file('lenivec.keystore')
+            storePassword 'lenivec'
+            keyAlias 'lenivec'
+            keyPassword 'lenivec'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main.assets.srcDirs += "$buildDir/webapp"
+    }
+}
+
+// само приложение (html/css/js/иконки) берём из корня репозитория — APK всегда совпадает с сайтом
+tasks.register('copyWebApp', Copy) {
+    from(rootProject.file('..')) {
+        include 'index.html', 'manifest.json', 'css/**', 'js/**', 'icons/**'
+    }
+    into "$buildDir/webapp"
+}
+preBuild.dependsOn 'copyWebApp'
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+}

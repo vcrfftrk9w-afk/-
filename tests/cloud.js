@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./_browser');
 /* Имитация платформы: db + user. Хранилище живёт в Node и переживает
    перезагрузки страницы — ровно как настоящее облако. */
 const STORE = {};

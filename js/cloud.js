@@ -25,6 +25,7 @@ const Cloud = (() => {
   let adoptHandler = null;
 
   const MIN_GAP = 15000;       // писать не чаще раза в 15 секунд
+  let minGap = MIN_GAP;        // своя база аккаунта (account.js) выдерживает чаще — там 4 секунды
   const DEBOUNCE = 2500;       // и только когда человек перестал нажимать
   const DOC_LIMIT = 230 * 1024; // у документа предел 256 КиБ — держим запас
 
@@ -86,14 +87,26 @@ const Cloud = (() => {
 
   const ref = (name) => db.doc('data/users/' + uid + '/' + name);
 
-  /* ---------- подключение ---------- */
+  /* ---------- подключение ----------
+     Внутри Claude — его облако. В APK и на сайте — аккаунт (account.js),
+     если человек вошёл: у него те же doc().get/set/onSnapshot. */
+  function connect() {
+    if (typeof window !== 'undefined' && window.claude && typeof window.claude.use === 'function') {
+      return Promise.all([window.claude.use('db'), window.claude.use('user')]);
+    }
+    const b = typeof Account !== 'undefined' ? Account.backend() : null;
+    return b ? Promise.resolve([b.db, b.user]) : null;
+  }
+
   async function init(timeoutMs) {
-    if (typeof window === 'undefined' || !window.claude || typeof window.claude.use !== 'function') {
+    const conn = connect();
+    minGap = typeof window !== 'undefined' && window.claude ? MIN_GAP : 4000;
+    if (!conn) {
       status = 'absent';
       return null;
     }
     status = 'connecting';
-    const got = await withTimeout(Promise.all([window.claude.use('db'), window.claude.use('user')]), timeoutMs || 8000);
+    const got = await withTimeout(conn, timeoutMs || 8000);
     if (!got || !got[0] || !got[1]) { status = 'absent'; return null; }
     db = got[0];
     const id = await withTimeout(got[1].id(), 5000);
@@ -157,7 +170,7 @@ const Cloud = (() => {
     if (status !== 'on') return;
     clearTimeout(timer);
     const since = Date.now() - lastWriteAt;
-    const wait = Math.max(DEBOUNCE, MIN_GAP - since);
+    const wait = Math.max(DEBOUNCE, minGap - since);
     timer = setTimeout(writeNow, wait);
   }
 
@@ -175,8 +188,7 @@ const Cloud = (() => {
     unsub = ref('core').onSnapshot((snap) => {
       if (!snap.exists || snap.metadata.hasPendingWrites) return;
       const remote = snap.data();
-      const mine = State.s.savedAt || 0;
-      if (!remote || !remote.savedAt || remote.savedAt <= mine) return;
+      if (!remote || edited(remote) <= edited(State.s)) return;
       if (JSON.stringify(remote) === lastPayload.core) return;
       // подтягиваем задачи и историю к новому ядру
       Promise.all([ref('tasks').get(), ref('history').get()]).then(([t, h]) => {
@@ -192,15 +204,42 @@ const Cloud = (() => {
   }
 
   /* нажатия, ввод и уход со страницы — сигналы, что пора сохранить */
+  let bound = false;
   function bindTriggers() {
+    if (bound) return;
+    bound = true;
     const onAct = () => schedule();
     ['pointerup', 'keyup', 'change'].forEach((ev) => document.addEventListener(ev, onAct, true));
     document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
     window.addEventListener('pagehide', flush);
+    window.addEventListener('online', () => schedule());
+  }
+
+  /* Какое сохранение новее — решает время последнего действия человека, а не записи:
+     приложение сохраняется и само (таймеры, доход империи), и забытый открытым
+     телефон иначе затёр бы свежий прогресс с другого. */
+  const edited = (x) => (x && (x.userEditAt || x.savedAt)) || 0;
+  if (typeof document !== 'undefined') {
+    const mark = () => { try { if (State.s) State.s.userEditAt = Date.now(); } catch (e) {} };
+    ['pointerup', 'keyup', 'change'].forEach((ev) => document.addEventListener(ev, mark, true));
+  }
+
+  /* вход в другой аккаунт или выход — забываем прежнее подключение */
+  function reset() {
+    clearTimeout(timer);
+    if (unsub) { try { unsub(); } catch (e) {} }
+    unsub = null;
+    db = null;
+    uid = null;
+    status = 'off';
+    lastPayload = {};
+    writing = false;
+    dirty = false;
+    lastWriteAt = 0;
   }
 
   return {
-    init, schedule, flush, watch, bindTriggers,
+    init, schedule, flush, watch, bindTriggers, reset, edited,
     get status() { return status; },
     get ready() { return status === 'on'; },
   };

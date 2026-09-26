@@ -40,6 +40,10 @@
 </div>
 
 <!-- ==================== ОНБОРДИНГ ==================== -->
+<div id="auth" class="onboarding hidden">
+  <div class="onboarding-card"><div id="auth-root"></div></div>
+</div>
+
 <div id="onboarding" class="onboarding hidden">
   <div class="onboarding-card">
     <div class="onboarding-steps"><i class="active"></i><i></i><i></i><i></i><i></i></div>
@@ -53,6 +57,7 @@
         <input id="ob-name" type="text" maxlength="24" placeholder="Например, Саша" autocomplete="off">
       </label>
       <button class="btn btn-primary btn-lg btn-block" data-ob-next>Дальше →</button>
+      <button class="btn btn-ghost btn-block ob-account" id="ob-account" type="button" hidden>☁️ У меня уже есть аккаунт — войти</button>
     </section>
 
     <section class="ob-step" data-step="1">
@@ -1035,9 +1040,11 @@
   </div>
 </div>
 
+<script src="js/android.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/data.js"></script>
 <script src="js/state.js"></script>
+<script src="js/account.js"></script>
 <script src="js/cloud.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/music.js"></script>

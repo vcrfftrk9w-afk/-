@@ -2230,6 +2230,46 @@ button.wk-body { min-height: 40px; }
 .remind-g .chip { text-decoration: none; }
 .remind-clock { margin-top: 14px; padding: 12px; border-radius: 14px; border: 1.5px dashed color-mix(in srgb, var(--warn) 60%, transparent); }
 .remind-clock ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; display: grid; gap: 4px; }
+.remind-alarm { margin: 12px 0 14px; padding: 14px; border-radius: 16px; display: grid; gap: 10px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+.remind-alarm p { margin: 0; }
+.remind-sw { display: flex; align-items: center; gap: 10px; font-size: 15px; cursor: pointer; }
+.remind-sw input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
+.remind-next { font-size: 14px; }
+.remind-own { justify-content: space-between; }
+.remind-own label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.remind-own .icon-btn { background: none; border: 0; font-size: 18px; cursor: pointer; padding: 6px; }
+.remind-new { display: grid; gap: 10px; padding: 12px; border-radius: 14px; background: var(--surface-solid); }
+.remind-new input[type="time"] { font: inherit; font-size: 32px; font-weight: 700; text-align: center; padding: 6px; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--text) 20%, transparent); background: transparent; color: var(--text); color-scheme: dark; }
+[data-theme="light"] .remind-new input[type="time"] { color-scheme: light; }
+.remind-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.remind-days .seg-btn { padding: 8px 0; }
+.remind-new-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.remind-test { display: grid; gap: 8px; }
+.lv-alarm { display: block; width: 100%; margin: 4px 0 10px; padding: 12px 14px; border-radius: 14px; text-align: left;
+  font: inherit; font-size: 15px; color: var(--text); cursor: pointer;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.lv-account { display: block; width: 100%; margin: 4px 0 8px; padding: 12px 14px; border-radius: 14px; text-align: left;
+  font: inherit; font-size: 15px; font-weight: 600; color: var(--text); cursor: pointer;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 28%, transparent), color-mix(in srgb, var(--accent2) 22%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); }
+.lv-account.on { font-weight: 500; background: color-mix(in srgb, var(--success, #22c55e) 12%, transparent);
+  border-color: color-mix(in srgb, var(--success, #22c55e) 45%, transparent); }
+.acc-sheet { display: grid; gap: 12px; }
+.acc-sheet h2, .acc-sheet p { margin: 0; }
+.acc-form { display: grid; gap: 10px; }
+.acc-form .field input { width: 100%; font-size: 17px; }
+.acc-err { margin: 0; min-height: 1.2em; color: var(--danger, #ef4444); font-size: 14px; }
+.acc-state { font-weight: 600; }
+.ob-account { margin-top: 10px; }
+.auth-gate { display: grid; gap: 12px; text-align: center; }
+.auth-gate h1 { margin: 0; }
+.auth-gate p { margin: 0; }
+.auth-gate .acc-form, .auth-gate .field { text-align: left; }
+.auth-gate .acc-seg { display: grid; grid-template-columns: 1fr 1fr; }
+.auth-skip { background: none; border: 0; padding: 8px; font: inherit; font-size: 14px; color: var(--text-muted); text-decoration: underline; cursor: pointer; }
+.lv-alarm.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
 .remind-note { padding: 12px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
 .remind-note p { margin: 4px 0 0; }
 

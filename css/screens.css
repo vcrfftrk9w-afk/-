@@ -2250,6 +2250,19 @@ button.wk-body { min-height: 40px; }
 .lv-alarm { display: block; width: 100%; margin: 4px 0 10px; padding: 12px 14px; border-radius: 14px; text-align: left;
   font: inherit; font-size: 15px; color: var(--text); cursor: pointer;
   background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.lv-account { display: block; width: 100%; margin: 4px 0 8px; padding: 12px 14px; border-radius: 14px; text-align: left;
+  font: inherit; font-size: 15px; font-weight: 600; color: var(--text); cursor: pointer;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 28%, transparent), color-mix(in srgb, var(--accent2) 22%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); }
+.lv-account.on { font-weight: 500; background: color-mix(in srgb, var(--success, #22c55e) 12%, transparent);
+  border-color: color-mix(in srgb, var(--success, #22c55e) 45%, transparent); }
+.acc-sheet { display: grid; gap: 12px; }
+.acc-sheet h2, .acc-sheet p { margin: 0; }
+.acc-form { display: grid; gap: 10px; }
+.acc-form .field input { width: 100%; font-size: 17px; }
+.acc-err { margin: 0; min-height: 1.2em; color: var(--danger, #ef4444); font-size: 14px; }
+.acc-state { font-weight: 600; }
+.ob-account { margin-top: 10px; }
 .lv-alarm.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
 .remind-note { padding: 12px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
 .remind-note p { margin: 4px 0 0; }

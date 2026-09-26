@@ -1231,7 +1231,7 @@ const App = (() => {
 
   /* облако ответило, а приложение уже открыто: берём то, что свежее */
   function reconcile(remote) {
-    if (remote && (remote.savedAt || 0) > (State.s.savedAt || 0)) {
+    if (remote && Cloud.edited(remote) > Cloud.edited(State.s)) {
       State.adopt(remote);
       applyAll();
       // в облаке мог лежать вчерашний план — собираем сегодняшний
@@ -1241,6 +1241,47 @@ const App = (() => {
       renderActive();
     }
     afterCloud();
+  }
+
+  /* вошёл в аккаунт (account.js): новый аккаунт получает прогресс этого телефона,
+     в существующем — прогресс из аккаунта, если на телефоне ещё нет своего */
+  async function accountConnected(created) {
+    Cloud.reset();
+    const remote = await Cloud.init(10000);
+    if (!Cloud.ready) {
+      UI.toast('Вошёл, но нет связи — синхронизирую, когда появится интернет', 'warn', '☁️');
+      return;
+    }
+    const useRemote = (fresh) => {
+      State.adopt(fresh);
+      applyAll();
+      lastHeal = 0;
+      safely('dailyCheckIn', dailyCheckIn);
+      safely('ensureDaySetup', ensureDaySetup);
+      const ob = $('#onboarding');
+      if (ob && !ob.classList.contains('hidden')) { ob.classList.add('hidden'); showApp(); }
+      renderActive();
+      afterCloud();
+      UI.toast('Готово! Прогресс из аккаунта на этом телефоне', 'success', '☁️');
+    };
+    const keepLocal = () => {
+      afterCloud();   // flush отправит прогресс этого телефона в аккаунт
+      renderActive();
+      UI.toast(created ? 'Аккаунт создан! Теперь войди с ним на втором телефоне' : 'Прогресс этого телефона теперь в аккаунте', 'success', '☁️');
+    };
+    if (created || !remote || !remote.onboarded) { keepLocal(); return; }
+    if (!State.s.onboarded) { useRemote(remote); return; }
+    // на телефоне уже есть свой прогресс — спросим, какой оставить
+    const lvl = (x) => ((x.lvl && x.lvl.level) || 0) + 1;
+    const body = UI.sheet(`
+      <div class="acc-sheet">
+        <h2>☁️ Какой прогресс оставить?</h2>
+        <p class="muted">И в аккаунте, и на этом телефоне уже есть прогресс. Выбери один — он будет на всех телефонах.</p>
+        <button class="btn btn-primary btn-lg btn-block" id="acc-remote">Из аккаунта · уровень ${lvl(remote)} (рекомендую)</button>
+        <button class="btn btn-ghost btn-block" id="acc-local">С этого телефона · уровень ${lvl(State.s)}</button>
+      </div>`);
+    body.querySelector('#acc-remote').onclick = () => { UI.closeModal('#sheet-modal'); useRemote(remote); };
+    body.querySelector('#acc-local').onclick = () => { UI.closeModal('#sheet-modal'); State.s.userEditAt = Date.now(); State.save(); keepLocal(); };
   }
 
   function afterCloud() {
@@ -1287,7 +1328,7 @@ const App = (() => {
     ensureDaySetup();
   }
 
-  return { init, go, showComeback, syncBottomInsets, applyAll, applyPalette, renderHeader, renderActive, openCapture, moveIndicator, paintMiniPlayIcon, isQuietNow, logError, ensureDaySetup, focusTask: null };
+  return { init, go, accountConnected, showComeback, syncBottomInsets, applyAll, applyPalette, renderHeader, renderActive, openCapture, moveIndicator, paintMiniPlayIcon, isQuietNow, logError, ensureDaySetup, focusTask: null };
 })();
 
 window.addEventListener('error', (e) => { try { App.logError('window', e.error || e.message); } catch (err) {} });

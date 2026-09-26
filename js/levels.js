@@ -239,6 +239,7 @@ const Levels = (() => {
         <ul class="lv-road">${road}</ul>
       </div>
 
+      ${typeof Account !== 'undefined' ? Account.line() : ''}
       ${typeof Remind !== 'undefined' ? Remind.alarmLine() : ''}
       <button class="btn btn-ghost btn-block my-switch" data-space="all">🧩 Всё остальное — график, задачи, привычки, фокус…</button>`;
 
@@ -246,6 +247,7 @@ const Levels = (() => {
     el.querySelectorAll('[data-lvdone]').forEach((b) => { b.onclick = () => complete(b.dataset.lvdone, b); });
     el.querySelectorAll('[data-lvinfo]').forEach((b) => { b.onclick = () => start(b.dataset.lvinfo, b); });
     const al = el.querySelector('[data-alarm]'); if (al) al.onclick = () => Remind.open();
+    const ac = el.querySelector('[data-account]'); if (ac) ac.onclick = () => Account.open();
   }
 
   return { render, complete, start, streak, levelOn, questsAt, isDone, LEVELS, QUESTS, checkDay, state: st };

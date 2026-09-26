@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ldm-cache-v4';
+const CACHE_NAME = 'ldm-cache-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const ASSETS = [
   './css/components.css',
   './css/screens.css',
   './css/animations.css',
+  './js/android.js',
   './js/icons.js',
   './js/data.js',
   './js/state.js',

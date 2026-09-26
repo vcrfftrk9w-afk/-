@@ -34,6 +34,7 @@ const ASSETS = [
   './js/coach.js',
   './js/remind.js',
   './js/modes.js',
+  './js/levels.js',
   './js/palette.js',
   './js/app.js'
 ];

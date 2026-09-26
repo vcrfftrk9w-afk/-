@@ -293,9 +293,9 @@ const Coach = (() => {
     return t;
   }
 
-  function startRun(kind, steps, title, block) {
+  function startRun(kind, steps, title, block, onDone) {
     stopRun();
-    run = { kind, steps, i: 0, endsAt: 0, timer: null, started: Date.now(), block, title, paused: false };
+    run = { kind, steps, i: 0, endsAt: 0, timer: null, started: Date.now(), block, title, paused: false, onDone };
     // старт — это событие: звук, вибрация и голос, как у тренера
     Sound.sfx('fanfare');
     FX.vibrate([60, 40, 120]);
@@ -399,7 +399,8 @@ const Coach = (() => {
       workoutsLog()[State.todayKey()] = { type: r.kind === 'walk' ? 'walk' : typeFor(), at: Date.now(), minutes };
       Track.workout(Math.max(minutes, r.kind === 'walk' ? 30 : 20), true);
     }
-    completeTask(r.block, r.kind);
+    if (r.onDone) { try { r.onDone(); } catch (e) { /* засчитать не вышло — но сессия пройдена */ } }
+    else completeTask(r.block, r.kind);
     say(r.kind === 'train' ? 'Тренировка сделана. Красавчик.' : 'Готово. Отличная работа.');
     Sound.sfx('fanfare');
     FX.fireworks(3);
@@ -887,7 +888,7 @@ ${digest()}
     openTraining, openWalk, openCook, openShop, openAI,
     recipeFor, shopList, shopWeek, strengthSteps, walkSteps, trainingWeek, roundsNow, typeFor,
     WORKOUTS, RECIPES, MENUS, weekIndex, digest, prompt,
-    say, SESSIONS,
+    say, SESSIONS, runSteps: startRun,
     get running() { return !!run; },
   };
 })();

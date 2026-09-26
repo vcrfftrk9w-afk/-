@@ -140,6 +140,92 @@ const Remind = (() => {
     ];
   }
 
+  /* ---------- настоящий будильник в APK для Android ---------- */
+  const phone = () => typeof window !== 'undefined' && window.AndroidApp && typeof window.AndroidApp.setAlarms === 'function';
+  const alarmCfg = () => State.s.alarms || (State.s.alarms = { wake: true, publish: true });
+
+  /* подъём — первый блок дня по графику; публикации — за 10 минут до фиксированного времени */
+  function phoneAlarms(cfg) {
+    const out = [];
+    for (let dow = 0; dow < 7; dow++) {
+      const day = Week.scriptFor(dow);
+      if (cfg.wake && day[0]) {
+        out.push({ dow, min: day[0].start, title: '☀️ Подъём', text: 'Вода, умывание — и открой приложение: план дня уже готов.' });
+      }
+      if (cfg.publish) {
+        day.filter((b) => b.hard).forEach((b) => out.push({
+          dow, min: b.start - 10, title: `${b.emoji || '⏰'} Через 10 минут: ${b.title}`,
+          text: `Ровно в ${Track.hhmm(b.start)}. Подпись, хэштеги и обложка — готовь сейчас.`,
+        }));
+      }
+    }
+    return out;
+  }
+
+  const refresh = () => { try { if (typeof App !== 'undefined' && App.renderActive) App.renderActive(); } catch (e) {} };
+
+  function alarmStatus() {
+    try { return JSON.parse(window.AndroidApp.alarmStatus()) || {}; } catch (e) { return {}; }
+  }
+
+  function syncAlarms() {
+    if (!phone()) return null;
+    const cfg = alarmCfg();
+    let st = {};
+    try { st = JSON.parse(window.AndroidApp.setAlarms(JSON.stringify(phoneAlarms(cfg)))) || {}; } catch (e) { return null; }
+    // первый раз — сказать, что будильник заведён, и попросить разрешение на уведомления
+    if (!cfg.announced && st.next) {
+      cfg.announced = true; State.save();
+      UI.toast(`Будильник заведён: ${whenLabel(st.next)} — ${st.nextTitle}`, 'success', '⏰');
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        try { Notification.requestPermission().then(refresh); } catch (e) {}
+      }
+    }
+    refresh();
+    return st;
+  }
+
+  function whenLabel(ms) {
+    const d = new Date(ms), now = new Date();
+    const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diff = Math.round((day(d) - day(now)) / 864e5);
+    const t = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    if (diff === 0) return `сегодня в ${t}`;
+    if (diff === 1) return `завтра в ${t}`;
+    return `${DAYS_RU[d.getDay()]} в ${t}`;
+  }
+
+  /* строка «⏰ Будильник: завтра в 07:00» для «Моих заданий» — только в APK */
+  function alarmLine() {
+    if (!phone()) return '';
+    const st = alarmStatus();
+    const cfg = alarmCfg();
+    const off = !cfg.wake && !cfg.publish;
+    const warn = typeof Notification !== 'undefined' && Notification.permission !== 'granted';
+    return `<button class="lv-alarm ${warn ? 'warn' : ''}" data-alarm>⏰ ${off ? 'Будильник выключен' : warn ? 'Будильник не сможет звонить — разреши уведомления' : st.next ? `Будильник: ${whenLabel(st.next)} · ${UI.esc(String(st.nextTitle || '').replace(/^\S+\s/, ''))}` : 'Будильник'}</button>`;
+  }
+
+  function alarmBlock() {
+    const cfg = alarmCfg();
+    const st = alarmStatus();
+    const perm = typeof Notification !== 'undefined' ? Notification.permission : 'denied';
+    const wk = Week.scriptFor(1)[0], we = Week.scriptFor(6)[0];
+    const warns = [];
+    if (perm !== 'granted') warns.push(`<button class="btn btn-primary btn-block" data-afix="notify">🔔 Разрешить уведомления — без них будильник не покажется</button>`);
+    if (st.exact === false) warns.push(`<button class="btn btn-ghost btn-block" data-afix="exact">⏱ Разрешить точные будильники — иначе может опоздать</button>`);
+    if (st.fullScreen === false) warns.push(`<button class="btn btn-ghost btn-block" data-afix="fullscreen">📱 Разрешить звонок на весь экран на заблокированном телефоне</button>`);
+    return `
+      <div class="remind-alarm">
+        <b>⏰ Будильник в этом телефоне</b>
+        <p class="muted small">Звонит как обычный будильник — даже когда приложение закрыто и экран заблокирован. Кнопки: «Встал» и «Ещё 5 минут».</p>
+        <label class="remind-sw"><input type="checkbox" data-aopt="wake" ${cfg.wake ? 'checked' : ''}><span>☀️ Подъём · Пн–Пт ${Track.hhmm(wk.start)}, Сб–Вс ${Track.hhmm(we.start)}</span></label>
+        <label class="remind-sw"><input type="checkbox" data-aopt="publish" ${cfg.publish ? 'checked' : ''}><span>🎞️🐋 Публикации · 19:45 и 20:50 (за 10 минут)</span></label>
+        <p class="remind-next">${cfg.wake || cfg.publish ? (st.next ? `Следующий: <b>${whenLabel(st.next)}</b> — ${UI.esc(st.nextTitle || '')}` : '') : 'Все будильники выключены.'}${st.snooze ? `<br>😴 Отложенный: ${whenLabel(st.snooze)}` : ''}</p>
+        ${warns.join('')}
+        <button class="btn btn-ghost btn-block" id="rm-alarm-test">🔔 Проверить — зазвонит через 1 минуту</button>
+      </div>`;
+  }
+
   function download(text, name) {
     try {
       const blob = new Blob([text], { type: 'text/calendar;charset=utf-8' });
@@ -168,6 +254,7 @@ const Remind = (() => {
         <div class="coach-sheet remind">
           <div class="why-tag">Звонит, даже когда приложение закрыто</div>
           <h2>⏰ Напоминания в телефон</h2>
+          ${phone() ? alarmBlock() : ''}
           <p class="muted small">Я превращу твой график в календарь: каждое дело станет повторяющимся событием с сигналом. Импортируешь один раз — дальше телефон сам зовёт.</p>
 
           <div class="remind-opts">
@@ -214,7 +301,7 @@ const Remind = (() => {
             <p class="muted small">Ключ никому не показывай и не пиши в чат — только в секреты GitHub.</p>
           </details>
 
-          <div class="remind-clock">
+          <div class="remind-clock" ${phone() ? 'hidden' : ''}>
             <b>🔊 Громкие будильники — поставь в «Часах» руками, 1 минута</b>
             <p class="muted small">Календарь присылает уведомление, а будильник звонит, пока не выключишь. Для подъёма и публикаций нужен именно он.</p>
             <ul>${alarmClock().map((a) => `<li><b>${a.time}</b> ${a.days} — ${UI.esc(a.what)}</li>`).join('')}</ul>
@@ -225,6 +312,20 @@ const Remind = (() => {
         const s1 = e.target.closest('[data-rset]'), s2 = e.target.closest('[data-rbefore]');
         if (s1) { st.set = s1.dataset.rset; State.save(); Sound.sfx('pop'); render(); return; }
         if (s2) { st.before = Number(s2.dataset.rbefore); State.save(); Sound.sfx('pop'); render(); return; }
+        const opt = e.target.closest('[data-aopt]');
+        if (opt) { alarmCfg()[opt.dataset.aopt] = opt.checked; State.save(); syncAlarms(); Sound.sfx('pop'); render(); return; }
+        const fix = e.target.closest('[data-afix]');
+        if (fix) {
+          const k = fix.dataset.afix;
+          if (k === 'notify' && Notification.permission === 'default') Notification.requestPermission().then(render);
+          else window.AndroidApp.openSettings(k);
+          return;
+        }
+        if (e.target.closest('#rm-alarm-test')) {
+          window.AndroidApp.testAlarm();
+          UI.toast('Зазвонит через минуту — можешь заблокировать телефон', 'success', '🔔');
+          return;
+        }
         if (e.target.closest('#rm-ics')) {
           const ok = download(ics(st), 'lenivec-reminders.ics');
           State.s.totals.remindersExported = (State.s.totals.remindersExported || 0) + 1;
@@ -236,6 +337,11 @@ const Remind = (() => {
     render();
   }
 
-  return { events, ics, googleLink, alarmClock, open, IMPORTANT };
+  return { events, ics, googleLink, alarmClock, open, IMPORTANT, phoneAlarms, syncAlarms, alarmLine };
 })();
+
+/* в APK будильники ставятся сами при каждом запуске — по актуальному графику */
+if (typeof window !== 'undefined' && window.AndroidApp) {
+  window.addEventListener('load', () => setTimeout(() => { try { Remind.syncAlarms(); } catch (e) {} }, 1500));
+}
 

@@ -16,6 +16,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -225,6 +226,50 @@ public class MainActivity extends Activity {
                     .setContentIntent(tap)
                     .setAutoCancel(true);
             nm.notify(notifyId++, b.build());
+        }
+
+        /** Будильники из графика: JSON-массив {dow, min, title, text}; dow 0 — воскресенье. */
+        @JavascriptInterface
+        public String setAlarms(String json) {
+            Alarms.save(MainActivity.this, json);
+            Alarms.scheduleAll(MainActivity.this);
+            return Alarms.status(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public String alarmStatus() {
+            return Alarms.status(MainActivity.this);
+        }
+
+        /** проверка: будильник зазвонит через минуту */
+        @JavascriptInterface
+        public void testAlarm() {
+            Alarms.snooze(MainActivity.this, "🔔 Проверка будильника", "Работает! Так же он разбудит тебя утром.", 1);
+        }
+
+        /** открыть нужный экран настроек: notify, exact, fullscreen */
+        @JavascriptInterface
+        public void openSettings(String which) {
+            Intent i;
+            Uri pkg = Uri.parse("package:" + getPackageName());
+            if ("exact".equals(which) && Build.VERSION.SDK_INT >= 31) {
+                i = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg);
+            } else if ("fullscreen".equals(which) && Build.VERSION.SDK_INT >= 34) {
+                i = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg);
+            } else if (Build.VERSION.SDK_INT >= 26) {
+                i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+            } else {
+                i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg);
+            }
+            try {
+                startActivity(i);
+            } catch (ActivityNotFoundException e) {
+                try {
+                    startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg));
+                } catch (ActivityNotFoundException ignored) {
+                    toast("Открой настройки приложения вручную");
+                }
+            }
         }
 
         /** Скачивание из приложения (календарь .ics, отчёт, резервная копия) — в папку «Загрузки». */

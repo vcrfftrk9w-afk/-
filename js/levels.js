@@ -239,11 +239,13 @@ const Levels = (() => {
         <ul class="lv-road">${road}</ul>
       </div>
 
+      ${typeof Remind !== 'undefined' ? Remind.alarmLine() : ''}
       <button class="btn btn-ghost btn-block my-switch" data-space="all">🧩 Всё остальное — график, задачи, привычки, фокус…</button>`;
 
     el.querySelectorAll('[data-lvgo]').forEach((b) => { b.onclick = () => start(b.dataset.lvgo, b); });
     el.querySelectorAll('[data-lvdone]').forEach((b) => { b.onclick = () => complete(b.dataset.lvdone, b); });
     el.querySelectorAll('[data-lvinfo]').forEach((b) => { b.onclick = () => start(b.dataset.lvinfo, b); });
+    const al = el.querySelector('[data-alarm]'); if (al) al.onclick = () => Remind.open();
   }
 
   return { render, complete, start, streak, levelOn, questsAt, isDone, LEVELS, QUESTS, checkDay, state: st };

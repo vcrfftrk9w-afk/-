@@ -2230,6 +2230,16 @@ button.wk-body { min-height: 40px; }
 .remind-g .chip { text-decoration: none; }
 .remind-clock { margin-top: 14px; padding: 12px; border-radius: 14px; border: 1.5px dashed color-mix(in srgb, var(--warn) 60%, transparent); }
 .remind-clock ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; display: grid; gap: 4px; }
+.remind-alarm { margin: 12px 0 14px; padding: 14px; border-radius: 16px; display: grid; gap: 10px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+.remind-alarm p { margin: 0; }
+.remind-sw { display: flex; align-items: center; gap: 10px; font-size: 15px; cursor: pointer; }
+.remind-sw input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
+.remind-next { font-size: 14px; }
+.lv-alarm { display: block; width: 100%; margin: 4px 0 10px; padding: 12px 14px; border-radius: 14px; text-align: left;
+  font: inherit; font-size: 15px; color: var(--text); cursor: pointer;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.lv-alarm.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
 .remind-note { padding: 12px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
 .remind-note p { margin: 4px 0 0; }
 

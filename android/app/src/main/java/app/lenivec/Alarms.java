@@ -138,39 +138,80 @@ final class Alarms {
             o.put("nextTitle", p.getString("nextTitle", ""));
             long snooze = p.getLong("snooze", 0);
             o.put("snooze", snooze > System.currentTimeMillis() ? snooze : 0);
+            o.put("sound", soundName(c));
             return o.toString();
         } catch (Exception e) {
             return "{}";
         }
     }
 
-    private static Uri alarmSound(Context c) {
-        Uri u = RingtoneManager.getActualDefaultRingtoneUri(c, RingtoneManager.TYPE_ALARM);
-        if (u == null) u = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
-        if (u == null) u = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
-        return u;
+    /** выбранная мелодия, затем мелодия будильника телефона, затем любые стандартные — что сыграет */
+    static java.util.List<Uri> soundCandidates(Context c) {
+        java.util.LinkedHashSet<Uri> out = new java.util.LinkedHashSet<>();
+        String chosen = prefs(c).getString("sound", null);
+        if (chosen != null) out.add(Uri.parse(chosen));
+        Uri[] std = {
+                RingtoneManager.getActualDefaultRingtoneUri(c, RingtoneManager.TYPE_ALARM),
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+        };
+        for (Uri u : std) if (u != null) out.add(u);
+        return new java.util.ArrayList<>(out);
+    }
+
+    static Uri chosenSound(Context c) {
+        String s = prefs(c).getString("sound", null);
+        return s == null ? null : Uri.parse(s);
+    }
+
+    static void setSound(Context c, Uri uri) {
+        prefs(c).edit().putString("sound", uri == null ? null : uri.toString()).apply();
+    }
+
+    static String soundName(Context c) {
+        try {
+            java.util.List<Uri> list = soundCandidates(c);
+            if (list.isEmpty()) return "";
+            android.media.Ringtone r = RingtoneManager.getRingtone(c, list.get(0));
+            return r == null ? "" : r.getTitle(c);
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private static final long[] VIBRATE = {0, 800, 600, 800, 600, 800};
+    private static final String CHANNEL_SCREEN = "alarm_screen"; // экран звонка; звук играет AlarmService
 
-    /** звонок: уведомление со звуком будильника по кругу и экран поверх блокировки */
-    static void ring(Context c, String title, String text) {
+    private static void ensureChannels(Context c) {
+        if (Build.VERSION.SDK_INT < 26) return;
         NotificationManager nm = c.getSystemService(NotificationManager.class);
-        Uri sound = alarmSound(c);
-        if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
-            NotificationChannel ch = new NotificationChannel(CHANNEL, "Будильник", NotificationManager.IMPORTANCE_HIGH);
-            ch.setDescription("Подъём и публикации — звонит, пока не нажмёшь «Встал»");
-            ch.setSound(sound, new AudioAttributes.Builder()
+        if (nm.getNotificationChannel(CHANNEL_SCREEN) == null) {
+            NotificationChannel ch = new NotificationChannel(CHANNEL_SCREEN, "Будильник", NotificationManager.IMPORTANCE_HIGH);
+            ch.setDescription("Экран звонка будильника. Мелодию играет сам будильник, на громкости будильника.");
+            ch.setSound(null, null);
+            ch.enableVibration(false);
+            ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            nm.createNotificationChannel(ch);
+        }
+        if (nm.getNotificationChannel(CHANNEL) == null) {
+            NotificationChannel ch = new NotificationChannel(CHANNEL, "Будильник (запасной звук)", NotificationManager.IMPORTANCE_HIGH);
+            ch.setDescription("Если телефон не дал запустить будильник — звонит этим уведомлением");
+            java.util.List<Uri> snd = soundCandidates(c);
+            ch.setSound(snd.isEmpty() ? null : snd.get(0), new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build());
             ch.enableVibration(true);
             ch.setVibrationPattern(VIBRATE);
             ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
-            ch.setBypassDnd(true);
             nm.createNotificationChannel(ch);
         }
+    }
 
+    /** уведомление звонка: экран поверх блокировки и кнопки «Встал» / «Ещё 5 минут» */
+    static Notification ringNotification(Context c, String title, String text, boolean silent) {
+        ensureChannels(c);
         Intent full = new Intent(c, AlarmActivity.class)
                 .putExtra(EXTRA_TITLE, title).putExtra(EXTRA_TEXT, text)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -183,7 +224,7 @@ final class Alarms {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
-                ? new Notification.Builder(c, CHANNEL)
+                ? new Notification.Builder(c, silent ? CHANNEL_SCREEN : CHANNEL)
                 : new Notification.Builder(c);
         b.setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentTitle(title)
@@ -198,18 +239,35 @@ final class Alarms {
                 .addAction(new Notification.Action.Builder(null, "✅ Встал", dismiss).build())
                 .addAction(new Notification.Action.Builder(null, "😴 Ещё " + SNOOZE_MIN + " мин", snooze).build());
         if (Build.VERSION.SDK_INT >= 26) {
-            b.setTimeoutAfter(10 * 60_000L); // не звонить бесконечно, если телефон далеко
+            if (!silent) b.setTimeoutAfter(10 * 60_000L); // не звонить бесконечно, если телефон далеко
         } else {
-            b.setPriority(Notification.PRIORITY_MAX)
-                    .setSound(sound, AudioManager.STREAM_ALARM)
-                    .setVibrate(VIBRATE);
+            b.setPriority(Notification.PRIORITY_MAX);
+            if (!silent) {
+                java.util.List<Uri> snd = soundCandidates(c);
+                if (!snd.isEmpty()) b.setSound(snd.get(0), AudioManager.STREAM_ALARM);
+                b.setVibrate(VIBRATE);
+            }
         }
         Notification n = b.build();
-        n.flags |= Notification.FLAG_INSISTENT; // звук по кругу, пока не выключишь
-        nm.notify(RING_ID, n);
+        if (!silent) n.flags |= Notification.FLAG_INSISTENT; // звук по кругу, пока не выключишь
+        return n;
+    }
+
+    /** звонок: служба играет мелодию; если телефон не дал её запустить — звонит само уведомление */
+    static void ring(Context c, String title, String text) {
+        try {
+            AlarmService.start(c, title, text);
+        } catch (Exception e) {
+            c.getSystemService(NotificationManager.class).notify(RING_ID, ringNotification(c, title, text, false));
+        }
+    }
+
+    static void cancelNotification(Context c) {
+        c.getSystemService(NotificationManager.class).cancel(RING_ID);
     }
 
     static void stopRinging(Context c) {
-        c.getSystemService(NotificationManager.class).cancel(RING_ID);
+        AlarmService.stop(c);
+        cancelNotification(c);
     }
 }

@@ -15,6 +15,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.media.RingtoneManager;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
@@ -48,6 +49,7 @@ public class MainActivity extends Activity {
     private static final String CHANNEL = "reminders";
     private static final int REQ_NOTIFY = 1;
     private static final int REQ_FILE = 2;
+    private static final int REQ_SOUND = 3;
 
     private WebView web;
     private TextToSpeech tts;
@@ -139,6 +141,17 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        // будильник звонит, а человек открыл приложение — показываем экран с кнопками
+        if (AlarmService.ringing) {
+            startActivity(new Intent(this, AlarmActivity.class)
+                    .putExtra(Alarms.EXTRA_TITLE, AlarmService.ringingTitle)
+                    .putExtra(Alarms.EXTRA_TEXT, AlarmService.ringingText));
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         if (tts != null) tts.shutdown();
         web.destroy();
@@ -147,6 +160,14 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQ_SOUND) {
+            if (resultCode == RESULT_OK && data != null) {
+                Uri picked = data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+                if (picked != null) Alarms.setSound(this, picked);
+            }
+            web.evaluateJavascript("window.onAlarmSound && window.onAlarmSound()", null);
+            return;
+        }
         if (requestCode == REQ_FILE && fileCallback != null) {
             Uri uri = (resultCode == RESULT_OK && data != null) ? data.getData() : null;
             fileCallback.onReceiveValue(uri == null ? null : new Uri[]{uri});
@@ -239,6 +260,31 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String alarmStatus() {
             return Alarms.status(MainActivity.this);
+        }
+
+        /** проверка: звонит прямо сейчас — со звуком, экраном и кнопками */
+        @JavascriptInterface
+        public void ringNow() {
+            Alarms.ring(MainActivity.this, "🔔 Проверка будильника", "Так он зазвонит утром. Нажми «Встал», чтобы выключить.");
+        }
+
+        /** выбрать мелодию будильника из мелодий телефона */
+        @JavascriptInterface
+        public void pickSound() {
+            Intent i = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
+                    .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                    .putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Мелодия будильника")
+                    .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                    .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
+            Uri cur = Alarms.chosenSound(MainActivity.this);
+            if (cur != null) i.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, cur);
+            runOnUiThread(() -> {
+                try {
+                    startActivityForResult(i, REQ_SOUND);
+                } catch (ActivityNotFoundException e) {
+                    toast("На этом телефоне нельзя выбрать мелодию — будет звучать мелодия будильника из «Часов»");
+                }
+            });
         }
 
         /** проверка: будильник зазвонит через минуту */

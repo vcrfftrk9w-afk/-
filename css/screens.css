@@ -2236,6 +2236,17 @@ button.wk-body { min-height: 40px; }
 .remind-sw { display: flex; align-items: center; gap: 10px; font-size: 15px; cursor: pointer; }
 .remind-sw input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
 .remind-next { font-size: 14px; }
+.remind-own { justify-content: space-between; }
+.remind-own label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.remind-own .icon-btn { background: none; border: 0; font-size: 18px; cursor: pointer; padding: 6px; }
+.remind-new { display: grid; gap: 10px; padding: 12px; border-radius: 14px; background: var(--surface-solid); }
+.remind-new input[type="time"] { font: inherit; font-size: 32px; font-weight: 700; text-align: center; padding: 6px; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--text) 20%, transparent); background: transparent; color: var(--text); color-scheme: dark; }
+[data-theme="light"] .remind-new input[type="time"] { color-scheme: light; }
+.remind-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.remind-days .seg-btn { padding: 8px 0; }
+.remind-new-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.remind-test { display: grid; gap: 8px; }
 .lv-alarm { display: block; width: 100%; margin: 4px 0 10px; padding: 12px 14px; border-radius: 14px; text-align: left;
   font: inherit; font-size: 15px; color: var(--text); cursor: pointer;
   background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }

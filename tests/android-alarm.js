@@ -14,7 +14,7 @@ const mock = `(() => {
       if (d.getDay() === a.dow && d.getTime() > now.getTime()) { if (!best || d < best.d) best = { d, a }; break; } } });
     return best;
   };
-  let status = { exact: true, fullScreen: true, count: 0, next: 0, nextTitle: '', snooze: 0 };
+  let status = { exact: true, fullScreen: true, count: 0, next: 0, nextTitle: '', snooze: 0, sound: 'Утро' };
   window.AndroidApp = {
     speak: () => {}, stopSpeaking: () => {}, saveFile: () => {}, notify: () => {},
     notifyState: () => notify, requestNotify: () => { notify = 'granted'; },
@@ -22,6 +22,8 @@ const mock = `(() => {
       status = Object.assign({}, status, { count: list.length, next: b ? b.d.getTime() : 0, nextTitle: b ? b.a.title : '' }); return JSON.stringify(status); },
     alarmStatus: () => JSON.stringify(status),
     testAlarm: () => calls.push(['testAlarm']),
+    ringNow: () => calls.push(['ringNow']),
+    pickSound: () => { calls.push(['pickSound']); status = Object.assign({}, status, { sound: 'Рассвет' }); setTimeout(() => window.onAlarmSound && window.onAlarmSound(), 50); },
     openSettings: (w) => calls.push(['openSettings', w]),
   };
 })();`;
@@ -61,6 +63,25 @@ const mock = `(() => {
   // проверка звонка
   await p.click('#rm-alarm-test'); await p.waitForTimeout(200);
   check('кнопка «Проверить» заводит звонок через минуту', await p.evaluate(()=>window.__android.some(x=>x[0]==='testAlarm')));
+  await p.click('#rm-alarm-now'); await p.waitForTimeout(200);
+  check('«Проверить звук сейчас» звонит сразу', await p.evaluate(()=>window.__android.some(x=>x[0]==='ringNow')));
+  const snd0 = await p.textContent('#rm-alarm-sound');
+  await p.click('#rm-alarm-sound'); await p.waitForTimeout(300);
+  const snd1 = await p.textContent('#rm-alarm-sound');
+  check('мелодию можно выбрать — название обновляется', /Утро/.test(snd0) && /Рассвет/.test(snd1), [snd0, snd1]);
+
+  // свой будильник: 06:40, Пн–Пт без среды
+  await p.click('[data-anew]'); await p.waitForTimeout(200);
+  await p.fill('#al-time', '06:40');
+  await p.click('[data-dday="3"]'); await p.waitForTimeout(150);
+  await p.click('#al-save'); await p.waitForTimeout(300);
+  const own = await p.evaluate(()=>{ const c = window.__android.filter(x=>x[0]==='setAlarms'); const l = c[c.length-1][1].filter(a=>a.title==='⏰ Будильник'); return { l: l.map(a=>a.dow+':'+a.min), row: (document.querySelector('.remind-own')||{}).textContent, custom: State.s.alarms.custom }; });
+  check('свой будильник 06:40 в Пн, Вт, Чт, Пт', own.l.join()==='1:400,2:400,4:400,5:400' && /06:40/.test(own.row) && /Пн, Вт, Чт, Пт/.test(own.row), own);
+  await p.click('[data-aown]'); await p.waitForTimeout(200);
+  const offOwn = await p.evaluate(()=>{ const c = window.__android.filter(x=>x[0]==='setAlarms'); return c[c.length-1][1].filter(a=>a.title==='⏰ Будильник').length; });
+  check('свой будильник можно выключить', offOwn===0, offOwn);
+  await p.click('[data-adel]'); await p.waitForTimeout(200);
+  check('и удалить', await p.evaluate(()=>State.s.alarms.custom.length===0 && !document.querySelector('.remind-own')));
 
   // после перезапуска приложение не спамит тостом второй раз, а будильники ставит снова
   await p.reload(); await p.waitForTimeout(3200);

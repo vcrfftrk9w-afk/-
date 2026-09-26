@@ -159,8 +159,16 @@ const Remind = (() => {
         }));
       }
     }
+    // свои будильники: время и дни недели, как в «Часах»
+    (cfg.custom || []).filter((a) => a.on !== false).forEach((a) => a.days.forEach((dow) => out.push({
+      dow, min: a.min, title: '⏰ Будильник', text: a.label || 'Твой будильник. Встань и начни с первого дела.',
+    })));
     return out;
   }
+
+  const anyOn = (cfg) => cfg.wake || cfg.publish || (cfg.custom || []).some((a) => a.on !== false);
+  let draft = null; // новый свой будильник, пока его настраивают
+  const toMin = (v) => { const m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? Math.min(23, +m[1]) * 60 + Math.min(59, +m[2]) : null; };
 
   const refresh = () => { try { if (typeof App !== 'undefined' && App.renderActive) App.renderActive(); } catch (e) {} };
 
@@ -200,7 +208,7 @@ const Remind = (() => {
     if (!phone()) return '';
     const st = alarmStatus();
     const cfg = alarmCfg();
-    const off = !cfg.wake && !cfg.publish;
+    const off = !anyOn(cfg);
     const warn = typeof Notification !== 'undefined' && Notification.permission !== 'granted';
     return `<button class="lv-alarm ${warn ? 'warn' : ''}" data-alarm>⏰ ${off ? 'Будильник выключен' : warn ? 'Будильник не сможет звонить — разреши уведомления' : st.next ? `Будильник: ${whenLabel(st.next)} · ${UI.esc(String(st.nextTitle || '').replace(/^\S+\s/, ''))}` : 'Будильник'}</button>`;
   }
@@ -220,9 +228,28 @@ const Remind = (() => {
         <p class="muted small">Звонит как обычный будильник — даже когда приложение закрыто и экран заблокирован. Кнопки: «Встал» и «Ещё 5 минут».</p>
         <label class="remind-sw"><input type="checkbox" data-aopt="wake" ${cfg.wake ? 'checked' : ''}><span>☀️ Подъём · Пн–Пт ${Track.hhmm(wk.start)}, Сб–Вс ${Track.hhmm(we.start)}</span></label>
         <label class="remind-sw"><input type="checkbox" data-aopt="publish" ${cfg.publish ? 'checked' : ''}><span>🎞️🐋 Публикации · 19:45 и 20:50 (за 10 минут)</span></label>
-        <p class="remind-next">${cfg.wake || cfg.publish ? (st.next ? `Следующий: <b>${whenLabel(st.next)}</b> — ${UI.esc(st.nextTitle || '')}` : '') : 'Все будильники выключены.'}${st.snooze ? `<br>😴 Отложенный: ${whenLabel(st.snooze)}` : ''}</p>
+        ${(cfg.custom || []).map((a) => `
+          <div class="remind-sw remind-own">
+            <label><input type="checkbox" data-aown="${a.id}" ${a.on !== false ? 'checked' : ''}><span>⏰ <b>${Track.hhmm(a.min)}</b> · ${daysLabel(a.days)}</span></label>
+            <button class="icon-btn" data-adel="${a.id}" aria-label="Удалить будильник ${Track.hhmm(a.min)}">🗑</button>
+          </div>`).join('')}
+        ${draft ? `
+          <div class="remind-new">
+            <input type="time" id="al-time" value="${Track.hhmm(draft.min)}" aria-label="Время будильника">
+            <div class="remind-days">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<button class="seg-btn ${draft.days.includes(d) ? 'sel' : ''}" data-dday="${d}">${DAYS_RU[d]}</button>`).join('')}</div>
+            <div class="remind-new-btns">
+              <button class="btn btn-primary" id="al-save">Сохранить</button>
+              <button class="btn btn-ghost" id="al-cancel">Отмена</button>
+            </div>
+          </div>` : '<button class="btn btn-ghost btn-block" data-anew>＋ Свой будильник</button>'}
+        <p class="remind-next">${anyOn(cfg) ? (st.next ? `Следующий: <b>${whenLabel(st.next)}</b> — ${UI.esc(st.nextTitle || '')}` : '') : 'Все будильники выключены.'}${st.snooze ? `<br>😴 Отложенный: ${whenLabel(st.snooze)}` : ''}</p>
         ${warns.join('')}
-        <button class="btn btn-ghost btn-block" id="rm-alarm-test">🔔 Проверить — зазвонит через 1 минуту</button>
+        <button class="btn btn-ghost btn-block" id="rm-alarm-sound">🎵 Мелодия: ${UI.esc(st.sound || 'как в «Часах»')}</button>
+        <div class="remind-test">
+          <button class="btn btn-primary" id="rm-alarm-now">🔔 Проверить звук сейчас</button>
+          <button class="btn btn-ghost" id="rm-alarm-test">⏱ Проверить через минуту</button>
+        </div>
+        <p class="muted small">Звонит на громкости будильника — даже в беззвучном режиме. «Через 1 минуту» — чтобы проверить на заблокированном экране.</p>
       </div>`;
   }
 
@@ -308,7 +335,10 @@ const Remind = (() => {
           </div>
         </div>`, { wide: true });
 
+      if (phone()) window.onAlarmSound = () => { if (body.isConnected) render(); };
       body.onclick = (e) => {
+        const tIn = body.querySelector('#al-time');
+        if (tIn && draft && toMin(tIn.value) != null) draft.min = toMin(tIn.value);
         const s1 = e.target.closest('[data-rset]'), s2 = e.target.closest('[data-rbefore]');
         if (s1) { st.set = s1.dataset.rset; State.save(); Sound.sfx('pop'); render(); return; }
         if (s2) { st.before = Number(s2.dataset.rbefore); State.save(); Sound.sfx('pop'); render(); return; }
@@ -325,6 +355,36 @@ const Remind = (() => {
           window.AndroidApp.testAlarm();
           UI.toast('Зазвонит через минуту — можешь заблокировать телефон', 'success', '🔔');
           return;
+        }
+        if (e.target.closest('#rm-alarm-now')) { window.AndroidApp.ringNow(); return; }
+        if (e.target.closest('#rm-alarm-sound')) { window.AndroidApp.pickSound(); return; }
+        const cfg = alarmCfg();
+        if (e.target.closest('[data-anew]')) { draft = { min: 7 * 60, days: [1, 2, 3, 4, 5] }; render(); return; }
+        const dd = e.target.closest('[data-dday]');
+        if (dd && draft) {
+          const d = Number(dd.dataset.dday);
+          draft.days = draft.days.includes(d) ? draft.days.filter((x) => x !== d) : draft.days.concat(d);
+          render(); return;
+        }
+        if (e.target.closest('#al-cancel')) { draft = null; render(); return; }
+        if (e.target.closest('#al-save') && draft) {
+          if (!draft.days.length) { UI.toast('Выбери хотя бы один день', 'warn', '📅'); return; }
+          const a = { id: Date.now(), min: draft.min, days: draft.days.slice().sort((x, y) => ((x + 6) % 7) - ((y + 6) % 7)), on: true };
+          (cfg.custom || (cfg.custom = [])).push(a);
+          draft = null; State.save(); syncAlarms(); Sound.sfx('success');
+          UI.toast(`Будильник на ${Track.hhmm(a.min)} · ${daysLabel(a.days)}`, 'success', '⏰');
+          render(); return;
+        }
+        const own = e.target.closest('[data-aown]');
+        if (own) {
+          const a = (cfg.custom || []).find((x) => String(x.id) === own.dataset.aown);
+          if (a) { a.on = own.checked; State.save(); syncAlarms(); Sound.sfx('pop'); render(); }
+          return;
+        }
+        const del = e.target.closest('[data-adel]');
+        if (del) {
+          cfg.custom = (cfg.custom || []).filter((x) => String(x.id) !== del.dataset.adel);
+          State.save(); syncAlarms(); render(); return;
         }
         if (e.target.closest('#rm-ics')) {
           const ok = download(ics(st), 'lenivec-reminders.ics');

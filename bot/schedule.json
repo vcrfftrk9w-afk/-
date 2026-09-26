@@ -1,0 +1,2268 @@
+{
+ "version": 4,
+ "days_ru": [
+  "Воскресенье",
+  "Понедельник",
+  "Вторник",
+  "Среда",
+  "Четверг",
+  "Пятница",
+  "Суббота"
+ ],
+ "days": {
+  "0": [
+   {
+    "start": 450,
+    "end": 510,
+    "title": "Подъём, завтрак, спокойное утро",
+    "emoji": "☀️",
+    "kind": "wake",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 510,
+    "end": 550,
+    "title": "Английский",
+    "emoji": "🇬🇧",
+    "kind": "task",
+    "task": "Английский",
+    "hard": false,
+    "note": "10 мин слова · 15 мин слушать или читать · 15 мин говорить или писать"
+   },
+   {
+    "start": 550,
+    "end": 570,
+    "title": "Одно сохранённое видео",
+    "emoji": "🍿",
+    "kind": "task",
+    "task": "Одно сохранённое видео",
+    "hard": false,
+    "note": "Ровно одно. После — записать одну мысль или действие."
+   },
+   {
+    "start": 570,
+    "end": 630,
+    "title": "Закрыть учебные задания",
+    "emoji": "📚",
+    "kind": "task",
+    "task": "Задания по учёбе",
+    "hard": false,
+    "note": "Если срочного нет — практика навыка для заработка."
+   },
+   {
+    "start": 630,
+    "end": 660,
+    "title": "Отдых",
+    "emoji": "🛋️",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 660,
+    "end": 720,
+    "title": "Бытовые дела и покупки на неделю по списку",
+    "emoji": "🧹",
+    "kind": "task",
+    "task": "Бытовые дела",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 720,
+    "end": 780,
+    "title": "Готовка и обед",
+    "emoji": "🍲",
+    "kind": "task",
+    "task": "Готовка",
+    "hard": false,
+    "note": "По возможности сразу на два дня."
+   },
+   {
+    "start": 780,
+    "end": 870,
+    "title": "Заготовить ролики на несколько дней",
+    "emoji": "🎬",
+    "kind": "task",
+    "task": "Смонтировать два ролика: кино и orca",
+    "hard": false,
+    "note": "На выходных можно заготовить сразу на несколько дней."
+   },
+   {
+    "start": 870,
+    "end": 1020,
+    "title": "Прогулка, друзья, хобби, свободное время",
+    "emoji": "🌳",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1020,
+    "end": 1080,
+    "title": "Приготовить ужин и поесть",
+    "emoji": "🍽️",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1080,
+    "end": 1120,
+    "title": "YouTube",
+    "emoji": "▶️",
+    "kind": "task",
+    "task": "YouTube",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1120,
+    "end": 1140,
+    "title": "План на неделю — 20 минут",
+    "emoji": "🗓️",
+    "kind": "task",
+    "task": "План на неделю",
+    "hard": false,
+    "note": "Двадцать минут внутри вечернего блока — что получилось за неделю и что главное в следующей."
+   },
+   {
+    "start": 1140,
+    "end": 1175,
+    "title": "Отдых",
+    "emoji": "🛋️",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1175,
+    "end": 1185,
+    "title": "Отдых от экрана",
+    "emoji": "👀",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1185,
+    "end": 1195,
+    "title": "Проверить ролик «кино»: подпись, загрузка",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить ролик «кино»: подпись и загрузка",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1195,
+    "end": 1205,
+    "title": "Публикация «кино» в TikTok",
+    "emoji": "🎞️",
+    "kind": "task",
+    "task": "ТТ видео — кино",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1205,
+    "end": 1235,
+    "title": "Свободное время",
+    "emoji": "🎮",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1235,
+    "end": 1250,
+    "title": "Продуктивное время с ИИ: разбор дня и главное на завтра",
+    "emoji": "🤖",
+    "kind": "task",
+    "task": "Разбор с ИИ: что получилось и что дальше",
+    "hard": false,
+    "note": "Одно главное действие на завтра, а не бесконечное планирование."
+   },
+   {
+    "start": 1250,
+    "end": 1260,
+    "title": "Проверить и подготовить ролик «orca»",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить и подготовить ролик «orca»",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1260,
+    "end": 1270,
+    "title": "Публикация «orca» в TikTok",
+    "emoji": "🐋",
+    "kind": "task",
+    "task": "ТТ видео — orca",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1270,
+    "end": 1305,
+    "title": "Отдых, общение, свои дела",
+    "emoji": "💬",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1305,
+    "end": 1320,
+    "title": "Собрать вещи, одежда, 3 главные задачи на завтра",
+    "emoji": "🎒",
+    "kind": "task",
+    "task": "Собрать вещи и записать 3 задачи на завтра",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1320,
+    "end": 1350,
+    "title": "Гигиена и спокойное занятие без ленты",
+    "emoji": "🌙",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1350,
+    "end": 1440,
+    "title": "Сон — 8 часов 30 минут",
+    "emoji": "😴",
+    "kind": "sleep",
+    "task": null,
+    "hard": false,
+    "note": ""
+   }
+  ],
+  "1": [
+   {
+    "start": 420,
+    "end": 435,
+    "title": "Подъём, умывание, вода",
+    "emoji": "☀️",
+    "kind": "wake",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 435,
+    "end": 450,
+    "title": "Лёгкая разминка, заправить кровать",
+    "emoji": "🤸",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 450,
+    "end": 480,
+    "title": "Завтрак и сборы",
+    "emoji": "🍳",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 480,
+    "end": 510,
+    "title": "Дорога на учёбу",
+    "emoji": "🚌",
+    "kind": "road",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 510,
+    "end": 560,
+    "title": "Первая пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 560,
+    "end": 570,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 570,
+    "end": 620,
+    "title": "Вторая пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 620,
+    "end": 630,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 630,
+    "end": 680,
+    "title": "Третья пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 680,
+    "end": 710,
+    "title": "Дорога домой",
+    "emoji": "🚌",
+    "kind": "road",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 710,
+    "end": 730,
+    "title": "Перекус и отдых",
+    "emoji": "🥪",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 730,
+    "end": 770,
+    "title": "Английский",
+    "emoji": "🇬🇧",
+    "kind": "task",
+    "task": "Английский",
+    "hard": false,
+    "note": "10 мин слова · 15 мин слушать или читать · 15 мин говорить или писать"
+   },
+   {
+    "start": 770,
+    "end": 800,
+    "title": "YouTube",
+    "emoji": "▶️",
+    "kind": "task",
+    "task": "YouTube",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 800,
+    "end": 830,
+    "title": "Обед",
+    "emoji": "🍽️",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 830,
+    "end": 880,
+    "title": "Поиск заработка: выбрать вариант и сделать шаг",
+    "emoji": "💰",
+    "kind": "task",
+    "task": "Работа над заработком",
+    "hard": false,
+    "note": "Не «думать», а сделать шаг: найти 3 предложения, написать заказчику, собрать пример работы."
+   },
+   {
+    "start": 880,
+    "end": 910,
+    "title": "OLX: объявления, сообщения, обмены",
+    "emoji": "📦",
+    "kind": "task",
+    "task": "OLX: объявления и обмены",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 910,
+    "end": 930,
+    "title": "Одно сохранённое видео",
+    "emoji": "🍿",
+    "kind": "task",
+    "task": "Одно сохранённое видео",
+    "hard": false,
+    "note": "Ровно одно. После — записать одну мысль или действие."
+   },
+   {
+    "start": 930,
+    "end": 960,
+    "title": "Свободный запас времени или отдых",
+    "emoji": "🛋️",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 960,
+    "end": 1005,
+    "title": "Тренировка",
+    "emoji": "💪",
+    "kind": "task",
+    "task": "Тренировка",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1005,
+    "end": 1020,
+    "title": "Душ",
+    "emoji": "🚿",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1020,
+    "end": 1060,
+    "title": "Готовка — по возможности сразу на два дня",
+    "emoji": "🍲",
+    "kind": "task",
+    "task": "Готовка",
+    "hard": false,
+    "note": "По возможности сразу на два дня."
+   },
+   {
+    "start": 1060,
+    "end": 1080,
+    "title": "Ужин",
+    "emoji": "🍽️",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1080,
+    "end": 1125,
+    "title": "Задания по учёбе (нет срочного — практика навыка)",
+    "emoji": "📚",
+    "kind": "task",
+    "task": "Задания по учёбе",
+    "hard": false,
+    "note": "Если срочного нет — практика навыка для заработка."
+   },
+   {
+    "start": 1125,
+    "end": 1175,
+    "title": "Создание и монтаж двух роликов: кино и orca",
+    "emoji": "🎬",
+    "kind": "task",
+    "task": "Смонтировать два ролика: кино и orca",
+    "hard": false,
+    "note": "На выходных можно заготовить сразу на несколько дней."
+   },
+   {
+    "start": 1175,
+    "end": 1185,
+    "title": "Отдых от экрана",
+    "emoji": "👀",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1185,
+    "end": 1195,
+    "title": "Проверить ролик «кино»: подпись, загрузка",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить ролик «кино»: подпись и загрузка",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1195,
+    "end": 1205,
+    "title": "Публикация «кино» в TikTok",
+    "emoji": "🎞️",
+    "kind": "task",
+    "task": "ТТ видео — кино",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1205,
+    "end": 1235,
+    "title": "Свободное время",
+    "emoji": "🎮",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1235,
+    "end": 1250,
+    "title": "Продуктивное время с ИИ: разбор дня и главное на завтра",
+    "emoji": "🤖",
+    "kind": "task",
+    "task": "Разбор с ИИ: что получилось и что дальше",
+    "hard": false,
+    "note": "Одно главное действие на завтра, а не бесконечное планирование."
+   },
+   {
+    "start": 1250,
+    "end": 1260,
+    "title": "Проверить и подготовить ролик «orca»",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить и подготовить ролик «orca»",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1260,
+    "end": 1270,
+    "title": "Публикация «orca» в TikTok",
+    "emoji": "🐋",
+    "kind": "task",
+    "task": "ТТ видео — orca",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1270,
+    "end": 1305,
+    "title": "Отдых, общение, свои дела",
+    "emoji": "💬",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1305,
+    "end": 1320,
+    "title": "Собрать вещи, одежда, 3 главные задачи на завтра",
+    "emoji": "🎒",
+    "kind": "task",
+    "task": "Собрать вещи и записать 3 задачи на завтра",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1320,
+    "end": 1350,
+    "title": "Гигиена и спокойное занятие без ленты",
+    "emoji": "🌙",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1350,
+    "end": 1440,
+    "title": "Сон — 8 часов 30 минут",
+    "emoji": "😴",
+    "kind": "sleep",
+    "task": null,
+    "hard": false,
+    "note": ""
+   }
+  ],
+  "2": [
+   {
+    "start": 420,
+    "end": 435,
+    "title": "Подъём, умывание, вода",
+    "emoji": "☀️",
+    "kind": "wake",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 435,
+    "end": 450,
+    "title": "Лёгкая разминка, заправить кровать",
+    "emoji": "🤸",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 450,
+    "end": 480,
+    "title": "Завтрак и сборы",
+    "emoji": "🍳",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 480,
+    "end": 520,
+    "title": "Английский",
+    "emoji": "🇬🇧",
+    "kind": "task",
+    "task": "Английский",
+    "hard": false,
+    "note": "10 мин слова · 15 мин слушать или читать · 15 мин говорить или писать"
+   },
+   {
+    "start": 520,
+    "end": 550,
+    "title": "YouTube",
+    "emoji": "▶️",
+    "kind": "task",
+    "task": "YouTube",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 550,
+    "end": 570,
+    "title": "Одно сохранённое видео",
+    "emoji": "🍿",
+    "kind": "task",
+    "task": "Одно сохранённое видео",
+    "hard": false,
+    "note": "Ровно одно. После — записать одну мысль или действие."
+   },
+   {
+    "start": 570,
+    "end": 600,
+    "title": "OLX",
+    "emoji": "📦",
+    "kind": "task",
+    "task": "OLX: объявления и обмены",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 600,
+    "end": 650,
+    "title": "Работа над заработком",
+    "emoji": "💰",
+    "kind": "task",
+    "task": "Работа над заработком",
+    "hard": false,
+    "note": "Не «думать», а сделать шаг: найти 3 предложения, написать заказчику, собрать пример работы."
+   },
+   {
+    "start": 650,
+    "end": 660,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 660,
+    "end": 690,
+    "title": "Подготовка роликов для TikTok",
+    "emoji": "🎬",
+    "kind": "task",
+    "task": "Подготовка роликов для TikTok",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 690,
+    "end": 720,
+    "title": "Ранний обед и сборы",
+    "emoji": "🍽️",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 720,
+    "end": 750,
+    "title": "Дорога на учёбу",
+    "emoji": "🚌",
+    "kind": "road",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 750,
+    "end": 800,
+    "title": "Первая пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 800,
+    "end": 810,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 810,
+    "end": 860,
+    "title": "Вторая пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 860,
+    "end": 870,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 870,
+    "end": 920,
+    "title": "Третья пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 920,
+    "end": 950,
+    "title": "Дорога домой",
+    "emoji": "🚌",
+    "kind": "road",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 950,
+    "end": 960,
+    "title": "Перекус, переодеться",
+    "emoji": "🥪",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 960,
+    "end": 1005,
+    "title": "Прогулка или восстановление",
+    "emoji": "🚶",
+    "kind": "task",
+    "task": "Прогулка и восстановление",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1005,
+    "end": 1020,
+    "title": "Душ",
+    "emoji": "🚿",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1020,
+    "end": 1060,
+    "title": "Готовка — по возможности сразу на два дня",
+    "emoji": "🍲",
+    "kind": "task",
+    "task": "Готовка",
+    "hard": false,
+    "note": "По возможности сразу на два дня."
+   },
+   {
+    "start": 1060,
+    "end": 1080,
+    "title": "Ужин",
+    "emoji": "🍽️",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1080,
+    "end": 1125,
+    "title": "Задания по учёбе (нет срочного — практика навыка)",
+    "emoji": "📚",
+    "kind": "task",
+    "task": "Задания по учёбе",
+    "hard": false,
+    "note": "Если срочного нет — практика навыка для заработка."
+   },
+   {
+    "start": 1125,
+    "end": 1175,
+    "title": "Создание и монтаж двух роликов: кино и orca",
+    "emoji": "🎬",
+    "kind": "task",
+    "task": "Смонтировать два ролика: кино и orca",
+    "hard": false,
+    "note": "На выходных можно заготовить сразу на несколько дней."
+   },
+   {
+    "start": 1175,
+    "end": 1185,
+    "title": "Отдых от экрана",
+    "emoji": "👀",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1185,
+    "end": 1195,
+    "title": "Проверить ролик «кино»: подпись, загрузка",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить ролик «кино»: подпись и загрузка",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1195,
+    "end": 1205,
+    "title": "Публикация «кино» в TikTok",
+    "emoji": "🎞️",
+    "kind": "task",
+    "task": "ТТ видео — кино",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1205,
+    "end": 1235,
+    "title": "Свободное время",
+    "emoji": "🎮",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1235,
+    "end": 1250,
+    "title": "Продуктивное время с ИИ: разбор дня и главное на завтра",
+    "emoji": "🤖",
+    "kind": "task",
+    "task": "Разбор с ИИ: что получилось и что дальше",
+    "hard": false,
+    "note": "Одно главное действие на завтра, а не бесконечное планирование."
+   },
+   {
+    "start": 1250,
+    "end": 1260,
+    "title": "Проверить и подготовить ролик «orca»",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить и подготовить ролик «orca»",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1260,
+    "end": 1270,
+    "title": "Публикация «orca» в TikTok",
+    "emoji": "🐋",
+    "kind": "task",
+    "task": "ТТ видео — orca",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1270,
+    "end": 1305,
+    "title": "Отдых, общение, свои дела",
+    "emoji": "💬",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1305,
+    "end": 1320,
+    "title": "Собрать вещи, одежда, 3 главные задачи на завтра",
+    "emoji": "🎒",
+    "kind": "task",
+    "task": "Собрать вещи и записать 3 задачи на завтра",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1320,
+    "end": 1350,
+    "title": "Гигиена и спокойное занятие без ленты",
+    "emoji": "🌙",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1350,
+    "end": 1440,
+    "title": "Сон — 8 часов 30 минут",
+    "emoji": "😴",
+    "kind": "sleep",
+    "task": null,
+    "hard": false,
+    "note": ""
+   }
+  ],
+  "3": [
+   {
+    "start": 420,
+    "end": 435,
+    "title": "Подъём, умывание, вода",
+    "emoji": "☀️",
+    "kind": "wake",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 435,
+    "end": 450,
+    "title": "Лёгкая разминка, заправить кровать",
+    "emoji": "🤸",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 450,
+    "end": 480,
+    "title": "Завтрак и сборы",
+    "emoji": "🍳",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 480,
+    "end": 520,
+    "title": "Английский",
+    "emoji": "🇬🇧",
+    "kind": "task",
+    "task": "Английский",
+    "hard": false,
+    "note": "10 мин слова · 15 мин слушать или читать · 15 мин говорить или писать"
+   },
+   {
+    "start": 520,
+    "end": 550,
+    "title": "YouTube",
+    "emoji": "▶️",
+    "kind": "task",
+    "task": "YouTube",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 550,
+    "end": 570,
+    "title": "Одно сохранённое видео",
+    "emoji": "🍿",
+    "kind": "task",
+    "task": "Одно сохранённое видео",
+    "hard": false,
+    "note": "Ровно одно. После — записать одну мысль или действие."
+   },
+   {
+    "start": 570,
+    "end": 600,
+    "title": "OLX",
+    "emoji": "📦",
+    "kind": "task",
+    "task": "OLX: объявления и обмены",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 600,
+    "end": 640,
+    "title": "Работа над заработком",
+    "emoji": "💰",
+    "kind": "task",
+    "task": "Работа над заработком",
+    "hard": false,
+    "note": "Не «думать», а сделать шаг: найти 3 предложения, написать заказчику, собрать пример работы."
+   },
+   {
+    "start": 640,
+    "end": 660,
+    "title": "Перекус и сборы",
+    "emoji": "🥪",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 660,
+    "end": 690,
+    "title": "Дорога на учёбу",
+    "emoji": "🚌",
+    "kind": "road",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 690,
+    "end": 740,
+    "title": "Первая пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 740,
+    "end": 750,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 750,
+    "end": 800,
+    "title": "Вторая пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 800,
+    "end": 810,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 810,
+    "end": 860,
+    "title": "Третья пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 860,
+    "end": 890,
+    "title": "Дорога домой",
+    "emoji": "🚌",
+    "kind": "road",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 890,
+    "end": 920,
+    "title": "Обед",
+    "emoji": "🍽️",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 920,
+    "end": 960,
+    "title": "Отдых",
+    "emoji": "🛋️",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 960,
+    "end": 1005,
+    "title": "Тренировка",
+    "emoji": "💪",
+    "kind": "task",
+    "task": "Тренировка",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1005,
+    "end": 1020,
+    "title": "Душ",
+    "emoji": "🚿",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1020,
+    "end": 1060,
+    "title": "Готовка — по возможности сразу на два дня",
+    "emoji": "🍲",
+    "kind": "task",
+    "task": "Готовка",
+    "hard": false,
+    "note": "По возможности сразу на два дня."
+   },
+   {
+    "start": 1060,
+    "end": 1080,
+    "title": "Ужин",
+    "emoji": "🍽️",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1080,
+    "end": 1125,
+    "title": "Задания по учёбе (нет срочного — практика навыка)",
+    "emoji": "📚",
+    "kind": "task",
+    "task": "Задания по учёбе",
+    "hard": false,
+    "note": "Если срочного нет — практика навыка для заработка."
+   },
+   {
+    "start": 1125,
+    "end": 1175,
+    "title": "Создание и монтаж двух роликов: кино и orca",
+    "emoji": "🎬",
+    "kind": "task",
+    "task": "Смонтировать два ролика: кино и orca",
+    "hard": false,
+    "note": "На выходных можно заготовить сразу на несколько дней."
+   },
+   {
+    "start": 1175,
+    "end": 1185,
+    "title": "Отдых от экрана",
+    "emoji": "👀",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1185,
+    "end": 1195,
+    "title": "Проверить ролик «кино»: подпись, загрузка",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить ролик «кино»: подпись и загрузка",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1195,
+    "end": 1205,
+    "title": "Публикация «кино» в TikTok",
+    "emoji": "🎞️",
+    "kind": "task",
+    "task": "ТТ видео — кино",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1205,
+    "end": 1235,
+    "title": "Свободное время",
+    "emoji": "🎮",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1235,
+    "end": 1250,
+    "title": "Продуктивное время с ИИ: разбор дня и главное на завтра",
+    "emoji": "🤖",
+    "kind": "task",
+    "task": "Разбор с ИИ: что получилось и что дальше",
+    "hard": false,
+    "note": "Одно главное действие на завтра, а не бесконечное планирование."
+   },
+   {
+    "start": 1250,
+    "end": 1260,
+    "title": "Проверить и подготовить ролик «orca»",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить и подготовить ролик «orca»",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1260,
+    "end": 1270,
+    "title": "Публикация «orca» в TikTok",
+    "emoji": "🐋",
+    "kind": "task",
+    "task": "ТТ видео — orca",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1270,
+    "end": 1305,
+    "title": "Отдых, общение, свои дела",
+    "emoji": "💬",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1305,
+    "end": 1320,
+    "title": "Собрать вещи, одежда, 3 главные задачи на завтра",
+    "emoji": "🎒",
+    "kind": "task",
+    "task": "Собрать вещи и записать 3 задачи на завтра",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1320,
+    "end": 1350,
+    "title": "Гигиена и спокойное занятие без ленты",
+    "emoji": "🌙",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1350,
+    "end": 1440,
+    "title": "Сон — 8 часов 30 минут",
+    "emoji": "😴",
+    "kind": "sleep",
+    "task": null,
+    "hard": false,
+    "note": ""
+   }
+  ],
+  "4": [
+   {
+    "start": 420,
+    "end": 435,
+    "title": "Подъём, умывание, вода",
+    "emoji": "☀️",
+    "kind": "wake",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 435,
+    "end": 450,
+    "title": "Лёгкая разминка, заправить кровать",
+    "emoji": "🤸",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 450,
+    "end": 480,
+    "title": "Завтрак и сборы",
+    "emoji": "🍳",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 480,
+    "end": 520,
+    "title": "Английский",
+    "emoji": "🇬🇧",
+    "kind": "task",
+    "task": "Английский",
+    "hard": false,
+    "note": "10 мин слова · 15 мин слушать или читать · 15 мин говорить или писать"
+   },
+   {
+    "start": 520,
+    "end": 550,
+    "title": "YouTube",
+    "emoji": "▶️",
+    "kind": "task",
+    "task": "YouTube",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 550,
+    "end": 570,
+    "title": "Одно сохранённое видео",
+    "emoji": "🍿",
+    "kind": "task",
+    "task": "Одно сохранённое видео",
+    "hard": false,
+    "note": "Ровно одно. После — записать одну мысль или действие."
+   },
+   {
+    "start": 570,
+    "end": 600,
+    "title": "OLX",
+    "emoji": "📦",
+    "kind": "task",
+    "task": "OLX: объявления и обмены",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 600,
+    "end": 650,
+    "title": "Работа над заработком",
+    "emoji": "💰",
+    "kind": "task",
+    "task": "Работа над заработком",
+    "hard": false,
+    "note": "Не «думать», а сделать шаг: найти 3 предложения, написать заказчику, собрать пример работы."
+   },
+   {
+    "start": 650,
+    "end": 660,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 660,
+    "end": 690,
+    "title": "Подготовка роликов для TikTok",
+    "emoji": "🎬",
+    "kind": "task",
+    "task": "Подготовка роликов для TikTok",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 690,
+    "end": 720,
+    "title": "Ранний обед и сборы",
+    "emoji": "🍽️",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 720,
+    "end": 750,
+    "title": "Дорога на учёбу",
+    "emoji": "🚌",
+    "kind": "road",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 750,
+    "end": 800,
+    "title": "Первая пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 800,
+    "end": 810,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 810,
+    "end": 860,
+    "title": "Вторая пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 860,
+    "end": 870,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 870,
+    "end": 920,
+    "title": "Третья пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 920,
+    "end": 950,
+    "title": "Дорога домой",
+    "emoji": "🚌",
+    "kind": "road",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 950,
+    "end": 960,
+    "title": "Перекус, переодеться",
+    "emoji": "🥪",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 960,
+    "end": 1005,
+    "title": "Прогулка или восстановление",
+    "emoji": "🚶",
+    "kind": "task",
+    "task": "Прогулка и восстановление",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1005,
+    "end": 1020,
+    "title": "Душ",
+    "emoji": "🚿",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1020,
+    "end": 1060,
+    "title": "Готовка — по возможности сразу на два дня",
+    "emoji": "🍲",
+    "kind": "task",
+    "task": "Готовка",
+    "hard": false,
+    "note": "По возможности сразу на два дня."
+   },
+   {
+    "start": 1060,
+    "end": 1080,
+    "title": "Ужин",
+    "emoji": "🍽️",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1080,
+    "end": 1125,
+    "title": "Задания по учёбе (нет срочного — практика навыка)",
+    "emoji": "📚",
+    "kind": "task",
+    "task": "Задания по учёбе",
+    "hard": false,
+    "note": "Если срочного нет — практика навыка для заработка."
+   },
+   {
+    "start": 1125,
+    "end": 1175,
+    "title": "Создание и монтаж двух роликов: кино и orca",
+    "emoji": "🎬",
+    "kind": "task",
+    "task": "Смонтировать два ролика: кино и orca",
+    "hard": false,
+    "note": "На выходных можно заготовить сразу на несколько дней."
+   },
+   {
+    "start": 1175,
+    "end": 1185,
+    "title": "Отдых от экрана",
+    "emoji": "👀",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1185,
+    "end": 1195,
+    "title": "Проверить ролик «кино»: подпись, загрузка",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить ролик «кино»: подпись и загрузка",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1195,
+    "end": 1205,
+    "title": "Публикация «кино» в TikTok",
+    "emoji": "🎞️",
+    "kind": "task",
+    "task": "ТТ видео — кино",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1205,
+    "end": 1235,
+    "title": "Свободное время",
+    "emoji": "🎮",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1235,
+    "end": 1250,
+    "title": "Продуктивное время с ИИ: разбор дня и главное на завтра",
+    "emoji": "🤖",
+    "kind": "task",
+    "task": "Разбор с ИИ: что получилось и что дальше",
+    "hard": false,
+    "note": "Одно главное действие на завтра, а не бесконечное планирование."
+   },
+   {
+    "start": 1250,
+    "end": 1260,
+    "title": "Проверить и подготовить ролик «orca»",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить и подготовить ролик «orca»",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1260,
+    "end": 1270,
+    "title": "Публикация «orca» в TikTok",
+    "emoji": "🐋",
+    "kind": "task",
+    "task": "ТТ видео — orca",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1270,
+    "end": 1305,
+    "title": "Отдых, общение, свои дела",
+    "emoji": "💬",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1305,
+    "end": 1320,
+    "title": "Собрать вещи, одежда, 3 главные задачи на завтра",
+    "emoji": "🎒",
+    "kind": "task",
+    "task": "Собрать вещи и записать 3 задачи на завтра",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1320,
+    "end": 1350,
+    "title": "Гигиена и спокойное занятие без ленты",
+    "emoji": "🌙",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1350,
+    "end": 1440,
+    "title": "Сон — 8 часов 30 минут",
+    "emoji": "😴",
+    "kind": "sleep",
+    "task": null,
+    "hard": false,
+    "note": ""
+   }
+  ],
+  "5": [
+   {
+    "start": 420,
+    "end": 435,
+    "title": "Подъём, умывание, вода",
+    "emoji": "☀️",
+    "kind": "wake",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 435,
+    "end": 450,
+    "title": "Лёгкая разминка, заправить кровать",
+    "emoji": "🤸",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 450,
+    "end": 480,
+    "title": "Завтрак и сборы",
+    "emoji": "🍳",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 480,
+    "end": 520,
+    "title": "Английский",
+    "emoji": "🇬🇧",
+    "kind": "task",
+    "task": "Английский",
+    "hard": false,
+    "note": "10 мин слова · 15 мин слушать или читать · 15 мин говорить или писать"
+   },
+   {
+    "start": 520,
+    "end": 550,
+    "title": "YouTube",
+    "emoji": "▶️",
+    "kind": "task",
+    "task": "YouTube",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 550,
+    "end": 570,
+    "title": "Одно сохранённое видео",
+    "emoji": "🍿",
+    "kind": "task",
+    "task": "Одно сохранённое видео",
+    "hard": false,
+    "note": "Ровно одно. После — записать одну мысль или действие."
+   },
+   {
+    "start": 570,
+    "end": 600,
+    "title": "OLX",
+    "emoji": "📦",
+    "kind": "task",
+    "task": "OLX: объявления и обмены",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 600,
+    "end": 650,
+    "title": "Работа над заработком",
+    "emoji": "💰",
+    "kind": "task",
+    "task": "Работа над заработком",
+    "hard": false,
+    "note": "Не «думать», а сделать шаг: найти 3 предложения, написать заказчику, собрать пример работы."
+   },
+   {
+    "start": 650,
+    "end": 660,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 660,
+    "end": 690,
+    "title": "Подготовка роликов для TikTok",
+    "emoji": "🎬",
+    "kind": "task",
+    "task": "Подготовка роликов для TikTok",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 690,
+    "end": 720,
+    "title": "Ранний обед и сборы",
+    "emoji": "🍽️",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 720,
+    "end": 750,
+    "title": "Дорога на учёбу",
+    "emoji": "🚌",
+    "kind": "road",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 750,
+    "end": 800,
+    "title": "Первая пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 800,
+    "end": 810,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 810,
+    "end": 860,
+    "title": "Вторая пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 860,
+    "end": 870,
+    "title": "Перерыв",
+    "emoji": "☕",
+    "kind": "break",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 870,
+    "end": 920,
+    "title": "Третья пара",
+    "emoji": "🎓",
+    "kind": "pair",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 920,
+    "end": 950,
+    "title": "Дорога домой",
+    "emoji": "🚌",
+    "kind": "road",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 950,
+    "end": 960,
+    "title": "Перекус, переодеться",
+    "emoji": "🥪",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 960,
+    "end": 1005,
+    "title": "Тренировка",
+    "emoji": "💪",
+    "kind": "task",
+    "task": "Тренировка",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1005,
+    "end": 1020,
+    "title": "Душ",
+    "emoji": "🚿",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1020,
+    "end": 1060,
+    "title": "Готовка — по возможности сразу на два дня",
+    "emoji": "🍲",
+    "kind": "task",
+    "task": "Готовка",
+    "hard": false,
+    "note": "По возможности сразу на два дня."
+   },
+   {
+    "start": 1060,
+    "end": 1080,
+    "title": "Ужин",
+    "emoji": "🍽️",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1080,
+    "end": 1125,
+    "title": "Задания по учёбе (нет срочного — практика навыка)",
+    "emoji": "📚",
+    "kind": "task",
+    "task": "Задания по учёбе",
+    "hard": false,
+    "note": "Если срочного нет — практика навыка для заработка."
+   },
+   {
+    "start": 1125,
+    "end": 1175,
+    "title": "Создание и монтаж двух роликов: кино и orca",
+    "emoji": "🎬",
+    "kind": "task",
+    "task": "Смонтировать два ролика: кино и orca",
+    "hard": false,
+    "note": "На выходных можно заготовить сразу на несколько дней."
+   },
+   {
+    "start": 1175,
+    "end": 1185,
+    "title": "Отдых от экрана",
+    "emoji": "👀",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1185,
+    "end": 1195,
+    "title": "Проверить ролик «кино»: подпись, загрузка",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить ролик «кино»: подпись и загрузка",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1195,
+    "end": 1205,
+    "title": "Публикация «кино» в TikTok",
+    "emoji": "🎞️",
+    "kind": "task",
+    "task": "ТТ видео — кино",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1205,
+    "end": 1235,
+    "title": "Свободное время",
+    "emoji": "🎮",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1235,
+    "end": 1250,
+    "title": "Продуктивное время с ИИ: разбор дня и главное на завтра",
+    "emoji": "🤖",
+    "kind": "task",
+    "task": "Разбор с ИИ: что получилось и что дальше",
+    "hard": false,
+    "note": "Одно главное действие на завтра, а не бесконечное планирование."
+   },
+   {
+    "start": 1250,
+    "end": 1260,
+    "title": "Проверить и подготовить ролик «orca»",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить и подготовить ролик «orca»",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1260,
+    "end": 1270,
+    "title": "Публикация «orca» в TikTok",
+    "emoji": "🐋",
+    "kind": "task",
+    "task": "ТТ видео — orca",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1270,
+    "end": 1305,
+    "title": "Отдых, общение, свои дела",
+    "emoji": "💬",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1305,
+    "end": 1320,
+    "title": "Собрать вещи, одежда, 3 главные задачи на завтра",
+    "emoji": "🎒",
+    "kind": "task",
+    "task": "Собрать вещи и записать 3 задачи на завтра",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1320,
+    "end": 1350,
+    "title": "Гигиена и спокойное занятие без ленты",
+    "emoji": "🌙",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1350,
+    "end": 1440,
+    "title": "Сон — 8 часов 30 минут",
+    "emoji": "😴",
+    "kind": "sleep",
+    "task": null,
+    "hard": false,
+    "note": ""
+   }
+  ],
+  "6": [
+   {
+    "start": 450,
+    "end": 510,
+    "title": "Подъём, завтрак, спокойное утро",
+    "emoji": "☀️",
+    "kind": "wake",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 510,
+    "end": 550,
+    "title": "Английский",
+    "emoji": "🇬🇧",
+    "kind": "task",
+    "task": "Английский",
+    "hard": false,
+    "note": "10 мин слова · 15 мин слушать или читать · 15 мин говорить или писать"
+   },
+   {
+    "start": 550,
+    "end": 570,
+    "title": "Одно сохранённое видео",
+    "emoji": "🍿",
+    "kind": "task",
+    "task": "Одно сохранённое видео",
+    "hard": false,
+    "note": "Ровно одно. После — записать одну мысль или действие."
+   },
+   {
+    "start": 570,
+    "end": 630,
+    "title": "Работа над заработком",
+    "emoji": "💰",
+    "kind": "task",
+    "task": "Работа над заработком",
+    "hard": false,
+    "note": "Не «думать», а сделать шаг: найти 3 предложения, написать заказчику, собрать пример работы."
+   },
+   {
+    "start": 630,
+    "end": 660,
+    "title": "Отдых",
+    "emoji": "🛋️",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 660,
+    "end": 720,
+    "title": "OLX: фото вещей, объявления, обмены",
+    "emoji": "📦",
+    "kind": "task",
+    "task": "OLX: объявления и обмены",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 720,
+    "end": 780,
+    "title": "Готовка и обед",
+    "emoji": "🍲",
+    "kind": "task",
+    "task": "Готовка",
+    "hard": false,
+    "note": "По возможности сразу на два дня."
+   },
+   {
+    "start": 780,
+    "end": 870,
+    "title": "Заготовить ролики на несколько дней",
+    "emoji": "🎬",
+    "kind": "task",
+    "task": "Смонтировать два ролика: кино и orca",
+    "hard": false,
+    "note": "На выходных можно заготовить сразу на несколько дней."
+   },
+   {
+    "start": 870,
+    "end": 1020,
+    "title": "Прогулка, друзья, хобби, свободное время",
+    "emoji": "🌳",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1020,
+    "end": 1080,
+    "title": "Приготовить ужин и поесть",
+    "emoji": "🍽️",
+    "kind": "meal",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1080,
+    "end": 1175,
+    "title": "YouTube и отдых",
+    "emoji": "▶️",
+    "kind": "task",
+    "task": "YouTube",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1175,
+    "end": 1185,
+    "title": "Отдых от экрана",
+    "emoji": "👀",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1185,
+    "end": 1195,
+    "title": "Проверить ролик «кино»: подпись, загрузка",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить ролик «кино»: подпись и загрузка",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1195,
+    "end": 1205,
+    "title": "Публикация «кино» в TikTok",
+    "emoji": "🎞️",
+    "kind": "task",
+    "task": "ТТ видео — кино",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1205,
+    "end": 1235,
+    "title": "Свободное время",
+    "emoji": "🎮",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1235,
+    "end": 1250,
+    "title": "Продуктивное время с ИИ: разбор дня и главное на завтра",
+    "emoji": "🤖",
+    "kind": "task",
+    "task": "Разбор с ИИ: что получилось и что дальше",
+    "hard": false,
+    "note": "Одно главное действие на завтра, а не бесконечное планирование."
+   },
+   {
+    "start": 1250,
+    "end": 1260,
+    "title": "Проверить и подготовить ролик «orca»",
+    "emoji": "🔎",
+    "kind": "task",
+    "task": "Проверить и подготовить ролик «orca»",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1260,
+    "end": 1270,
+    "title": "Публикация «orca» в TikTok",
+    "emoji": "🐋",
+    "kind": "task",
+    "task": "ТТ видео — orca",
+    "hard": true,
+    "note": "Время публикации. Не двигается."
+   },
+   {
+    "start": 1270,
+    "end": 1305,
+    "title": "Отдых, общение, свои дела",
+    "emoji": "💬",
+    "kind": "rest",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1305,
+    "end": 1320,
+    "title": "Собрать вещи, одежда, 3 главные задачи на завтра",
+    "emoji": "🎒",
+    "kind": "task",
+    "task": "Собрать вещи и записать 3 задачи на завтра",
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1320,
+    "end": 1350,
+    "title": "Гигиена и спокойное занятие без ленты",
+    "emoji": "🌙",
+    "kind": "routine",
+    "task": null,
+    "hard": false,
+    "note": ""
+   },
+   {
+    "start": 1350,
+    "end": 1440,
+    "title": "Сон — 8 часов 30 минут",
+    "emoji": "😴",
+    "kind": "sleep",
+    "task": null,
+    "hard": false,
+    "note": ""
+   }
+  ]
+ }
+}

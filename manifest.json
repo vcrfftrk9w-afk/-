@@ -1,0 +1,13 @@
+{
+  "name": "Из Ленивца в Миллионеры",
+  "short_name": "Ленивец→Миллионер",
+  "description": "Геймифицированное приложение для саморазвития и продуктивности со специальным режимом для СДВГ",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f0e17",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

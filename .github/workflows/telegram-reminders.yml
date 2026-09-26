@@ -1,0 +1,66 @@
+# Напоминания в Telegram по недельному графику.
+# Нужны секреты репозитория: TELEGRAM_TOKEN (ключ от @BotFather) и TELEGRAM_CHAT_ID.
+# Расписание — в UTC, для часового пояса UTC+5; собрано командой
+#   python3 bot/telegram_bot.py --print-crons
+# GitHub иногда запускает по расписанию с опозданием на несколько минут —
+# бот тогда пишет, на сколько опоздал.
+name: Telegram-напоминания
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # 07:00 местного
+    - cron: "30 2 * * *"   # 07:30 местного
+    - cron: "55 2 * * *"   # 07:55 местного
+    - cron: "0 3 * * *"   # 08:00 местного
+    - cron: "25 3 * * *"   # 08:25 местного
+    - cron: "35 3 * * *"   # 08:35 местного
+    - cron: "5 4 * * *"   # 09:05 местного
+    - cron: "25 4 * * *"   # 09:25 местного
+    - cron: "55 4 * * *"   # 09:55 местного
+    - cron: "55 5 * * *"   # 10:55 местного
+    - cron: "0 6 * * *"   # 11:00 местного
+    - cron: "55 6 * * *"   # 11:55 местного
+    - cron: "0 7 * * *"   # 12:00 местного
+    - cron: "5 7 * * *"   # 12:05 местного
+    - cron: "45 7 * * *"   # 12:45 местного
+    - cron: "55 7 * * *"   # 12:55 местного
+    - cron: "45 8 * * *"   # 13:45 местного
+    - cron: "35 9 * * *"   # 14:35 местного
+    - cron: "5 10 * * *"   # 15:05 местного
+    - cron: "55 10 * * *"   # 15:55 местного
+    - cron: "55 11 * * *"   # 16:55 местного
+    - cron: "55 12 * * *"   # 17:55 местного
+    - cron: "35 13 * * *"   # 18:35 местного
+    - cron: "40 13 * * *"   # 18:40 местного
+    - cron: "40 14 * * *"   # 19:40 местного
+    - cron: "55 14 * * *"   # 19:55 местного
+    - cron: "30 15 * * *"   # 20:30 местного
+    - cron: "45 15 * * *"   # 20:45 местного
+    - cron: "0 16 * * *"   # 21:00 местного
+    - cron: "40 16 * * *"   # 21:40 местного
+    - cron: "0 17 * * *"   # 22:00 местного
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'test — проверочное сообщение, today — план на сегодня'
+        default: test
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: bot
+      - name: Отправить напоминание
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TZ_OFFSET: ${{ vars.TZ_OFFSET || '5' }}
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            python3 bot/telegram_bot.py --cron "${{ github.event.schedule }}"
+          else
+            python3 bot/telegram_bot.py --${{ inputs.mode || 'test' }}
+          fi

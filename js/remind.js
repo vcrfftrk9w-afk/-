@@ -202,6 +202,18 @@ const Remind = (() => {
             </div>
           </details>
 
+          <details class="remind-how remind-tg">
+            <summary>🤖 Напоминания в Telegram</summary>
+            <p>Бот сам пишет тебе: утром — план дня, за 5 минут — о каждом деле, за 15 минут и ровно в срок — о публикациях в TikTok. Работает бесплатно на GitHub, где лежит проект.</p>
+            <ol>
+              <li>В Telegram открой <b>@BotFather</b> → <code>/newbot</code> → придумай имя. Он пришлёт ключ вида <code>123456:ABC…</code>.</li>
+              <li>Открой своего нового бота и нажми <b>Start</b>.</li>
+              <li>На GitHub в репозитории: <b>Settings → Secrets and variables → Actions → New repository secret</b>, имя <code>TELEGRAM_TOKEN</code>, значение — ключ.</li>
+              <li><b>Actions → Telegram-напоминания → Run workflow</b>. Придёт «✅ Бот подключён» — готово. В логе будет номер чата: добавь его секретом <code>TELEGRAM_CHAT_ID</code>, чтобы бот не терял тебя.</li>
+            </ol>
+            <p class="muted small">Ключ никому не показывай и не пиши в чат — только в секреты GitHub.</p>
+          </details>
+
           <div class="remind-clock">
             <b>🔊 Громкие будильники — поставь в «Часах» руками, 1 минута</b>
             <p class="muted small">Календарь присылает уведомление, а будильник звонит, пока не выключишь. Для подъёма и публикаций нужен именно он.</p>

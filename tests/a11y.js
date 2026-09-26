@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./_browser');
 (async () => {
   const b = await chromium.launch({ executablePath:'/opt/pw-browsers/chromium' });
   const p = await b.newPage({viewport:{width:390,height:844}});

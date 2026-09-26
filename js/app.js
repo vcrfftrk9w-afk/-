@@ -737,6 +737,7 @@ const App = (() => {
       applyAll();
       $('#onboarding').classList.add('hidden');
       $('#app').classList.remove('hidden');
+      if (Cloud.ready) Cloud.flush();   // вошёл в аккаунт до анкеты — сохраняем в него сразу
       dailyCheckIn();
       ensureDaySetup();
       go('dashboard');
@@ -1127,6 +1128,11 @@ const App = (() => {
     };
 
     setTimeout(async () => {
+      // вне Claude первый экран — регистрация или вход: один аккаунт на все телефоны
+      if (typeof Account !== 'undefined' && Account.needGate()) {
+        hideLoader(showAuth);
+        return;
+      }
       if (State.s.onboarded) {
         // браузер уже знает человека — не ждём облако, открываем сразу
         hideLoader(showApp);
@@ -1243,6 +1249,27 @@ const App = (() => {
     afterCloud();
   }
 
+  const ensureApp = () => { if ($('#app').classList.contains('hidden')) showApp(); };
+
+  /* экран «Регистрация / Вход» при первом запуске на телефоне */
+  function showAuth() {
+    const box = $('#auth');
+    box.classList.remove('hidden');
+    Account.gate($('#auth-root'), {
+      onDone: async (res) => {
+        await accountConnected(res.created);   // пока подтягивается прогресс — экран входа остаётся
+        box.classList.add('hidden');
+        if (State.s.onboarded) ensureApp();
+        else $('#onboarding').classList.remove('hidden');   // новый аккаунт — короткая анкета
+      },
+      onSkip: () => {
+        box.classList.add('hidden');
+        if (State.s.onboarded) ensureApp();
+        else $('#onboarding').classList.remove('hidden');
+      },
+    });
+  }
+
   /* вошёл в аккаунт (account.js): новый аккаунт получает прогресс этого телефона,
      в существующем — прогресс из аккаунта, если на телефоне ещё нет своего */
   async function accountConnected(created) {
@@ -1259,14 +1286,15 @@ const App = (() => {
       safely('dailyCheckIn', dailyCheckIn);
       safely('ensureDaySetup', ensureDaySetup);
       const ob = $('#onboarding');
-      if (ob && !ob.classList.contains('hidden')) { ob.classList.add('hidden'); showApp(); }
+      if (ob && !ob.classList.contains('hidden')) ob.classList.add('hidden');
+      ensureApp();
       renderActive();
       afterCloud();
       UI.toast('Готово! Прогресс из аккаунта на этом телефоне', 'success', '☁️');
     };
     const keepLocal = () => {
       afterCloud();   // flush отправит прогресс этого телефона в аккаунт
-      renderActive();
+      if (State.s.onboarded) renderActive();
       UI.toast(created ? 'Аккаунт создан! Теперь войди с ним на втором телефоне' : 'Прогресс этого телефона теперь в аккаунте', 'success', '☁️');
     };
     if (created || !remote || !remote.onboarded) { keepLocal(); return; }

@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./_browser');
 const SP=require('os').tmpdir()+'/';
 async function page(b, iso, mode, seed) {
   const ctx = await b.newContext({ viewport:{width:390,height:844} });

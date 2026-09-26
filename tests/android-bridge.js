@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./_browser');
 /* APK-версия: приложение открыто в Android WebView, где нет голоса, уведомлений и скачивания.
    js/android.js подключает их к мосту window.AndroidApp. Имитируем WebView: убираем
    speechSynthesis и Notification, подставляем поддельный AndroidApp и смотрим, что он получает. */

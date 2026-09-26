@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./_browser');
 // Два окна: «Мои дела» (только названные главными) и «Всё остальное» (всё приложение).
 (async () => {
   const b = await chromium.launch({ executablePath:'/opt/pw-browsers/chromium' });

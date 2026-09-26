@@ -2263,6 +2263,12 @@ button.wk-body { min-height: 40px; }
 .acc-err { margin: 0; min-height: 1.2em; color: var(--danger, #ef4444); font-size: 14px; }
 .acc-state { font-weight: 600; }
 .ob-account { margin-top: 10px; }
+.auth-gate { display: grid; gap: 12px; text-align: center; }
+.auth-gate h1 { margin: 0; }
+.auth-gate p { margin: 0; }
+.auth-gate .acc-form, .auth-gate .field { text-align: left; }
+.auth-gate .acc-seg { display: grid; grid-template-columns: 1fr 1fr; }
+.auth-skip { background: none; border: 0; padding: 8px; font: inherit; font-size: 14px; color: var(--text-muted); text-decoration: underline; cursor: pointer; }
 .lv-alarm.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
 .remind-note { padding: 12px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
 .remind-note p { margin: 4px 0 0; }

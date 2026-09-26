@@ -158,7 +158,7 @@ const Account = (() => {
 
   /* ---------- экран входа ---------- */
   const ERR = {
-    login_taken: 'Такой логин уже занят. Придумай другой — или нажми «У меня уже есть», если это твой.',
+    login_taken: 'Такой логин уже занят. Придумай другой — или нажми «Вход», если это твой.',
     bad_login: 'Неверный логин или пароль.',
     locked: 'Слишком много попыток. Подожди 15 минут и попробуй снова.',
     bad_login_format: 'Логин — латинские буквы, цифры, точка, дефис или _, от 3 до 32 символов.',
@@ -166,6 +166,80 @@ const Account = (() => {
     network: 'Нет связи с сервером. Проверь интернет и нажми ещё раз.',
   };
 
+  const SKIP_KEY = 'ldm_auth_skip';
+  const skipped = () => { try { return localStorage.getItem(SKIP_KEY) === '1'; } catch (e) { return false; } };
+  /* показать экран входа при запуске: вне Claude, не вошёл и не выбрал «без аккаунта» */
+  const needGate = () => available() && !acc && !skipped();
+
+  const seg = (mode, a, b) => `
+    <div class="seg acc-seg" role="group" aria-label="Аккаунт">
+      <button type="button" class="seg-btn ${mode === 'create' ? 'sel' : ''}" data-accmode="create">${a}</button>
+      <button type="button" class="seg-btn ${mode === 'login' ? 'sel' : ''}" data-accmode="login">${b}</button>
+    </div>`;
+
+  const formHTML = (mode) => `
+    <form class="acc-form" id="acc-form" autocomplete="on">
+      <label class="field"><span>Логин</span>
+        <input id="acc-login" name="username" type="text" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" maxlength="32" placeholder="например, lenivec2026" required>
+      </label>
+      <label class="field"><span>Пароль ${mode === 'create' ? '(минимум 6 символов)' : ''}</span>
+        <input id="acc-pass" name="password" type="password" autocomplete="${mode === 'create' ? 'new-password' : 'current-password'}" maxlength="72" required>
+      </label>
+      <p class="acc-err" id="acc-err" role="alert"></p>
+      <button class="btn btn-primary btn-lg btn-block" id="acc-go" type="submit">${mode === 'create' ? 'Зарегистрироваться' : 'Войти'}</button>
+    </form>
+    ${mode === 'create' ? '<p class="muted small">Запиши логин и пароль в заметки — они понадобятся один раз на втором телефоне.</p>' : '<p class="muted small">Тот же логин и пароль, что на другом телефоне. Весь прогресс сразу будет здесь.</p>'}`;
+
+  /* форма: переключатель регистрация/вход, ошибки по-русски, onDone({ ok, login, created }) */
+  function bindForm(root, getMode, setMode, onDone) {
+    root.querySelectorAll('[data-accmode]').forEach((b) => { b.onclick = () => setMode(b.dataset.accmode); });
+    const form = root.querySelector('#acc-form');
+    if (!form) return;
+    const errEl = root.querySelector('#acc-err');
+    const go = root.querySelector('#acc-go');
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const create = getMode() === 'create';
+      const login = root.querySelector('#acc-login').value.trim();
+      const pass = root.querySelector('#acc-pass').value;
+      errEl.textContent = '';
+      go.disabled = true;
+      go.textContent = '⏳ Секунду…';
+      const res = await signIn(login, pass, create);
+      if (!res.ok) {
+        errEl.textContent = ERR[res.error] || 'Не получилось. Попробуй ещё раз.';
+        go.disabled = false;
+        go.textContent = create ? 'Зарегистрироваться' : 'Войти';
+        return;
+      }
+      try { localStorage.removeItem(SKIP_KEY); } catch (e2) {}
+      onDone(Object.assign({ created: create }, res));
+    };
+  }
+
+  /* ---------- первый экран: регистрация или вход ---------- */
+  function gate(root, opts) {
+    let mode = 'create';
+    const render = () => {
+      root.innerHTML = `
+        <div class="auth-gate">
+          <div class="ob-emoji">🦥</div>
+          <h1>Из Ленивца<br>в Миллионеры</h1>
+          <p class="muted">Один аккаунт на Android и айфон. Зарегистрируйся один раз — задания, уровень и серия будут общими на всех телефонах.</p>
+          ${seg(mode, 'Регистрация', 'Вход')}
+          ${formHTML(mode)}
+          <button type="button" class="auth-skip" id="auth-skip">Продолжить без аккаунта</button>
+        </div>`;
+      bindForm(root, () => mode, (m) => { mode = m; render(); }, opts.onDone);
+      root.querySelector('#auth-skip').onclick = () => {
+        try { localStorage.setItem(SKIP_KEY, '1'); } catch (e) {}
+        opts.onSkip();
+      };
+    };
+    render();
+  }
+
+  /* ---------- окно аккаунта внутри приложения ---------- */
   function open(opts) {
     const o = opts || {};
     let mode = o.mode || (acc ? 'me' : 'create');
@@ -176,63 +250,33 @@ const Account = (() => {
           <h2>☁️ Ты вошёл как <b>${UI.esc(acc ? acc.login : '')}</b></h2>
           <p class="muted">Прогресс сам синхронизируется между телефонами: отметил дело на одном — секунд через 10 оно отмечено на другом. Входить заново не нужно.</p>
           <p class="acc-state">${typeof Cloud !== 'undefined' && Cloud.ready ? '✅ Синхронизация работает' : '⏳ Нет связи — сохраню, когда появится интернет'}</p>
-          <p class="muted small">На другом телефоне открой приложение → «☁️ Войти» → этот же логин и пароль.</p>
+          <p class="muted small">На другом телефоне открой приложение → «Вход» → этот же логин и пароль.</p>
           <button class="btn btn-ghost btn-block" id="acc-out">Выйти из аккаунта на этом телефоне</button>
         </div>` : `
         <div class="acc-sheet">
           <div class="why-tag">Входишь один раз — дальше телефон помнит</div>
           <h2>☁️ Один аккаунт на все телефоны</h2>
           <p class="muted">Отметил дело на Android — оно появится и на айфоне. Уровень, серия и задания — общие.</p>
-          <div class="seg" role="group" aria-label="Аккаунт">
-            <button class="seg-btn ${mode === 'create' ? 'sel' : ''}" data-accmode="create">Создать аккаунт</button>
-            <button class="seg-btn ${mode === 'login' ? 'sel' : ''}" data-accmode="login">У меня уже есть</button>
-          </div>
-          <form class="acc-form" id="acc-form" autocomplete="on">
-            <label class="field"><span>Логин</span>
-              <input id="acc-login" name="username" type="text" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" maxlength="32" placeholder="например, lenivec2026" required>
-            </label>
-            <label class="field"><span>Пароль ${mode === 'create' ? '(минимум 6 символов)' : ''}</span>
-              <input id="acc-pass" name="password" type="password" autocomplete="${mode === 'create' ? 'new-password' : 'current-password'}" maxlength="72" required>
-            </label>
-            <p class="acc-err" id="acc-err" role="alert"></p>
-            <button class="btn btn-primary btn-lg btn-block" id="acc-go" type="submit">${mode === 'create' ? 'Создать и войти' : 'Войти'}</button>
-          </form>
-          ${mode === 'create' ? '<p class="muted small">Запиши логин и пароль в заметки — они понадобятся один раз на втором телефоне.</p>' : ''}
+          ${seg(mode, 'Регистрация', 'Вход')}
+          ${formHTML(mode)}
         </div>`);
 
-      body.onclick = async (e) => {
-        const m = e.target.closest('[data-accmode]');
-        if (m) { mode = m.dataset.accmode; render(); return; }
-        if (e.target.closest('#acc-out')) {
+      const out = body.querySelector('#acc-out');
+      if (out) {
+        out.onclick = async () => {
           await signOut();
           if (typeof Cloud !== 'undefined') Cloud.reset();
           UI.closeModal('#sheet-modal');
           UI.toast('Вышел из аккаунта. Прогресс остался на этом телефоне', 'default', '☁️');
           if (typeof App !== 'undefined') App.renderActive();
-        }
-      };
-      const form = body.querySelector('#acc-form');
-      if (!form) return;
-      const errEl = body.querySelector('#acc-err');
-      const go = body.querySelector('#acc-go');
-      form.onsubmit = async (e) => {
-        e.preventDefault();
-        const login = body.querySelector('#acc-login').value.trim();
-        const pass = body.querySelector('#acc-pass').value;
-        errEl.textContent = '';
-        go.disabled = true;
-        go.textContent = '⏳ Секунду…';
-        const res = await signIn(login, pass, mode === 'create');
-        if (!res.ok) {
-          errEl.textContent = ERR[res.error] || 'Не получилось. Попробуй ещё раз.';
-          go.disabled = false;
-          go.textContent = mode === 'create' ? 'Создать и войти' : 'Войти';
-          return;
-        }
+        };
+        return;
+      }
+      bindForm(body, () => mode, (m) => { mode = m; render(); }, (res) => {
         UI.closeModal('#sheet-modal');
-        if (typeof App !== 'undefined' && App.accountConnected) App.accountConnected(mode === 'create');
+        if (typeof App !== 'undefined' && App.accountConnected) App.accountConnected(res.created);
         if (o.onDone) o.onDone(res);
-      };
+      });
       setTimeout(() => { const f = body.querySelector('#acc-login'); if (f) f.focus(); }, 250);
     };
     render();
@@ -245,7 +289,7 @@ const Account = (() => {
     return `<button class="lv-account" data-account>☁️ Войти — и прогресс будет на всех телефонах</button>`;
   }
 
-  /* второй телефон: вместо анкеты — войти, и весь прогресс уже здесь */
+  /* в анкете (если выбрал «без аккаунта») — всё ещё можно войти */
   if (typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', () => {
       const b = document.getElementById('ob-account');
@@ -256,7 +300,7 @@ const Account = (() => {
   }
 
   return {
-    available, backend, signIn, signOut, open, line,
+    available, backend, signIn, signOut, open, line, gate, needGate,
     get signedIn() { return !!acc; },
     get login() { return acc ? acc.login : null; },
   };

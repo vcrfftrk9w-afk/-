@@ -287,7 +287,7 @@ body::before {
 .field > span { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; }
 .field.compact { margin: 0 0 10px; }
 
-input[type="text"], input[type="number"], input[type="date"], select, textarea {
+input[type="text"], input[type="password"], input[type="number"], input[type="date"], select, textarea {
   width: 100%;
   padding: 11px 13px;
   border-radius: var(--radius-sm);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ldm-cache-v6';
+const CACHE_NAME = 'ldm-cache-v7';
 const ASSETS = [
   './',
   './index.html',
@@ -64,10 +64,14 @@ self.addEventListener('activate', (event) => {
    и установленное приложение навсегда застревало на старой версии. */
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  const same = new URL(event.request.url).origin === self.location.origin;
+  // свои файлы — всегда сверяем с сервером (GitHub Pages разрешает браузеру держать копию 10 минут,
+  // и после обновления телефон показывал старую версию)
+  const live = same ? fetch(event.request.url, { cache: 'no-cache', credentials: 'same-origin' }) : fetch(event.request);
   event.respondWith(
-    fetch(event.request)
+    live
       .then((response) => {
-        if (response && response.ok && new URL(event.request.url).origin === self.location.origin) {
+        if (response && response.ok && same) {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
         }

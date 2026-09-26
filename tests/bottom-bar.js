@@ -12,7 +12,7 @@ const { chromium } = require('playwright');
     const p = await b.newPage({viewport:cfg.vp, hasTouch:true, isMobile:true});
     p.on('pageerror',e=>errs.push(e.message));
     await p.goto('http://localhost:8792/index.html'); await p.waitForTimeout(1400);
-    await p.evaluate((a)=>{ State.s.onboarded=true; Track.profile().set=true; State.s.a11y=a.a; State.s.theme=a.t||'dark'; State.save(); }, {a:cfg.a11y, t:cfg.theme});
+    await p.evaluate((a)=>{ State.s.onboarded=true; State.s.space='all'; Track.profile().set=true; State.s.a11y=a.a; State.s.theme=a.t||'dark'; State.save(); }, {a:cfg.a11y, t:cfg.theme});
     await p.reload(); await p.waitForTimeout(1800);
     await p.evaluate(()=>document.querySelectorAll('.modal:not(.hidden)').forEach(m=>m.classList.add('hidden')));
     await p.waitForTimeout(500);

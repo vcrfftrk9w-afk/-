@@ -178,6 +178,11 @@
     </div>
   </header>
 
+  <div class="space-switch" role="tablist" aria-label="Окно">
+    <button class="space-btn" data-space="tasks" role="tab">🎯 Мои дела</button>
+    <button class="space-btn" data-space="all" role="tab">🧩 Всё остальное</button>
+  </div>
+
   <nav class="tabbar" id="tabbar" aria-label="Разделы">
     <span class="tab-indicator" id="tab-indicator" aria-hidden="true"></span>
     <button class="tab-btn active" data-tab="dashboard" data-icon="home"><span class="tab-ico"></span><em>Главная</em><i class="tab-badge hidden"></i></button>
@@ -197,6 +202,10 @@
   <main class="content">
 
     <!-- ==================== ГЛАВНАЯ ==================== -->
+    <section id="tab-mytasks" class="tab-panel" aria-label="Мои дела">
+      <div id="mytasks-root"></div>
+    </section>
+
     <section id="tab-dashboard" class="tab-panel active">
       <div class="dash-toolbar">
         <button class="link-btn" id="dash-customize">⚙️ Настроить главную</button>

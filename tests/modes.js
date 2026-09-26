@@ -12,7 +12,7 @@ const SP=require('os').tmpdir()+'/';
     window.Date = FD;
   });
   await p.goto('http://localhost:8792/index.html'); await p.waitForTimeout(1000);
-  await p.evaluate(()=>{ State.s.onboarded=true; State.s.mode='adhd'; Math.random = () => 0.9; State.save(); });
+  await p.evaluate(()=>{ State.s.onboarded=true; State.s.space='all'; State.s.mode='adhd'; Math.random = () => 0.9; State.save(); });
   await p.reload(); await p.waitForTimeout(2600);
   await p.evaluate(()=>{ Math.random = () => 0.9; });   // без случайных сюрпризов — проверяем комбо
   await p.evaluate(()=>document.querySelectorAll('.modal:not(.hidden)').forEach(m=>m.classList.add('hidden')));

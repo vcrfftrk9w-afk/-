@@ -15,7 +15,7 @@ const { chromium } = require('playwright');
     }, iso);
     await p.goto('http://localhost:8792/index.html'); await p.waitForTimeout(1200);
     // старый пользователь: онборд пройден, стартовый шаблон, график НЕ ставился, есть хвосты старых задач
-    await p.evaluate(()=>{ State.s.onboarded=true; State.s.profile = State.s.profile || {}; State.save(); });
+    await p.evaluate(()=>{ State.s.onboarded=true; State.s.space='all'; State.s.profile = State.s.profile || {}; State.save(); });
     await p.reload(); await p.waitForTimeout(2200);
     const r = await p.evaluate(() => {
       document.querySelectorAll('.modal:not(.hidden)').forEach(m=>m.classList.add('hidden'));

@@ -607,6 +607,16 @@ Screens.dashboard = (() => {
         <button class="linkbtn" id="main-day">🗓️ Весь день</button>
       </div>`;
 
+    bindRows(el);
+    const lateBtn = $('#main-late'); if (lateBtn) lateBtn.onclick = () => { State.s.mainLate = !State.s.mainLate; State.save(); renderMainCard(); };
+    const more = $('#main-more'); if (more) more.onclick = () => { State.s.mainMore = !State.s.mainMore; State.save(); renderMainCard(); };
+    const v = $('#main-verdict'); if (v) v.onclick = () => Verdict.open();
+    const d = $('#main-day'); if (d) d.onclick = () => App.go('day');
+    const rm = $('#main-remind'); if (rm) rm.onclick = () => Remind.open();
+  }
+
+  /* кнопки строк: ▶ начать, ○ сделано, название — подробности */
+  function bindRows(el) {
     const block = (id) => Planner.blocks().find((x) => x.id === id);
     el.querySelectorAll('[data-mgo]').forEach((btn) => { btn.onclick = () => {
       const b = block(btn.dataset.mgo);
@@ -621,11 +631,82 @@ Screens.dashboard = (() => {
       if (b && typeof Modes !== 'undefined') Modes.completeBlock(b, btn);
     }; });
     el.querySelectorAll('[data-mopen]').forEach((btn) => { btn.onclick = () => { App.go('day'); setTimeout(() => Screens.day.explain(btn.dataset.mopen), 220); }; });
-    const lateBtn = $('#main-late'); if (lateBtn) lateBtn.onclick = () => { State.s.mainLate = !State.s.mainLate; State.save(); renderMainCard(); };
-    const more = $('#main-more'); if (more) more.onclick = () => { State.s.mainMore = !State.s.mainMore; State.save(); renderMainCard(); };
-    const v = $('#main-verdict'); if (v) v.onclick = () => Verdict.open();
-    const d = $('#main-day'); if (d) d.onclick = () => App.go('day');
-    const rm = $('#main-remind'); if (rm) rm.onclick = () => Remind.open();
+  }
+
+  /* =========================================================
+     ОКНО 1 — «МОИ ДЕЛА»: только то, что ты сам назвал главным.
+     Ничего больше на экране: список, «Начать», прогресс, неделя.
+     ========================================================= */
+  let myDow = null;          // какой день недели смотрим; null — сегодня
+
+  function renderMyTasks() {
+    const el = $('#mytasks-root');
+    if (!el) return;
+    const split = coreSplit();
+    const now = Track.nowMin();
+    const todayDow = new Date().getDay();
+    const dayName = typeof Week !== 'undefined' ? Week.DAY_NAMES[todayDow] : '';
+
+    if (!split) {
+      el.innerHTML = `<div class="my-empty"><p>Собираю твой день по графику…</p><button class="btn btn-primary" id="my-fix">▶ Поставить дела на сегодня</button></div>`;
+      const f = $('#my-fix'); if (f) f.onclick = () => { App.ensureDaySetup(); App.renderActive(); };
+      return;
+    }
+    const core = split.core;
+    const done = core.filter((b) => Planner.isDone(b));
+    const ahead = core.filter((b) => !Planner.isDone(b) && b.end > now);
+    const missed = core.filter((b) => !Planner.isDone(b) && b.end <= now);
+    const pct = core.length ? Math.round((done.length / core.length) * 100) : 0;
+    const R = 2 * Math.PI * 30;
+    const night = typeof Modes !== 'undefined' && Modes.target().kind === 'sleep';
+    let nightHTML = '';
+    if (night) {
+      let first = ahead[0], when = first ? Track.hhmm(first.start) : '', title = first ? `${first.emoji || ''} ${shortTitle(first)}` : '';
+      if (!first && typeof Week !== 'undefined') {
+        const t = Week.scriptFor((todayDow + 1) % 7).find((x) => x.kind === 'task' && CORE.has(x.task));
+        if (t) { when = Track.hhmm(t.start); title = `${t.emoji} ${SHORT[t.task] || t.title}`; }
+      }
+      nightHTML = `<div class="mt-night"><b>🌙 Сейчас ночь — лучшее дело: спать</b><span>${title ? `Первое дело — в ${when}: ${UI.esc(title)}` : 'Утром всё будет готово.'}</span></div>`;
+    }
+
+    // неделя: какие мои дела в какой день
+    const wd = myDow === null ? todayDow : myDow;
+    const weekRows = typeof Week !== 'undefined' && myDow !== null
+      ? Week.scriptFor(wd).filter((x) => x.kind === 'task' && CORE.has(x.task))
+      : null;
+
+    el.innerHTML = `
+      <div class="my-head">
+        <div class="my-ring" style="--p:${pct / 100}">
+          <svg viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30" class="r-bg"/><circle cx="36" cy="36" r="30" class="r-fg" stroke-dasharray="${R}" stroke-dashoffset="${R * (1 - pct / 100)}"/></svg>
+          <b>${done.length}<i>/${core.length}</i></b>
+        </div>
+        <div class="my-title">
+          <h2>🎯 Мои дела</h2>
+          <small>${UI.esc(dayName)} · ${core.length - done.length ? `осталось ${UI.plur(core.length - done.length, 'дело', 'дела', 'дел')}` : 'всё сделано 🏆'}</small>
+        </div>
+      </div>
+      ${nightHTML}
+      ${ahead.length ? `<h4 class="my-sec">Сейчас и дальше</h4><ul class="mt-list">${ahead.map((b) => rowHTML(b, now)).join('')}</ul>` : ''}
+      ${missed.length ? `<h4 class="my-sec">Пропущено — можно коротко</h4><ul class="mt-list mt-other">${missed.map((b) => rowHTML(b, now)).join('')}</ul>` : ''}
+      ${done.length ? `<h4 class="my-sec">Сделано</h4><ul class="mt-list">${done.map((b) => rowHTML(b, now)).join('')}</ul>` : ''}
+      ${!ahead.length && !missed.length && !done.length ? '<p class="mt-empty">Сегодня главных дел нет — отдыхай.</p>' : ''}
+
+      <div class="my-week">
+        <h4 class="my-sec">Мои дела по дням</h4>
+        <div class="wk-chips">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<button class="wk-chip ${d === wd ? 'sel' : ''} ${d === todayDow ? 'today' : ''}" data-myday="${d}"><b>${Week.DAY_SHORT[d]}</b>${d === todayDow ? '<i>сегодня</i>' : ''}</button>`).join('')}</div>
+        ${weekRows ? `<ul class="my-plan">${weekRows.map((x) => `<li><span>${Track.hhmm(x.start)}</span><b>${x.emoji} ${UI.esc(SHORT[x.task] || x.title)}</b></li>`).join('')}</ul>` : '<p class="muted small">Нажми на день — покажу, какие твои дела в этот день и во сколько.</p>'}
+      </div>
+
+      <button class="btn btn-ghost btn-block my-switch" data-space="all">🧩 Всё остальное — задачи, привычки, фокус, путь…</button>`;
+
+    bindRows(el);
+    el.querySelectorAll('[data-myday]').forEach((btn) => { btn.onclick = () => {
+      const d = Number(btn.dataset.myday);
+      myDow = (myDow === d) ? null : d;
+      Sound.sfx('pop');
+      renderMyTasks();
+    }; });
   }
 
   function findMain(id) { return mainItems().list.find((x) => x.id === id); }
@@ -741,8 +822,10 @@ Screens.dashboard = (() => {
     if (!$('#quote-text').dataset.ready) { showQuote(); $('#quote-text').dataset.ready = '1'; }
   }
 
-  return { bind, render, showQuote, renderPathCard, renderDayCard, renderMainCard };
+  return { bind, render, showQuote, renderPathCard, renderDayCard, renderMainCard, renderMyTasks };
 })();
+
+Screens.mytasks = { render: () => Screens.dashboard.renderMyTasks() };
 
 /* =========================================================
    ЗАДАЧИ

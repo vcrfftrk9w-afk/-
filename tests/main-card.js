@@ -8,7 +8,7 @@ const { chromium } = require('playwright');
   // время закреплено: среда 12:20 — посреди дня, есть и сделанное, и впереди
   await p.addInitScript(()=>{ const R=Date,f=new R('2026-09-23T12:20:00').getTime(),s=R.now(); class FD extends R{constructor(...a){a.length?super(...a):super(f+R.now()-s)} static now(){return f+R.now()-s}} window.Date=FD; });
   await p.goto('http://localhost:8792/index.html'); await p.waitForTimeout(1500);
-  await p.evaluate(()=>{ State.s.onboarded=true; State.s.name='Саша'; State.save(); });
+  await p.evaluate(()=>{ State.s.onboarded=true; State.s.space='all'; State.s.name='Саша'; State.save(); });
   await p.reload(); await p.waitForTimeout(1800); await hide();
 
   console.log('=== КАРТОЧКА ПЕРВАЯ НА ЭКРАНЕ? ===');

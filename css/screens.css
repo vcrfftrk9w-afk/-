@@ -2325,3 +2325,43 @@ body[data-mode="adhd"] .bg-aurora span, body .bg-aurora span { opacity: 0.16; }
   padding: 7px 12px; font-size: 12.5px; color: var(--text); }
 .mt-links .linkbtn:hover { border-color: var(--accent); }
 .mt-links .linkbtn { display: inline-flex; align-items: center; gap: 4px; line-height: 1.2; margin: 0; }
+
+/* =========================================================
+   ДВА ОКНА: «Мои дела» и «Всё остальное»
+   ========================================================= */
+.space-switch {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+  margin: 10px 14px 4px; padding: 4px; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.space-btn {
+  min-height: 42px; border: 0; border-radius: 12px; cursor: pointer; font: inherit; font-weight: 800; font-size: 14px;
+  background: transparent; color: var(--text-muted); transition: background .2s ease, color .2s ease;
+}
+.space-btn.sel { background: var(--accent); color: #fff; box-shadow: 0 6px 18px -10px var(--accent); }
+@media (min-width: 761px) { .space-switch { max-width: 520px; margin: 12px auto 4px; } }
+/* в окне «Мои дела» — ничего лишнего: ни вкладок, ни счётчиков */
+body[data-space="tasks"] .tabbar,
+body[data-space="tasks"] .stat-pills { display: none !important; }
+
+.my-head { display: flex; align-items: center; gap: 14px; margin: 6px 2px 14px; }
+.my-ring { position: relative; width: 72px; height: 72px; flex: 0 0 72px; display: grid; place-items: center; }
+.my-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.my-ring circle { fill: none; stroke-width: 7; }
+.my-ring .r-bg { stroke: color-mix(in srgb, var(--text) 10%, transparent); }
+.my-ring .r-fg { stroke: var(--success); stroke-linecap: round; transition: stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1); }
+.my-ring b { position: relative; font-size: 20px; font-weight: 900; }
+.my-ring b i { font-style: normal; font-size: 12px; color: var(--text-muted); font-weight: 700; }
+.my-title h2 { margin: 0; font-size: 24px; }
+.my-title small { color: var(--text-muted); font-size: 13px; }
+.my-sec { margin: 16px 2px 8px; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.my-week { margin-top: 18px; padding: 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); }
+.my-week .my-sec { margin-top: 0; }
+.my-plan { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.my-plan li { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; padding: 7px 4px; border-top: 1px solid var(--border); }
+.my-plan li:first-child { border-top: 0; }
+.my-plan span { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text-muted); }
+.my-plan b { font-weight: 600; overflow-wrap: anywhere; }
+.my-switch { margin-top: 16px; }
+.my-empty { text-align: center; padding: 30px 10px; }
+#tab-mytasks { max-width: 640px; margin: 0 auto; }

@@ -11,7 +11,7 @@ async function page(b, iso, mode, seed) {
   }, iso);
   await p.goto('http://localhost:8792/index.html'); await p.waitForTimeout(900);
   await p.evaluate(({mode, seed})=>{
-    State.s.onboarded=true; State.s.mode=mode;
+    State.s.onboarded=true; State.s.space='all'; State.s.mode=mode;
     if (seed) {
       for (let i=1;i<=4;i++){ State.logDone('ТТ видео — кино', State.daysAgoKey(i)); State.logDone('Английский', State.daysAgoKey(i)); State.s.dailyTaskCounts[State.daysAgoKey(i)] = 5; }
       State.s.tasks.push({id:'old1', title:'Старое дело', done:true, doneAt: Date.now()-40*86400000, createdAt: Date.now()-41*86400000, category:'other', priority:'mid'});

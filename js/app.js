@@ -223,6 +223,7 @@ const App = (() => {
 
   /* ---------- роутинг ---------- */
   const screenByTab = {
+    mytasks: () => Screens.mytasks,
     dashboard: () => Screens.dashboard,
     day: () => Screens.day,
     tasks: () => Screens.tasks,
@@ -241,6 +242,9 @@ const App = (() => {
     if (currentTab === 'adhd' && tab !== 'adhd') Screens.focus.onLeave();
     if (currentTab === 'day' && tab !== 'day' && Screens.day) Screens.day.onLeave();
     currentTab = tab;
+    // два окна: «Мои дела» — отдельный экран, всё остальное — вкладки как раньше
+    setSpace(tab === 'mytasks' ? 'tasks' : 'all');
+    if (tab !== 'mytasks') lastAllTab = tab;
 
     if (tab === 'rewards') State.s.seenAchievements = State.unlockedAchievements();
 
@@ -1179,11 +1183,31 @@ const App = (() => {
     } catch (err) { /* даже журнал не записался — молчим */ }
   }
 
+  let lastAllTab = 'dashboard';
+  function setSpace(space) {
+    document.body.dataset.space = space;
+    $$('.space-btn').forEach((b) => { const on = b.dataset.space === space; b.classList.toggle('sel', on); b.setAttribute('aria-selected', String(on)); });
+    if (State.s.space !== space) { State.s.space = space; State.save(); }
+    setTimeout(syncBottomInsets, 0);
+  }
+  function bindSpaces() {
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-space]');
+      if (!b || !b.closest('.space-switch, #mytasks-root')) return;
+      Sound.sfx('pop');
+      if (b.dataset.space === 'tasks') { if (currentTab !== 'mytasks') lastAllTab = currentTab; go('mytasks'); }
+      else go(lastAllTab && lastAllTab !== 'mytasks' ? lastAllTab : 'dashboard');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
   function showApp() {
     $('#app').classList.remove('hidden');
     safely('dailyCheckIn', dailyCheckIn);
     safely('ensureDaySetup', ensureDaySetup);
-    safely('go', () => go('dashboard'));
+    safely('spaces', bindSpaces);
+    // по умолчанию открывается окно «Мои дела»
+    safely('go', () => go(State.s.space === 'all' ? 'dashboard' : 'mytasks'));
     safely('tilt', () => UI.initTilt());
     safely('ghosts', offerGhostCleanup);
     safely('env', noteEnv);

@@ -10,7 +10,7 @@ const { chromium } = require('playwright');
       window.__said=[]; Object.defineProperty(window,'speechSynthesis',{configurable:true, get:()=>({ speak:(u)=>window.__said.push(u.text), cancel:()=>{}, getVoices:()=>[] })}); window.SpeechSynthesisUtterance=function(t){this.text=t;};
       window.__sfx=[]; }, iso);
     await p.goto('http://localhost:8792/index.html'); await p.waitForTimeout(700);
-    await p.evaluate(()=>{ State.s.onboarded=true; State.s.mode='adhd'; State.save(); }); await p.reload(); await p.waitForTimeout(2300);
+    await p.evaluate(()=>{ State.s.onboarded=true; State.s.space='all'; State.s.mode='adhd'; State.save(); }); await p.reload(); await p.waitForTimeout(2300);
     await p.evaluate(()=>{ document.querySelectorAll('.modal.modal-open').forEach(m=>UI.closeModal('#'+m.id)); const o=Sound.sfx; Sound.sfx=(n)=>{ window.__sfx.push(n); return o(n); }; });
     await p.waitForTimeout(300);
     return p;
@@ -51,7 +51,7 @@ const { chromium } = require('playwright');
   // внутри просмотрщика Claude вкладки закреплены сверху и видны
   p = await b.newPage({viewport:{width:320,height:640}});
   await p.goto('http://localhost:8792/index.html'); await p.waitForTimeout(600);
-  await p.evaluate(()=>{ State.s.onboarded=true; State.save(); });
+  await p.evaluate(()=>{ State.s.onboarded=true; State.s.space='all'; State.save(); });
   await p.setContent('<style>body{margin:0}</style><iframe src="http://localhost:8792/index.html" style="border:0;width:320px;height:640px"></iframe>');
   await p.waitForTimeout(3500);
   const fr = p.frames()[1];

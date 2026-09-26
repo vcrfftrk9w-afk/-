@@ -6,7 +6,7 @@ const { chromium } = require('playwright');
   const errs=[]; p.on('pageerror',e=>errs.push(e.message));
   let ok=true; const check=(n,c,i)=>{ console.log((c?'✓ ':'✗ ')+n, i!==undefined?JSON.stringify(i).slice(0,200):''); if(!c) ok=false; };
   await p.goto('http://localhost:8792/index.html'); await p.waitForTimeout(900);
-  await p.evaluate(()=>{ State.s.onboarded=true; State.save(); }); await p.reload(); await p.waitForTimeout(2400);
+  await p.evaluate(()=>{ State.s.onboarded=true; State.s.space='all'; State.save(); }); await p.reload(); await p.waitForTimeout(2400);
   await p.evaluate(()=>document.querySelectorAll('.modal.modal-open').forEach(m=>UI.closeModal('#'+m.id))); await p.waitForTimeout(300);
   check('кнопка на главной', await p.evaluate(()=>!!document.querySelector('#main-remind')));
   await p.click('#main-remind'); await p.waitForTimeout(400);

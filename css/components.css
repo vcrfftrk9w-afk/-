@@ -686,3 +686,12 @@
   }
   body.in-frame .tab-indicator { top: auto; bottom: 0; }
 }
+
+/* ---------- установленное приложение: подложка под строку статуса телефона ---------- */
+@media (display-mode: standalone) {
+  html::before {
+    content: ''; position: fixed; top: 0; left: 0; right: 0; z-index: 101;
+    height: env(safe-area-inset-top, 0px);
+    background: var(--surface-solid); pointer-events: none;
+  }
+}

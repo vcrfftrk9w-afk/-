@@ -96,7 +96,7 @@ public class AlarmActivity extends Activity {
         root.addView(label(title, 24, 0xFFFFFFFF, true));
         if (!text.isEmpty()) root.addView(label(text, 17, 0xFFC9C6E0, false));
 
-        Button up = button("✅ Встал!", 0xFF7C3AED);
+        Button up = button(Alarms.okLabel(title), 0xFF7C3AED);
         up.setOnClickListener(v -> {
             Alarms.stopRinging(this);
             startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

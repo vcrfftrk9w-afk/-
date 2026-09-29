@@ -2263,6 +2263,27 @@ button.wk-body { min-height: 40px; }
 .acc-err { margin: 0; min-height: 1.2em; color: var(--danger, #ef4444); font-size: 14px; }
 .acc-state { font-weight: 600; }
 .ob-account { margin-top: 10px; }
+.plans { margin-top: 6px; }
+.plans-empty { margin: 0 0 8px; }
+.plans-add { margin: 4px 0 8px; }
+.plans-all { margin: 0 0 10px; }
+.plans-all summary { cursor: pointer; padding: 6px 2px; color: var(--text-muted); font-size: 14px; }
+.plans-all ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.plans-all li button { width: 100%; display: grid; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 12px; cursor: pointer;
+  font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); }
+.plans-all li small { color: var(--text-muted); font-size: 13px; }
+.plan-ed { display: grid; gap: 10px; }
+.plan-ed h2, .plan-ed p { margin: 0; }
+.plan-ed .field { margin: 0; }
+.plan-ed .field input { font-size: 17px; }
+.plan-ideas { display: flex; flex-wrap: wrap; gap: 6px; }
+.plan-days { display: grid; gap: 6px; }
+.plan-day { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 10px; }
+.plan-day .seg-btn { padding: 9px 0; }
+.plan-day input[type="time"] { font: inherit; font-size: 18px; font-weight: 700; padding: 7px 10px; border-radius: 10px; color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--text) 20%, transparent); background: var(--surface-2); color-scheme: dark; }
+[data-theme="light"] .plan-day input[type="time"] { color-scheme: light; }
+.plan-del { color: var(--danger); }
 .auth-gate { display: grid; gap: 12px; text-align: center; }
 .auth-gate h1 { margin: 0; }
 .auth-gate p { margin: 0; }

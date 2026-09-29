@@ -209,6 +209,11 @@ final class Alarms {
         }
     }
 
+    /** подъём — «Встал», своё дело или публикация — «Начинаю» */
+    static String okLabel(String title) {
+        return title != null && (title.contains("Подъём") || title.contains("Будильник") || title.contains("Проверка")) ? "✅ Встал!" : "✅ Начинаю!";
+    }
+
     /** уведомление звонка: экран поверх блокировки и кнопки «Встал» / «Ещё 5 минут» */
     static Notification ringNotification(Context c, String title, String text, boolean silent) {
         ensureChannels(c);
@@ -236,7 +241,7 @@ final class Alarms {
                 .setAutoCancel(false)
                 .setContentIntent(fullPi)
                 .setFullScreenIntent(fullPi, true)
-                .addAction(new Notification.Action.Builder(null, "✅ Встал", dismiss).build())
+                .addAction(new Notification.Action.Builder(null, okLabel(title), dismiss).build())
                 .addAction(new Notification.Action.Builder(null, "😴 Ещё " + SNOOZE_MIN + " мин", snooze).build());
         if (Build.VERSION.SDK_INT >= 26) {
             if (!silent) b.setTimeoutAfter(10 * 60_000L); // не звонить бесконечно, если телефон далеко

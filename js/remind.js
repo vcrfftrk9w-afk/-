@@ -163,10 +163,13 @@ const Remind = (() => {
     (cfg.custom || []).filter((a) => a.on !== false).forEach((a) => a.days.forEach((dow) => out.push({
       dow, min: a.min, title: '⏰ Будильник', text: a.label || 'Твой будильник. Встань и начни с первого дела.',
     })));
+    // свои дела из «Моих дел»: у каждого дня своё время
+    if (typeof Plans !== 'undefined') out.push(...Plans.alarms());
     return out;
   }
 
-  const anyOn = (cfg) => cfg.wake || cfg.publish || (cfg.custom || []).some((a) => a.on !== false);
+  const anyOn = (cfg) => cfg.wake || cfg.publish || (cfg.custom || []).some((a) => a.on !== false)
+    || (typeof Plans !== 'undefined' && Plans.alarms().length > 0);
   let draft = null; // новый свой будильник, пока его настраивают
   const toMin = (v) => { const m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? Math.min(23, +m[1]) * 60 + Math.min(59, +m[2]) : null; };
 
@@ -176,11 +179,15 @@ const Remind = (() => {
     try { return JSON.parse(window.AndroidApp.alarmStatus()) || {}; } catch (e) { return {}; }
   }
 
+  let lastSent = null; // какой список будильников в последний раз отдали телефону
+
   function syncAlarms() {
     if (!phone()) return null;
     const cfg = alarmCfg();
     let st = {};
-    try { st = JSON.parse(window.AndroidApp.setAlarms(JSON.stringify(phoneAlarms(cfg)))) || {}; } catch (e) { return null; }
+    const json = JSON.stringify(phoneAlarms(cfg));
+    try { st = JSON.parse(window.AndroidApp.setAlarms(json)) || {}; } catch (e) { return null; }
+    lastSent = json;
     // первый раз — сказать, что будильник заведён, и попросить разрешение на уведомления
     if (!cfg.announced && st.next) {
       cfg.announced = true; State.save();
@@ -397,11 +404,23 @@ const Remind = (() => {
     render();
   }
 
-  return { events, ics, googleLink, alarmClock, open, IMPORTANT, phoneAlarms, syncAlarms, alarmLine };
+  /* после любых изменений: если список будильников стал другим — отдать телефону новый */
+  function syncIfChanged() {
+    if (!phone() || lastSent === null) return;
+    if (JSON.stringify(phoneAlarms(alarmCfg())) !== lastSent) syncAlarms();
+  }
+
+  return { events, ics, googleLink, alarmClock, open, IMPORTANT, phoneAlarms, syncAlarms, syncIfChanged, alarmLine };
 })();
 
 /* в APK будильники ставятся сами при каждом запуске — по актуальному графику */
 if (typeof window !== 'undefined' && window.AndroidApp) {
   window.addEventListener('load', () => setTimeout(() => { try { Remind.syncAlarms(); } catch (e) {} }, 1500));
+  // дела и будильники могли поменять на другом телефоне (аккаунт) — переставляем, когда список правда изменился
+  let alarmTimer = null;
+  State.on('change', () => {
+    clearTimeout(alarmTimer);
+    alarmTimer = setTimeout(() => { try { Remind.syncIfChanged(); } catch (e) {} }, 2000);
+  });
 }
 

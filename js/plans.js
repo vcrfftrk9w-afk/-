@@ -117,9 +117,9 @@ const Plans = (() => {
   }
 
   /* ---------- редактор: название, дни, время на каждый день, будильник ---------- */
-  function editor(orig) {
+  function editor(orig, preset) {
     const phone = !!(window.AndroidApp && window.AndroidApp.setAlarms);
-    const d = orig ? JSON.parse(JSON.stringify(orig)) : { title: '', emoji: '📌', times: {}, alarm: true };
+    const d = orig ? JSON.parse(JSON.stringify(orig)) : Object.assign({ title: '', emoji: '📌', times: {}, alarm: true }, preset || {});
     let last = 7 * 60; // время по умолчанию для нового дня — последнее введённое
     ORDER.forEach((x) => { if (timeOn(d, x) != null) last = timeOn(d, x); });
 
@@ -228,5 +228,31 @@ const Plans = (() => {
     return out;
   }
 
-  return { section, bind, editor, alarms, questTime, schedule, list };
+  /* ---------- ⏰ у задания уровня ---------- */
+  function questPlan(id) { return list().find((x) => x.quest === id); }
+
+  function bellOn(id) {
+    const q = Levels.QUESTS[id];
+    if (q.at) return typeof Remind !== 'undefined' && Remind.pubCfg(id).on;
+    const p = questPlan(id);
+    return !!(p && p.alarm !== false && Object.keys(p.times || {}).length);
+  }
+
+  function bell(id) {
+    const q = Levels.QUESTS[id];
+    const on = bellOn(id);
+    return `<button class="mt-bell ${on ? 'on' : ''}" data-lvalarm="${id}" aria-label="${on ? 'Будильник включён' : 'Поставить будильник'}: ${UI.esc(q.title(0))}">${on ? '⏰' : '🔕'}</button>`;
+  }
+
+  function bellClick(id) {
+    const q = Levels.QUESTS[id];
+    // публикации — фиксированное время: включить/выключить и за сколько минут
+    if (q.at) { Remind.pubSheet(id); return; }
+    // остальное — свои дни и время, название уже подставлено
+    const p = questPlan(id);
+    if (p) editor(p);
+    else editor(null, { title: q.title(0), emoji: q.emoji });
+  }
+
+  return { section, bind, editor, alarms, questTime, schedule, list, bell, bellClick };
 })();

@@ -152,12 +152,16 @@ const Remind = (() => {
       if (cfg.wake && day[0]) {
         out.push({ dow, min: day[0].start, title: '☀️ Подъём', text: 'Вода, умывание — и открой приложение: план дня уже готов.' });
       }
-      if (cfg.publish) {
-        day.filter((b) => b.hard).forEach((b) => out.push({
-          dow, min: b.start - 10, title: `${b.emoji || '⏰'} Через 10 минут: ${b.title}`,
-          text: `Ровно в ${Track.hhmm(b.start)}. Подпись, хэштеги и обложка — готовь сейчас.`,
-        }));
-      }
+      // публикации: у каждой свой будильник (⏰ у задания в «Моих делах») — вкл/выкл и за сколько минут
+      day.filter((b) => b.hard).forEach((b) => {
+        const pc = pubCfg(questOf(b.task), cfg);
+        if (!pc.on) return;
+        out.push({
+          dow, min: b.start - pc.lead,
+          title: `${b.emoji || '⏰'} ${pc.lead ? `Через ${pc.lead} минут` : 'Сейчас'}: ${b.title}`,
+          text: pc.lead ? `Ровно в ${Track.hhmm(b.start)}. Подпись, хэштеги и обложка — готовь сейчас.` : 'Жми «Опубликовать» — прямо сейчас.',
+        });
+      });
     }
     // свои будильники: время и дни недели, как в «Часах»
     (cfg.custom || []).filter((a) => a.on !== false).forEach((a) => a.days.forEach((dow) => out.push({
@@ -166,6 +170,53 @@ const Remind = (() => {
     // свои дела из «Моих дел»: у каждого дня своё время
     if (typeof Plans !== 'undefined') out.push(...Plans.alarms());
     return out;
+  }
+
+  /* задание уровня по делу графика: «ТТ видео — кино» → kino */
+  function questOf(task) {
+    if (typeof Levels === 'undefined') return null;
+    return Object.keys(Levels.QUESTS).find((id) => Levels.QUESTS[id].link === task) || null;
+  }
+  /* будильник публикации: общий переключатель + своя настройка у задания */
+  function pubCfg(id, cfg) {
+    const c = cfg || alarmCfg();
+    return Object.assign({ on: c.publish !== false, lead: 10 }, (id && c.pub && c.pub[id]) || {});
+  }
+
+  /* ⏰ у публикации в «Моих делах»: включить, выключить, за сколько минут */
+  function pubSheet(id) {
+    const q = Levels.QUESTS[id];
+    const render = () => {
+      const pc = pubCfg(id);
+      const at = q.at;
+      const body = UI.sheet(`
+        <div class="plan-ed">
+          <h2>⏰ ${q.emoji} ${UI.esc(q.title(0))}</h2>
+          <p class="muted">Публикация каждый день ровно в <b>${Track.hhmm(at)}</b>. Когда звонить?</p>
+          <div class="seg" role="group" aria-label="За сколько минут">
+            ${[0, 5, 10, 15].map((m) => `<button class="seg-btn ${pc.on && pc.lead === m ? 'sel' : ''}" data-pub-lead="${m}">${m ? `за ${m} мин` : 'в момент'}</button>`).join('')}
+          </div>
+          <p class="remind-next">${pc.on ? `Будильник: каждый день в <b>${Track.hhmm(at - pc.lead)}</b>` : '🔕 Будильник выключен'}${phone() ? '' : '<br><small class="muted">Звонит в приложении на Android</small>'}</p>
+          <button class="btn ${pc.on ? 'btn-ghost' : 'btn-primary'} btn-block" id="pub-toggle">${pc.on ? '🔕 Выключить будильник' : '⏰ Включить будильник'}</button>
+          <button class="btn btn-ghost btn-block" id="pub-close">Готово</button>
+        </div>`);
+      const save = (patch) => {
+        const c = alarmCfg();
+        c.pub = c.pub || {};
+        c.pub[id] = Object.assign(pubCfg(id), patch);
+        State.commit();
+        syncAlarms();
+        Sound.sfx('pop');
+        render();
+      };
+      body.onclick = (e) => {
+        const l = e.target.closest('[data-pub-lead]');
+        if (l) { save({ on: true, lead: Number(l.dataset.pubLead) }); return; }
+        if (e.target.closest('#pub-toggle')) { save({ on: !pubCfg(id).on }); return; }
+        if (e.target.closest('#pub-close')) { UI.closeModal('#sheet-modal'); refresh(); }
+      };
+    };
+    render();
   }
 
   const anyOn = (cfg) => cfg.wake || cfg.publish || (cfg.custom || []).some((a) => a.on !== false)
@@ -234,7 +285,7 @@ const Remind = (() => {
         <b>⏰ Будильник в этом телефоне</b>
         <p class="muted small">Звонит как обычный будильник — даже когда приложение закрыто и экран заблокирован. Кнопки: «Встал» и «Ещё 5 минут».</p>
         <label class="remind-sw"><input type="checkbox" data-aopt="wake" ${cfg.wake ? 'checked' : ''}><span>☀️ Подъём · Пн–Пт ${Track.hhmm(wk.start)}, Сб–Вс ${Track.hhmm(we.start)}</span></label>
-        <label class="remind-sw"><input type="checkbox" data-aopt="publish" ${cfg.publish ? 'checked' : ''}><span>🎞️🐋 Публикации · 19:45 и 20:50 (за 10 минут)</span></label>
+        <label class="remind-sw"><input type="checkbox" data-aopt="publish" ${cfg.publish ? 'checked' : ''}><span>🎞️🐋 Публикации в TikTok (за сколько минут — ⏰ у задания в «Моих делах»)</span></label>
         ${(cfg.custom || []).map((a) => `
           <div class="remind-sw remind-own">
             <label><input type="checkbox" data-aown="${a.id}" ${a.on !== false ? 'checked' : ''}><span>⏰ <b>${Track.hhmm(a.min)}</b> · ${daysLabel(a.days)}</span></label>
@@ -350,7 +401,12 @@ const Remind = (() => {
         if (s1) { st.set = s1.dataset.rset; State.save(); Sound.sfx('pop'); render(); return; }
         if (s2) { st.before = Number(s2.dataset.rbefore); State.save(); Sound.sfx('pop'); render(); return; }
         const opt = e.target.closest('[data-aopt]');
-        if (opt) { alarmCfg()[opt.dataset.aopt] = opt.checked; State.save(); syncAlarms(); Sound.sfx('pop'); render(); return; }
+        if (opt) {
+          const c = alarmCfg();
+          c[opt.dataset.aopt] = opt.checked;
+          if (opt.dataset.aopt === 'publish') c.pub = {}; // общий переключатель — для всех публикаций сразу
+          State.save(); syncAlarms(); Sound.sfx('pop'); render(); return;
+        }
         const fix = e.target.closest('[data-afix]');
         if (fix) {
           const k = fix.dataset.afix;
@@ -410,7 +466,7 @@ const Remind = (() => {
     if (JSON.stringify(phoneAlarms(alarmCfg())) !== lastSent) syncAlarms();
   }
 
-  return { events, ics, googleLink, alarmClock, open, IMPORTANT, phoneAlarms, syncAlarms, syncIfChanged, alarmLine };
+  return { events, ics, googleLink, alarmClock, open, IMPORTANT, phoneAlarms, syncAlarms, syncIfChanged, alarmLine, pubCfg, pubSheet };
 })();
 
 /* в APK будильники ставятся сами при каждом запуске — по актуальному графику */

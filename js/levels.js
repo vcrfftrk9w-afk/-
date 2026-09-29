@@ -200,8 +200,9 @@ const Levels = (() => {
       const at = q.at || own;
       const late = !d && at && now > at + 10;
       return `
-        <li class="mt-row ${d ? 'done' : ''} ${!d && at && now >= at - 15 && now <= at + 10 ? 'now' : ''}">
+        <li class="mt-row has-bell ${d ? 'done' : ''} ${!d && at && now >= at - 15 && now <= at + 10 ? 'now' : ''}">
           <button class="mt-main" data-lvinfo="${id}"><small class="mt-time">${at ? Track.hhmm(at) + (own != null ? ' ⏰' : '') + ' · ' : ''}${d ? 'сделано' : late ? 'время прошло — сделай сейчас' : UI.esc(q.sub(lv))}</small><b>${q.emoji} ${UI.esc(q.title(lv))}</b></button>
+          ${typeof Plans !== 'undefined' ? Plans.bell(id) : ''}
           ${d ? '<span class="mt-ok" aria-label="Сделано">✓</span>'
             : `<button class="mt-go" data-lvgo="${id}" aria-label="Начать: ${UI.esc(q.title(lv))}">▶</button>
                <button class="mt-check" data-lvdone="${id}" aria-label="Отметить сделанным"></button>`}
@@ -252,6 +253,7 @@ const Levels = (() => {
     el.querySelectorAll('[data-lvdone]').forEach((b) => { b.onclick = () => complete(b.dataset.lvdone, b); });
     el.querySelectorAll('[data-lvinfo]').forEach((b) => { b.onclick = () => start(b.dataset.lvinfo, b); });
     if (typeof Plans !== 'undefined') Plans.bind(el);
+    el.querySelectorAll('[data-lvalarm]').forEach((b) => { b.onclick = () => Plans.bellClick(b.dataset.lvalarm); });
     const al = el.querySelector('[data-alarm]'); if (al) al.onclick = () => Remind.open();
     const ac = el.querySelector('[data-account]'); if (ac) ac.onclick = () => Account.open();
   }

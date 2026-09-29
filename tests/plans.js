@@ -87,6 +87,30 @@ const mock = `(() => {
   await p.waitForTimeout(300);
   await p.click('#pl-del'); await p.waitForTimeout(500);
   check('дело удалено вместе с будильником', await p.evaluate(() => !State.s.plans.some((x) => x.title === 'Английский') && !window.__alarms.slice(-1)[0].some((a) => /Английский/.test(a.title))));
+  // ⏰ у публикации «кино»: будильники публикаций выключены — включаем «за 15 минут»
+  const bell0 = await p.textContent('#mytasks-root [data-lvalarm="kino"]');
+  check('⏰ у «кино» есть и показывает, что выключен', /🔕/.test(bell0), bell0);
+  await p.click('#mytasks-root [data-lvalarm="kino"]'); await p.waitForTimeout(300);
+  await p.click('[data-pub-lead="15"]'); await p.waitForTimeout(300);
+  const kino = (await lastAlarms()).filter((a) => /кино/.test(a.title));
+  const orca = (await lastAlarms()).filter((a) => /orca/.test(a.title));
+  check('«кино» за 15 минут — будильник каждый день в 19:40, orca не трогаем', kino.length === 7 && kino.every((a) => a.min === 19 * 60 + 40) && /Через 15 минут/.test(kino[0].title) && orca.length === 0, { kino: kino.length, min: kino[0] && kino[0].min, orca: orca.length });
+  await p.click('#pub-toggle'); await p.waitForTimeout(300);
+  check('выключил — будильника «кино» нет', !(await lastAlarms()).some((a) => /кино/.test(a.title)));
+  await p.click('#pub-toggle'); await p.waitForTimeout(200);
+  await p.click('#pub-close'); await p.waitForTimeout(400);
+  check('⏰ у «кино» теперь горит', /⏰/.test(await p.textContent('#mytasks-root [data-lvalarm="kino"]')));
+
+  // ⏰ у «Тренировки» уровня: редактор с уже подставленным названием
+  await p.evaluate(() => { State.s.plans = []; State.commit(); }); await p.waitForTimeout(300);
+  await p.click('#mytasks-root [data-lvalarm="train"]'); await p.waitForTimeout(300);
+  check('⏰ у «Тренировки» — редактор, название подставлено', (await p.inputValue('#pl-title')) === 'Тренировка');
+  await p.click('[data-pl-day="1"]'); await p.fill('[data-pl-time="1"]', '07:00');
+  await p.click('[data-pl-day="2"]'); await p.fill('[data-pl-time="2"]', '10:00');
+  await p.click('#pl-save'); await p.waitForTimeout(500);
+  const tr = await p.evaluate(() => ({ plan: State.s.plans[0], bell: document.querySelector('#mytasks-root [data-lvalarm="train"]').textContent }));
+  check('«Тренировка»: пн 07:00, вт 10:00, ⏰ горит, к заданию уровня', tr.plan.quest === 'train' && tr.plan.times['1'] === 420 && tr.plan.times['2'] === 600 && /⏰/.test(tr.bell), tr);
+
   check('без ошибок на странице', errs.length === 0, errs);
 
   await b.close();

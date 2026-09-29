@@ -2284,6 +2284,8 @@ button.wk-body { min-height: 40px; }
   border: 1px solid color-mix(in srgb, var(--text) 20%, transparent); background: var(--surface-2); color-scheme: dark; }
 [data-theme="light"] .plan-day input[type="time"] { color-scheme: light; }
 .plan-del { color: var(--danger); }
+.plan-ed .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.plan-ed .seg .seg-btn { padding: 10px 2px; font-size: 13.5px; white-space: nowrap; }
 .auth-gate { display: grid; gap: 12px; text-align: center; }
 .auth-gate h1 { margin: 0; }
 .auth-gate p { margin: 0; }
@@ -2351,6 +2353,12 @@ body[data-mode="adhd"] .bg-aurora span, body .bg-aurora span { opacity: 0.16; }
 .mt-main .mt-time { display: block; margin: 0 0 2px; font-size: 12px; font-weight: 700; color: var(--text-muted); }
 .mt-main b { overflow-wrap: break-word; word-break: normal; hyphens: auto; }
 .mt-ok { grid-column: 2 / 4; }
+.mt-row.has-bell { grid-template-columns: minmax(0, 1fr) 34px 42px 32px; gap: 6px; }
+.mt-row.has-bell .mt-ok { grid-column: 3 / 5; }
+.mt-bell { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: transparent; cursor: pointer;
+  font-size: 15px; display: grid; place-items: center; padding: 0; opacity: .55; filter: grayscale(1); }
+.mt-bell.on { opacity: 1; filter: none; border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .mt-row.now .mt-time { color: var(--accent2, var(--accent)); }
 
 /* ---------- шапка на телефоне: два ряда вместо трёх ---------- */

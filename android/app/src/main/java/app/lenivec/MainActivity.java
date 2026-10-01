@@ -268,6 +268,12 @@ public class MainActivity extends Activity {
             Alarms.ring(MainActivity.this, "🔔 Проверка будильника", "Так он зазвонит утром. Нажми «Встал», чтобы выключить.");
         }
 
+        /** будильник говорит название дела голосом — вкл/выкл */
+        @JavascriptInterface
+        public void setAlarmVoice(boolean on) {
+            Alarms.setVoice(MainActivity.this, on);
+        }
+
         /** выбрать мелодию будильника из мелодий телефона */
         @JavascriptInterface
         public void pickSound() {

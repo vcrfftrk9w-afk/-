@@ -139,6 +139,7 @@ final class Alarms {
             long snooze = p.getLong("snooze", 0);
             o.put("snooze", snooze > System.currentTimeMillis() ? snooze : 0);
             o.put("sound", soundName(c));
+            o.put("voice", voiceOn(c));
             return o.toString();
         } catch (Exception e) {
             return "{}";
@@ -207,6 +208,29 @@ final class Alarms {
             ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             nm.createNotificationChannel(ch);
         }
+    }
+
+    /* ---------- голос будильника ---------- */
+    static boolean voiceOn(Context c) {
+        return prefs(c).getBoolean("voice", true);
+    }
+
+    static void setVoice(Context c, boolean on) {
+        prefs(c).edit().putBoolean("voice", on).apply();
+    }
+
+    /** что сказать голосом: название дела без эмодзи и значков («💪 Тренировка» → «Тренировка! Пора.») */
+    static String spokenPhrase(String title) {
+        String t = title == null ? "" : title;
+        if (t.contains("Проверка")) return "Проверка будильника. Так я скажу название дела.";
+        if (t.contains("Подъём")) return "Подъём! Доброе утро. Пора вставать.";
+        String clean = t.replaceAll("[«»\"]", "")
+                .replace("TikTok", "тикток").replace("orca", "орка").replace("YouTube", "ютуб").replace("OLX", "о-эл-икс")
+                .replaceAll("[^\\p{L}\\p{N}\\s.,:!?\\-—]", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (clean.isEmpty() || clean.equals("Будильник")) return "Будильник! Пора.";
+        return clean.endsWith("!") || clean.endsWith(".") ? clean + " Пора." : clean + "! Пора.";
     }
 
     /** подъём — «Встал», своё дело или публикация — «Начинаю» */

@@ -23,6 +23,7 @@ const mock = `(() => {
     alarmStatus: () => JSON.stringify(status),
     testAlarm: () => calls.push(['testAlarm']),
     ringNow: () => calls.push(['ringNow']),
+    setAlarmVoice: (v) => { calls.push(['voice', v]); status = Object.assign({}, status, { voice: v }); },
     pickSound: () => { calls.push(['pickSound']); status = Object.assign({}, status, { sound: 'Рассвет' }); setTimeout(() => window.onAlarmSound && window.onAlarmSound(), 50); },
     openSettings: (w) => calls.push(['openSettings', w]),
   };
@@ -65,6 +66,10 @@ const mock = `(() => {
   check('кнопка «Проверить» заводит звонок через минуту', await p.evaluate(()=>window.__android.some(x=>x[0]==='testAlarm')));
   await p.click('#rm-alarm-now'); await p.waitForTimeout(200);
   check('«Проверить звук сейчас» звонит сразу', await p.evaluate(()=>window.__android.some(x=>x[0]==='ringNow')));
+  check('голос включён по умолчанию', await p.isChecked('#rm-alarm-voice'));
+  await p.click('#rm-alarm-voice'); await p.waitForTimeout(200);
+  check('выключил голос — телефон знает', await p.evaluate(()=>window.__android.some(x=>x[0]==='voice' && x[1]===false)));
+  await p.click('#rm-alarm-voice'); await p.waitForTimeout(200);
   const snd0 = await p.textContent('#rm-alarm-sound');
   await p.click('#rm-alarm-sound'); await p.waitForTimeout(300);
   const snd1 = await p.textContent('#rm-alarm-sound');

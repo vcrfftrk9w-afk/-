@@ -15,11 +15,16 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
+
+import java.util.Locale;
 
 /**
  * Звонок будильника, как в «Часах»: служба сама играет мелодию на громкости будильника по кругу
  * и вибрирует — не зависит от звука уведомлений и беззвучного режима. Показывает экран звонка
- * поверх блокировки. Молчит после «Встал» / «Ещё 5 минут» или сама через 10 минут.
+ * поверх блокировки. Голосом говорит, что за дело («Тренировка! Пора»), мелодия на это время
+ * стихает, и так каждые 20 секунд. Молчит после «Встал» / «Ещё 5 минут» или сама через 10 минут.
  */
 public class AlarmService extends Service {
     static volatile boolean ringing;
@@ -28,11 +33,17 @@ public class AlarmService extends Service {
 
     private static final long[] VIBRATE = {0, 800, 600};
     private static final long AUTO_STOP = 10 * 60_000L;
+    private static final long VOICE_FIRST = 2_000L;   // сначала мелодия, через 2 секунды — голос
+    private static final long VOICE_EVERY = 20_000L;  // и повторять каждые 20 секунд
 
     private MediaPlayer player;
     private Vibrator vibrator;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable autoStop = this::stopSelf;
+    private TextToSpeech tts;
+    private volatile boolean ttsReady;
+    private String phrase = "";
+    private final Runnable sayAgain = this::say;
 
     static void start(Context c, String title, String text) {
         Intent i = new Intent(c, AlarmService.class)
@@ -66,9 +77,51 @@ public class AlarmService extends Service {
         ringing = true;
         play();
         vibrate();
+        startVoice();
         handler.removeCallbacks(autoStop);
         handler.postDelayed(autoStop, AUTO_STOP);
         return START_NOT_STICKY;
+    }
+
+    /* ---------- голос: говорит название дела ---------- */
+    private void startVoice() {
+        handler.removeCallbacks(sayAgain);
+        if (!Alarms.voiceOn(this)) return;
+        phrase = Alarms.spokenPhrase(ringingTitle);
+        if (tts != null) { handler.postDelayed(sayAgain, VOICE_FIRST); return; }
+        tts = new TextToSpeech(this, status -> {
+            if (status != TextToSpeech.SUCCESS || tts == null) return;
+            int r = tts.setLanguage(new Locale("ru", "RU"));
+            if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) return; // нет русского голоса — только мелодия
+            tts.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)            // на громкости будильника, даже в беззвучном
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build());
+            tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                @Override public void onStart(String id) {}
+                @Override public void onDone(String id) { handler.post(() -> duck(false)); }
+                @Override public void onError(String id) { handler.post(() -> duck(false)); }
+            });
+            ttsReady = true;
+            handler.postDelayed(sayAgain, VOICE_FIRST);
+        });
+    }
+
+    private void say() {
+        if (!ringing || !ttsReady || tts == null || phrase.isEmpty()) return;
+        duck(true);
+        tts.speak(phrase, TextToSpeech.QUEUE_FLUSH, null, "alarm");
+        handler.postDelayed(sayAgain, VOICE_EVERY);
+    }
+
+    /** пока говорит — мелодия тише, чтобы слова было слышно */
+    private void duck(boolean quiet) {
+        if (player == null) return;
+        try {
+            float v = quiet ? 0.15f : 1f;
+            player.setVolume(v, v);
+        } catch (Exception ignored) {
+        }
     }
 
     private void play() {
@@ -129,6 +182,12 @@ public class AlarmService extends Service {
     @Override
     public void onDestroy() {
         handler.removeCallbacks(autoStop);
+        handler.removeCallbacks(sayAgain);
+        if (tts != null) {
+            tts.stop();
+            tts.shutdown();
+            tts = null;
+        }
         stopSound();
         if (vibrator != null) vibrator.cancel();
         ringing = false;

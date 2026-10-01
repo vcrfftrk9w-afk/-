@@ -302,6 +302,7 @@ const Remind = (() => {
           </div>` : '<button class="btn btn-ghost btn-block" data-anew>＋ Свой будильник</button>'}
         <p class="remind-next">${anyOn(cfg) ? (st.next ? `Следующий: <b>${whenLabel(st.next)}</b> — ${UI.esc(st.nextTitle || '')}` : '') : 'Все будильники выключены.'}${st.snooze ? `<br>😴 Отложенный: ${whenLabel(st.snooze)}` : ''}</p>
         ${warns.join('')}
+        <label class="remind-sw"><input type="checkbox" id="rm-alarm-voice" ${st.voice !== false ? 'checked' : ''}><span>🗣 Говорить название дела — «Тренировка! Пора.»</span></label>
         <button class="btn btn-ghost btn-block" id="rm-alarm-sound">🎵 Мелодия: ${UI.esc(st.sound || 'как в «Часах»')}</button>
         <div class="remind-test">
           <button class="btn btn-primary" id="rm-alarm-now">🔔 Проверить звук сейчас</button>
@@ -419,6 +420,8 @@ const Remind = (() => {
           UI.toast('Зазвонит через минуту — можешь заблокировать телефон', 'success', '🔔');
           return;
         }
+        const voice = e.target.closest('#rm-alarm-voice');
+        if (voice) { if (window.AndroidApp.setAlarmVoice) window.AndroidApp.setAlarmVoice(voice.checked); Sound.sfx('pop'); return; }
         if (e.target.closest('#rm-alarm-now')) { window.AndroidApp.ringNow(); return; }
         if (e.target.closest('#rm-alarm-sound')) { window.AndroidApp.pickSound(); return; }
         const cfg = alarmCfg();

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Ржавый остров</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Sans+Narrow:wght@400;700&family=Russo+One&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game" aria-label="Игровой мир"></canvas>
+<div id="vignette"></div>
+
+<div id="hud" hidden>
+  <div id="tl">
+    <div id="clock">День 1 · 07:00</div>
+    <div id="questbox"><span>Задание</span><p id="quest"></p></div>
+  </div>
+  <canvas id="minimap" width="150" height="150" aria-label="Мини-карта"></canvas>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="prompt" hidden></div>
+  <div id="reload" hidden><i></i></div>
+  <div id="br">
+    <div id="notes"></div>
+    <div id="chips"></div>
+    <div id="vitals">
+      <div class="bar" id="b-hp"><span>Здоровье</span><i></i><b>100</b></div>
+      <div class="bar" id="b-food"><span>Сытость</span><i></i><b>100</b></div>
+      <div class="bar" id="b-water"><span>Вода</span><i></i><b>100</b></div>
+    </div>
+  </div>
+  <div id="bottom">
+    <div id="queue"></div>
+    <div id="heldname"></div>
+    <div id="hotbar"></div>
+  </div>
+  <div id="tbtns">
+    <button id="t-use" aria-label="Действие">E</button>
+    <button id="t-reload" aria-label="Перезарядка">R</button>
+    <button id="t-inv" aria-label="Рюкзак">Рюкзак</button>
+    <button id="t-map" aria-label="Карта">Карта</button>
+    <button id="t-pause" aria-label="Пауза">II</button>
+  </div>
+  <div id="sticks"><div class="stick" id="stickL"><i></i></div><div class="stick" id="stickR"><i></i></div></div>
+</div>
+
+<div id="panel" hidden>
+  <div class="pwrap">
+    <section class="pinv">
+      <header><h3>Рюкзак</h3><div id="armor"></div></header>
+      <div class="grid" id="invgrid"></div>
+      <h3 class="sub">Пояс</h3>
+      <div class="grid" id="invhot"></div>
+      <div id="info"></div>
+    </section>
+    <section class="pside">
+      <nav id="cats"></nav>
+      <div id="side"></div>
+    </section>
+    <button id="pclose" aria-label="Закрыть">✕</button>
+  </div>
+</div>
+
+<div id="bigmap" hidden>
+  <div class="mapwrap"><canvas id="bigmapcv" width="900" height="900"></canvas><p>M или Esc — закрыть</p></div>
+</div>
+
+<div id="menu">
+  <div class="mwrap">
+    <p class="eyebrow">Выживание · 160 × 160 клеток</p>
+    <h1>Ржавый<br>остров</h1>
+    <p class="lead">Вас выбросило на берег с булыжником и факелом. Рубите лес, плавьте руду, стройте лагерь и переживите ночи, когда мародёры выходят на охоту.</p>
+    <div class="mbtns">
+      <button id="m-continue" hidden>Продолжить</button>
+      <button id="m-new">Новый остров</button>
+      <button id="m-sound" class="ghost">Звук: вкл</button>
+    </div>
+    <p id="m-confirm" class="warn" hidden>Текущий остров будет потерян. Нажмите «Новый остров» ещё раз.</p>
+    <div class="controls">
+      <div><kbd>WASD</kbd> ходить</div><div><kbd>Shift</kbd> бег</div>
+      <div><kbd>ЛКМ</kbd> удар, выстрел, стройка</div><div><kbd>E</kbd> взять, открыть, пить</div>
+      <div><kbd>Tab</kbd> рюкзак и создание</div><div><kbd>1–6</kbd> пояс</div>
+      <div><kbd>R</kbd> перезарядка</div><div><kbd>M</kbd> карта</div>
+      <div><kbd>X</kbd> разобрать молотком</div><div><kbd>Esc</kbd> пауза</div>
+    </div>
+  </div>
+</div>
+
+<div id="pause" hidden>
+  <div class="mwrap small">
+    <h2>Пауза</h2>
+    <div class="mbtns col">
+      <button id="p-resume">Продолжить</button>
+      <button id="p-sound" class="ghost">Звук: вкл</button>
+      <button id="p-menu" class="ghost">В главное меню</button>
+    </div>
+    <p class="muted" id="p-saved">Игра сохраняется автоматически.</p>
+  </div>
+</div>
+
+<div id="death" hidden>
+  <div class="mwrap small">
+    <p class="eyebrow">Причина: <span id="cause"></span></p>
+    <h2 class="dead">Вы погибли</h2>
+    <p class="muted">Ваши вещи остались в рюкзаке на месте гибели.</p>
+    <div class="mbtns col">
+      <button id="d-bag">Возродиться у спальника</button>
+      <button id="d-beach" class="ghost">Возродиться на пляже</button>
+    </div>
+    <p class="muted" id="d-stats"></p>
+  </div>
+</div>
+
+<script src="js/util.js"></script>
+<script src="js/data.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/inventory.js"></script>
+<script src="js/world.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

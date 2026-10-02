@@ -44,6 +44,8 @@
   const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const plural = (n, a, b, c) => { n = Math.abs(n) % 100; const m = n % 10; return n > 10 && n < 20 ? c : m > 1 && m < 5 ? b : m === 1 ? a : c; };
   const app = $('#app');
+  // Внутри чужой страницы (например, ссылки-артефакта) YouTube не встраивается и скачивание файлов запрещено.
+  const EMBED = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
 
   function level(xp = S.xp) {
     let i = 0; while (i + 1 < LEVELS.length && xp >= LEVELS[i + 1][0]) i++;
@@ -257,11 +259,11 @@
       const v = l.videos[cur];
       box.innerHTML = `
         <h2>🎬 Видеоурок</h2>
-        <div class="player" id="pl">
+        ${EMBED ? `<a class="player ext" href="https://www.youtube.com/watch?v=${v.id}" target="_blank" rel="noopener"><span class="playbtn" aria-hidden="true">▶</span><span class="vt">${esc(v.title)}<small>Откроется в YouTube</small></span></a>` : `<div class="player" id="pl">
           <img alt="" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" id="thumb">
           <button class="playbtn" id="play" aria-label="Смотреть видео">▶</button>
           <div class="vt">${esc(v.title)}</div>
-        </div>
+        </div>`}
         <div class="vtabs">${l.videos.map((x, i) => `<button class="chip ${i === cur ? 'on' : ''} ${bad.has(i) ? 'bad' : ''}" data-v="${i}" title="${esc(x.title)}">${i === 0 ? '⭐ Основное' : 'Запасное ' + i}${/\(EN\)/.test(x.title) ? ' · EN' : ''}</button>`).join('')}</div>
         <div class="vlinks">
           <a href="https://www.youtube.com/watch?v=${v.id}" target="_blank" rel="noopener">Открыть на YouTube ↗</a>
@@ -272,7 +274,7 @@
         <p class="muted small">Английские ролики (EN) — включите в плеере субтитры ⚙ → Субтитры → Перевести → Русский.</p>
         ${st.video ? '<p class="okmsg">✅ Видео просмотрено</p>' : '<button class="btn ghost" id="watched">✔ Посмотрел(а) видео (+20 XP)</button>'}`;
       const img = $('#thumb');
-      img.onload = () => {
+      if (img) img.onload = () => {
         // У несуществующих или удалённых роликов YouTube отдаёт заглушку 120×90 — переключаемся на запасное видео.
         if (img.naturalWidth <= 120) {
           bad.add(cur);
@@ -281,8 +283,8 @@
           else $('#pl').classList.add('nov');
         }
       };
-      img.onerror = () => $('#pl').classList.add('noimg');
-      $('#pl').onclick = () => {
+      if (img) img.onerror = () => $('#pl').classList.add('noimg');
+      if (!EMBED) $('#pl').onclick = () => {
         if ($('#pl iframe')) return;
         $('#pl').innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&rel=0&modestbranding=1&hl=ru&cc_lang_pref=ru" title="${esc(v.title)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
       };
@@ -401,13 +403,13 @@
     const d = doneCount(), ready = d === ALL.length || S.settings.free;
     app.innerHTML = `<div class="pagehead"><h1>🏆 Финальный экзамен</h1></div>
       <section class="card center">
-        ${S.exam.passed ? `<p class="okmsg">✅ Экзамен сдан ${esc(S.exam.date)} с результатом ${Math.round(S.exam.best * 100)}%</p><canvas id="cert" width="1600" height="1130"></canvas><div class="row center"><button class="btn" id="dl">⬇ Скачать сертификат (PNG)</button><button class="btn ghost" id="again">Пересдать для рекорда</button></div>` :
+        ${S.exam.passed ? `<p class="okmsg">✅ Экзамен сдан ${esc(S.exam.date)} с результатом ${Math.round(S.exam.best * 100)}%</p><canvas id="cert" width="1600" height="1130" hidden></canvas><img id="certimg" alt="Сертификат «Знаток логистики»"><p class="muted small">На телефоне: нажмите и удерживайте сертификат → «Сохранить изображение».</p><div class="row center">${EMBED ? '' : '<button class="btn" id="dl">⬇ Скачать сертификат (PNG)</button>'}<button class="btn ghost" id="again">Пересдать для рекорда</button></div>` :
         `<p class="lead">${EXAM_N} случайных вопросов по всему курсу · ${EXAM_MIN} минут · проходной балл ${EXAM_PASS * 100}%</p>
         <p>После сдачи вы получите именной сертификат <b>«Знаток логистики»</b> и +500 XP.</p>
         ${ready ? '<button class="btn big" id="go">Начать экзамен</button>' : `<p class="warn">Сначала пройдите все уроки: ${d} из ${ALL.length}.</p><div class="pbar"><i style="width:${d / ALL.length * 100}%"></i></div><p class="muted small">Или включите свободный режим в <a href="#/course">программе курса</a>.</p>`}
         ${S.exam.best ? `<p class="muted">Лучшая попытка: ${Math.round(S.exam.best * 100)}%</p>` : ''}`}
       </section>`;
-    if (S.exam.passed) { drawCert($('#cert')); $('#dl').onclick = () => { const a = document.createElement('a'); a.download = 'sertifikat-logistika.png'; a.href = $('#cert').toDataURL('image/png'); a.click(); }; $('#again').onclick = examGo; }
+    if (S.exam.passed) { drawCert($('#cert')); $('#certimg').src = $('#cert').toDataURL('image/png'); if ($('#dl')) $('#dl').onclick = () => { const a = document.createElement('a'); a.download = 'sertifikat-logistika.png'; a.href = $('#cert').toDataURL('image/png'); a.click(); }; $('#again').onclick = examGo; }
     const g = $('#go'); if (g) g.onclick = examGo;
   }
   function examGo() {
@@ -472,14 +474,20 @@
         <label class="fld"><span>Имя для сертификата</span><input id="pn" maxlength="40" value="${esc(S.name)}"></label>
         <label class="switch"><input type="checkbox" id="pt" ${S.settings.theme === 'light' ? 'checked' : ''}><span>Светлая тема</span></label>
         <label class="switch"><input type="checkbox" id="pf" ${S.settings.free ? 'checked' : ''}><span>Свободный режим (все уроки открыты)</span></label>
-        <div class="row"><button class="btn ghost" id="exp">⬇ Сохранить прогресс в файл</button><label class="btn ghost">⬆ Загрузить из файла<input type="file" id="imp" accept=".json" hidden></label><button class="btn no" id="rst">Сбросить всё</button></div>
+        <div class="row"><button class="btn ghost" id="exp">${EMBED ? '📋 Скопировать прогресс' : '⬇ Сохранить прогресс в файл'}</button><label class="btn ghost" ${EMBED ? 'hidden' : ''}>⬆ Загрузить из файла<input type="file" id="imp" accept=".json" hidden></label><button class="btn no" id="rst">Сбросить всё</button></div>
+        <textarea id="expbox" rows="3" hidden readonly aria-label="Прогресс в виде текста"></textarea>
+        <div id="rstok" class="row" hidden><span class="warn">Удалить весь прогресс? Это нельзя отменить.</span><button class="btn no" id="rsty">Да, удалить</button><button class="btn ghost" id="rstn">Отмена</button></div>
       </section>`;
     $('#pn').onchange = (e) => { const v = e.target.value.trim(); if (v) { S.name = v; save(); toast('Имя сохранено'); } };
     $('#pt').onchange = (e) => { S.settings.theme = e.target.checked ? 'light' : 'dark'; save(); theme(); };
     $('#pf').onchange = (e) => { S.settings.free = e.target.checked; save(); };
-    $('#exp').onclick = () => { const a = document.createElement('a'); a.download = 'logistika-progress.json'; a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' })); a.click(); };
+    $('#exp').onclick = () => {
+      if (EMBED) { const t = $('#expbox'); t.hidden = false; t.value = JSON.stringify(S); t.select(); try { navigator.clipboard.writeText(t.value).then(() => toast('Прогресс скопирован'), () => {}); } catch (er) { /* выделенный текст можно скопировать вручную */ } return; }
+      const a = document.createElement('a'); a.download = 'logistika-progress.json'; a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' })); a.click(); };
     $('#imp').onchange = (e) => { const f = e.target.files[0]; if (!f) return; f.text().then((t) => { try { const d = JSON.parse(t); if (typeof d !== 'object' || !d || typeof d.xp !== 'number') throw 0; S = Object.assign(fresh(), d); save(); theme(); toast('Прогресс загружен'); route(); } catch (er) { toast('Не удалось прочитать файл'); } }); };
-    $('#rst').onclick = () => { if (confirm('Удалить весь прогресс? Это нельзя отменить.')) { S = fresh(); save(); location.hash = '#/'; route(); } };
+    $('#rst').onclick = () => { $('#rstok').hidden = false; };
+    $('#rstn').onclick = () => { $('#rstok').hidden = true; };
+    $('#rsty').onclick = () => { S = fresh(); save(); location.hash = '#/'; route(); };
   }
 
   /* ================= Запуск ================= */

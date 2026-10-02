@@ -128,14 +128,14 @@ const SHOTS = process.env.SHOTS || '';
     }
     await p.waitForSelector('.result.ok');
     await p.click('text=Мой сертификат');
-    await p.waitForSelector('#cert');
+    await p.waitForSelector('#certimg');
     ok(await p.evaluate(() => LogiPro.state().exam.passed && /^LP-/.test(LogiPro.state().exam.id)), `${vp.name}: экзамен сдан, у сертификата есть номер`);
     await noHScroll('сертификат');
     await shot('certificate');
 
     // прогресс переживает перезагрузку
     await p.reload();
-    await p.waitForSelector('#cert');
+    await p.waitForSelector('#certimg');
     ok(await p.evaluate(() => LogiPro.state().name === 'Анна Логистова'), `${vp.name}: прогресс сохранился после перезагрузки`);
 
     // профиль и светлая тема
@@ -156,6 +156,24 @@ const SHOTS = process.env.SHOTS || '';
   await p.goto(BASE);
   ok(await p.locator('#wn').count() === 1, 'битое сохранение: приложение стартует с чистого листа');
   await ctx.close();
+
+  // внутри чужой страницы (ссылка-артефакт): видео — ссылкой на YouTube, сброс — без confirm()
+  {
+    const c = await b.newContext({ viewport: { width: 390, height: 844 } });
+    await c.addInitScript(() => { try { localStorage.setItem('logipro_v1', JSON.stringify({ name: 'Тест' })); } catch (e) {} });
+    const w = await c.newPage();
+    await w.goto('http://localhost:8792/logistics/sw.js');
+    await w.setContent(`<iframe src="${BASE}#/lesson/1-1" style="width:390px;height:800px;border:0"></iframe>`);
+    const f = await (await w.waitForSelector('iframe')).contentFrame();
+    await f.waitForSelector('#vid');
+    ok(await f.locator('a.player.ext[href*="youtube.com/watch?v=fjiNBEPIzGE"]').count() === 1, 'во встроенном режиме видео открывается ссылкой на YouTube');
+    ok(await f.locator('iframe').count() === 0, 'во встроенном режиме нет вложенного плеера');
+    await f.evaluate(() => { location.hash = '#/profile'; });
+    await f.click('#rst');
+    await f.click('#rsty');
+    ok(await f.locator('#wn').count() === 1, 'сброс прогресса подтверждается кнопкой на странице');
+    await c.close();
+  }
 
   // все видео курса: у каждого урока ≥ 2 разных ролика, ID похожи на YouTube
   const p2 = await (await b.newContext()).newPage();

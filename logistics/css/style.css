@@ -3,10 +3,12 @@
   --text: #e5ebf5; --muted: #8fa0bd; --accent: #3b82f6; --accent2: #8b5cf6; --gold: #f59e0b;
   --ok: #10b981; --bad: #ef4444; --r: 16px; --shadow: 0 10px 30px rgba(0,0,0,.25);
   --grad: linear-gradient(90deg, #3b82f6, #8b5cf6 55%, #f59e0b);
+  color-scheme: dark;
 }
 [data-theme="light"] {
   --bg: #f4f6fb; --bg2: #e9eef7; --card: #ffffff; --card2: #f1f4fa; --line: #dbe2ee;
   --text: #0f172a; --muted: #5b6b86; --shadow: 0 8px 24px rgba(15,23,42,.08);
+  color-scheme: light;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -25,7 +27,7 @@ code { background: var(--card2); padding: 1px 6px; border-radius: 6px; }
 .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
 /* ---------- шапка и навигация ---------- */
-.top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
 .logo { font-weight: 700; color: var(--text); font-size: 1.1rem; white-space: nowrap; }
 .logo b { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .logo:hover { text-decoration: none; }
@@ -239,7 +241,8 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .ans:focus-visibl
 .face.back b { color: var(--gold); font-size: 1.4rem; }
 
 /* ---------- экзамен и профиль ---------- */
-#cert { width: 100%; height: auto; border-radius: 12px; margin: 10px 0; }
+#cert, #certimg { width: 100%; height: auto; border-radius: 12px; margin: 10px 0; display: block; }
+#cert[hidden] { display: none; }
 .prof { display: flex; gap: 18px; align-items: center; }
 .prof > div:last-child { flex: 1; }
 .prof h2 { margin: 0; }
@@ -264,3 +267,8 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .ans:focus-visibl
 @keyframes tin { from { opacity: 0; transform: translateY(-10px); } }
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- режим ссылки: видео открывается в YouTube ---------- */
+.player.ext { display: flex; align-items: center; justify-content: center; text-decoration: none; background: radial-gradient(circle at 30% 20%, #ff003355, transparent 60%), linear-gradient(135deg, #111827, #1e1b4b); }
+.player.ext .playbtn { display: grid; place-items: center; }
+.player.ext .vt small { display: block; font-weight: 400; opacity: .8; margin-top: 2px; }

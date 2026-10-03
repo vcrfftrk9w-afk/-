@@ -1,0 +1,815 @@
+@module flappy
+icon: 🐤
+color: #ffb020
+title: Проект: Flappy Bird
+desc: Птичка, гравитация, бесконечные трубы, очки и рекорд, который сохраняется
+project: true
+
+@lesson flp-1
+title: Шаг 1. Птица машет крыльями
+xp: 20
+@theory
+Третий проект — **Flappy Bird** [флэ́ппи бёрд] — «хлопающая птичка». В 2014 году эту простую игру скачали больше 50 миллионов раз! Правила: птица падает, нажатие — взмах вверх. Нужно пролетать между трубами.
+
+## План
+
+1. **Птица машет крыльями** ← ты здесь
+2. Бесконечные трубы
+3. Столкновения и очки
+4. Старт, рекорд и новая игра
+
+## Физика птицы
+
+Всё как в уроке про гравитацию и прыжок:
+
+- каждый кадр `vy += gravity` — птица разгоняется вниз;
+- взмах — резкая скорость вверх: `vy = -flapPower`.
+
+Главное отличие от прыжка: взмахивать можно **в воздухе** сколько угодно — никакой проверки «на земле».
+
+## Управление: и клавиши, и клик
+
+Чтобы играть и на компьютере, и на телефоне, взмах делаем по пробелу **и** по клику (касанию). Обе подписки вызывают одну функцию `flap()`:
+
+```code
+function flap() {
+  bird.vy = -flapPower;
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === " " || e.key === "ArrowUp") flap();
+});
+canvas.addEventListener("click", flap);
+```
+
+Обрати внимание: в `addEventListener("click", flap)` мы передаём **саму функцию** — без скобок! Со скобками `flap()` функция выполнилась бы сразу, один раз, а нам нужно «вызывать при каждом клике».
+
+> 🎮 Холст в этом проекте **вертикальный** — 360 × 480, как экран телефона.
+@task
+1. В `update()`: увеличивай `bird.vy` на `gravity`, сдвигай `bird.y` на `bird.vy`. Не давай птице провалиться ниже холста: если `bird.y + bird.r` больше высоты — поставь её на дно и обнули `vy`.
+2. Функция `flap()` задаёт `bird.vy = -flapPower`.
+3. Вызывай `flap()` по пробелу и по клику по холсту.
+@canvas 360x480
+@starter
+const bird = { x: 80, y: 200, r: 14, vy: 0 };
+const gravity = 0.4;
+const flapPower = 7;
+
+// 2. Взмах
+function flap() {
+
+}
+
+// 3. Управление: пробел и клик
+
+
+function update() {
+  // 1. Гравитация и дно
+
+}
+
+function draw() {
+  ctx.fillStyle = "#4ec0ff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.font = bird.r * 2 + "px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("🐤", bird.x, bird.y + bird.r * 0.7);
+  ctx.textAlign = "left";
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@solution
+const bird = { x: 80, y: 200, r: 14, vy: 0 };
+const gravity = 0.4;
+const flapPower = 7;
+
+// 2. Взмах
+function flap() {
+  bird.vy = -flapPower;
+}
+
+// 3. Управление: пробел и клик
+document.addEventListener("keydown", (e) => {
+  if (e.key === " " || e.key === "ArrowUp") flap();
+});
+canvas.addEventListener("click", flap);
+
+function update() {
+  // 1. Гравитация и дно
+  bird.vy += gravity;
+  bird.y += bird.vy;
+  if (bird.y + bird.r > canvas.height) {
+    bird.y = canvas.height - bird.r;
+    bird.vy = 0;
+  }
+}
+
+function draw() {
+  ctx.fillStyle = "#4ec0ff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.font = bird.r * 2 + "px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("🐤", bird.x, bird.y + bird.r * 0.7);
+  ctx.textAlign = "left";
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@test Гравитация разгоняет птицу вниз
+(function () { bird.y = 100; bird.vy = 1; update(); return Math.abs(bird.vy - 1.4) < 1e-9 && Math.abs(bird.y - 101.4) < 1e-9; })()
+@test Птица не проваливается ниже холста
+(function () { bird.y = canvas.height - bird.r - 1; bird.vy = 8; update(); return bird.y + bird.r === canvas.height && bird.vy === 0; })()
+@test flap() даёт скорость вверх flapPower
+(function () { bird.vy = 5; flap(); return bird.vy === -flapPower; })()
+@test Пробел вызывает взмах
+(function () { bird.vy = 3; __press(" "); __release(" "); return bird.vy === -flapPower; })()
+@test Клик по холсту вызывает взмах
+(function () { bird.vy = 3; __click(100, 100); return bird.vy === -flapPower; })()
+@hint
+update: `bird.vy += gravity; bird.y += bird.vy;` и проверка дна `if (bird.y + bird.r > canvas.height) { bird.y = canvas.height - bird.r; bird.vy = 0; }`
+@hint
+flap: `bird.vy = -flapPower;`
+@hint
+Управление: `document.addEventListener("keydown", (e) => { if (e.key === " ") flap(); });` и `canvas.addEventListener("click", flap);`
+@quiz
+? Чем отличаются `addEventListener("click", flap)` и `addEventListener("click", flap())`?
++ Первый передаёт функцию для вызова при клике, второй вызывает её сразу один раз
+- Ничем
+- Второй правильнее
+= Без скобок — сама функция («вызови потом»), со скобками — результат её вызова прямо сейчас.
+
+@lesson flp-2
+title: Шаг 2. Бесконечные трубы
+xp: 20
+@theory
+Теперь — **трубы**. Они появляются справа и едут налево. Каждая «труба» — это пара: верхняя и нижняя, а между ними **проход** (gap [гэп] — «промежуток»).
+
+Хранить можно всего два числа на пару: `x` (где труба) и `gapY` (где начинается проход):
+
+```code
+{ x: 360, gapY: 150 }
+```
+
+Верхняя труба — от 0 до `gapY`, нижняя — от `gapY + GAP` до низа холста.
+
+## Новые трубы через равные промежутки
+
+Будем считать кадры. Каждые 90 кадров (≈1.5 секунды) — новая труба:
+
+```code
+frame++;
+if (frame % 90 === 0) addPipe();
+```
+
+`frame % 90 === 0` — «номер кадра делится на 90» — верно на 90-м, 180-м, 270-м кадре…
+
+## Проход в случайном месте
+
+```code
+function addPipe() {
+  const gapY = randomInt(60, canvas.height - 60 - GAP);
+  pipes.push({ x: canvas.width, gapY: gapY, passed: false });
+}
+```
+
+Отступ 60 сверху и снизу — чтобы проход не прилипал к краю экрана. Свойство `passed` [пэст] — «пролетели» — пригодится в следующем шаге для очков.
+
+## Уборка
+
+Трубы, уехавшие за левый край, удаляем — иначе через пару минут их будут тысячи, и игра начнёт тормозить:
+
+```code
+pipes = pipes.filter((p) => p.x + PIPE_W > 0);
+```
+
+> 🎮 Так делают «бесконечные» игры (раннеры): мир создаётся впереди и удаляется позади. Сам мир стоит на месте — двигаются препятствия.
+@task
+1. `addPipe()` — добавляет в `pipes` трубу: `x = canvas.width`, `gapY` — случайное от 60 до `canvas.height - 60 - GAP`, `passed: false`.
+2. В `update()`: увеличивай `frame`; каждые 90 кадров вызывай `addPipe()`; сдвигай каждую трубу влево на `PIPE_SPEED`; удаляй трубы, ушедшие за левый край.
+3. В `draw()` нарисуй каждую трубу: верхний прямоугольник (от 0 до `gapY`) и нижний (от `gapY + GAP` до низа), шириной `PIPE_W`.
+@canvas 360x480
+@starter
+const bird = { x: 80, y: 200, r: 14, vy: 0 };
+const gravity = 0.4;
+const flapPower = 7;
+const GAP = 140;        // высота прохода
+const PIPE_W = 60;      // ширина трубы
+const PIPE_SPEED = 2;   // скорость труб
+let pipes = [];
+let frame = 0;
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function flap() { bird.vy = -flapPower; }
+document.addEventListener("keydown", (e) => {
+  if (e.key === " " || e.key === "ArrowUp") flap();
+});
+canvas.addEventListener("click", flap);
+
+// 1. Новая труба
+function addPipe() {
+
+}
+
+function update() {
+  bird.vy += gravity;
+  bird.y += bird.vy;
+  if (bird.y + bird.r > canvas.height) { bird.y = canvas.height - bird.r; bird.vy = 0; }
+
+  // 2. Трубы: появление, движение, уборка
+
+}
+
+function draw() {
+  ctx.fillStyle = "#4ec0ff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // 3. Трубы
+  ctx.fillStyle = "#3cb043";
+
+  ctx.font = bird.r * 2 + "px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("🐤", bird.x, bird.y + bird.r * 0.7);
+  ctx.textAlign = "left";
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@solution
+const bird = { x: 80, y: 200, r: 14, vy: 0 };
+const gravity = 0.4;
+const flapPower = 7;
+const GAP = 140;        // высота прохода
+const PIPE_W = 60;      // ширина трубы
+const PIPE_SPEED = 2;   // скорость труб
+let pipes = [];
+let frame = 0;
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function flap() { bird.vy = -flapPower; }
+document.addEventListener("keydown", (e) => {
+  if (e.key === " " || e.key === "ArrowUp") flap();
+});
+canvas.addEventListener("click", flap);
+
+// 1. Новая труба
+function addPipe() {
+  const gapY = randomInt(60, canvas.height - 60 - GAP);
+  pipes.push({ x: canvas.width, gapY: gapY, passed: false });
+}
+
+function update() {
+  bird.vy += gravity;
+  bird.y += bird.vy;
+  if (bird.y + bird.r > canvas.height) { bird.y = canvas.height - bird.r; bird.vy = 0; }
+
+  // 2. Трубы: появление, движение, уборка
+  frame++;
+  if (frame % 90 === 0) addPipe();
+  for (const p of pipes) {
+    p.x -= PIPE_SPEED;
+  }
+  pipes = pipes.filter((p) => p.x + PIPE_W > 0);
+}
+
+function draw() {
+  ctx.fillStyle = "#4ec0ff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // 3. Трубы
+  ctx.fillStyle = "#3cb043";
+  for (const p of pipes) {
+    ctx.fillRect(p.x, 0, PIPE_W, p.gapY);
+    ctx.fillRect(p.x, p.gapY + GAP, PIPE_W, canvas.height - p.gapY - GAP);
+  }
+  ctx.font = bird.r * 2 + "px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("🐤", bird.x, bird.y + bird.r * 0.7);
+  ctx.textAlign = "left";
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@test addPipe добавляет трубу у правого края
+(function () { pipes.length = 0; addPipe(); var p = pipes[0]; return pipes.length === 1 && p.x === canvas.width && p.passed === false && typeof p.gapY === "number"; })()
+@test Проход всегда в допустимых пределах и в разных местах
+(function () { var seen = {}; for (var i = 0; i < 400; i++) { pipes.length = 0; addPipe(); var g = pipes[0].gapY; if (g < 60 || g > canvas.height - 60 - GAP || g !== Math.floor(g)) return false; seen[g] = 1; } pipes.length = 0; return Object.keys(seen).length > 30; })()
+@test update сдвигает трубы влево на PIPE_SPEED
+(function () { pipes.length = 0; pipes.push({ x: 200, gapY: 100, passed: false }); frame = 1; update(); return pipes.length >= 1 && pipes[0].x === 200 - PIPE_SPEED; })()
+@test Уехавшие за экран трубы удаляются
+(function () { pipes.length = 0; pipes.push({ x: -PIPE_W + 1, gapY: 100, passed: false }, { x: 150, gapY: 100, passed: false }); frame = 1; update(); return pipes.length === 1 && pipes[0].x === 150 - PIPE_SPEED; })()
+@test Каждые 90 кадров появляется новая труба
+(function () { pipes.length = 0; frame = 0; for (var i = 0; i < 180; i++) { bird.y = 200; bird.vy = 0; update(); } return pipes.length === 2; })()
+@test Каждая труба рисуется двумя прямоугольниками с проходом GAP
+(function () { pipes.length = 0; pipes.push({ x: 150, gapY: 120, passed: false }); __clearDraw(); draw(); var r = __drawn("fillRect").filter(function (c) { return c.a[0] === 150 && c.a[2] === PIPE_W; }); var top = r.some(function (c) { return c.a[1] === 0 && c.a[3] === 120; }); var bot = r.some(function (c) { return c.a[1] === 120 + GAP && c.a[1] + c.a[3] >= canvas.height; }); return top && bot; })()
+@hint
+addPipe: `const gapY = randomInt(60, canvas.height - 60 - GAP); pipes.push({ x: canvas.width, gapY: gapY, passed: false });`
+@hint
+В update: `frame++; if (frame % 90 === 0) addPipe(); for (const p of pipes) { p.x -= PIPE_SPEED; } pipes = pipes.filter((p) => p.x + PIPE_W > 0);`
+@hint
+В draw для каждой трубы: `ctx.fillRect(p.x, 0, PIPE_W, p.gapY);` и `ctx.fillRect(p.x, p.gapY + GAP, PIPE_W, canvas.height - p.gapY - GAP);`
+@quiz
+? Когда верно `frame % 90 === 0`?
++ На 90-м, 180-м, 270-м… кадре
+- Только на 90-м кадре
+- Каждый кадр
+= Остаток от деления на 90 равен нулю для всех чисел, кратных 90.
+
+@lesson flp-3
+title: Шаг 3. Столкновения и очки
+xp: 20
+@theory
+Теперь птица может **разбиться**, а за каждую пролетённую трубу — **очко**.
+
+## Столкновение с трубой
+
+Птица задела трубу, если она одновременно:
+1. **по горизонтали** — на уровне трубы: правый край птицы правее левого края трубы **и** левый край птицы левее правого края трубы;
+2. **по вертикали** — **не** внутри прохода.
+
+```code
+function hitsPipe(p) {
+  const inX = bird.x + bird.r > p.x && bird.x - bird.r < p.x + PIPE_W;
+  const inGap = bird.y - bird.r > p.gapY && bird.y + bird.r < p.gapY + GAP;
+  return inX && !inGap;
+}
+```
+
+(Птицу считаем квадратом вокруг круга — для этой игры этого достаточно.)
+
+## Земля и небо
+
+Коснулась земли или улетела выше экрана — тоже конец:
+
+```code
+if (bird.y + bird.r > canvas.height || bird.y - bird.r < 0) gameOver = true;
+```
+
+## Очки
+
+Очко — когда труба целиком проехала **левее** птицы. Чтобы не засчитать одну трубу 60 раз (каждый кадр!), помечаем её `passed = true`:
+
+```code
+if (!p.passed && p.x + PIPE_W < bird.x) {
+  p.passed = true;
+  score++;
+}
+```
+
+> 🧠 Флажок «уже засчитано» — очень частый приём. Без него условие верно много кадров подряд, и событие срабатывает многократно.
+@task
+1. Напиши `hitsPipe(p)` — возвращает `true`, если птица задевает трубу `p` (формула в теории).
+2. В `update()`: если игра окончена (`gameOver`) — ничего не делай (`return`).
+3. В цикле по трубам: если птица задела трубу — `gameOver = true`; если труба пролетела левее птицы и ещё не засчитана — `passed = true` и `score++`.
+4. Если птица коснулась земли или верхнего края — `gameOver = true`.
+@canvas 360x480
+@starter
+const bird = { x: 80, y: 200, r: 14, vy: 0 };
+const gravity = 0.4;
+const flapPower = 7;
+const GAP = 140;
+const PIPE_W = 60;
+const PIPE_SPEED = 2;
+let pipes = [];
+let frame = 0;
+let score = 0;
+let gameOver = false;
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function flap() { bird.vy = -flapPower; }
+document.addEventListener("keydown", (e) => {
+  if (e.key === " " || e.key === "ArrowUp") flap();
+});
+canvas.addEventListener("click", flap);
+
+function addPipe() {
+  const gapY = randomInt(60, canvas.height - 60 - GAP);
+  pipes.push({ x: canvas.width, gapY: gapY, passed: false });
+}
+
+// 1. Задела ли птица трубу?
+function hitsPipe(p) {
+
+}
+
+function update() {
+  // 2. Игра окончена — стоим
+
+  bird.vy += gravity;
+  bird.y += bird.vy;
+
+  frame++;
+  if (frame % 90 === 0) addPipe();
+  for (const p of pipes) {
+    p.x -= PIPE_SPEED;
+    // 3. Столкновение и очки
+
+  }
+  pipes = pipes.filter((p) => p.x + PIPE_W > 0);
+
+  // 4. Земля и небо
+
+}
+
+function draw() {
+  ctx.fillStyle = "#4ec0ff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#3cb043";
+  for (const p of pipes) {
+    ctx.fillRect(p.x, 0, PIPE_W, p.gapY);
+    ctx.fillRect(p.x, p.gapY + GAP, PIPE_W, canvas.height - p.gapY - GAP);
+  }
+  ctx.font = bird.r * 2 + "px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(gameOver ? "💥" : "🐤", bird.x, bird.y + bird.r * 0.7);
+  ctx.fillStyle = "white";
+  ctx.font = "bold 40px Arial";
+  ctx.fillText(score, canvas.width / 2, 60);
+  ctx.textAlign = "left";
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@solution
+const bird = { x: 80, y: 200, r: 14, vy: 0 };
+const gravity = 0.4;
+const flapPower = 7;
+const GAP = 140;
+const PIPE_W = 60;
+const PIPE_SPEED = 2;
+let pipes = [];
+let frame = 0;
+let score = 0;
+let gameOver = false;
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function flap() { bird.vy = -flapPower; }
+document.addEventListener("keydown", (e) => {
+  if (e.key === " " || e.key === "ArrowUp") flap();
+});
+canvas.addEventListener("click", flap);
+
+function addPipe() {
+  const gapY = randomInt(60, canvas.height - 60 - GAP);
+  pipes.push({ x: canvas.width, gapY: gapY, passed: false });
+}
+
+// 1. Задела ли птица трубу?
+function hitsPipe(p) {
+  const inX = bird.x + bird.r > p.x && bird.x - bird.r < p.x + PIPE_W;
+  const inGap = bird.y - bird.r > p.gapY && bird.y + bird.r < p.gapY + GAP;
+  return inX && !inGap;
+}
+
+function update() {
+  // 2. Игра окончена — стоим
+  if (gameOver) return;
+
+  bird.vy += gravity;
+  bird.y += bird.vy;
+
+  frame++;
+  if (frame % 90 === 0) addPipe();
+  for (const p of pipes) {
+    p.x -= PIPE_SPEED;
+    // 3. Столкновение и очки
+    if (hitsPipe(p)) gameOver = true;
+    if (!p.passed && p.x + PIPE_W < bird.x) {
+      p.passed = true;
+      score++;
+    }
+  }
+  pipes = pipes.filter((p) => p.x + PIPE_W > 0);
+
+  // 4. Земля и небо
+  if (bird.y + bird.r > canvas.height || bird.y - bird.r < 0) gameOver = true;
+}
+
+function draw() {
+  ctx.fillStyle = "#4ec0ff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#3cb043";
+  for (const p of pipes) {
+    ctx.fillRect(p.x, 0, PIPE_W, p.gapY);
+    ctx.fillRect(p.x, p.gapY + GAP, PIPE_W, canvas.height - p.gapY - GAP);
+  }
+  ctx.font = bird.r * 2 + "px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(gameOver ? "💥" : "🐤", bird.x, bird.y + bird.r * 0.7);
+  ctx.fillStyle = "white";
+  ctx.font = "bold 40px Arial";
+  ctx.fillText(score, canvas.width / 2, 60);
+  ctx.textAlign = "left";
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@test hitsPipe: птица в проходе — не задевает
+(function () { bird.x = 80; bird.y = 200; return hitsPipe({ x: 60, gapY: 150, passed: false }) === false; })()
+@test hitsPipe: птица на уровне верхней или нижней трубы — задевает
+(function () { bird.x = 80; bird.y = 140; var a = hitsPipe({ x: 60, gapY: 150, passed: false }); bird.y = 285; var b = hitsPipe({ x: 60, gapY: 150, passed: false }); return a === true && b === true; })()
+@test hitsPipe: труба далеко впереди — не задевает
+(function () { bird.x = 80; bird.y = 20; return hitsPipe({ x: 250, gapY: 150, passed: false }) === false; })()
+@test Удар о трубу заканчивает игру и всё замирает
+(function () { gameOver = false; pipes.length = 0; pipes.push({ x: 70, gapY: 300, passed: false }); bird.x = 80; bird.y = 100; bird.vy = 0; frame = 1; update(); var a = gameOver === true; var y = bird.y; update(); return a && bird.y === y; })()
+@test Пролетели трубу — ровно одно очко
+(function () { gameOver = false; pipes.length = 0; pipes.push({ x: bird.x - PIPE_W - 1 + PIPE_SPEED, gapY: 150, passed: false }); bird.y = 220; bird.vy = -0.4; frame = 1; var s = score; update(); update(); update(); return score === s + 1 && pipes[0].passed === true; })()
+@test Земля или потолок — конец игры
+(function () { gameOver = false; pipes.length = 0; bird.y = canvas.height - bird.r; bird.vy = 2; frame = 1; update(); var a = gameOver; gameOver = false; bird.y = bird.r; bird.vy = -3; update(); return a === true && gameOver === true; })()
+@hint
+hitsPipe: `const inX = bird.x + bird.r > p.x && bird.x - bird.r < p.x + PIPE_W;`, `const inGap = bird.y - bird.r > p.gapY && bird.y + bird.r < p.gapY + GAP;`, `return inX && !inGap;`
+@hint
+В цикле: `if (hitsPipe(p)) gameOver = true;` и `if (!p.passed && p.x + PIPE_W < bird.x) { p.passed = true; score++; }`
+@hint
+В начале update `if (gameOver) return;`, в конце `if (bird.y + bird.r > canvas.height || bird.y - bird.r < 0) gameOver = true;`
+@quiz
+? Зачем у трубы флажок passed?
++ Чтобы очко за трубу засчиталось один раз
+- Чтобы труба исчезла
+- Чтобы птица пролетала сквозь трубу
+= Условие «труба левее птицы» верно много кадров подряд — флажок не даёт считать очко снова.
+
+@lesson flp-4
+title: Шаг 4. Старт, рекорд и новая игра
+xp: 25
+@theory
+Финальные штрихи, которые превращают прототип в игру:
+
+1. **Экран старта.** Игра не начинается сразу — птица висит в воздухе и ждёт первого нажатия.
+2. **Рекорд**, который сохраняется даже после закрытия браузера.
+3. **Новая игра** по нажатию после проигрыша.
+
+## Три состояния
+
+```code
+let state = "ready";   // "ready" — ждём старта, "play" — летим, "over" — разбились
+```
+
+Одна функция `flap()` делает разное в зависимости от состояния:
+
+```code
+function flap() {
+  if (state === "over") { restart(); return; }
+  state = "play";
+  bird.vy = -flapPower;
+}
+```
+
+## Рекорд в localStorage
+
+```code
+let best = Number(localStorage.getItem("flappyBest")) || 0;
+
+function endGame() {
+  state = "over";
+  if (score > best) {
+    best = score;
+    localStorage.setItem("flappyBest", best);
+  }
+}
+```
+
+> 💡 Ключ называем по имени игры (`"flappyBest"`), чтобы рекорды разных игр не перепутались.
+
+> 🏆 Готово! Твой Flappy Bird можно показывать друзьям. Идеи для улучшений: трубы ускоряются со временем, птица наклоняется по скорости (`ctx.rotate`), медали за 10, 20, 50 очков.
+@task
+1. `flap()`: если `state === "over"` — вызови `restart()` и выйди; иначе поставь `state = "play"` и сделай взмах.
+2. `endGame()`: `state = "over"` и, если `score > best`, обнови `best` и сохрани его в `localStorage` под ключом `"flappyBest"`.
+3. `restart()`: птица в начальную точку (`y = 200`, `vy = 0`), трубы пустые, `frame = 0`, `score = 0`, `state = "ready"`.
+4. В `update()`: пока `state !== "play"` — ничего не делай. Вместо `gameOver = true` вызывай `endGame()`.
+@canvas 360x480
+@starter
+const bird = { x: 80, y: 200, r: 14, vy: 0 };
+const gravity = 0.4;
+const flapPower = 7;
+const GAP = 140;
+const PIPE_W = 60;
+const PIPE_SPEED = 2;
+let pipes = [];
+let frame = 0;
+let score = 0;
+let state = "ready";   // "ready", "play" или "over"
+let best = Number(localStorage.getItem("flappyBest")) || 0;
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// 1. Взмах / старт / новая игра
+function flap() {
+  bird.vy = -flapPower;
+}
+
+// 2. Конец игры и рекорд
+function endGame() {
+
+}
+
+// 3. Новая игра
+function restart() {
+
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === " " || e.key === "ArrowUp") flap();
+});
+canvas.addEventListener("click", flap);
+
+function addPipe() {
+  const gapY = randomInt(60, canvas.height - 60 - GAP);
+  pipes.push({ x: canvas.width, gapY: gapY, passed: false });
+}
+
+function hitsPipe(p) {
+  const inX = bird.x + bird.r > p.x && bird.x - bird.r < p.x + PIPE_W;
+  const inGap = bird.y - bird.r > p.gapY && bird.y + bird.r < p.gapY + GAP;
+  return inX && !inGap;
+}
+
+function update() {
+  // 4. Не летим — ничего не делаем
+
+  bird.vy += gravity;
+  bird.y += bird.vy;
+
+  frame++;
+  if (frame % 90 === 0) addPipe();
+  for (const p of pipes) {
+    p.x -= PIPE_SPEED;
+    if (hitsPipe(p)) endGame();
+    if (!p.passed && p.x + PIPE_W < bird.x) {
+      p.passed = true;
+      score++;
+    }
+  }
+  pipes = pipes.filter((p) => p.x + PIPE_W > 0);
+
+  if (bird.y + bird.r > canvas.height || bird.y - bird.r < 0) endGame();
+}
+
+function draw() {
+  ctx.fillStyle = "#4ec0ff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#3cb043";
+  for (const p of pipes) {
+    ctx.fillRect(p.x, 0, PIPE_W, p.gapY);
+    ctx.fillRect(p.x, p.gapY + GAP, PIPE_W, canvas.height - p.gapY - GAP);
+  }
+  ctx.textAlign = "center";
+  ctx.font = bird.r * 2 + "px Arial";
+  ctx.fillText(state === "over" ? "💥" : "🐤", bird.x, bird.y + bird.r * 0.7);
+  ctx.fillStyle = "white";
+  ctx.font = "bold 40px Arial";
+  ctx.fillText(score, canvas.width / 2, 60);
+  ctx.font = "20px Arial";
+  if (state === "ready") ctx.fillText("Нажми пробел или кликни", canvas.width / 2, 260);
+  if (state === "over") {
+    ctx.fillText("Рекорд: " + best, canvas.width / 2, 240);
+    ctx.fillText("Нажми, чтобы сыграть ещё", canvas.width / 2, 270);
+  }
+  ctx.textAlign = "left";
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@solution
+const bird = { x: 80, y: 200, r: 14, vy: 0 };
+const gravity = 0.4;
+const flapPower = 7;
+const GAP = 140;
+const PIPE_W = 60;
+const PIPE_SPEED = 2;
+let pipes = [];
+let frame = 0;
+let score = 0;
+let state = "ready";   // "ready", "play" или "over"
+let best = Number(localStorage.getItem("flappyBest")) || 0;
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// 1. Взмах / старт / новая игра
+function flap() {
+  if (state === "over") {
+    restart();
+    return;
+  }
+  state = "play";
+  bird.vy = -flapPower;
+}
+
+// 2. Конец игры и рекорд
+function endGame() {
+  state = "over";
+  if (score > best) {
+    best = score;
+    localStorage.setItem("flappyBest", best);
+  }
+}
+
+// 3. Новая игра
+function restart() {
+  bird.y = 200;
+  bird.vy = 0;
+  pipes = [];
+  frame = 0;
+  score = 0;
+  state = "ready";
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === " " || e.key === "ArrowUp") flap();
+});
+canvas.addEventListener("click", flap);
+
+function addPipe() {
+  const gapY = randomInt(60, canvas.height - 60 - GAP);
+  pipes.push({ x: canvas.width, gapY: gapY, passed: false });
+}
+
+function hitsPipe(p) {
+  const inX = bird.x + bird.r > p.x && bird.x - bird.r < p.x + PIPE_W;
+  const inGap = bird.y - bird.r > p.gapY && bird.y + bird.r < p.gapY + GAP;
+  return inX && !inGap;
+}
+
+function update() {
+  // 4. Не летим — ничего не делаем
+  if (state !== "play") return;
+
+  bird.vy += gravity;
+  bird.y += bird.vy;
+
+  frame++;
+  if (frame % 90 === 0) addPipe();
+  for (const p of pipes) {
+    p.x -= PIPE_SPEED;
+    if (hitsPipe(p)) endGame();
+    if (!p.passed && p.x + PIPE_W < bird.x) {
+      p.passed = true;
+      score++;
+    }
+  }
+  pipes = pipes.filter((p) => p.x + PIPE_W > 0);
+
+  if (bird.y + bird.r > canvas.height || bird.y - bird.r < 0) endGame();
+}
+
+function draw() {
+  ctx.fillStyle = "#4ec0ff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#3cb043";
+  for (const p of pipes) {
+    ctx.fillRect(p.x, 0, PIPE_W, p.gapY);
+    ctx.fillRect(p.x, p.gapY + GAP, PIPE_W, canvas.height - p.gapY - GAP);
+  }
+  ctx.textAlign = "center";
+  ctx.font = bird.r * 2 + "px Arial";
+  ctx.fillText(state === "over" ? "💥" : "🐤", bird.x, bird.y + bird.r * 0.7);
+  ctx.fillStyle = "white";
+  ctx.font = "bold 40px Arial";
+  ctx.fillText(score, canvas.width / 2, 60);
+  ctx.font = "20px Arial";
+  if (state === "ready") ctx.fillText("Нажми пробел или кликни", canvas.width / 2, 260);
+  if (state === "over") {
+    ctx.fillText("Рекорд: " + best, canvas.width / 2, 240);
+    ctx.fillText("Нажми, чтобы сыграть ещё", canvas.width / 2, 270);
+  }
+  ctx.textAlign = "left";
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@test До старта птица висит на месте
+(function () { state = "ready"; bird.y = 200; bird.vy = 0; update(); update(); return bird.y === 200; })()
+@test Первое нажатие запускает игру и делает взмах
+(function () { state = "ready"; bird.vy = 0; __press(" "); __release(" "); return state === "play" && bird.vy === -flapPower; })()
+@test Разбились — состояние "over", рекорд обновлён и сохранён
+(function () { state = "play"; best = 0; score = 5; pipes.length = 0; bird.y = canvas.height + 5; bird.vy = 1; update(); return state === "over" && best === 5 && localStorage.getItem("flappyBest") === "5"; })()
+@test Рекорд не уменьшается, если результат хуже
+(function () { state = "play"; best = 50; score = 3; endGame(); return best === 50; })()
+@test Нажатие после проигрыша начинает новую игру
+(function () { state = "over"; score = 9; pipes.push({ x: 100, gapY: 100, passed: false }); bird.y = 400; __press(" "); __release(" "); return state === "ready" && score === 0 && pipes.length === 0 && bird.y === 200 && bird.vy === 0 && frame === 0; })()
+@hint
+flap: `if (state === "over") { restart(); return; } state = "play"; bird.vy = -flapPower;`
+@hint
+endGame: `state = "over"; if (score > best) { best = score; localStorage.setItem("flappyBest", best); }`
+@hint
+restart: `bird.y = 200; bird.vy = 0; pipes = []; frame = 0; score = 0; state = "ready";`. В начале update: `if (state !== "play") return;`
+@quiz
+? Почему ключ рекорда лучше назвать "flappyBest", а не просто "best"?
++ Чтобы рекорды разных игр не перезаписывали друг друга
+- Так короче
+- localStorage не принимает слово best
+= Хранилище общее для всех программ на сайте, поэтому имена ключей должны быть уникальными.

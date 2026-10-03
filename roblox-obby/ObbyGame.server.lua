@@ -16,6 +16,16 @@ local TweenService = game:GetService("TweenService")
 local DataStoreService = game:GetService("DataStoreService")
 local Debris = game:GetService("Debris")
 
+-- Пишет в Output, на каком шаге сейчас скрипт, и даёт Studio чуть передохнуть.
+-- Если игра зависнет, последняя строчка в Output покажет, где именно.
+local stepNumber = 0
+local function step(name)
+	stepNumber += 1
+	print(("[Obby] Шаг %d: %s"):format(stepNumber, name))
+	task.wait(0.3)
+end
+step("скрипт запущен")
+
 local CONFIG = {
 	StartHeight = 100, -- на какой высоте висит трасса
 	LavaHeight = 70, -- уровень лавы под трассой
@@ -156,6 +166,7 @@ end
 
 local checkpoints = {}
 
+step("создаю старт")
 local startPad = Instance.new("SpawnLocation")
 startPad.Name = "Start"
 startPad.Anchored = true
@@ -170,6 +181,7 @@ checkpoints[0] = startPad
 
 -- Отключаем другие точки появления (например, из шаблона Baseplate),
 -- чтобы все появлялись на нашей трассе.
+step("отключаю другие точки появления")
 for _, item in ipairs(workspace:GetDescendants()) do
 	if item:IsA("SpawnLocation") and item ~= startPad then
 		item.Enabled = false
@@ -382,15 +394,15 @@ local stages = {
 }
 local LAST_STAGE = #stages
 
-print("[Obby] Начинаю строить трассу...")
+step("начинаю строить трассу")
 local z, y = 8, CONFIG.StartHeight
 for index, build in ipairs(stages) do
 	z, y = build(z, y)
 	z = makeCheckpoint(index, z, y)
-	print("[Obby] Этап " .. index .. " построен")
-	task.wait() -- даём Studio передохнуть между этапами
+	step("этап " .. index .. " построен")
 end
 
+step("строю финиш")
 -- Финиш
 makePart({
 	Size = Vector3.new(24, 1, 24),
@@ -437,6 +449,7 @@ local finishGate = makePart({
 })
 
 -- Море лавы под всей трассой
+step("строю море лавы")
 local seaLength = z + 60
 local sea = makeDeadly(makePart({
 	Name = "LavaSea",
@@ -452,6 +465,7 @@ print("[Obby] Трасса построена: " .. LAST_STAGE .. " этапов
 -- Игроки и сохранения
 ---------------------------------------------------------------------
 
+step("подключаю сохранения")
 local store
 if CONFIG.SaveProgress then
 	local ok, result = pcall(function()
@@ -532,6 +546,7 @@ local function save(player)
 	end
 end
 
+step("жду игроков")
 Players.PlayerAdded:Connect(onPlayerAdded)
 for _, player in ipairs(Players:GetPlayers()) do
 	task.spawn(onPlayerAdded, player)
@@ -574,6 +589,7 @@ end)
 -- Анимация: вертушки, монеты, страховка от падения
 ---------------------------------------------------------------------
 
+step("включаю вертушки и монеты")
 local overlap = OverlapParams.new()
 overlap.FilterType = Enum.RaycastFilterType.Exclude
 overlap.FilterDescendantsInstances = { map }
@@ -607,6 +623,7 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 -- Если игрок как-то пролетел мимо лавы — всё равно возвращаем его на чекпоинт
+step("включаю защиту от падения")
 task.spawn(function()
 	while true do
 		task.wait(0.5)
@@ -621,3 +638,4 @@ task.spawn(function()
 	end
 end)
 
+step("всё готово, можно играть!")

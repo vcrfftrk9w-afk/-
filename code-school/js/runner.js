@@ -97,6 +97,26 @@
   window.__drawn = function(m){ return __draw.filter(function(c){ return c.m === m; }); };
   window.__color = function(c, want){ return String(c.fill).toLowerCase() === String(want).toLowerCase(); };
   window.__clearDraw = function(){ __draw.length = 0; };
+  // цвет → [r, g, b] и проверка «похож ли на красный/жёлтый/…» (любым способом записи цвета)
+  window.__rgbOf = function(s){
+    s = String(s);
+    if (/^#[0-9a-f]{6}$/i.test(s)) return [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)];
+    var m = /rgba?\(([^)]+)\)/.exec(s);
+    if (m) return m[1].split(',').slice(0,3).map(function(v){ return parseFloat(v); });
+    return [0,0,0];
+  };
+  window.__isColor = function(s, name){
+    var c = __rgbOf(s), r = c[0]/255, g = c[1]/255, b = c[2]/255;
+    var max = Math.max(r,g,b), min = Math.min(r,g,b), l = (max+min)/2, d = max-min, h = 0;
+    var sat = d === 0 ? 0 : d / (1 - Math.abs(2*l - 1));
+    if (name === 'white') return l > 0.9;
+    if (name === 'black') return l < 0.12;
+    if (sat < 0.3 || l < 0.12 || l > 0.92) return false;
+    if (max === r) h = 60 * (((g-b)/d) % 6); else if (max === g) h = 60 * ((b-r)/d + 2); else h = 60 * ((r-g)/d + 4);
+    if (h < 0) h += 360;
+    var R = {red:[[345,360],[0,15]], orange:[[15,40]], yellow:[[40,72]], green:[[72,165]], cyan:[[165,200]], blue:[[200,258]], purple:[[258,300]], pink:[[300,345]]}[name] || [];
+    return R.some(function(p){ return h >= p[0] && h <= p[1]; });
+  };
   var CODES = {ArrowLeft:'ArrowLeft', ArrowRight:'ArrowRight', ArrowUp:'ArrowUp', ArrowDown:'ArrowDown', ' ':'Space', Enter:'Enter'};
   window.__press = function(key, type){
     var code = CODES[key] || (key.length === 1 ? 'Key' + key.toUpperCase() : key);

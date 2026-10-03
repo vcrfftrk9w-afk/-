@@ -1,0 +1,548 @@
+@module canvas
+icon: 🎨
+color: #20c1d8
+title: Рисуем на холсте
+desc: Координаты, цвета, фигуры, текст — рисуем игровой мир
+
+@lesson canvas-1
+title: Холст и координаты
+@theory
+Пора рисовать! Браузерные игры рисуются на **холсте** — по-английски `canvas` [кэ́нвас]. Это прямоугольная область, на которой можно рисовать фигуры, текст и картинки.
+
+Рисуют на холсте с помощью «кисти» — **контекста рисования**. Обычно её называют `ctx` (сокращение от context [ко́нтекст]).
+
+> 💡 В этом курсе холст и кисть уже готовы: просто пиши `ctx.`… Размер холста — **480 × 320** точек (пикселей). В настоящей веб-странице их достают так: `const canvas = document.getElementById("game"); const ctx = canvas.getContext("2d");` — об этом подробно в последнем модуле.
+
+## Первый прямоугольник
+
+```js canvas
+ctx.fillStyle = "orange";
+ctx.fillRect(50, 40, 120, 80);
+```
+
+- `ctx.fillStyle = "orange"` — выбрать цвет заливки (`fillStyle` [фил стайл] — «стиль заливки»);
+- `ctx.fillRect(x, y, ширина, высота)` — нарисовать закрашенный прямоугольник (`fill rect` [фил ре́кт] — «залить прямоугольник»).
+
+## Координаты — самое важное
+
+Каждая точка холста имеет два числа: **x** и **y**.
+
+- **x** — сколько шагов **вправо** от левого края;
+- **y** — сколько шагов **вниз** от верхнего края.
+
+> ⚠️ Внимание: в отличие от школьной математики, **y растёт вниз**! Точка (0, 0) — в **левом верхнем** углу. Чем больше y, тем ниже.
+
+```js canvas
+ctx.fillStyle = "red";
+ctx.fillRect(0, 0, 40, 40);
+
+ctx.fillStyle = "lime";
+ctx.fillRect(440, 0, 40, 40);
+
+ctx.fillStyle = "cyan";
+ctx.fillRect(0, 280, 40, 40);
+
+ctx.fillStyle = "yellow";
+ctx.fillRect(220, 140, 40, 40);
+```
+
+Красный — в левом верхнем углу (x = 0, y = 0). Зелёный — в правом верхнем (x = 440, потому что 480 − 40). Голубой — в левом нижнем. Жёлтый — примерно в центре.
+
+У прямоугольника `x` и `y` — это его **левый верхний угол**.
+
+> 🎮 Двигать героя по экрану = менять его x и y. Вправо — x больше, влево — меньше, вниз — y больше, вверх — меньше.
+@task
+Нарисуй **жёлтый квадрат** со стороной **50**, левый верхний угол которого находится в точке **x = 100, y = 60**.
+
+Не забудь сначала выбрать цвет `"yellow"`.
+@canvas
+@starter
+// Выбери цвет и нарисуй квадрат
+
+@solution
+ctx.fillStyle = "yellow";
+ctx.fillRect(100, 60, 50, 50);
+@test Нарисован прямоугольник 50 × 50
+__drew("fillRect", function (c) { return c.a[2] === 50 && c.a[3] === 50; })
+@test Он в точке x = 100, y = 60
+__drew("fillRect", function (c) { return c.a[0] === 100 && c.a[1] === 60 && c.a[2] === 50; })
+@test Он жёлтый
+__drew("fillRect", function (c) { return c.a[2] === 50 && __isColor(c.fill, "yellow"); })
+@hint
+Сначала цвет: `ctx.fillStyle = "yellow";`
+@hint
+Потом квадрат: `ctx.fillRect(100, 60, 50, 50);` — x, y, ширина, высота.
+@quiz
+? Где находится точка (0, 0) на холсте?
+- В центре
+- В левом нижнем углу
++ В левом верхнем углу
+= Отсчёт идёт от левого верхнего угла: x вправо, y вниз.
+? Персонаж стоит в y = 100. Куда он сдвинется, если сделать y = 150?
++ Вниз
+- Вверх
+- Вправо
+= На холсте y растёт вниз.
+
+@lesson canvas-2
+title: Цвета
+@theory
+Цвет можно задать несколькими способами.
+
+## 1. Названием
+
+Английское слово: `"red"`, `"blue"`, `"green"`, `"yellow"`, `"orange"`, `"purple"`, `"pink"`, `"white"`, `"black"`, `"gray"`, `"gold"`, `"cyan"`, `"lime"`, `"brown"`… Всего названий больше 140!
+
+```js canvas
+const colors = ["red", "orange", "yellow", "lime", "cyan", "blue", "purple", "pink"];
+for (let i = 0; i < colors.length; i++) {
+  ctx.fillStyle = colors[i];
+  ctx.fillRect(20 + i * 56, 120, 50, 80);
+}
+```
+
+## 2. Шестнадцатеричным кодом
+
+`"#ff0000"` — так задают цвета дизайнеры. Решётка и шесть символов: две цифры на красный, две на зелёный, две на синий. Цифры — от `00` (ноль) до `ff` (максимум).
+
+| Код | Цвет |
+|---|---|
+| `#ff0000` | красный |
+| `#00ff00` | зелёный |
+| `#0000ff` | синий |
+| `#ffffff` | белый |
+| `#000000` | чёрный |
+| `#ffa500` | оранжевый |
+
+## 3. rgb — красный, зелёный, синий
+
+`"rgb(255, 100, 0)"` — три числа от 0 до 255: сколько красного, зелёного и синего. Экран смешивает свет — как в фонарике.
+
+```js canvas
+for (let i = 0; i < 10; i++) {
+  ctx.fillStyle = `rgb(${i * 25}, 50, ${255 - i * 25})`;
+  ctx.fillRect(i * 48, 0, 48, 320);
+}
+```
+
+## 4. hsl — по кругу оттенков
+
+`"hsl(оттенок, 100%, 50%)"`: оттенок — угол на цветовом круге от 0 до 360 (0 — красный, 120 — зелёный, 240 — синий). Удобно для радуги:
+
+```js canvas
+for (let i = 0; i < 24; i++) {
+  ctx.fillStyle = `hsl(${i * 15}, 90%, 55%)`;
+  ctx.fillRect(i * 20, 100, 20, 120);
+}
+```
+
+> 💡 `fillStyle` действует на всё, что рисуется **после** него, пока не выберешь другой цвет. Это как обмакнуть кисть в краску.
+@task
+Нарисуй **светофор**: три квадрата **60 × 60** один под другим — **красный**, **жёлтый** и **зелёный** (сверху вниз). Используй любой способ задания цвета.
+
+Можно добавить чёрный или серый корпус позади — по желанию.
+@canvas
+@starter
+
+@solution
+ctx.fillStyle = "#333333";
+ctx.fillRect(200, 20, 80, 220);
+
+ctx.fillStyle = "red";
+ctx.fillRect(210, 30, 60, 60);
+
+ctx.fillStyle = "yellow";
+ctx.fillRect(210, 100, 60, 60);
+
+ctx.fillStyle = "lime";
+ctx.fillRect(210, 170, 60, 60);
+@test Нарисованы три квадрата 60 × 60
+__drawn("fillRect").filter(function (c) { return c.a[2] === 60 && c.a[3] === 60; }).length >= 3
+@test Квадраты разных цветов: красный, жёлтый, зелёный
+(function () { var q = __drawn("fillRect").filter(function (c) { return c.a[2] === 60 && c.a[3] === 60; }); return ["red", "yellow", "green"].every(function (n) { return q.some(function (c) { return __isColor(c.fill, n); }); }); })()
+@test Квадраты стоят один под другим: красный сверху, жёлтый посередине, зелёный снизу
+(function () { var q = __drawn("fillRect").filter(function (c) { return c.a[2] === 60 && c.a[3] === 60; }); var f = function (n) { return q.find(function (c) { return __isColor(c.fill, n); }); }; var r = f("red"), y = f("yellow"), g = f("green"); return r && y && g && r.a[1] < y.a[1] && y.a[1] < g.a[1]; })()
+@hint
+Для каждого квадрата — две строчки: сначала `ctx.fillStyle = "red";`, потом `ctx.fillRect(210, 30, 60, 60);`
+@hint
+Чтобы квадраты стояли один под другим, x у всех одинаковый, а y увеличивается: например 30, 100, 170.
+@quiz
+? Какой цвет у кода `#00ff00`?
+- Красный
++ Зелёный
+- Синий
+= Первые две цифры — красный (00), вторые — зелёный (ff, максимум), третьи — синий (00).
+? Что будет, если нарисовать два прямоугольника, а fillStyle задать только перед первым?
++ Оба будут этого цвета
+- Второй будет чёрным
+- Будет ошибка
+= Цвет кисти сохраняется, пока его не поменяешь.
+
+@lesson canvas-3
+title: Круги и линии
+@theory
+Прямоугольники рисуются одной командой, а для остальных фигур нужно «вести перо» — рисовать **путь** (path [пас]).
+
+## Круг
+
+```js canvas
+ctx.fillStyle = "gold";
+ctx.beginPath();
+ctx.arc(240, 160, 60, 0, Math.PI * 2);
+ctx.fill();
+```
+
+1. `ctx.beginPath()` [биги́н пас] — «начать новый путь». Без этого новая фигура склеится со старыми.
+2. `ctx.arc(x, y, радиус, начальныйУгол, конечныйУгол)` — `arc` [арк] — «дуга». Для полного круга углы от `0` до `Math.PI * 2`.
+3. `ctx.fill()` — залить фигуру.
+
+> ⚠️ У круга `x` и `y` — это **центр**, а не угол, как у прямоугольника.
+
+> 🧠 Почему `Math.PI * 2`? Углы в программировании меряют не в градусах, а в радианах. Полный круг = 2π ≈ 6.28 радиан. Половина круга — `Math.PI`.
+
+## Линии
+
+```js canvas
+ctx.strokeStyle = "white";
+ctx.lineWidth = 4;
+ctx.beginPath();
+ctx.moveTo(40, 280);
+ctx.lineTo(240, 40);
+ctx.lineTo(440, 280);
+ctx.closePath();
+ctx.stroke();
+```
+
+- `moveTo(x, y)` [мув ту] — поставить перо в точку (не рисуя);
+- `lineTo(x, y)` [лайн ту] — провести линию до точки;
+- `closePath()` — соединить с началом;
+- `stroke()` [стро́ук] — «обвести» — нарисовать линии;
+- `strokeStyle` — цвет линий, `lineWidth` — толщина.
+
+## Контур и заливка
+
+У любой фигуры можно сделать и заливку (`fill`), и контур (`stroke`):
+
+```js canvas
+ctx.beginPath();
+ctx.arc(120, 160, 50, 0, Math.PI * 2);
+ctx.fillStyle = "tomato";
+ctx.fill();
+ctx.lineWidth = 6;
+ctx.strokeStyle = "white";
+ctx.stroke();
+
+ctx.strokeStyle = "lime";
+ctx.strokeRect(260, 110, 140, 100);
+```
+@task
+Нарисуй **солнце**: жёлтый (`"yellow"` или `"gold"`) круг с центром в точке **(100, 80)** и радиусом **40**.
+
+Помни про три шага: `beginPath`, `arc`, `fill`.
+@canvas
+@starter
+
+@solution
+ctx.fillStyle = "yellow";
+ctx.beginPath();
+ctx.arc(100, 80, 40, 0, Math.PI * 2);
+ctx.fill();
+@test Нарисована дуга с центром (100, 80) и радиусом 40
+__drew("arc", function (c) { return c.a[0] === 100 && c.a[1] === 80 && c.a[2] === 40; })
+@test Это полный круг (до Math.PI * 2)
+__drew("arc", function (c) { return c.a[2] === 40 && Math.abs(c.a[4] - c.a[3]) >= Math.PI * 2 - 0.01; })
+@test Круг залит жёлтым или золотым
+__drew("fill", function (c) { return __isColor(c.fill, "yellow"); })
+@test Использован beginPath
+__drew("beginPath")
+@hint
+Цвет: `ctx.fillStyle = "yellow";`, потом `ctx.beginPath();`
+@hint
+`ctx.arc(100, 80, 40, 0, Math.PI * 2);` и `ctx.fill();`
+@quiz
+? Что означают первые два числа в `ctx.arc(x, y, r, ...)`?
++ Центр круга
+- Левый верхний угол
+- Ширину и высоту
+= У круга x и y — центр.
+? Какой метод рисует контур, а не заливку?
+- fill
++ stroke
+- arc
+= stroke — «обвести».
+
+@lesson canvas-4
+title: Текст на холсте
+@theory
+В каждой игре есть надписи: счёт, жизни, «Game Over». Текст рисуется командой `fillText`:
+
+```js canvas
+ctx.fillStyle = "white";
+ctx.font = "28px Arial";
+ctx.fillText("Счёт: 150", 20, 40);
+
+ctx.fillStyle = "tomato";
+ctx.font = "bold 48px Arial";
+ctx.fillText("GAME OVER", 100, 180);
+```
+
+- `ctx.font = "28px Arial"` — размер и шрифт (`font` [фонт] — «шрифт»). Можно добавить `bold` — жирный;
+- `ctx.fillText(текст, x, y)` — нарисовать текст.
+
+> ⚠️ У текста `y` — это **нижняя линия букв** (как линейка в тетради), а не верх. Если написать `y = 0`, текст уйдёт за верхний край.
+
+## Текст по центру
+
+```js canvas
+ctx.fillStyle = "gold";
+ctx.font = "bold 36px Arial";
+ctx.textAlign = "center";
+ctx.fillText("УРОВЕНЬ 2", canvas.width / 2, canvas.height / 2);
+```
+
+`textAlign = "center"` [текст элайн] — выравнивание: теперь x — это середина текста. `canvas.width` и `canvas.height` — размеры холста, так что `canvas.width / 2` — середина по горизонтали.
+
+## Числа и переменные в тексте
+
+```js canvas
+let score = 1250;
+let lives = 3;
+ctx.fillStyle = "white";
+ctx.font = "22px Arial";
+ctx.fillText(`Очки: ${score}`, 16, 32);
+ctx.fillText("❤️".repeat(lives), 380, 32);
+```
+
+> 💡 Эмодзи тоже можно рисовать текстом — это самый быстрый способ получить «картинку» персонажа! 🐸👾🚀
+@task
+Нарисуй игровой интерфейс:
+
+1. **Белым** цветом, шрифтом `"24px Arial"` напиши `Счёт: 0` в точке **(20, 40)**.
+2. По центру холста напиши `Нажми пробел` (используй `textAlign = "center"` и `canvas.width / 2`).
+@canvas
+@starter
+
+@solution
+ctx.fillStyle = "white";
+ctx.font = "24px Arial";
+ctx.fillText("Счёт: 0", 20, 40);
+
+ctx.textAlign = "center";
+ctx.fillText("Нажми пробел", canvas.width / 2, canvas.height / 2);
+@test Текст «Счёт: 0» в точке (20, 40)
+__drew("fillText", function (c) { return String(c.a[0]) === "Счёт: 0" && c.a[1] === 20 && c.a[2] === 40; })
+@test Он белый и размером 24px
+__drew("fillText", function (c) { return String(c.a[0]) === "Счёт: 0" && __color(c, "#ffffff") && /24px/.test(c.font); })
+@test Текст «Нажми пробел» по центру по горизонтали
+__drew("fillText", function (c) { return String(c.a[0]) === "Нажми пробел" && c.a[1] === canvas.width / 2; })
+@test Использован textAlign = "center"
+/textAlign\s*=\s*["']center["']/.test(__code)
+@hint
+`ctx.fillStyle = "white"; ctx.font = "24px Arial"; ctx.fillText("Счёт: 0", 20, 40);`
+@hint
+`ctx.textAlign = "center";` и `ctx.fillText("Нажми пробел", canvas.width / 2, 160);`
+@quiz
+? Что означает y в `ctx.fillText("Привет", 10, 50)`?
+- Верхний край текста
++ Нижнюю линию букв
+- Высоту букв
+= y у текста — базовая линия, на которой «стоят» буквы.
+
+@lesson canvas-5
+title: Рисуем персонажа функцией
+@theory
+Персонаж состоит из нескольких фигур. Но если координаты каждой фигуры вписать числами, двигать его будет мучением — придётся менять все числа.
+
+Хитрость: всё рисуем **относительно одной точки** `x, y`. И оборачиваем в функцию:
+
+```js canvas
+function drawHero(x, y) {
+  // тело
+  ctx.fillStyle = "royalblue";
+  ctx.fillRect(x, y, 40, 50);
+  // голова
+  ctx.fillStyle = "peachpuff";
+  ctx.beginPath();
+  ctx.arc(x + 20, y - 15, 15, 0, Math.PI * 2);
+  ctx.fill();
+  // глаза
+  ctx.fillStyle = "black";
+  ctx.fillRect(x + 12, y - 19, 4, 4);
+  ctx.fillRect(x + 24, y - 19, 4, 4);
+  // ноги
+  ctx.fillStyle = "saddlebrown";
+  ctx.fillRect(x + 4, y + 50, 12, 16);
+  ctx.fillRect(x + 24, y + 50, 12, 16);
+}
+
+drawHero(60, 150);
+drawHero(220, 120);
+drawHero(380, 200);
+```
+
+Три героя одной функцией! Голова на `x + 20` (центр тела), глаза на `x + 12` и `x + 24`… Меняешь `x` и `y` — двигается весь персонаж.
+
+> 🎮 Именно так и рисуют игровых персонажей: функция `draw` с координатами. Чтобы персонаж «шёл», в анимации каждый кадр рисуют его с чуть другим `x`.
+
+## Рисуем с картинкой-эмодзи
+
+Быстрый способ сделать симпатичного героя — эмодзи:
+
+```js canvas
+function drawFrog(x, y, size) {
+  ctx.font = size + "px Arial";
+  ctx.fillText("🐸", x, y);
+}
+drawFrog(50, 200, 60);
+drawFrog(200, 220, 100);
+drawFrog(380, 180, 40);
+```
+@task
+Напиши функцию `drawHero(x, y)`, которая рисует персонажа **относительно точки** `(x, y)`: хотя бы **две фигуры** (например, тело-прямоугольник и голову-круг).
+
+Робот вызовет твою функцию в разных точках и проверит, что персонаж действительно сдвигается.
+
+Нарисуй своего героя хотя бы в двух местах.
+@canvas
+@starter
+function drawHero(x, y) {
+
+}
+
+@solution
+function drawHero(x, y) {
+  ctx.fillStyle = "royalblue";
+  ctx.fillRect(x, y, 40, 50);
+  ctx.fillStyle = "peachpuff";
+  ctx.beginPath();
+  ctx.arc(x + 20, y - 15, 15, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+drawHero(100, 150);
+drawHero(300, 150);
+@test Функция drawHero есть и принимает x и y
+typeof drawHero === "function" && drawHero.length >= 2
+@test Рисует хотя бы две фигуры
+(function () { __clearDraw(); drawHero(50, 50); return __draw.filter(function (c) { return ["fillRect", "arc", "fillText", "strokeRect", "rect", "ellipse", "lineTo"].indexOf(c.m) !== -1; }).length >= 2; })()
+@test Персонаж двигается вместе с x и y
+(function () { __clearDraw(); drawHero(50, 50); var a = JSON.stringify(__draw.map(function (c) { return c.a; })); __clearDraw(); drawHero(250, 150); var b = JSON.stringify(__draw.map(function (c) { return c.a; })); return a !== b && __draw.length > 0; })()
+@test Все части сдвигаются на одинаковое расстояние
+(function () { function pts() { return __draw.filter(function (c) { return ["fillRect", "arc", "fillText", "strokeRect", "rect", "ellipse", "moveTo", "lineTo"].indexOf(c.m) !== -1; }).map(function (c) { return c.m === "fillText" ? [c.a[1], c.a[2]] : [c.a[0], c.a[1]]; }); } __clearDraw(); drawHero(50, 50); var a = pts(); __clearDraw(); drawHero(150, 90); var b = pts(); return a.length >= 2 && a.length === b.length && a.every(function (p, i) { return b[i][0] - p[0] === 100 && b[i][1] - p[1] === 40; }); })()
+@test Герой нарисован хотя бы в двух местах
+(__codeNS.match(/drawHero\s*\(/g) || []).length >= 3
+@hint
+Внутри функции используй координаты вида `x + число` и `y + число`, а не просто числа. Например, `ctx.fillRect(x, y, 40, 50);`
+@hint
+Голова: `ctx.beginPath(); ctx.arc(x + 20, y - 15, 15, 0, Math.PI * 2); ctx.fill();`. И вызови: `drawHero(100, 150); drawHero(300, 150);`
+@quiz
+? Зачем рисовать части персонажа через `x + 20`, а не через готовое число 120?
++ Чтобы весь персонаж двигался, если поменять x
+- Так быстрее рисуется
+- Иначе будет ошибка
+= Все части привязаны к одной точке — двигаешь её, двигается всё.
+
+@lesson canvas-6
+title: Циклы на холсте
+@theory
+Цикл + рисование = целые миры за пару строчек.
+
+## Ряд монет
+
+```js canvas
+for (let i = 0; i < 8; i++) {
+  ctx.fillStyle = "gold";
+  ctx.beginPath();
+  ctx.arc(40 + i * 55, 160, 18, 0, Math.PI * 2);
+  ctx.fill();
+}
+```
+
+`40 + i * 55` — каждая следующая монета на 55 пикселей правее.
+
+## Стена из кирпичей — двойной цикл
+
+```js canvas
+const brickW = 56, brickH = 22;
+for (let row = 0; row < 5; row++) {
+  for (let col = 0; col < 8; col++) {
+    ctx.fillStyle = `hsl(${row * 40}, 80%, 55%)`;
+    ctx.fillRect(10 + col * (brickW + 2), 20 + row * (brickH + 4), brickW, brickH);
+  }
+}
+```
+
+Это почти готовое поле для арканоида!
+
+## Звёздное небо — случайность
+
+```js canvas
+ctx.fillStyle = "#0b1030";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+for (let i = 0; i < 150; i++) {
+  const x = Math.random() * canvas.width;
+  const y = Math.random() * canvas.height;
+  const size = Math.random() * 2.5;
+  ctx.fillStyle = "white";
+  ctx.fillRect(x, y, size, size);
+}
+```
+
+Запусти несколько раз — каждый раз новое небо.
+
+## Рисуем карту из массива
+
+Помнишь карту уровня из модуля про массивы? Вот она в графике:
+
+```js canvas
+const level = [
+  "############",
+  "#..........#",
+  "#..##..o...#",
+  "#......##..#",
+  "#..o.......#",
+  "############"
+];
+const size = 40;
+for (let y = 0; y < level.length; y++) {
+  for (let x = 0; x < level[y].length; x++) {
+    const cell = level[y][x];
+    if (cell === "#") ctx.fillStyle = "#5a4fcf";
+    else if (cell === "o") ctx.fillStyle = "gold";
+    else ctx.fillStyle = "#1c2244";
+    ctx.fillRect(x * size, y * size, size - 1, size - 1);
+  }
+}
+```
+
+> 💡 Строка — это тоже как массив символов: `level[y][x]` даёт один символ. Так удобно «рисовать» уровни прямо текстом.
+@task
+С помощью **цикла** нарисуй ряд из **10 монет** — золотых кругов радиусом 15. Монеты должны стоять в ряд по горизонтали (у всех одинаковый y, а x — разный).
+@canvas
+@starter
+
+@solution
+ctx.fillStyle = "gold";
+for (let i = 0; i < 10; i++) {
+  ctx.beginPath();
+  ctx.arc(30 + i * 45, 160, 15, 0, Math.PI * 2);
+  ctx.fill();
+}
+@test Нарисовано не меньше 10 кругов радиусом 15
+__drawn("arc").filter(function (c) { return c.a[2] === 15; }).length >= 10
+@test Круги стоят в ряд: одинаковый y, разные x
+(function () { var a = __drawn("arc").filter(function (c) { return c.a[2] === 15; }); var ys = {}, xs = {}; a.forEach(function (c) { ys[c.a[1]] = 1; xs[c.a[0]] = 1; }); return Object.keys(ys).length === 1 && Object.keys(xs).length >= 10; })()
+@test Монеты золотые
+__drew("fill", function (c) { return __isColor(c.fill, "yellow") || __isColor(c.fill, "orange"); })
+@test Используется цикл
+/for\s*\(|while\s*\(/.test(__codeNS)
+@hint
+Цикл `for (let i = 0; i < 10; i++)`, внутри — круг с `x = 30 + i * 45`.
+@hint
+Внутри цикла: `ctx.beginPath(); ctx.arc(30 + i * 45, 160, 15, 0, Math.PI * 2); ctx.fill();`. Цвет `"gold"` можно выбрать один раз перед циклом.
+@quiz
+? Как в цикле сделать, чтобы каждый следующий квадрат был на 30 пикселей правее предыдущего?
++ x = начало + i * 30
+- x = 30
+- x = i + 30
+= Умножаем номер шага на расстояние между фигурами.

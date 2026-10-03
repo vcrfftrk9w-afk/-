@@ -1,0 +1,494 @@
+@module obj
+icon: 🧱
+color: #f78c6b
+title: Объекты
+desc: Описываем героя и врагов: свойства, методы, списки объектов и сохранения
+
+@lesson obj-1
+title: Объект — всё о персонаже в одном месте
+@theory
+У героя много характеристик: имя, здоровье, уровень, оружие, координаты. Хранить их в отдельных переменных неудобно — особенно если героев несколько. Удобнее собрать всё в **объект**.
+
+```js
+const hero = {
+  name: "Рыцарь",
+  hp: 100,
+  level: 1,
+  weapon: "меч"
+};
+
+console.log(hero.name);
+console.log(hero.hp);
+console.log(hero);
+```
+
+## Как устроен объект
+
+- объект пишется в **фигурных скобках** `{ }`;
+- внутри — пары **ключ: значение**, через запятую;
+- ключ (имя свойства) — слово, значение — что угодно.
+
+Такая пара называется **свойство**. У героя четыре свойства: `name`, `hp`, `level`, `weapon`.
+
+## Как достать свойство
+
+**Через точку** — самый частый способ:
+
+```code
+hero.name     // "Рыцарь"
+hero.hp       // 100
+```
+
+**Через квадратные скобки** — если имя свойства хранится в переменной:
+
+```js
+const hero = { name: "Рыцарь", hp: 100 };
+const what = "hp";
+console.log(hero[what]);
+console.log(hero["name"]);
+```
+
+> 💡 Сравни массив и объект: в массиве элементы по **номерам** (`inventory[0]`), в объекте — по **именам** (`hero.hp`). Массив — для списка однотипных вещей, объект — для описания одной вещи.
+
+> 🎮 В играх объекты — это всё: игрок, враг, пуля, монета, кнопка. У каждого есть `x`, `y`, размеры, скорость…
+@task
+Создай объект `hero` со свойствами:
+- `name` — имя героя (текст),
+- `hp` — `100`,
+- `level` — `1`,
+- `weapon` — `"меч"`.
+
+Выведи имя и здоровье героя, обращаясь к свойствам через точку.
+@starter
+
+@solution
+const hero = {
+  name: "Рыцарь",
+  hp: 100,
+  level: 1,
+  weapon: "меч"
+};
+
+console.log(hero.name);
+console.log(hero.hp);
+@test Объект hero создан
+typeof hero === "object" && hero !== null && !Array.isArray(hero)
+@test У героя есть имя-текст, hp = 100, level = 1, weapon = "меч"
+typeof hero.name === "string" && hero.name.length > 0 && hero.hp === 100 && hero.level === 1 && hero.weapon === "меч"
+@test Выведены имя и здоровье через точку
+__has(hero.name) && __line("100") && /hero\.name/.test(__codeNS) && /hero\.hp/.test(__codeNS)
+@hint
+`const hero = { name: "Рыцарь", hp: 100, level: 1, weapon: "меч" };` — можно в одну строку или как в примере, по свойству на строку.
+@hint
+Вывод: `console.log(hero.name);` и `console.log(hero.hp);`
+@quiz
+? Как достать свойство speed у объекта player?
++ `player.speed`
+- `player[speed]` (без кавычек)
+- `speed.player`
+= Через точку: объект.свойство. В квадратных скобках имя нужно в кавычках: `player["speed"]`.
+? Что разделяет свойства в объекте?
+- Точка с запятой
++ Запятая
+- Пробел
+= `{ a: 1, b: 2 }` — свойства через запятую.
+
+@lesson obj-2
+title: Меняем объект
+@theory
+Свойства объекта можно менять, добавлять и удалять — прямо как переменные.
+
+```js
+const hero = { name: "Рыцарь", hp: 100, level: 1 };
+
+hero.hp -= 30;
+hero.level++;
+console.log(hero);
+```
+
+## Добавить новое свойство
+
+Просто присвой значение свойству, которого ещё нет — оно появится:
+
+```js
+const hero = { name: "Рыцарь", hp: 100 };
+hero.gold = 50;
+hero.hasKey = true;
+console.log(hero);
+```
+
+## Удалить свойство
+
+```js
+const hero = { name: "Рыцарь", hp: 100, curse: "слабость" };
+delete hero.curse;
+console.log(hero);
+```
+
+`delete` [дили́т] — «удалить».
+
+## Есть ли свойство?
+
+```js
+const hero = { name: "Рыцарь", hp: 100 };
+console.log("hp" in hero);
+console.log("mana" in hero);
+console.log(hero.mana);
+```
+
+Отсутствующее свойство даёт `undefined`, а оператор `in` [ин] отвечает, есть ли такой ключ.
+
+> 💡 Как и с массивами: объект в `const` можно менять внутри. `const` только запрещает заменить весь объект на другой.
+
+## Перебор свойств
+
+```js
+const stats = { сила: 8, ловкость: 5, ум: 3 };
+for (const key in stats) {
+  console.log(key + ": " + stats[key]);
+}
+console.log(Object.keys(stats));
+```
+
+`for...in` перебирает **ключи** объекта. `Object.keys(obj)` возвращает массив ключей.
+@task
+Герой попал в передрягу. Измени объект `hero`:
+
+1. Герой получил урон — уменьши `hp` на 30.
+2. Герой победил монстра — увеличь `level` на 1.
+3. Добавь герою новое свойство `gold` со значением `50`.
+
+Выведи весь объект `hero`.
+@starter
+const hero = {
+  name: "Рыцарь",
+  hp: 100,
+  level: 1
+};
+
+@solution
+const hero = {
+  name: "Рыцарь",
+  hp: 100,
+  level: 1
+};
+
+hero.hp -= 30;
+hero.level++;
+hero.gold = 50;
+
+console.log(hero);
+@test hp стало 70
+hero.hp === 70
+@test level стал 2
+hero.level === 2
+@test Появилось свойство gold = 50
+hero.gold === 50
+@test Объект меняли, а не создавали заново с готовыми числами
+/hero\.hp\s*(-=|=\s*hero\.hp\s*-)/.test(__codeNS) && /hero\.level\s*(\+\+|\+=)|\+\+\s*hero\.level|hero\.level\s*=\s*hero\.level\s*\+/.test(__codeNS)
+@test Объект выведен
+__out.some(function (l) { return l.indexOf("gold") !== -1; })
+@hint
+`hero.hp -= 30;`, `hero.level++;`, `hero.gold = 50;`
+@quiz
+? Что выведет: `const a = { x: 1 }; a.y = 2; console.log(a.y);`
++ 2
+- undefined
+- Ошибку, ведь a — const
+= Новое свойство просто добавляется. const не мешает менять содержимое.
+? Что вернёт обращение к несуществующему свойству?
+- null
++ undefined
+- Ошибку
+= Отсутствующее свойство — undefined.
+
+@lesson obj-3
+title: Методы — объекты умеют действовать
+@theory
+В объекте можно хранить не только данные, но и **функции**. Функция внутри объекта называется **методом**. Ты уже пользовался методами: `console.log` — это метод `log` объекта `console`!
+
+```js
+const player = {
+  x: 0,
+  speed: 5,
+  moveRight() {
+    this.x += this.speed;
+  },
+  report() {
+    console.log("Игрок на позиции " + this.x);
+  }
+};
+
+player.moveRight();
+player.moveRight();
+player.report();
+```
+
+## Что такое this
+
+`this` [зис] — «этот». Внутри метода `this` — это **сам объект**, у которого вызвали метод. `this.x` — «мой x», `this.speed` — «моя скорость».
+
+Зачем? Чтобы метод работал с данными своего объекта. Если объект переименовать или скопировать — метод всё равно будет работать с правильными данными.
+
+## Как записать метод
+
+```code
+const obj = {
+  имяМетода() {
+    // команды, можно использовать this
+  }
+};
+```
+
+Вызов — через точку и скобки: `obj.имяМетода()`.
+
+> ⚠️ Внутри метода пиши `this.x`, а не просто `x`. Просто `x` — это какая-то другая, внешняя переменная (скорее всего, её нет — будет ошибка).
+
+> 🎮 У игровых объектов почти всегда есть методы `update()` — «обновиться» (сдвинуться, проверить столкновения) и `draw()` — «нарисоваться». Скоро увидишь!
+@task
+Допиши объект `player`:
+
+1. Метод `moveRight()` — увеличивает `x` на `speed` (используй `this`).
+2. Метод `moveLeft()` — уменьшает `x` на `speed`.
+
+Вызови `moveRight()` три раза и `moveLeft()` один раз. Выведи `player.x` — должно быть `10`.
+@starter
+const player = {
+  x: 0,
+  speed: 5,
+
+};
+
+@solution
+const player = {
+  x: 0,
+  speed: 5,
+  moveRight() {
+    this.x += this.speed;
+  },
+  moveLeft() {
+    this.x -= this.speed;
+  }
+};
+
+player.moveRight();
+player.moveRight();
+player.moveRight();
+player.moveLeft();
+console.log(player.x);
+@test Есть методы moveRight и moveLeft
+typeof player.moveRight === "function" && typeof player.moveLeft === "function"
+@test moveRight увеличивает x на speed
+(function () { player.x = 0; player.speed = 7; player.moveRight(); var ok = player.x === 7; player.speed = 5; return ok; })()
+@test moveLeft уменьшает x на speed
+(function () { player.x = 20; player.speed = 5; player.moveLeft(); return player.x === 15; })()
+@test После вызовов выведено 10
+__line("10")
+@test Используется this
+/this\.x/.test(__codeNS) && /this\.speed/.test(__codeNS)
+@hint
+После `speed: 5,` добавь метод: `moveRight() { this.x += this.speed; },`
+@hint
+Так же `moveLeft() { this.x -= this.speed; }`. Между методами — запятая.
+@quiz
+? Что такое this внутри метода?
++ Сам объект, у которого вызван метод
+- Глобальная переменная
+- Предыдущая функция
+= `this` — «этот объект».
+? Как вызвать метод jump объекта hero?
+- `jump(hero)`
++ `hero.jump()`
+- `hero.jump`
+= Метод вызывается через точку и обязательно со скобками.
+
+@lesson obj-4
+title: Массив объектов — армия врагов
+@theory
+Самое мощное сочетание в играх — **массив объектов**. Каждый враг — объект с координатами и здоровьем, а все враги — массив.
+
+```js
+const enemies = [
+  { name: "Гоблин", hp: 30, x: 50 },
+  { name: "Орк", hp: 0, x: 120 },
+  { name: "Тролль", hp: 80, x: 200 }
+];
+
+console.log(enemies[0].name);
+console.log(enemies[2].hp);
+console.log("Врагов: " + enemies.length);
+```
+
+`enemies[0]` — первый объект, `enemies[0].name` — его имя.
+
+## Перебираем объекты
+
+```js
+const enemies = [
+  { name: "Гоблин", hp: 30 },
+  { name: "Орк", hp: 0 },
+  { name: "Тролль", hp: 80 }
+];
+
+for (const e of enemies) {
+  if (e.hp > 0) {
+    console.log(`${e.name} жив (${e.hp} HP)`);
+  } else {
+    console.log(`${e.name} повержен`);
+  }
+}
+
+const alive = enemies.filter((e) => e.hp > 0);
+console.log("Живых: " + alive.length);
+```
+
+## Удар по всем
+
+Изменение объекта внутри цикла меняет его в массиве:
+
+```js
+const enemies = [{ hp: 30 }, { hp: 10 }, { hp: 50 }];
+for (const e of enemies) {
+  e.hp -= 20;
+}
+console.log(enemies);
+```
+
+> 🎮 Вот так выглядит «магия по площади»: один цикл — и урон получили все враги. Каждый кадр игры — это проход по массивам объектов: двигаем, рисуем, проверяем.
+@task
+Есть массив врагов `enemies`.
+
+1. Огненный шар бьёт всех: уменьши `hp` каждого врага на **25** (в цикле).
+2. Создай массив `alive` — только враги, у кого после удара `hp` **больше 0** (используй `filter`).
+3. Выведи имена выживших через запятую — используй `map` и `join(", ")`.
+
+Должно вывестись: `Тролль, Дракон`
+@starter
+const enemies = [
+  { name: "Гоблин", hp: 20 },
+  { name: "Тролль", hp: 60 },
+  { name: "Слизень", hp: 25 },
+  { name: "Дракон", hp: 200 }
+];
+
+@solution
+const enemies = [
+  { name: "Гоблин", hp: 20 },
+  { name: "Тролль", hp: 60 },
+  { name: "Слизень", hp: 25 },
+  { name: "Дракон", hp: 200 }
+];
+
+for (const e of enemies) {
+  e.hp -= 25;
+}
+
+const alive = enemies.filter((e) => e.hp > 0);
+
+console.log(alive.map((e) => e.name).join(", "));
+@test Здоровье всех врагов уменьшено на 25
+enemies[0].hp === -5 && enemies[1].hp === 35 && enemies[2].hp === 0 && enemies[3].hp === 175
+@test alive содержит только Тролля и Дракона
+Array.isArray(alive) && alive.length === 2 && alive[0].name === "Тролль" && alive[1].name === "Дракон"
+@test Выведено «Тролль, Дракон»
+__line("Тролль, Дракон")
+@test Используются filter, map и join
+/\.filter\s*\(/.test(__codeNS) && /\.map\s*\(/.test(__codeNS) && /\.join\s*\(/.test(__codeNS)
+@hint
+Удар: `for (const e of enemies) { e.hp -= 25; }`
+@hint
+`const alive = enemies.filter((e) => e.hp > 0);` и `console.log(alive.map((e) => e.name).join(", "));`
+@quiz
+? Как получить x третьего врага в массиве enemies?
+- `enemies.x[2]`
++ `enemies[2].x`
+- `enemies[3].x`
+= Третий элемент — индекс 2, у него берём свойство x.
+
+@lesson obj-5
+title: JSON и сохранение рекорда
+@theory
+Как игра запоминает рекорд, даже если закрыть браузер? У браузера есть своя «память» — `localStorage` [ло́укал сто́ридж], «местное хранилище».
+
+```js
+localStorage.setItem("best", 500);
+const saved = localStorage.getItem("best");
+console.log("Сохранённый рекорд: " + saved);
+```
+
+- `setItem(ключ, значение)` [сет а́йтем] — сохранить;
+- `getItem(ключ)` [гет а́йтем] — достать. Если ничего не сохранено — вернёт `null`.
+
+> ⚠️ Хранилище умеет хранить **только текст**. Число 500 сохранится как `"500"`. Поэтому после чтения превращай в число: `Number(localStorage.getItem("best"))`.
+
+> 💡 В этом курсе у песочницы своя память: сохранённое в одном запуске программы будет доступно в следующем. Запусти пример два раза!
+
+```js
+let visits = Number(localStorage.getItem("visits")) || 0;
+visits++;
+localStorage.setItem("visits", visits);
+console.log("Ты запускаешь эту программу уже " + visits + " раз");
+```
+
+`|| 0` значит «а если там пусто (null превратится в 0, а NaN — тоже ложь) — возьми 0».
+
+## Сохранить объект: JSON
+
+А как сохранить целый объект — например, прогресс героя? Объект надо превратить в текст. Для этого есть формат **JSON** [джейсо́н]:
+
+```js
+const save = { level: 3, coins: 120, items: ["меч", "щит"] };
+
+const text = JSON.stringify(save);
+console.log(text);
+
+const back = JSON.parse(text);
+console.log(back.items[1]);
+```
+
+- `JSON.stringify(obj)` [стри́нгифай] — объект → текст;
+- `JSON.parse(text)` [парс] — текст → объект.
+
+> 🎮 Так работают сохранения почти во всех браузерных играх.
+@task
+Напиши сохранение рекорда:
+
+1. Прочитай рекорд из хранилища в переменную `best`: `Number(localStorage.getItem("best")) || 0`.
+2. Игрок набрал `score = 120`. Если `score` больше `best` — сохрани новый рекорд через `setItem` и выведи `Новый рекорд!`
+3. В конце выведи `Рекорд: ` и текущий рекорд из хранилища.
+@starter
+const score = 120;
+
+@solution
+const score = 120;
+let best = Number(localStorage.getItem("best")) || 0;
+
+if (score > best) {
+  localStorage.setItem("best", score);
+  console.log("Новый рекорд!");
+}
+
+console.log("Рекорд: " + localStorage.getItem("best"));
+@test Рекорд читается через getItem("best")
+/localStorage\.getItem\s*\(\s*["']best["']\s*\)/.test(__code)
+@test Рекорд сохраняется через setItem("best", ...) внутри if
+/if\s*\([^)]*score\s*>\s*best[^)]*\)\s*\{[^}]*localStorage\.setItem\s*\(\s*["']best["']/.test(__code)
+@test В хранилище рекорд не меньше 120
+Number(localStorage.getItem("best")) >= 120
+@test Выведена строчка с рекордом
+__out.some(function (l) { return /^Рекорд: \d+/.test(l); })
+@hint
+`let best = Number(localStorage.getItem("best")) || 0;`
+@hint
+`if (score > best) { localStorage.setItem("best", score); console.log("Новый рекорд!"); }` и в конце `console.log("Рекорд: " + localStorage.getItem("best"));`
+@quiz
+? Что вернёт `localStorage.getItem("ключ")`, если ничего не сохраняли?
++ null
+- 0
+- Пустую строку
+= Если ключа нет — null.
+? Зачем нужен JSON.stringify?
+- Чтобы удалить объект
++ Чтобы превратить объект в текст (например, для сохранения)
+- Чтобы ускорить игру
+= localStorage хранит только текст, поэтому объект сначала превращают в JSON-строку.

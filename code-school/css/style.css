@@ -210,8 +210,8 @@ main.enter { animation: enter .3s ease; }
 code.ic { background: var(--code-bg); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; font-size: .88em; white-space: nowrap; }
 pre.code { background: var(--code-bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: .9rem; line-height: 1.6; margin: 0 0 1em; tab-size: 2; }
 pre.plain { white-space: pre-wrap; }
-.gw { cursor: help; border-bottom: 1px dashed color-mix(in srgb, currentColor 45%, transparent); }
-.gw:hover { background: var(--accent-soft); border-radius: 3px; }
+.gw { cursor: help; border-radius: 3px; transition: background .12s; }
+.gw:hover { background: var(--accent-soft); box-shadow: 0 1px 0 currentColor; }
 .callout { border-radius: 12px; padding: 12px 16px; margin: 0 0 1em; border: 1px solid var(--line); background: var(--card2); }
 .callout.tip { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
 .callout.warn { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
@@ -377,7 +377,7 @@ th { background: var(--card2); }
 .dw-what { font-size: .88rem; color: var(--muted); margin-top: 4px; line-height: 1.45; }
 .dw-topic { display: inline-block; margin-top: 8px; font-size: .72rem; font-weight: 800; padding: 2px 8px; border-radius: 99px; background: var(--card2); color: var(--muted); }
 
-.profile { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); }
+.profile { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); align-items: start; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
 .p-main { display: flex; gap: 18px; align-items: center; }
 .p-avatar { font-size: 3.4rem; width: 92px; height: 92px; border-radius: 24px; display: grid; place-items: center; background: var(--accent-soft); flex-shrink: 0; }

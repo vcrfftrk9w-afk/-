@@ -54,6 +54,7 @@
   // — перевод английского слова: наведение мышью или касание —
   let tip = null;
   let tipFor = null;
+  let tipShownAt = 0;
   function showTip(target) {
     const w = target.dataset.w;
     const g = window.glossLookup(w);
@@ -74,6 +75,7 @@
     const top = r.top - th - 8 < 8 ? r.bottom + 8 : r.top - th - 8;
     tip.style.top = (top + window.scrollY) + 'px';
     tipFor = target;
+    tipShownAt = Date.now();
   }
   function hideTip() { if (tip) tip.classList.remove('show'); tipFor = null; }
   document.addEventListener('mouseover', (e) => {
@@ -86,7 +88,10 @@
     if (t) { e.preventDefault(); if (tipFor === t) hideTip(); else showTip(t); return; }
     if (!(e.target.closest && e.target.closest('.gtip'))) hideTip();
   });
-  window.addEventListener('scroll', () => { if (tipFor && matchMedia('(hover: hover)').matches) hideTip(); }, { passive: true });
+  // прокрутка уводит слово из-под курсора — прячем перевод (но не сразу после появления)
+  window.addEventListener('scroll', () => {
+    if (tipFor && Date.now() - tipShownAt > 400 && matchMedia('(hover: hover)').matches) hideTip();
+  }, { passive: true });
 
   // — звуки (синтезируются, файлов не нужно) —
   let ac = null;

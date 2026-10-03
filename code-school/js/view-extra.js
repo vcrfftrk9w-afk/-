@@ -9,7 +9,8 @@
     sessionStorage.removeItem('igrokod_sandbox_in');
     let curProject = null;
     const startCode = incoming || s.sandboxCode || (T[0] ? T[0].code : '');
-    const startCanvas = s.sandboxCanvas !== undefined ? s.sandboxCanvas : true;
+    const startCanvas = incoming ? /ctx\.|canvas/.test(incoming) : (s.sandboxCanvas !== undefined ? s.sandboxCanvas : !!(T[0] && T[0].canvas));
+    if (incoming) { s.sandboxCanvas = startCanvas; s.sandboxSize = { w: 480, h: 320 }; }
     root.innerHTML = `
       <div class="page-head"><h1>🧪 Песочница</h1><p class="lead">Здесь можно писать что угодно: пробовать, ломать и создавать свои игры. Начни с шаблона или с чистого листа.</p></div>
       <div class="sandbox">
@@ -18,14 +19,17 @@
           <label class="switch"><input type="checkbox" class="sb-canvas" ${startCanvas ? 'checked' : ''}> <span>Холст для игры</span></label>
           <span class="wb-spacer"></span>
           <span class="sb-name muted"></span>
+          <button type="button" class="btn small sb-download" title="Скачать игру отдельным файлом .html">⬇ Скачать игру</button>
           <button type="button" class="btn small sb-save">💾 Сохранить проект</button>
           <button type="button" class="btn small sb-list">📂 Мои проекты (${s.projects.length})</button>
         </div>
         <div class="wb-host"></div>
       </div>`;
+    const size = s.sandboxSize || { w: 480, h: 320 };
     sbw = Workbench.create(root.querySelector('.wb-host'), {
       value: startCode,
       canvas: startCanvas,
+      width: size.w, height: size.h,
       onChange: (v) => { s.sandboxCode = v; Store.save(); },
       onSave: () => saveProject()
     });
@@ -39,6 +43,8 @@
       sbw.editor.setValue(t.code);
       s.sandboxCode = t.code;
       s.sandboxCanvas = t.canvas;
+      s.sandboxSize = { w: t.w || 480, h: t.h || 320 };
+      sbw.setSize(s.sandboxSize.w, s.sandboxSize.h);
       root.querySelector('.sb-canvas').checked = t.canvas;
       sbw.setCanvas(t.canvas);
       curProject = null;
@@ -55,9 +61,9 @@
       const ok = () => {
         name = inp.value.trim() || 'Проект ' + (s.projects.length + 1);
         if (curProject && curProject.name === name) {
-          curProject.code = sbw.editor.value; curProject.canvas = root.querySelector('.sb-canvas').checked; curProject.updated = Date.now();
+          curProject.code = sbw.editor.value; curProject.canvas = root.querySelector('.sb-canvas').checked; curProject.size = s.sandboxSize; curProject.updated = Date.now();
         } else {
-          curProject = { id: Date.now().toString(36), name, code: sbw.editor.value, canvas: root.querySelector('.sb-canvas').checked, updated: Date.now() };
+          curProject = { id: Date.now().toString(36), name, code: sbw.editor.value, canvas: root.querySelector('.sb-canvas').checked, size: s.sandboxSize, updated: Date.now() };
           s.projects.unshift(curProject);
         }
         Store.save();
@@ -71,6 +77,11 @@
       inp.onkeydown = (e) => { if (e.key === 'Enter') ok(); };
     }
     root.querySelector('.sb-save').onclick = saveProject;
+    root.querySelector('.sb-download').onclick = () => {
+      const sz = s.sandboxSize || { w: 480, h: 320 };
+      const title = curProject ? curProject.name : 'Моя игра';
+      downloadGame(sbw.editor.value, title, sz.w, sz.h);
+    };
     root.querySelector('.sb-list').onclick = () => {
       const list = s.projects;
       const m = UI.modal(`<h2>📂 Мои проекты</h2>${list.length ? `<ul class="pj-list">${list.map((p, k) => `<li><button class="pj-open" data-k="${k}"><b>${UI.esc(p.name)}</b><small>${new Date(p.updated).toLocaleString('ru-RU')}</small></button><button class="btn tiny ghost pj-del" data-k="${k}" title="Удалить" aria-label="Удалить">🗑</button></li>`).join('')}</ul>` : '<p class="muted">Пока нет сохранённых проектов. Напиши что-нибудь и нажми «💾 Сохранить проект».</p>'}
@@ -81,6 +92,8 @@
         sbw.editor.setValue(p.code);
         s.sandboxCode = p.code;
         s.sandboxCanvas = p.canvas;
+        s.sandboxSize = p.size || { w: 480, h: 320 };
+        sbw.setSize(s.sandboxSize.w, s.sandboxSize.h);
         root.querySelector('.sb-canvas').checked = p.canvas;
         sbw.setCanvas(p.canvas);
         nameEl.textContent = '📄 ' + p.name;
@@ -100,6 +113,66 @@
       });
     };
     if (incoming) setTimeout(() => sbw.run(), 100);
+  }
+
+  // Собирает из кода самостоятельную страницу .html: открывается двойным щелчком, без интернета
+  function downloadGame(code, title, w, h) {
+    const safe = code.replace(/<\/script/gi, '<\\/script');
+    const html = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${UI.esc(title)}</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1326; }
+  body { display: flex; align-items: center; justify-content: center; font-family: sans-serif; }
+  canvas { background: #0d1326; max-width: 100vw; max-height: 100vh; height: auto; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  #console { position: fixed; left: 8px; bottom: 8px; color: #9fe; font: 13px monospace; white-space: pre; max-height: 30vh; overflow: auto; }
+</style>
+</head>
+<body>
+<canvas id="game" width="${w}" height="${h}" tabindex="0"></canvas>
+<div id="console"></div>
+<script>
+// Холст и кисть — как в курсе «ИгроКод»
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.focus();
+document.addEventListener("mousedown", () => canvas.focus());
+// если браузер не даёт доступ к localStorage (бывает у файлов), рекорды хранятся в памяти
+try { window.localStorage.getItem("test"); } catch (e) {
+  const mem = {};
+  Object.defineProperty(window, "localStorage", { value: {
+    getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); },
+    removeItem: (k) => { delete mem[k]; }, clear: () => { for (const k in mem) delete mem[k]; }
+  } });
+}
+window.addEventListener("keydown", (e) => {
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
+});
+// console.log тоже показываем на странице
+const __con = document.getElementById("console");
+const __log = console.log.bind(console);
+console.log = (...a) => { __log(...a); __con.textContent += a.map((x) => typeof x === "string" ? x : JSON.stringify(x)).join(" ") + "\\n"; };
+<\/script>
+<script>
+{
+// ===== Твой код =====
+${safe}
+}
+<\/script>
+</body>
+</html>
+`;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (title.replace(/[^\wа-яё -]/gi, '').trim() || 'game').replace(/\s+/g, '-') + '.html';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    UI.toast('Файл игры скачан ✓ Открой его двойным щелчком — игра запустится в браузере.', 'ok', 5000);
   }
 
   // ———————————————— СЛОВАРЬ ————————————————

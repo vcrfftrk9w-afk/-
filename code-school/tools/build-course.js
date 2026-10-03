@@ -111,4 +111,22 @@ for (const f of files) {
     'window.COURSE = window.COURSE || [];\nwindow.COURSE.push(' + JSON.stringify(mod, null, 1) + ');\n';
   fs.writeFileSync(path.join(outDir, f.replace(/\.txt$/, '.js')), js);
 }
-console.log(`Собрано модулей: ${files.length}, уроков: ${lessons}`);
+// Шаблоны песочницы: свои заготовки из content/sandbox.tpl + готовые игры из проектов
+const templates = [];
+const tpl = fs.readFileSync(path.join(srcDir, 'sandbox.tpl'), 'utf8').replace(/\r/g, '');
+for (const block of tpl.split(/^@template /m).filter((b) => b.trim())) {
+  const nl = block.indexOf('\n');
+  const head = block.slice(0, nl).split('|').map((x) => x.trim());
+  const size = /(\d+)x(\d+)/.exec(head[2] || '');
+  templates.push({ name: head[0], canvas: head[1] === 'canvas', w: size ? +size[1] : 480, h: size ? +size[2] : 320, code: block.slice(nl + 1).replace(/\s+$/, '') + '\n' });
+}
+for (const f of files) {
+  const mod = parse(fs.readFileSync(path.join(srcDir, f), 'utf8'), f);
+  if (!mod.project) continue;
+  const last = mod.lessons[mod.lessons.length - 1].task;
+  templates.push({ name: 'Готовая игра: ' + mod.title.replace(/^Проект:\s*/, ''), canvas: true, w: last.width || 480, h: last.height || 320, code: last.solution });
+}
+fs.writeFileSync(path.join(outDir, 'templates.js'), '/* Собрано командой node code-school/tools/build-course.js из content/sandbox.tpl и проектов курса. */\n' +
+  'window.SANDBOX_TEMPLATES = ' + JSON.stringify(templates, null, 1) + ';\n');
+
+console.log(`Собрано модулей: ${files.length}, уроков: ${lessons}, шаблонов песочницы: ${templates.length}`);

@@ -157,6 +157,14 @@
           }
         });
         if (canvasMode) setTimeout(() => { if (frameHost._runner) frameHost._runner.focus(); }, 100);
+        // на узком экране результат ниже редактора — показываем его после запуска
+        if (window.innerWidth < 1080) {
+          const out = host.querySelector(canvasMode ? '.wb-stage' : '.wb-console-head');
+          setTimeout(() => {
+            const r = out.getBoundingClientRect();
+            if (r.top > window.innerHeight - 80 || r.bottom < 60) out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 60);
+        }
       });
     }
 
@@ -164,6 +172,7 @@
       editor,
       run,
       setCanvas,
+      setSize(w, h) { opts.width = w; opts.height = h; },
       line,
       extra: $('.wb-extra'),
       checkBtn: $('.wb-check'),

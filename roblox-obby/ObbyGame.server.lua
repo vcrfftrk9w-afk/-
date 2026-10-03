@@ -23,6 +23,7 @@ local CONFIG = {
 	FinishCoins = 50, -- награда за прохождение
 	RestartAfterFinish = true, -- после финиша вернуть игрока на старт
 	SaveProgress = true, -- сохранять прогресс (нужен доступ к API, см. README)
+	LightMode = true, -- облегчённая графика для слабых компьютеров
 }
 
 local COLORS = {
@@ -381,10 +382,13 @@ local stages = {
 }
 local LAST_STAGE = #stages
 
+print("[Obby] Начинаю строить трассу...")
 local z, y = 8, CONFIG.StartHeight
 for index, build in ipairs(stages) do
 	z, y = build(z, y)
 	z = makeCheckpoint(index, z, y)
+	print("[Obby] Этап " .. index .. " построен")
+	task.wait() -- даём Studio передохнуть между этапами
 end
 
 -- Финиш
@@ -414,13 +418,15 @@ local trophy = makePart({
 	Material = Enum.Material.Neon,
 	CanCollide = false,
 })
-local sparkles = Instance.new("ParticleEmitter")
-sparkles.Rate = 25
-sparkles.Speed = NumberRange.new(4, 8)
-sparkles.SpreadAngle = Vector2.new(180, 180)
-sparkles.Lifetime = NumberRange.new(1, 2)
-sparkles.Color = ColorSequence.new(COLORS.gold)
-sparkles.Parent = trophy
+if not CONFIG.LightMode then
+	local sparkles = Instance.new("ParticleEmitter")
+	sparkles.Rate = 25
+	sparkles.Speed = NumberRange.new(4, 8)
+	sparkles.SpreadAngle = Vector2.new(180, 180)
+	sparkles.Lifetime = NumberRange.new(1, 2)
+	sparkles.Color = ColorSequence.new(COLORS.gold)
+	sparkles.Parent = trophy
+end
 
 local finishGate = makePart({
 	Name = "FinishGate",
@@ -432,11 +438,15 @@ local finishGate = makePart({
 
 -- Море лавы под всей трассой
 local seaLength = z + 60
-makeDeadly(makePart({
+local sea = makeDeadly(makePart({
 	Name = "LavaSea",
-	Size = Vector3.new(400, 1, seaLength + 100),
+	Size = Vector3.new(CONFIG.LightMode and 120 or 400, 1, seaLength + 60),
 	Position = Vector3.new(0, CONFIG.LavaHeight, seaLength / 2 - 30),
 }))
+if CONFIG.LightMode then
+	sea.Material = Enum.Material.SmoothPlastic
+end
+print("[Obby] Трасса построена: " .. LAST_STAGE .. " этапов")
 
 ---------------------------------------------------------------------
 -- Игроки и сохранения
@@ -469,6 +479,7 @@ local function teleportToCheckpoint(player)
 end
 
 local function onPlayerAdded(player)
+	print("[Obby] Игрок зашёл: " .. player.Name)
 	local stats = Instance.new("Folder")
 	stats.Name = "leaderstats"
 	local function stat(name)
@@ -568,16 +579,23 @@ overlap.FilterType = Enum.RaycastFilterType.Exclude
 overlap.FilterDescendantsInstances = { map }
 
 local clock = 0
+local nextHazardCheck = 0
 RunService.Heartbeat:Connect(function(dt)
 	clock += dt
+	local checkHazards = clock >= nextHazardCheck
+	if checkHazards then
+		nextHazardCheck = clock + 0.1
+	end
 
 	for _, spinner in ipairs(spinners) do
 		spinner.angle += spinner.speed * dt
 		spinner.part.CFrame = CFrame.new(spinner.center) * CFrame.Angles(0, spinner.angle, 0)
-		for _, hit in ipairs(workspace:GetPartsInPart(spinner.part, overlap)) do
-			local humanoid = humanoidFromHit(hit)
-			if humanoid then
-				humanoid.Health = 0
+		if checkHazards then
+			for _, hit in ipairs(workspace:GetPartsInPart(spinner.part, overlap)) do
+				local humanoid = humanoidFromHit(hit)
+				if humanoid then
+					humanoid.Health = 0
+				end
 			end
 		end
 	end
@@ -603,4 +621,3 @@ task.spawn(function()
 	end
 end)
 
-print("[Obby] Трасса построена: " .. LAST_STAGE .. " этапов")

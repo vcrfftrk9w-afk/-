@@ -1,0 +1,781 @@
+@module phys
+icon: 💥
+color: #ffb020
+title: Физика и столкновения
+desc: Столкновения, гравитация, прыжки, сбор монет и эффекты частиц
+
+@lesson phys-1
+title: Столкновение прямоугольников
+@theory
+Самый важный вопрос в любой игре: **столкнулись ли два объекта?** Пуля попала во врага? Герой подобрал монету? Мяч коснулся ракетки?
+
+Если объекты — прямоугольники (а в играх почти всё можно считать прямоугольниками), есть простая проверка. Она называется **AABB** — сложное имя, простая идея.
+
+## Идея: когда прямоугольники НЕ пересекаются?
+
+Проще подумать наоборот. Два прямоугольника точно **не** касаются, если один из них:
+- целиком **левее** другого, или
+- целиком **правее**, или
+- целиком **выше**, или
+- целиком **ниже**.
+
+Во всех остальных случаях — пересекаются! Записываем «пересекаются» сразу:
+
+```code
+function rectsCollide(a, b) {
+  return a.x < b.x + b.w &&   // левый край a левее правого края b
+         a.x + a.w > b.x &&   // правый край a правее левого края b
+         a.y < b.y + b.h &&   // верх a выше низа b
+         a.y + a.h > b.y;     // низ a ниже верха b
+}
+```
+
+Все четыре условия через `&&` — должны выполняться **одновременно**.
+
+## Попробуй сам
+
+Двигай синий квадрат стрелками — при касании красный станет жёлтым:
+
+```js canvas
+const a = { x: 50, y: 140, w: 50, h: 50 };
+const b = { x: 250, y: 120, w: 80, h: 80 };
+const keys = {};
+document.addEventListener("keydown", (e) => { keys[e.key] = true; });
+document.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+function rectsCollide(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function loop() {
+  if (keys.ArrowRight) a.x += 3;
+  if (keys.ArrowLeft) a.x -= 3;
+  if (keys.ArrowUp) a.y -= 3;
+  if (keys.ArrowDown) a.y += 3;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = rectsCollide(a, b) ? "yellow" : "tomato";
+  ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.fillStyle = "deepskyblue";
+  ctx.fillRect(a.x, a.y, a.w, a.h);
+  requestAnimationFrame(loop);
+}
+loop();
+```
+
+> 🎮 Эта функция будет почти в каждой твоей игре. Её стоит понять один раз как следует — и пользоваться всю жизнь.
+@task
+Напиши функцию `rectsCollide(a, b)`, которая возвращает `true`, если прямоугольники `a` и `b` пересекаются, и `false`, если нет. У каждого прямоугольника есть `x`, `y`, `w` (ширина) и `h` (высота).
+
+Робот проверит много случаев: пересечение, касание вплотную, один внутри другого, далеко друг от друга.
+@starter
+function rectsCollide(a, b) {
+
+}
+
+const player = { x: 10, y: 10, w: 30, h: 30 };
+const coin = { x: 30, y: 30, w: 20, h: 20 };
+console.log(rectsCollide(player, coin));
+@solution
+function rectsCollide(a, b) {
+  return a.x < b.x + b.w &&
+         a.x + a.w > b.x &&
+         a.y < b.y + b.h &&
+         a.y + a.h > b.y;
+}
+
+const player = { x: 10, y: 10, w: 30, h: 30 };
+const coin = { x: 30, y: 30, w: 20, h: 20 };
+console.log(rectsCollide(player, coin));
+@test Пересекающиеся прямоугольники → true
+rectsCollide({ x: 0, y: 0, w: 50, h: 50 }, { x: 30, y: 30, w: 50, h: 50 }) === true
+@test Один внутри другого → true
+rectsCollide({ x: 0, y: 0, w: 100, h: 100 }, { x: 40, y: 40, w: 10, h: 10 }) === true && rectsCollide({ x: 40, y: 40, w: 10, h: 10 }, { x: 0, y: 0, w: 100, h: 100 }) === true
+@test Далеко слева/справа → false
+rectsCollide({ x: 0, y: 0, w: 20, h: 20 }, { x: 100, y: 0, w: 20, h: 20 }) === false && rectsCollide({ x: 100, y: 0, w: 20, h: 20 }, { x: 0, y: 0, w: 20, h: 20 }) === false
+@test Далеко сверху/снизу → false
+rectsCollide({ x: 0, y: 0, w: 20, h: 20 }, { x: 0, y: 100, w: 20, h: 20 }) === false && rectsCollide({ x: 0, y: 100, w: 20, h: 20 }, { x: 0, y: 0, w: 20, h: 20 }) === false
+@test Совпадают по x, но разнесены по y → false
+rectsCollide({ x: 0, y: 0, w: 50, h: 20 }, { x: 10, y: 40, w: 20, h: 20 }) === false
+@test Вплотную, но без перекрытия → false
+rectsCollide({ x: 0, y: 0, w: 20, h: 20 }, { x: 20, y: 0, w: 20, h: 20 }) === false
+@hint
+Нужны четыре сравнения через `&&`: `a.x < b.x + b.w`, `a.x + a.w > b.x`, …
+@hint
+Полностью: `return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;`
+@quiz
+? Прямоугольник A: x=0, w=10. Прямоугольник B: x=20, w=10. Они на одной высоте. Пересекаются?
+- Да
++ Нет
+= Правый край A — 10, а левый край B — 20. Между ними зазор.
+
+@lesson phys-2
+title: Столкновение кругов
+@theory
+Мячи, монеты, астероиды — круглые. Для кругов проверка ещё проще!
+
+Два круга касаются, если **расстояние между их центрами меньше суммы радиусов**.
+
+```code
+function circlesCollide(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  return dist < a.r + b.r;
+}
+```
+
+Расстояние считается по теореме Пифагора: `dx` и `dy` — катеты, `dist` — гипотенуза. Есть и готовая функция: `Math.hypot(dx, dy)` [хайпо́т] делает то же самое.
+
+```js canvas
+const a = { x: 100, y: 160, r: 40 };
+const b = { x: 300, y: 160, r: 60 };
+
+canvas.addEventListener("mousemove", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  a.x = (e.clientX - rect.left) * canvas.width / rect.width;
+  a.y = (e.clientY - rect.top) * canvas.height / rect.height;
+});
+
+function loop() {
+  const hit = Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = hit ? "gold" : "slateblue";
+  ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "tomato";
+  ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "white"; ctx.font = "18px Arial";
+  ctx.fillText(hit ? "Столкновение!" : "Води мышкой", 12, 26);
+  requestAnimationFrame(loop);
+}
+loop();
+```
+
+> 💡 Хитрость профессионалов: квадратный корень — медленная операция. Можно сравнивать **квадраты**: `dx*dx + dy*dy < (a.r + b.r) * (a.r + b.r)`. Результат тот же, а считается быстрее. Для наших игр разницы не будет — но приятно знать.
+@task
+Напиши функцию `circlesCollide(a, b)`, которая возвращает `true`, если круги `a` и `b` пересекаются. У каждого круга есть `x`, `y` (центр) и `r` (радиус).
+@starter
+function circlesCollide(a, b) {
+
+}
+
+console.log(circlesCollide({ x: 0, y: 0, r: 10 }, { x: 15, y: 0, r: 10 }));
+@solution
+function circlesCollide(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  return dist < a.r + b.r;
+}
+
+console.log(circlesCollide({ x: 0, y: 0, r: 10 }, { x: 15, y: 0, r: 10 }));
+@test Пересекающиеся круги → true
+circlesCollide({ x: 0, y: 0, r: 10 }, { x: 15, y: 0, r: 10 }) === true
+@test Далёкие круги → false
+circlesCollide({ x: 0, y: 0, r: 10 }, { x: 100, y: 0, r: 10 }) === false
+@test По диагонали: (0,0) r=10 и (30,40) r=45 → true, r=30 → false
+circlesCollide({ x: 0, y: 0, r: 10 }, { x: 30, y: 40, r: 45 }) === true && circlesCollide({ x: 0, y: 0, r: 10 }, { x: 30, y: 40, r: 30 }) === false
+@test Маленький круг внутри большого → true
+circlesCollide({ x: 50, y: 50, r: 100 }, { x: 60, y: 55, r: 5 }) === true
+@hint
+Сначала разницы: `const dx = a.x - b.x;` и `const dy = a.y - b.y;`
+@hint
+Расстояние: `Math.sqrt(dx * dx + dy * dy)` (или `Math.hypot(dx, dy)`), и `return dist < a.r + b.r;`
+@quiz
+? Круги радиусом 5 и 7, расстояние между центрами 10. Пересекаются?
++ Да
+- Нет
+= 10 < 5 + 7 = 12 — пересекаются.
+
+@lesson phys-3
+title: Гравитация
+@theory
+Как сделать, чтобы предметы **падали**, как в жизни? В реальности падающий предмет не просто летит вниз — он **разгоняется**. Каждую секунду быстрее и быстрее.
+
+В игре это делается в две строчки:
+
+```code
+player.vy += gravity;   // гравитация увеличивает скорость падения
+player.y += player.vy;  // скорость меняет положение
+```
+
+`gravity` [гра́вити] — небольшое число, например `0.5`. Каждый кадр скорость падения `vy` увеличивается на 0.5: 0.5, 1, 1.5, 2… — объект разгоняется.
+
+## Земля
+
+Чтобы объект не провалился сквозь пол, проверяем: если его низ ниже земли — ставим ровно на землю и обнуляем скорость.
+
+```js canvas
+const groundY = 280;
+const gravity = 0.5;
+const box = { x: 220, y: 0, w: 40, h: 40, vy: 0 };
+
+canvas.addEventListener("click", () => { box.y = 0; box.vy = 0; });
+
+function update() {
+  box.vy += gravity;
+  box.y += box.vy;
+  if (box.y + box.h > groundY) {
+    box.y = groundY - box.h;
+    box.vy = 0;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#3b7d3b";
+  ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+  ctx.fillStyle = "orange";
+  ctx.fillRect(box.x, box.y, box.w, box.h);
+  ctx.fillStyle = "white";
+  ctx.font = "16px Arial";
+  ctx.fillText("Кликни, чтобы уронить ящик ещё раз", 10, 24);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+```
+
+## Отскок вместо остановки
+
+Если вместо `vy = 0` написать `vy = -vy * 0.7`, ящик будет подпрыгивать, каждый раз всё ниже — как мячик. Число 0.7 — «упругость».
+
+> 🎮 Подбирая `gravity`, можно сделать игру «на Луне» (0.15) или «на Юпитере» (1.2). В Марио гравитация сильнее при падении, чем при подъёме, — от этого прыжок кажется «тяжёлым» и приятным.
+@task
+Допиши `update()`, чтобы игрок падал под действием гравитации:
+
+1. Увеличивай `player.vy` на `gravity`.
+2. Сдвигай `player.y` на `player.vy`.
+3. Если низ игрока (`player.y + player.h`) ниже земли `groundY` — поставь игрока ровно на землю, обнули `vy` и поставь `player.onGround = true`. Иначе — `player.onGround = false`.
+@canvas
+@starter
+const groundY = 280;
+const gravity = 0.5;
+const player = { x: 220, y: 20, w: 40, h: 40, vy: 0, onGround: false };
+
+function update() {
+
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#3b7d3b";
+  ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+  ctx.fillStyle = "orange";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@solution
+const groundY = 280;
+const gravity = 0.5;
+const player = { x: 220, y: 20, w: 40, h: 40, vy: 0, onGround: false };
+
+function update() {
+  player.vy += gravity;
+  player.y += player.vy;
+
+  if (player.y + player.h > groundY) {
+    player.y = groundY - player.h;
+    player.vy = 0;
+    player.onGround = true;
+  } else {
+    player.onGround = false;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#3b7d3b";
+  ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+  ctx.fillStyle = "orange";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@test В воздухе скорость падения растёт на gravity
+(function () { player.y = 50; player.vy = 2; update(); return player.vy === 2.5 && player.y === 52.5; })()
+@test Игрок разгоняется: каждый кадр падает быстрее
+(function () { player.y = 0; player.vy = 0; update(); var a = player.y; update(); var b = player.y; update(); var c = player.y; return b - a > a && c - b > b - a; })()
+@test На земле игрок стоит ровно на groundY и не проваливается
+(function () { player.y = groundY - player.h - 1; player.vy = 6; update(); return player.y + player.h === groundY && player.vy === 0; })()
+@test Флаг onGround: true на земле, false в воздухе
+(function () { player.y = groundY - player.h; player.vy = 0; update(); var a = player.onGround === true; player.y = 50; player.vy = 0; update(); return a && player.onGround === false; })()
+@hint
+Первые две строчки: `player.vy += gravity;` и `player.y += player.vy;`
+@hint
+Затем: `if (player.y + player.h > groundY) { player.y = groundY - player.h; player.vy = 0; player.onGround = true; } else { player.onGround = false; }`
+@quiz
+? Что делает строчка `player.vy += gravity`?
++ Увеличивает скорость падения
+- Двигает игрока вниз на gravity пикселей
+- Останавливает игрока
+= Гравитация меняет скорость, а скорость меняет положение.
+
+@lesson phys-4
+title: Прыжок
+@theory
+Прыжок — это просто **резкая скорость вверх**. Помнишь, что вверх — это отрицательный y? Значит, прыжок — это `vy = -10` (или другое отрицательное число). А дальше гравитация сама замедлит подъём, остановит героя в верхней точке и вернёт вниз. Получается красивая дуга — бесплатно!
+
+```code
+if (keys[" "] && player.onGround) {
+  player.vy = -jumpPower;
+}
+```
+
+## Зачем проверять onGround?
+
+Без этой проверки герой сможет прыгать **в воздухе** — бесконечно взлетая вверх. Поэтому прыгать можно, только стоя на земле. (А если захочешь сделать «двойной прыжок» — считай прыжки и разрешай второй в воздухе.)
+
+```js canvas
+const groundY = 280, gravity = 0.6, jumpPower = 12;
+const player = { x: 60, y: 200, w: 36, h: 36, vy: 0, onGround: false };
+const keys = {};
+document.addEventListener("keydown", (e) => { keys[e.key] = true; });
+document.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+function update() {
+  if (keys["ArrowRight"]) player.x += 4;
+  if (keys["ArrowLeft"]) player.x -= 4;
+  if (keys[" "] && player.onGround) player.vy = -jumpPower;
+
+  player.vy += gravity;
+  player.y += player.vy;
+  if (player.y + player.h > groundY) {
+    player.y = groundY - player.h;
+    player.vy = 0;
+    player.onGround = true;
+  } else {
+    player.onGround = false;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#3b7d3b";
+  ctx.fillRect(0, groundY, canvas.width, 40);
+  ctx.font = "36px Arial";
+  ctx.fillText("🐱", player.x, player.y + 32);
+  ctx.fillStyle = "white"; ctx.font = "16px Arial";
+  ctx.fillText("← → — бег, пробел — прыжок", 10, 24);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+```
+
+> 🧠 Высота прыжка зависит от `jumpPower` и `gravity`. Хочешь прыжок выше — увеличь `jumpPower`. Хочешь «парящий» прыжок — уменьши `gravity`.
+@task
+Добавь в `update()` прыжок: если зажат **пробел** (`keys[" "]`) **и** игрок стоит на земле (`player.onGround`) — задай `player.vy = -jumpPower`.
+
+Гравитация и земля уже написаны. Прыжок поставь **перед** гравитацией.
+@canvas
+@starter
+const groundY = 280;
+const gravity = 0.6;
+const jumpPower = 12;
+const player = { x: 60, y: 244, w: 36, h: 36, vy: 0, onGround: true };
+const keys = {};
+document.addEventListener("keydown", (e) => { keys[e.key] = true; });
+document.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+function update() {
+  if (keys["ArrowRight"]) player.x += 4;
+  if (keys["ArrowLeft"]) player.x -= 4;
+
+  // Прыжок
+
+
+  player.vy += gravity;
+  player.y += player.vy;
+  if (player.y + player.h > groundY) {
+    player.y = groundY - player.h;
+    player.vy = 0;
+    player.onGround = true;
+  } else {
+    player.onGround = false;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#3b7d3b";
+  ctx.fillRect(0, groundY, canvas.width, 40);
+  ctx.fillStyle = "orange";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@solution
+const groundY = 280;
+const gravity = 0.6;
+const jumpPower = 12;
+const player = { x: 60, y: 244, w: 36, h: 36, vy: 0, onGround: true };
+const keys = {};
+document.addEventListener("keydown", (e) => { keys[e.key] = true; });
+document.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+function update() {
+  if (keys["ArrowRight"]) player.x += 4;
+  if (keys["ArrowLeft"]) player.x -= 4;
+
+  // Прыжок
+  if (keys[" "] && player.onGround) {
+    player.vy = -jumpPower;
+  }
+
+  player.vy += gravity;
+  player.y += player.vy;
+  if (player.y + player.h > groundY) {
+    player.y = groundY - player.h;
+    player.vy = 0;
+    player.onGround = true;
+  } else {
+    player.onGround = false;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#3b7d3b";
+  ctx.fillRect(0, groundY, canvas.width, 40);
+  ctx.fillStyle = "orange";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@test Пробел на земле — игрок подпрыгивает (летит вверх)
+(function () { player.y = groundY - player.h; player.vy = 0; player.onGround = true; __press(" "); update(); __release(" "); return player.vy < 0 && player.y < groundY - player.h; })()
+@test Скорость прыжка — jumpPower
+(function () { player.y = groundY - player.h; player.vy = 0; player.onGround = true; __press(" "); update(); __release(" "); return Math.abs(player.vy - (-jumpPower + gravity)) < 0.001; })()
+@test В воздухе прыгнуть нельзя
+(function () { player.y = 100; player.vy = 1; player.onGround = false; __press(" "); update(); __release(" "); return player.vy > 1; })()
+@test Без пробела игрок не прыгает
+(function () { player.y = groundY - player.h; player.vy = 0; player.onGround = true; update(); return player.vy === 0; })()
+@hint
+Условие с двумя частями: `if (keys[" "] && player.onGround) { ... }`
+@hint
+Внутри: `player.vy = -jumpPower;` — минус, потому что вверх.
+@quiz
+? Почему скорость прыжка отрицательная?
++ На холсте y растёт вниз, а прыжок — вверх
+- Так короче писать
+- Это ошибка, должна быть положительной
+= Движение вверх — уменьшение y, значит скорость отрицательная.
+? Что будет без проверки onGround?
++ Можно прыгать в воздухе бесконечно
+- Нельзя будет прыгнуть вообще
+- Ничего не изменится
+= Каждый кадр с зажатым пробелом снова давал бы скорость вверх.
+
+@lesson phys-5
+title: Сбор предметов
+@theory
+Соединим всё вместе: у нас есть **массив монет** и функция **столкновения**. Если герой касается монеты — монета исчезает, счёт растёт.
+
+```js canvas
+const player = { x: 30, y: 140, w: 34, h: 34 };
+const coins = [];
+let score = 0;
+for (let i = 0; i < 8; i++) {
+  coins.push({ x: 60 + Math.random() * 380, y: 30 + Math.random() * 260, w: 20, h: 20 });
+}
+const keys = {};
+document.addEventListener("keydown", (e) => { keys[e.key] = true; });
+document.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+function rectsCollide(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function update() {
+  if (keys.ArrowRight) player.x += 4;
+  if (keys.ArrowLeft) player.x -= 4;
+  if (keys.ArrowUp) player.y -= 4;
+  if (keys.ArrowDown) player.y += 4;
+  for (let i = coins.length - 1; i >= 0; i--) {
+    if (rectsCollide(player, coins[i])) {
+      coins.splice(i, 1);
+      score++;
+    }
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = "20px Arial";
+  for (const c of coins) ctx.fillText("🪙", c.x - 2, c.y + 18);
+  ctx.font = "32px Arial";
+  ctx.fillText("🐹", player.x - 2, player.y + 30);
+  ctx.fillStyle = "white"; ctx.font = "18px Arial";
+  ctx.fillText(coins.length ? `Монеты: ${score}` : "Все монеты собраны! 🎉", 10, 24);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+```
+
+Узнаёшь приёмы?
+
+- массив объектов-монет, созданный в цикле со случайными координатами;
+- `rectsCollide` из первого урока модуля;
+- удаление из массива **с конца** через `splice` — как в модуле про массивы.
+
+> 🎮 Ровно так же работает подбор бонусов, аптечек, ключей и попадание пуль во врагов.
+@task
+Допиши в `update()` сбор монет: пройди по массиву `coins` **с конца**, и если игрок касается монеты (`rectsCollide(player, coins[i])`) — удали её через `splice` и увеличь `score` на 1.
+@canvas
+@starter
+const player = { x: 30, y: 140, w: 34, h: 34 };
+const coins = [];
+let score = 0;
+for (let i = 0; i < 8; i++) {
+  coins.push({ x: 60 + i * 50, y: 40 + (i % 3) * 100, w: 20, h: 20 });
+}
+const keys = {};
+document.addEventListener("keydown", (e) => { keys[e.key] = true; });
+document.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+function rectsCollide(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function update() {
+  if (keys.ArrowRight) player.x += 4;
+  if (keys.ArrowLeft) player.x -= 4;
+  if (keys.ArrowUp) player.y -= 4;
+  if (keys.ArrowDown) player.y += 4;
+
+  // Сбор монет
+
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "gold";
+  for (const c of coins) ctx.fillRect(c.x, c.y, c.w, c.h);
+  ctx.fillStyle = "deepskyblue";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  ctx.fillStyle = "white";
+  ctx.font = "18px Arial";
+  ctx.fillText("Монеты: " + score, 10, 24);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@solution
+const player = { x: 30, y: 140, w: 34, h: 34 };
+const coins = [];
+let score = 0;
+for (let i = 0; i < 8; i++) {
+  coins.push({ x: 60 + i * 50, y: 40 + (i % 3) * 100, w: 20, h: 20 });
+}
+const keys = {};
+document.addEventListener("keydown", (e) => { keys[e.key] = true; });
+document.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+function rectsCollide(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function update() {
+  if (keys.ArrowRight) player.x += 4;
+  if (keys.ArrowLeft) player.x -= 4;
+  if (keys.ArrowUp) player.y -= 4;
+  if (keys.ArrowDown) player.y += 4;
+
+  // Сбор монет
+  for (let i = coins.length - 1; i >= 0; i--) {
+    if (rectsCollide(player, coins[i])) {
+      coins.splice(i, 1);
+      score++;
+    }
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "gold";
+  for (const c of coins) ctx.fillRect(c.x, c.y, c.w, c.h);
+  ctx.fillStyle = "deepskyblue";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  ctx.fillStyle = "white";
+  ctx.font = "18px Arial";
+  ctx.fillText("Монеты: " + score, 10, 24);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@test Касание монеты убирает её и даёт очко
+(function () { coins.length = 0; coins.push({ x: 100, y: 100, w: 20, h: 20 }); player.x = 95; player.y = 95; var s = score; update(); return coins.length === 0 && score === s + 1; })()
+@test Далёкие монеты не собираются
+(function () { coins.length = 0; coins.push({ x: 400, y: 250, w: 20, h: 20 }); player.x = 10; player.y = 10; var s = score; update(); return coins.length === 1 && score === s; })()
+@test Две монеты под игроком — обе собраны за один кадр
+(function () { coins.length = 0; coins.push({ x: 100, y: 100, w: 10, h: 10 }); coins.push({ x: 112, y: 112, w: 10, h: 10 }); coins.push({ x: 400, y: 10, w: 10, h: 10 }); player.x = 95; player.y = 95; var s = score; update(); return coins.length === 1 && score === s + 2 && coins[0].x === 400; })()
+@hint
+Цикл с конца: `for (let i = coins.length - 1; i >= 0; i--) { ... }`
+@hint
+Внутри: `if (rectsCollide(player, coins[i])) { coins.splice(i, 1); score++; }`
+@quiz
+? Почему монеты удаляют в цикле с конца массива?
++ Чтобы при удалении не пропустить следующую монету
+- Чтобы монеты исчезали красивее
+- Так требует функция splice
+= После splice элементы сдвигаются влево — при движении с конца это не мешает.
+
+@lesson phys-6
+title: Частицы — взрывы и искры
+@theory
+Хочешь, чтобы игра выглядела «сочно»? Добавь **частицы**: при взрыве разлетаются искры, при сборе монеты — звёздочки. Это делается очень просто, а эффект — огромный.
+
+**Частица** — маленький объект с координатами, скоростью и **временем жизни**. Каждый кадр она летит, а её жизнь уменьшается. Жизнь закончилась — частицу удаляем.
+
+```js canvas
+const particles = [];
+
+function explode(x, y) {
+  for (let i = 0; i < 40; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1 + Math.random() * 4;
+    particles.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 60,
+      color: `hsl(${20 + Math.random() * 40}, 100%, 60%)`
+    });
+  }
+}
+
+canvas.addEventListener("click", (e) => {
+  const r = canvas.getBoundingClientRect();
+  explode((e.clientX - r.left) * canvas.width / r.width, (e.clientY - r.top) * canvas.height / r.height);
+});
+
+function update() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.05;
+    p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function draw() {
+  ctx.fillStyle = "rgba(10, 14, 35, 0.35)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (const p of particles) {
+    ctx.globalAlpha = p.life / 60;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, 3, 3);
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "white"; ctx.font = "18px Arial";
+  ctx.fillText("Кликай — будут взрывы!", 12, 26);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+explode(240, 160);
+loop();
+```
+
+## Новые приёмы
+
+- `Math.cos(angle)` и `Math.sin(angle)` [кос, сайн] превращают **угол** в направление: частицы разлетаются во все стороны по кругу.
+- `ctx.globalAlpha` [гло́убал а́льфа] — прозрачность от 0 до 1. Чем меньше жизни, тем прозрачнее частица — она красиво тает.
+- Фон рисуется **полупрозрачным** `rgba(..., 0.35)`, поэтому старые кадры не стираются полностью — остаётся лёгкий шлейф.
+
+> 🧠 Не пугайся синусов и косинусов: достаточно запомнить, что `Math.cos(угол) * скорость` и `Math.sin(угол) * скорость` дают vx и vy для движения под этим углом.
+@task
+Допиши систему частиц:
+
+1. Функция `spawn(x, y)` должна добавлять в массив `particles` **20 частиц** в точке `(x, y)` — у каждой: `x`, `y`, случайные `vx` и `vy` (например, от −3 до 3) и `life: 40`.
+2. В `update()` для каждой частицы: сдвинь на `vx`/`vy`, уменьши `life` на 1, и если `life` стала 0 или меньше — удали частицу (цикл с конца!).
+@canvas
+@starter
+const particles = [];
+
+function spawn(x, y) {
+
+}
+
+function update() {
+
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "orange";
+  for (const p of particles) ctx.fillRect(p.x, p.y, 4, 4);
+}
+
+canvas.addEventListener("click", (e) => {
+  const r = canvas.getBoundingClientRect();
+  spawn((e.clientX - r.left) * canvas.width / r.width, (e.clientY - r.top) * canvas.height / r.height);
+});
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@solution
+const particles = [];
+
+function spawn(x, y) {
+  for (let i = 0; i < 20; i++) {
+    particles.push({
+      x: x,
+      y: y,
+      vx: Math.random() * 6 - 3,
+      vy: Math.random() * 6 - 3,
+      life: 40
+    });
+  }
+}
+
+function update() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+    }
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "orange";
+  for (const p of particles) ctx.fillRect(p.x, p.y, 4, 4);
+}
+
+canvas.addEventListener("click", (e) => {
+  const r = canvas.getBoundingClientRect();
+  spawn((e.clientX - r.left) * canvas.width / r.width, (e.clientY - r.top) * canvas.height / r.height);
+});
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@test spawn добавляет 20 частиц в нужной точке с life 40
+(function () { particles.length = 0; spawn(100, 50); return particles.length === 20 && particles.every(function (p) { return p.x === 100 && p.y === 50 && p.life === 40 && typeof p.vx === "number" && typeof p.vy === "number"; }); })()
+@test Скорости частиц случайные и разные
+(function () { particles.length = 0; spawn(0, 0); var v = {}; particles.forEach(function (p) { v[p.vx.toFixed(3)] = 1; }); return Object.keys(v).length > 5; })()
+@test update двигает частицы и уменьшает life
+(function () { particles.length = 0; particles.push({ x: 10, y: 10, vx: 2, vy: -1, life: 5 }); update(); var p = particles[0]; return p && p.x === 12 && p.y === 9 && p.life === 4; })()
+@test Частицы с закончившейся жизнью удаляются
+(function () { particles.length = 0; particles.push({ x: 0, y: 0, vx: 0, vy: 0, life: 1 }); particles.push({ x: 0, y: 0, vx: 0, vy: 0, life: 1 }); particles.push({ x: 5, y: 5, vx: 0, vy: 0, life: 10 }); update(); return particles.length === 1 && particles[0].x === 5; })()
+@hint
+В spawn — цикл на 20 повторов с `particles.push({ x: x, y: y, vx: Math.random() * 6 - 3, vy: Math.random() * 6 - 3, life: 40 });`
+@hint
+В update — цикл с конца: сдвиг `p.x += p.vx; p.y += p.vy;`, затем `p.life--;` и `if (p.life <= 0) { particles.splice(i, 1); }`
+@quiz
+? Что даёт `Math.random() * 6 - 3`?
++ Случайное число от −3 до 3
+- От 0 до 6
+- От 3 до 6
+= От 0 до 6, сдвинутое на −3.

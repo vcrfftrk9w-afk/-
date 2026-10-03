@@ -1,0 +1,701 @@
+@module ctrl
+icon: 🕹️
+color: #7c6cff
+title: Управление
+desc: Игрок берёт управление: клавиатура, мышь и касания
+
+@lesson ctrl-1
+title: События клавиатуры
+@theory
+Игра становится игрой, когда ею можно **управлять**. Когда игрок нажимает клавишу, браузер создаёт **событие** (event [ивэ́нт]). Наша задача — «подписаться» на это событие: сказать браузеру, какую функцию вызвать.
+
+```js canvas
+document.addEventListener("keydown", (e) => {
+  console.log("Нажата клавиша: " + e.key);
+});
+
+ctx.fillStyle = "white";
+ctx.font = "20px Arial";
+ctx.fillText("Кликни сюда и нажимай клавиши", 90, 165);
+```
+
+Кликни по холсту и понажимай клавиши — в консоли появятся их названия.
+
+## Разбор
+
+- `document` [до́кьюмент] — вся страница;
+- `addEventListener` [эд ивэ́нт ли́снер] — «добавить слушателя события»;
+- `"keydown"` [ки да́ун] — событие «клавиша нажата». Есть ещё `"keyup"` [ки ап] — «отпущена»;
+- `(e) => { ... }` — функция, которая вызовется при нажатии. В `e` браузер положит информацию о событии;
+- `e.key` — какая клавиша нажата.
+
+## Названия клавиш
+
+| Клавиша | e.key |
+|---|---|
+| ← → ↑ ↓ | `"ArrowLeft"`, `"ArrowRight"`, `"ArrowUp"`, `"ArrowDown"` |
+| Пробел | `" "` (пробел в кавычках) |
+| Enter | `"Enter"` |
+| Буква A | `"a"` (или `"A"` с Shift) |
+
+## Двигаем героя
+
+```js canvas
+const player = { x: 220, y: 140, size: 40 };
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowRight") player.x += 20;
+  if (e.key === "ArrowLeft") player.x -= 20;
+  if (e.key === "ArrowUp") player.y -= 20;
+  if (e.key === "ArrowDown") player.y += 20;
+});
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = player.size + "px Arial";
+  ctx.fillText("🐸", player.x, player.y + player.size);
+  requestAnimationFrame(loop);
+}
+loop();
+```
+
+> 💡 Если `if` содержит всего одну команду, фигурные скобки можно не писать — так короче. Но если команд больше одной — скобки обязательны.
+
+> ⚠️ Чтобы игра «слышала» клавиатуру, по ней нужно сначала **кликнуть** — так браузер понимает, куда отправлять нажатия.
+@task
+Научи игрока ходить влево-вправо: подпишись на событие `"keydown"` и
+- при стрелке **вправо** (`"ArrowRight"`) увеличивай `player.x` на 10;
+- при стрелке **влево** (`"ArrowLeft"`) уменьшай `player.x` на 10.
+
+Робот сам «нажмёт» клавиши и проверит.
+@canvas
+@starter
+const player = { x: 220, y: 240, w: 40, h: 40 };
+
+// Подпишись на нажатия клавиш
+
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "lime";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  requestAnimationFrame(loop);
+}
+loop();
+@solution
+const player = { x: 220, y: 240, w: 40, h: 40 };
+
+// Подпишись на нажатия клавиш
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowRight") {
+    player.x += 10;
+  }
+  if (e.key === "ArrowLeft") {
+    player.x -= 10;
+  }
+});
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "lime";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  requestAnimationFrame(loop);
+}
+loop();
+@test Стрелка вправо сдвигает игрока на 10 вправо
+(function () { player.x = 200; __press("ArrowRight"); return player.x === 210; })()
+@test Стрелка влево сдвигает игрока на 10 влево
+(function () { player.x = 200; __press("ArrowLeft"); return player.x === 190; })()
+@test Другие клавиши игрока не двигают
+(function () { player.x = 200; __press("a"); __press(" "); return player.x === 200; })()
+@test Используется addEventListener("keydown", ...)
+/addEventListener\s*\(\s*["']keydown["']/.test(__code)
+@hint
+`document.addEventListener("keydown", (e) => { ... });`
+@hint
+Внутри: `if (e.key === "ArrowRight") { player.x += 10; }` и такое же условие для `"ArrowLeft"` с `-=`.
+@quiz
+? Какое событие происходит, когда клавишу отпускают?
+- keydown
++ keyup
+- keypress
+= keydown — нажали, keyup — отпустили.
+? Чему равно e.key при нажатии пробела?
++ `" "`
+- `"Space"`
+- `"пробел"`
+= Для пробела e.key — это строка с одним пробелом.
+
+@lesson ctrl-2
+title: Плавное движение — зажатые клавиши
+@theory
+Попробуй в прошлом примере зажать стрелку: герой сначала делает шаг, потом замирает, а потом начинает дёргаться. Это потому, что `keydown` повторяется с той же задержкой, что и буквы при наборе текста. Для игр это не годится!
+
+## Решение: запоминаем, какие клавиши зажаты
+
+1. При `keydown` записываем: «клавиша нажата» — `keys[e.key] = true`.
+2. При `keyup` — «отпущена» — `keys[e.key] = false`.
+3. В `update()` **каждый кадр** проверяем, что зажато, и двигаем героя.
+
+```js canvas
+const player = { x: 220, y: 140, size: 40, speed: 4 };
+const keys = {};
+
+document.addEventListener("keydown", (e) => { keys[e.key] = true; });
+document.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+function update() {
+  if (keys["ArrowRight"]) player.x += player.speed;
+  if (keys["ArrowLeft"]) player.x -= player.speed;
+  if (keys["ArrowUp"]) player.y -= player.speed;
+  if (keys["ArrowDown"]) player.y += player.speed;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = player.size + "px Arial";
+  ctx.fillText("🚀", player.x, player.y + player.size);
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+```
+
+Попробуй: движение плавное, и можно зажать две стрелки сразу — герой полетит по диагонали!
+
+## Что такое keys
+
+`keys` — обычный объект. Ключами в нём становятся названия клавиш: после нажатия → вправо он выглядит так: `{ ArrowRight: true }`. `keys["ArrowRight"]` и `keys.ArrowRight` — одно и то же.
+
+## WASD и русская раскладка
+
+Многие играют буквами W, A, S, D. Но осторожно: если у игрока включена **русская раскладка**, `e.key` для W будет `"ц"`! Чтобы не зависеть от раскладки, используют `e.code` — название **физической** клавиши:
+
+| Клавиша | e.key (англ / рус) | e.code |
+|---|---|---|
+| W | `"w"` / `"ц"` | `"KeyW"` |
+| A | `"a"` / `"ф"` | `"KeyA"` |
+| Пробел | `" "` | `"Space"` |
+
+> 💡 Для букв в играх надёжнее `e.code`: `keys[e.code] = true`, а потом `if (keys["KeyW"]) ...`. Тогда управление работает при любой раскладке.
+@task
+Сделай плавное управление:
+
+1. В объект `keys` при `keydown` записывай `true` для нажатой клавиши (`keys[e.key] = true`), при `keyup` — `false`.
+2. В `update()`: если зажата стрелка вправо — увеличивай `player.x` на `player.speed`, влево — уменьшай.
+@canvas
+@starter
+const player = { x: 220, y: 240, w: 40, h: 40, speed: 5 };
+const keys = {};
+
+// 1. Слушай keydown и keyup
+
+
+function update() {
+  // 2. Двигай игрока, пока зажата клавиша
+
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "orange";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+@solution
+const player = { x: 220, y: 240, w: 40, h: 40, speed: 5 };
+const keys = {};
+
+// 1. Слушай keydown и keyup
+document.addEventListener("keydown", (e) => {
+  keys[e.key] = true;
+});
+document.addEventListener("keyup", (e) => {
+  keys[e.key] = false;
+});
+
+function update() {
+  // 2. Двигай игрока, пока зажата клавиша
+  if (keys["ArrowRight"]) {
+    player.x += player.speed;
+  }
+  if (keys["ArrowLeft"]) {
+    player.x -= player.speed;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "orange";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+@test Нажатие записывается в keys
+(function () { __press("ArrowRight"); var ok = keys["ArrowRight"] === true; __release("ArrowRight"); return ok; })()
+@test Отпускание записывает false
+(function () { __press("ArrowLeft"); __release("ArrowLeft"); return !keys["ArrowLeft"]; })()
+@test Пока зажата →, каждый update сдвигает вправо на speed
+(function () { player.x = 100; __press("ArrowRight"); update(); update(); __release("ArrowRight"); return player.x === 110; })()
+@test Пока зажата ←, update сдвигает влево
+(function () { player.x = 100; __press("ArrowLeft"); update(); __release("ArrowLeft"); return player.x === 95; })()
+@test Когда ничего не зажато, игрок стоит
+(function () { player.x = 100; update(); update(); return player.x === 100; })()
+@hint
+`document.addEventListener("keydown", (e) => { keys[e.key] = true; });` и такой же для `"keyup"` с `false`.
+@hint
+В update: `if (keys["ArrowRight"]) { player.x += player.speed; }` и то же для `"ArrowLeft"`.
+@quiz
+? Почему для игр плохо двигать героя прямо в keydown?
++ Событие повторяется с задержкой, движение получается рывками
+- keydown не работает со стрелками
+- Так нельзя по правилам языка
+= keydown срабатывает как автоповтор при наборе текста — сначала пауза, потом частые повторы.
+? Что надёжнее для клавиши W при любой раскладке?
+- `e.key === "w"`
++ `e.code === "KeyW"`
+= e.code — физическая клавиша, она не зависит от языка раскладки.
+
+@lesson ctrl-3
+title: Границы экрана
+@theory
+Сейчас герой может уйти за край экрана и потеряться. Добавим **границы**.
+
+Идея: после движения проверяем — не вылез ли герой — и если вылез, ставим его обратно на край.
+
+```js canvas
+const player = { x: 220, y: 140, w: 40, h: 40, speed: 6 };
+const keys = {};
+document.addEventListener("keydown", (e) => { keys[e.key] = true; });
+document.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+function update() {
+  if (keys["ArrowRight"]) player.x += player.speed;
+  if (keys["ArrowLeft"]) player.x -= player.speed;
+  if (keys["ArrowUp"]) player.y -= player.speed;
+  if (keys["ArrowDown"]) player.y += player.speed;
+
+  if (player.x < 0) player.x = 0;
+  if (player.x + player.w > canvas.width) player.x = canvas.width - player.w;
+  if (player.y < 0) player.y = 0;
+  if (player.y + player.h > canvas.height) player.y = canvas.height - player.h;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "violet";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+```
+
+## Почему `canvas.width - player.w`?
+
+`player.x` — это **левый** край героя. Правый край — `player.x + player.w`. Чтобы правый край не вылез за холст, левый должен быть не больше `canvas.width - player.w`.
+
+## То же самое через clamp
+
+Помнишь функцию `clamp` из модуля про функции? Она идеально подходит:
+
+```code
+player.x = clamp(player.x, 0, canvas.width - player.w);
+player.y = clamp(player.y, 0, canvas.height - player.h);
+```
+
+Или через `Math.max` и `Math.min`:
+
+```code
+player.x = Math.max(0, Math.min(player.x, canvas.width - player.w));
+```
+
+> 🎮 А можно не останавливать, а **переносить** на другую сторону, как в Pac-Man: вышел справа — появился слева. Для этого: `if (player.x > canvas.width) player.x = -player.w;`
+@task
+Допиши в `update()` ограничения, чтобы игрок **не выходил** за левый и правый края холста.
+
+- слева: `x` не меньше 0;
+- справа: правый край (`x + w`) не больше `canvas.width`.
+
+Робот попробует вытолкнуть игрока за края.
+@canvas
+@starter
+const player = { x: 220, y: 240, w: 40, h: 40, speed: 6 };
+const keys = {};
+document.addEventListener("keydown", (e) => { keys[e.key] = true; });
+document.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+function update() {
+  if (keys["ArrowRight"]) player.x += player.speed;
+  if (keys["ArrowLeft"]) player.x -= player.speed;
+
+  // Не пускай игрока за края
+
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "violet";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@solution
+const player = { x: 220, y: 240, w: 40, h: 40, speed: 6 };
+const keys = {};
+document.addEventListener("keydown", (e) => { keys[e.key] = true; });
+document.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+function update() {
+  if (keys["ArrowRight"]) player.x += player.speed;
+  if (keys["ArrowLeft"]) player.x -= player.speed;
+
+  // Не пускай игрока за края
+  if (player.x < 0) {
+    player.x = 0;
+  }
+  if (player.x + player.w > canvas.width) {
+    player.x = canvas.width - player.w;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "violet";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+@test Игрок не уходит за левый край
+(function () { player.x = 2; __press("ArrowLeft"); update(); __release("ArrowLeft"); return player.x === 0; })()
+@test Игрок не уходит за правый край
+(function () { player.x = canvas.width - player.w - 2; __press("ArrowRight"); update(); __release("ArrowRight"); return player.x === canvas.width - player.w; })()
+@test Далеко за краем — возвращается на край
+(function () { player.x = -100; update(); var a = player.x === 0; player.x = 9999; update(); return a && player.x === canvas.width - player.w; })()
+@test В середине движется свободно
+(function () { player.x = 200; __press("ArrowRight"); update(); __release("ArrowRight"); return player.x === 206; })()
+@hint
+Левый край: `if (player.x < 0) { player.x = 0; }`
+@hint
+Правый край: `if (player.x + player.w > canvas.width) { player.x = canvas.width - player.w; }`
+@quiz
+? Холст шириной 480, игрок шириной 40. Какой максимальный x у игрока, чтобы он не вылезал справа?
+- 480
++ 440
+- 520
+= x — левый край, правый край = x + 40 ≤ 480, значит x ≤ 440.
+
+@lesson ctrl-4
+title: Мышь и касания
+@theory
+Многие игры управляются мышью или пальцем: кликеры, стрелялки, головоломки. События мыши подписываются так же, как клавиатурные, — только на холст.
+
+```js canvas
+canvas.addEventListener("click", (e) => {
+  console.log("Клик!", e.offsetX, e.offsetY);
+});
+ctx.fillStyle = "white";
+ctx.font = "22px Arial";
+ctx.fillText("Кликай по холсту", 150, 165);
+```
+
+| Событие | Когда |
+|---|---|
+| `"click"` | клик (или касание пальцем) |
+| `"mousedown"` | кнопку мыши нажали |
+| `"mouseup"` | отпустили |
+| `"mousemove"` | мышь двигается |
+
+`e.offsetX` и `e.offsetY` [о́фсет] — где был клик **внутри** элемента.
+
+## Точные координаты холста
+
+Есть тонкость: холст на экране может быть растянут или сжат (например, на телефоне он меньше 480 пикселей). Тогда `offsetX` — это координата **на экране**, а не на холсте. Надёжная формула пересчёта:
+
+```js canvas
+function getMousePos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * canvas.width / rect.width,
+    y: (e.clientY - rect.top) * canvas.height / rect.height
+  };
+}
+
+canvas.addEventListener("click", (e) => {
+  const pos = getMousePos(e);
+  ctx.fillStyle = `hsl(${Math.random() * 360}, 90%, 60%)`;
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2);
+  ctx.fill();
+});
+
+ctx.fillStyle = "white";
+ctx.font = "20px Arial";
+ctx.fillText("Кликай — будут появляться круги", 95, 165);
+```
+
+- `canvas.getBoundingClientRect()` — где холст на экране и какого он размера;
+- `e.clientX - rect.left` — сколько пикселей от левого края холста;
+- `* canvas.width / rect.width` — пересчёт из экранных пикселей в пиксели холста.
+
+> 💡 Эту функцию не нужно запоминать — просто копируй её в свои игры. Так делают все программисты.
+
+> 📱 Событие `click` срабатывает и от касания пальцем, так что такие игры работают на телефоне.
+@task
+Сделай «рисовалку кругами»:
+
+1. При клике по холсту получи точные координаты клика функцией `getMousePos(e)` (она уже написана).
+2. Добавь в массив `clicks` объект `{ x: ..., y: ... }` с этими координатами.
+
+Игровой цикл уже рисует круги из массива `clicks`.
+@canvas
+@starter
+const clicks = [];
+
+function getMousePos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * canvas.width / rect.width,
+    y: (e.clientY - rect.top) * canvas.height / rect.height
+  };
+}
+
+// Подпишись на клик и добавляй точки в clicks
+
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "deepskyblue";
+  for (const c of clicks) {
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  requestAnimationFrame(draw);
+}
+draw();
+@solution
+const clicks = [];
+
+function getMousePos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * canvas.width / rect.width,
+    y: (e.clientY - rect.top) * canvas.height / rect.height
+  };
+}
+
+// Подпишись на клик и добавляй точки в clicks
+canvas.addEventListener("click", (e) => {
+  const pos = getMousePos(e);
+  clicks.push({ x: pos.x, y: pos.y });
+});
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "deepskyblue";
+  for (const c of clicks) {
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  requestAnimationFrame(draw);
+}
+draw();
+@test Клик добавляет точку в clicks
+(function () { var n = clicks.length; __click(100, 50); return clicks.length === n + 1; })()
+@test Координаты точки совпадают с местом клика
+(function () { __click(300, 200); var c = clicks[clicks.length - 1]; return Math.abs(c.x - 300) < 3 && Math.abs(c.y - 200) < 3; })()
+@test Используется getMousePos
+/getMousePos\s*\(\s*e\s*\)/.test(__codeNS)
+@hint
+`canvas.addEventListener("click", (e) => { ... });`
+@hint
+Внутри: `const pos = getMousePos(e);` и `clicks.push({ x: pos.x, y: pos.y });`
+@quiz
+? Какое событие срабатывает и от мыши, и от касания пальцем?
++ click
+- keydown
+- mousemove
+= click срабатывает при щелчке мышью и при коротком касании экрана.
+
+@lesson ctrl-5
+title: Мини-игра «Поймай квадрат»
+@theory
+Соберём первую настоящую игру! Правила: на экране прыгает квадрат. Кликнул по нему — получил очко, квадрат перепрыгнул в случайное место. За 15 секунд набери как можно больше.
+
+Главное новое — **проверка попадания**: попал ли клик внутрь квадрата?
+
+```code
+function isInside(px, py, box) {
+  return px >= box.x && px <= box.x + box.size &&
+         py >= box.y && py <= box.y + box.size;
+}
+```
+
+Точка внутри квадрата, если она правее левого края **и** левее правого **и** ниже верхнего **и** выше нижнего. Четыре условия через `&&`.
+
+Вот полная игра — запусти и поиграй:
+
+```js canvas
+const target = { x: 200, y: 120, size: 50 };
+let score = 0;
+let timeLeft = 15;
+
+function getMousePos(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height };
+}
+
+function moveTarget() {
+  target.x = Math.random() * (canvas.width - target.size);
+  target.y = Math.random() * (canvas.height - target.size);
+}
+
+canvas.addEventListener("click", (e) => {
+  if (timeLeft <= 0) return;
+  const p = getMousePos(e);
+  if (p.x >= target.x && p.x <= target.x + target.size && p.y >= target.y && p.y <= target.y + target.size) {
+    score++;
+    moveTarget();
+  }
+});
+
+const timer = setInterval(() => {
+  timeLeft--;
+  if (timeLeft <= 0) clearInterval(timer);
+}, 1000);
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "tomato";
+  ctx.fillRect(target.x, target.y, target.size, target.size);
+  ctx.fillStyle = "white";
+  ctx.font = "20px Arial";
+  ctx.textAlign = "left";
+  ctx.fillText(`Очки: ${score}   Время: ${timeLeft}`, 12, 28);
+  if (timeLeft <= 0) {
+    ctx.textAlign = "center";
+    ctx.font = "bold 40px Arial";
+    ctx.fillText(`Игра окончена! ${score} очков`, 240, 170);
+  }
+  requestAnimationFrame(draw);
+}
+draw();
+```
+
+> 🧠 `return` в начале обработчика клика — «если время вышло, ничего не делай». Такой приём называется **ранний выход** и избавляет от лишней вложенности.
+
+> 🎮 Эту игру легко улучшать: квадрат может уменьшаться с каждым очком, двигаться сам, а за промах можно отнимать очки. Попробуй в песочнице!
+@task
+Напиши ядро игры:
+
+1. Функцию `isInside(px, py, box)` — возвращает `true`, если точка `(px, py)` внутри квадрата `box` (у него `x`, `y` и `size`).
+2. В обработчике клика: если клик попал в `target` (используй `isInside`) — увеличь `score` на 1 и вызови `moveTarget()`.
+@canvas
+@starter
+const target = { x: 200, y: 120, size: 50 };
+let score = 0;
+
+function getMousePos(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height };
+}
+
+function moveTarget() {
+  target.x = Math.random() * (canvas.width - target.size);
+  target.y = Math.random() * (canvas.height - target.size);
+}
+
+// 1. Функция isInside
+
+
+// 2. Обработчик клика
+canvas.addEventListener("click", (e) => {
+  const p = getMousePos(e);
+
+});
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "tomato";
+  ctx.fillRect(target.x, target.y, target.size, target.size);
+  ctx.fillStyle = "white";
+  ctx.font = "20px Arial";
+  ctx.fillText("Очки: " + score, 12, 28);
+  requestAnimationFrame(draw);
+}
+draw();
+@solution
+const target = { x: 200, y: 120, size: 50 };
+let score = 0;
+
+function getMousePos(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height };
+}
+
+function moveTarget() {
+  target.x = Math.random() * (canvas.width - target.size);
+  target.y = Math.random() * (canvas.height - target.size);
+}
+
+// 1. Функция isInside
+function isInside(px, py, box) {
+  return px >= box.x && px <= box.x + box.size &&
+         py >= box.y && py <= box.y + box.size;
+}
+
+// 2. Обработчик клика
+canvas.addEventListener("click", (e) => {
+  const p = getMousePos(e);
+  if (isInside(p.x, p.y, target)) {
+    score++;
+    moveTarget();
+  }
+});
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "tomato";
+  ctx.fillRect(target.x, target.y, target.size, target.size);
+  ctx.fillStyle = "white";
+  ctx.font = "20px Arial";
+  ctx.fillText("Очки: " + score, 12, 28);
+  requestAnimationFrame(draw);
+}
+draw();
+@test isInside: точка в центре квадрата — внутри
+isInside(25, 25, { x: 0, y: 0, size: 50 }) === true && isInside(130, 70, { x: 100, y: 50, size: 40 }) === true
+@test isInside: точки снаружи — не внутри
+isInside(60, 25, { x: 0, y: 0, size: 50 }) === false && isInside(25, 60, { x: 0, y: 0, size: 50 }) === false && isInside(99, 60, { x: 100, y: 50, size: 40 }) === false && isInside(120, 49, { x: 100, y: 50, size: 40 }) === false
+@test Клик по цели даёт очко и переносит цель
+(function () { target.x = 100; target.y = 100; var s = score; __click(125, 125); return score === s + 1 && !(target.x === 100 && target.y === 100); })()
+@test Клик мимо цели очков не даёт
+(function () { target.x = 100; target.y = 100; var s = score; __click(20, 20); return score === s && target.x === 100; })()
+@hint
+`return px >= box.x && px <= box.x + box.size && py >= box.y && py <= box.y + box.size;`
+@hint
+В обработчике: `if (isInside(p.x, p.y, target)) { score++; moveTarget(); }`
+@quiz
+? Квадрат: x = 100, y = 100, size = 50. Внутри ли точка (160, 120)?
+- Да
++ Нет
+= Правый край квадрата — 150, а точка правее: 160 > 150.

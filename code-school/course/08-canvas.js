@@ -18,7 +18,7 @@ window.COURSE.push({
      ],
      [
       "Он жёлтый",
-      "__drew(\"fillRect\", function (c) { return c.a[2] === 50 && __color(c, \"#ffff00\"); })"
+      "__drew(\"fillRect\", function (c) { return c.a[2] === 50 && __isColor(c.fill, \"yellow\"); })"
      ]
     ],
     "hints": [
@@ -120,7 +120,7 @@ window.COURSE.push({
      ],
      [
       "Круг залит жёлтым или золотым",
-      "__drew(\"fill\", function (c) { return __color(c, \"#ffff00\") || __color(c, \"#ffd700\"); })"
+      "__drew(\"fill\", function (c) { return __isColor(c.fill, \"yellow\"); })"
      ],
      [
       "Использован beginPath",

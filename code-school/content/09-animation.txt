@@ -1,0 +1,670 @@
+@module anim
+icon: 🎬
+color: #ff5c7a
+title: Анимация
+desc: Оживляем картинку: игровой цикл, скорость, отскоки и таймеры
+
+@lesson anim-1
+title: Как работает анимация — игровой цикл
+@theory
+Мультфильм — это много картинок, которые быстро сменяют друг друга. Каждая картинка — **кадр**. Если показывать больше 24 кадров в секунду, глаз видит плавное движение.
+
+Игры работают так же — обычно **60 кадров в секунду**. Каждый кадр программа:
+
+1. **стирает** холст;
+2. **меняет** положение объектов (чуть-чуть сдвигает);
+3. **рисует** всё заново.
+
+И так по кругу. Это называется **игровой цикл** (game loop [гейм луп]).
+
+```js canvas
+let x = 0;
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "tomato";
+  ctx.fillRect(x, 140, 40, 40);
+
+  x += 2;
+  if (x > canvas.width) {
+    x = -40;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+loop();
+```
+
+## Разбор
+
+- `ctx.clearRect(0, 0, canvas.width, canvas.height)` — стереть весь холст (`clear` [клир] — «очистить»). Без этого квадрат оставлял бы за собой след.
+- `x += 2` — каждый кадр сдвигаем квадрат на 2 пикселя вправо.
+- `requestAnimationFrame(loop)` [рикуэ́ст энимэ́йшн фрейм] — «попроси кадр анимации»: браузер вызовет `loop` ещё раз перед следующим кадром экрана. Функция сама себя «заказывает» снова и снова.
+- `loop();` в самом конце — первый запуск цикла.
+
+> 🧠 Почему не `while (true)`? Бесконечный while никогда не отдаст браузеру управление, и тот не успеет показать ни одного кадра — страница зависнет. `requestAnimationFrame` вызывает функцию ровно тогда, когда экран готов к новому кадру.
+
+Попробуй убрать строчку с `clearRect` и запустить — увидишь «шлейф».
+
+> 🎮 Абсолютно все игры, от «Змейки» до огромных 3D-миров, крутятся в таком цикле: стереть → обновить → нарисовать → повторить.
+@task
+Оживи квадрат! В игровом цикле:
+
+1. В начале каждого кадра **сотри** весь холст (`clearRect`).
+2. После рисования **сдвигай** квадрат вправо: увеличивай `x` на 3.
+
+Бонус: когда квадрат уезжает за правый край, верни его влево (`x = -40`).
+@canvas
+@starter
+let x = 0;
+
+function loop() {
+  // 1. Сотри холст
+
+
+  // 2. Рисуем квадрат
+  ctx.fillStyle = "tomato";
+  ctx.fillRect(x, 140, 40, 40);
+
+  // 3. Сдвинь квадрат
+
+
+  requestAnimationFrame(loop);
+}
+
+loop();
+@solution
+let x = 0;
+
+function loop() {
+  // 1. Сотри холст
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 2. Рисуем квадрат
+  ctx.fillStyle = "tomato";
+  ctx.fillRect(x, 140, 40, 40);
+
+  // 3. Сдвинь квадрат
+  x += 3;
+  if (x > canvas.width) {
+    x = -40;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+loop();
+@wait 600
+@test Квадрат движется вправо (x растёт)
+x !== 0 && __frames > 5 && __drawn("fillRect").map(function (c) { return c.a[0]; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).length > 5
+@test Холст стирается целиком каждый кадр
+__drew("clearRect", function (c) { return c.a[0] === 0 && c.a[1] === 0 && c.a[2] >= canvas.width && c.a[3] >= canvas.height; }) && __drawn("clearRect").length > 5
+@test Шаг движения — 3 пикселя
+/x\s*\+=\s*3|x\s*=\s*x\s*\+\s*3/.test(__codeNS)
+@hint
+Стереть: `ctx.clearRect(0, 0, canvas.width, canvas.height);`
+@hint
+Сдвинуть: `x += 3;`
+@quiz
+? Что произойдёт, если в игровом цикле не стирать холст?
++ Объекты будут оставлять за собой след
+- Ничего не нарисуется
+- Игра ускорится
+= Каждый новый кадр рисуется поверх старого — получается шлейф.
+? Примерно сколько раз в секунду вызывает функцию requestAnimationFrame?
+- 1
+- 10
++ 60
+= Обычно 60 раз в секунду — с частотой обновления экрана.
+
+@lesson anim-2
+title: Скорость и направление
+@theory
+Чтобы объект мог двигаться в любую сторону, у него две скорости:
+
+- `vx` — на сколько пикселей сдвигаться **по горизонтали** за кадр;
+- `vy` — на сколько **по вертикали**.
+
+(`v` — от velocity [вело́сити] — «скорость».)
+
+| vx | vy | Куда движется |
+|---|---|---|
+| 3 | 0 | вправо |
+| -3 | 0 | влево |
+| 0 | 3 | вниз |
+| 0 | -3 | вверх |
+| 3 | 2 | вправо и вниз (по диагонали) |
+
+```js canvas
+const ball = { x: 50, y: 50, vx: 3, vy: 2, r: 15 };
+
+function update() {
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "cyan";
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+```
+
+## Порядок в коде: update и draw
+
+Профессионалы делят игровой цикл на две функции:
+
+- `update()` [апде́йт] — «обновить»: только меняет данные (координаты, счёт), ничего не рисует;
+- `draw()` [дро] — «нарисовать»: только рисует, ничего не меняет.
+
+Так код намного проще понимать и исправлять. Мы будем всегда так делать.
+
+> 💡 Объект `ball` хранит всё про мяч в одном месте: положение, скорость, размер. Удобно, правда?
+@task
+Допиши функцию `update()`, чтобы мяч двигался: каждый кадр прибавляй к `ball.x` скорость `ball.vx`, а к `ball.y` — скорость `ball.vy`.
+
+Мяч должен полететь по диагонали вправо-вниз.
+@canvas
+@starter
+const ball = { x: 40, y: 40, vx: 3, vy: 2, r: 15 };
+
+function update() {
+
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "cyan";
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+@solution
+const ball = { x: 40, y: 40, vx: 3, vy: 2, r: 15 };
+
+function update() {
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "cyan";
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+@test update сдвигает мяч по x на vx
+(function () { ball.x = 100; ball.y = 100; ball.vx = 4; ball.vy = 0; update(); return ball.x === 104 && ball.y === 100; })()
+@test update сдвигает мяч по y на vy
+(function () { ball.x = 100; ball.y = 100; ball.vx = 0; ball.vy = -5; update(); return ball.x === 100 && ball.y === 95; })()
+@test Скорость берётся из свойств мяча, а не вписана числами
+/ball\.x\s*\+=\s*ball\.vx/.test(__codeNS) || /ball\.x\s*=\s*ball\.x\s*\+\s*ball\.vx/.test(__codeNS)
+@hint
+Внутри update две строчки: `ball.x += ball.vx;`
+@hint
+и `ball.y += ball.vy;`
+@quiz
+? Объект движется с vx = -2 и vy = 0. Куда?
++ Влево
+- Вправо
+- Вверх
+= Отрицательная скорость по x — движение влево.
+? Что должна делать функция draw?
+- Менять координаты
++ Только рисовать
+- Проверять столкновения
+= draw только рисует, а все изменения — в update.
+
+@lesson anim-3
+title: Отскок от стен
+@theory
+Мяч улетел за край экрана и пропал. Давай научим его **отскакивать**!
+
+Идея простая: если мяч коснулся правой или левой стены — **разворачиваем** скорость по горизонтали: `vx = -vx`. Была `3` — стала `-3`, и мяч полетел обратно. С верхом и низом — то же самое с `vy`.
+
+```js canvas
+const ball = { x: 100, y: 80, vx: 4, vy: 3, r: 18 };
+
+function update() {
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  if (ball.x + ball.r > canvas.width || ball.x - ball.r < 0) {
+    ball.vx = -ball.vx;
+  }
+  if (ball.y + ball.r > canvas.height || ball.y - ball.r < 0) {
+    ball.vy = -ball.vy;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "gold";
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+```
+
+## Почему `ball.x + ball.r`?
+
+`ball.x` — это **центр** мяча. Его правый край — `x + r`, левый — `x - r`. Если проверять только центр, мяч будет наполовину проваливаться в стену.
+
+| Стена | Условие касания |
+|---|---|
+| правая | `ball.x + ball.r > canvas.width` |
+| левая | `ball.x - ball.r < 0` |
+| нижняя | `ball.y + ball.r > canvas.height` |
+| верхняя | `ball.y - ball.r < 0` |
+
+> 💡 Бывает, что мяч «залипает» в стене и дрожит: на одном кадре скорость развернулась, но мяч ещё не успел выйти из стены, — и на следующем кадре развернулась обратно. Надёжнее не разворачивать, а задавать направление: у правой стены `vx = -Math.abs(vx)` (точно влево), у левой `vx = Math.abs(vx)` (точно вправо).
+
+> 🎮 Отскок — основа арканоида, пинг-понга и бильярда.
+@task
+Допиши в `update()` отскоки мяча от **всех четырёх** стен:
+- от левой и правой — разворачивай `ball.vx`;
+- от верхней и нижней — разворачивай `ball.vy`.
+
+Учитывай радиус мяча `ball.r`. Робот поставит мяч у каждой стены и проверит, что он отскакивает.
+@canvas
+@starter
+const ball = { x: 100, y: 80, vx: 4, vy: 3, r: 18 };
+
+function update() {
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  // Отскок от левой и правой стены
+
+
+  // Отскок от верхней и нижней стены
+
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "gold";
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+@solution
+const ball = { x: 100, y: 80, vx: 4, vy: 3, r: 18 };
+
+function update() {
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  // Отскок от левой и правой стены
+  if (ball.x + ball.r > canvas.width) {
+    ball.vx = -Math.abs(ball.vx);
+  }
+  if (ball.x - ball.r < 0) {
+    ball.vx = Math.abs(ball.vx);
+  }
+
+  // Отскок от верхней и нижней стены
+  if (ball.y + ball.r > canvas.height) {
+    ball.vy = -Math.abs(ball.vy);
+  }
+  if (ball.y - ball.r < 0) {
+    ball.vy = Math.abs(ball.vy);
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "gold";
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+@test Отскок от правой стены
+(function () { ball.x = canvas.width - ball.r - 1; ball.y = 150; ball.vx = 4; ball.vy = 0; update(); return ball.vx < 0; })()
+@test Отскок от левой стены
+(function () { ball.x = ball.r + 1; ball.y = 150; ball.vx = -4; ball.vy = 0; update(); return ball.vx > 0; })()
+@test Отскок от нижней стены
+(function () { ball.x = 200; ball.y = canvas.height - ball.r - 1; ball.vx = 0; ball.vy = 4; update(); return ball.vy < 0; })()
+@test Отскок от верхней стены
+(function () { ball.x = 200; ball.y = ball.r + 1; ball.vx = 0; ball.vy = -4; update(); return ball.vy > 0; })()
+@test В середине поля мяч летит не разворачиваясь
+(function () { ball.x = 240; ball.y = 160; ball.vx = 3; ball.vy = 2; update(); return ball.vx === 3 && ball.vy === 2; })()
+@hint
+Правая и левая стены одним условием: `if (ball.x + ball.r > canvas.width || ball.x - ball.r < 0) { ball.vx = -ball.vx; }`
+@hint
+Верх и низ так же, только с `ball.y`, `canvas.height` и `ball.vy`.
+@quiz
+? Мяч летит вправо со скоростью vx = 5 и касается правой стены. Какой станет vx?
++ -5
+- 0
+- 5
+= Скорость разворачивается: мяч летит влево с той же скоростью.
+? Почему в проверке пишут `ball.x + ball.r`, а не просто `ball.x`?
++ x — центр мяча, а стены касается его край
+- Так быстрее
+- Иначе ошибка
+= Правый край мяча — центр плюс радиус.
+
+@lesson anim-4
+title: Таймеры — setInterval и setTimeout
+@theory
+Иногда нужно сделать что-то **через время** или **раз в N секунд**: обратный отсчёт, появление врага каждые 2 секунды, бонус, который действует 5 секунд.
+
+## setTimeout — один раз через время
+
+```js
+console.log("Бомба заложена!");
+setTimeout(() => {
+  console.log("💥 БАБАХ!");
+}, 2000);
+```
+
+`setTimeout(функция, миллисекунды)` [сет та́ймаут] — выполнить функцию **один раз** через указанное время. **1000 миллисекунд = 1 секунда**.
+
+## setInterval — повторять
+
+```js
+let count = 0;
+const timer = setInterval(() => {
+  count++;
+  console.log("Тик " + count);
+  if (count === 5) {
+    clearInterval(timer);
+    console.log("Таймер остановлен");
+  }
+}, 500);
+```
+
+- `setInterval(функция, мс)` [сет и́нтервал] — повторять функцию каждые N миллисекунд;
+- он возвращает «номер таймера» — сохраняем его в переменную;
+- `clearInterval(номер)` [клир и́нтервал] — остановить.
+
+## Таймер на экране
+
+```js canvas
+let timeLeft = 5;
+
+const timer = setInterval(() => {
+  timeLeft--;
+  if (timeLeft <= 0) {
+    clearInterval(timer);
+  }
+}, 1000);
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "white";
+  ctx.font = "bold 48px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(timeLeft > 0 ? "⏰ " + timeLeft : "Время вышло!", 240, 175);
+  requestAnimationFrame(draw);
+}
+draw();
+```
+
+> 💡 Обрати внимание: таймер **меняет данные** (timeLeft), а игровой цикл их **рисует**. Они работают одновременно и не мешают друг другу.
+
+> 🎮 setInterval — способ сделать «тик» игры с постоянной скоростью. Например, змейка двигается ровно раз в 150 мс, а не 60 раз в секунду.
+@task
+Сделай таймер раунда:
+
+1. Каждую **секунду** (1000 мс) уменьшай `timeLeft` на 1 с помощью `setInterval`.
+2. Когда `timeLeft` дошёл до 0 — останови таймер через `clearInterval`.
+3. Игровой цикл уже рисует текст — посмотри, как меняется число.
+
+Робот подождёт чуть больше секунды и проверит, что время уменьшилось.
+@canvas
+@starter
+let timeLeft = 10;
+
+// Запусти таймер здесь
+
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "white";
+  ctx.font = "bold 40px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(timeLeft > 0 ? "Осталось: " + timeLeft : "Время вышло!", 240, 170);
+  requestAnimationFrame(draw);
+}
+draw();
+@solution
+let timeLeft = 10;
+
+// Запусти таймер здесь
+const timer = setInterval(() => {
+  timeLeft--;
+  if (timeLeft <= 0) {
+    clearInterval(timer);
+  }
+}, 1000);
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "white";
+  ctx.font = "bold 40px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(timeLeft > 0 ? "Осталось: " + timeLeft : "Время вышло!", 240, 170);
+  requestAnimationFrame(draw);
+}
+draw();
+@wait 1400
+@test Через секунду время уменьшилось на 1
+timeLeft === 9
+@test Используется setInterval с периодом 1000
+/setInterval\s*\([\s\S]*1000\s*\)/.test(__codeNS)
+@test Таймер останавливается через clearInterval
+/clearInterval\s*\(/.test(__codeNS)
+@hint
+`const timer = setInterval(() => { ... }, 1000);` — внутри `timeLeft--;`
+@hint
+Внутри же: `if (timeLeft <= 0) { clearInterval(timer); }`
+@quiz
+? Сколько миллисекунд в 3 секундах?
+- 30
+- 300
++ 3000
+= 1 секунда = 1000 мс.
+? Чем setTimeout отличается от setInterval?
++ setTimeout выполняет один раз, setInterval — повторяет
+- Ничем
+- setInterval работает быстрее
+= Timeout — «задержка», один раз. Interval — «промежуток», снова и снова.
+
+@lesson anim-5
+title: Много объектов в движении
+@theory
+Один мяч — скучно. Давай запустим **сотню**! Для этого объекты хранят в **массиве**, а в `update` и `draw` перебирают циклом.
+
+```js canvas
+const snow = [];
+for (let i = 0; i < 100; i++) {
+  snow.push({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: 1 + Math.random() * 3,
+    speed: 0.5 + Math.random() * 2
+  });
+}
+
+function update() {
+  for (const f of snow) {
+    f.y += f.speed;
+    if (f.y > canvas.height) {
+      f.y = -5;
+      f.x = Math.random() * canvas.width;
+    }
+  }
+}
+
+function draw() {
+  ctx.fillStyle = "#0b1030";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "white";
+  for (const f of snow) {
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+```
+
+## Что здесь происходит
+
+1. **Создание.** Цикл создаёт 100 снежинок со случайными координатами, размером и скоростью и кладёт их в массив `snow`.
+2. **update.** Каждую снежинку сдвигаем вниз на её скорость. Упала за нижний край — переносим наверх: снег идёт бесконечно.
+3. **draw.** Заливаем фон (это тоже «стирание» холста) и рисуем каждую снежинку.
+
+> 💡 Маленькие снежинки падают медленнее — так кажется, что они дальше. Это простой трюк, который создаёт глубину. Называется **параллакс**.
+
+> 🎮 Так делают звёздное небо в космических играх, дождь, листопад, искры от взрывов, пули и толпы врагов.
+@task
+Сделай звездопад:
+
+1. Заполни массив `stars` **30 звёздами**. У каждой — `x` (случайный по ширине), `y` (случайный по высоте) и `speed` (например, от 1 до 4).
+2. В `update()` двигай каждую звезду **вниз** на её `speed`.
+3. Если звезда ушла за нижний край (`y > canvas.height`), верни её наверх: `y = 0`.
+
+Функция `draw()` уже готова.
+@canvas
+@starter
+const stars = [];
+
+// 1. Создай 30 звёзд
+
+
+function update() {
+  // 2. Двигай звёзды вниз
+  // 3. Возвращай наверх
+
+}
+
+function draw() {
+  ctx.fillStyle = "#070b1f";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "white";
+  for (const s of stars) {
+    ctx.fillRect(s.x, s.y, 3, 3);
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+@solution
+const stars = [];
+
+// 1. Создай 30 звёзд
+for (let i = 0; i < 30; i++) {
+  stars.push({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    speed: 1 + Math.random() * 3
+  });
+}
+
+function update() {
+  // 2. Двигай звёзды вниз
+  // 3. Возвращай наверх
+  for (const s of stars) {
+    s.y += s.speed;
+    if (s.y > canvas.height) {
+      s.y = 0;
+    }
+  }
+}
+
+function draw() {
+  ctx.fillStyle = "#070b1f";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "white";
+  for (const s of stars) {
+    ctx.fillRect(s.x, s.y, 3, 3);
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+@test В массиве 30 звёзд с x, y и speed
+stars.length === 30 && stars.every(function (s) { return typeof s.x === "number" && typeof s.y === "number" && s.speed > 0; })
+@test Звёзды разбросаны случайно
+(function () { var xs = {}; stars.forEach(function (s) { xs[Math.round(s.x)] = 1; }); return Object.keys(xs).length > 10; })()
+@test update двигает каждую звезду вниз на её speed
+(function () { var s = stars[0], t = stars[1]; s.y = 50; s.speed = 2; t.y = 80; t.speed = 3.5; update(); return s.y === 52 && t.y === 83.5; })()
+@test Звезда за нижним краем возвращается наверх
+(function () { var s = stars[2]; s.y = canvas.height + 1; update(); return s.y < 20; })()
+@hint
+Создание в цикле: `stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, speed: 1 + Math.random() * 3 });`
+@hint
+В update: `for (const s of stars) { s.y += s.speed; if (s.y > canvas.height) { s.y = 0; } }`
+@quiz
+? Как в update сдвинуть все объекты массива?
++ Перебрать массив циклом и сдвинуть каждый
+- Сдвинуть сам массив: arr.y += 1
+- Это невозможно
+= У массива нет координат — они у каждого объекта внутри.

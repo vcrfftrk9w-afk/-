@@ -1,0 +1,519 @@
+@module cls
+icon: 🏗️
+color: #18c79a
+title: Классы
+desc: Чертежи для игровых объектов: враги, пули, бонусы и боссы
+
+@lesson cls-1
+title: Класс — чертёж для объектов
+@theory
+В игре сто врагов. У каждого — `x`, `y`, здоровье, скорость, методы `update` и `draw`. Писать сто одинаковых объектов вручную? Конечно нет. Нужен **чертёж**, по которому объекты создаются сами. Такой чертёж называется **класс**.
+
+```js
+class Enemy {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.hp = 30;
+    this.speed = 2;
+  }
+}
+
+const goblin = new Enemy(100, 50);
+const orc = new Enemy(300, 80);
+
+console.log(goblin);
+console.log(orc.x, orc.hp);
+```
+
+## Разбор
+
+- `class Enemy { ... }` — объявляем класс (`class` [класс]). Имя класса принято писать **с большой буквы**.
+- `constructor(x, y)` [констра́ктор] — особый метод, который **настраивает** новый объект. Вызывается автоматически при создании.
+- `this.x = x` — «у этого нового объекта свойство x равно переданному x».
+- `new Enemy(100, 50)` [нью] — «создай **новый** объект по чертежу Enemy». Аргументы попадают в constructor.
+
+> 🧠 Сравни: класс — это **форма для печенья**, а объекты — сами **печенья**. Форма одна, печений сколько угодно. Каждое печенье — отдельное: если откусить одно, другие останутся целыми.
+
+## Каждый объект — отдельный
+
+```js
+class Coin {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.value = 10;
+  }
+}
+
+const coins = [];
+for (let i = 0; i < 5; i++) {
+  coins.push(new Coin(i * 50, 100));
+}
+coins[2].value = 100;
+console.log(coins.map((c) => c.value));
+```
+
+Поменяли ценность одной монеты — остальные не изменились.
+@task
+Создай класс `Coin` (монета):
+- `constructor(x, y)` сохраняет `x` и `y`;
+- у каждой монеты есть свойство `value` = `10` и `collected` = `false`.
+
+Создай две монеты: `coin1` в точке (50, 100) и `coin2` в точке (200, 150).
+@starter
+
+@solution
+class Coin {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.value = 10;
+    this.collected = false;
+  }
+}
+
+const coin1 = new Coin(50, 100);
+const coin2 = new Coin(200, 150);
+console.log(coin1, coin2);
+@test Класс Coin создан
+typeof Coin === "function" && /class\s+Coin/.test(__codeNS)
+@test new Coin(5, 7) сохраняет координаты
+(function () { var c = new Coin(5, 7); return c.x === 5 && c.y === 7; })()
+@test У монеты value = 10 и collected = false
+(function () { var c = new Coin(0, 0); return c.value === 10 && c.collected === false; })()
+@test coin1 и coin2 созданы в нужных точках
+coin1 instanceof Coin && coin2 instanceof Coin && coin1.x === 50 && coin1.y === 100 && coin2.x === 200 && coin2.y === 150
+@hint
+`class Coin { constructor(x, y) { this.x = x; this.y = y; ... } }`
+@hint
+В конструкторе ещё `this.value = 10;` и `this.collected = false;`. Создание: `const coin1 = new Coin(50, 100);`
+@quiz
+? Что делает слово new?
++ Создаёт новый объект по классу
+- Объявляет класс
+- Удаляет объект
+= `new Имя(...)` создаёт объект и вызывает его constructor.
+? Как принято называть классы?
++ С большой буквы: Enemy
+- С маленькой: enemy
+- Большими буквами: ENEMY
+= Классы — с большой буквы, обычные переменные — с маленькой.
+
+@lesson cls-2
+title: Методы класса — update и draw
+@theory
+В классе можно описать не только свойства, но и **методы** — то, что объект умеет делать. Методы пишутся внутри класса после конструктора:
+
+```js canvas
+class Ball {
+  constructor(x, y, color) {
+    this.x = x;
+    this.y = y;
+    this.vx = Math.random() * 6 - 3;
+    this.vy = Math.random() * 6 - 3;
+    this.r = 12;
+    this.color = color;
+  }
+
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.x < this.r || this.x > canvas.width - this.r) this.vx = -this.vx;
+    if (this.y < this.r || this.y > canvas.height - this.r) this.vy = -this.vy;
+  }
+
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+const balls = [];
+for (let i = 0; i < 25; i++) {
+  balls.push(new Ball(240, 160, `hsl(${i * 14}, 90%, 60%)`));
+}
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const b of balls) {
+    b.update();
+    b.draw();
+  }
+  requestAnimationFrame(loop);
+}
+loop();
+```
+
+Смотри, как просто стал игровой цикл: «каждый мяч — обновись и нарисуйся». Вся логика мяча спрятана внутри класса.
+
+## Методы, которые отвечают на вопросы
+
+Метод может возвращать значение. Например, «улетел ли объект за экран?»:
+
+```code
+isOffScreen() {
+  return this.y < 0 || this.y > canvas.height;
+}
+```
+
+> 💡 Внутри методов к свойствам объекта обращаются через `this` — как в объектах из модуля 7.
+
+> 🎮 Почти любой игровой объект — это класс с методами `update()` и `draw()`. Добавить в игру новый вид врагов = написать новый класс.
+@task
+Создай класс `Bullet` (пуля):
+- `constructor(x, y)` — сохраняет `x`, `y` и задаёт `speed` = `8`;
+- метод `update()` — пуля летит **вверх**: уменьшает `y` на `speed`;
+- метод `isOffScreen()` — возвращает `true`, если пуля улетела за верхний край (`y < 0`).
+
+Ниже уже есть код, который стреляет пулями — посмотри на результат.
+@canvas
+@starter
+// Класс Bullet
+
+
+const bullets = [];
+setInterval(() => {
+  if (typeof Bullet === "function") bullets.push(new Bullet(240, 310));
+}, 300);
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "yellow";
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    if (b.update) b.update();
+    ctx.fillRect(b.x - 2, b.y, 4, 12);
+    if (b.isOffScreen && b.isOffScreen()) bullets.splice(i, 1);
+  }
+  requestAnimationFrame(loop);
+}
+loop();
+@solution
+// Класс Bullet
+class Bullet {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.speed = 8;
+  }
+
+  update() {
+    this.y -= this.speed;
+  }
+
+  isOffScreen() {
+    return this.y < 0;
+  }
+}
+
+const bullets = [];
+setInterval(() => {
+  if (typeof Bullet === "function") bullets.push(new Bullet(240, 310));
+}, 300);
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "yellow";
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    if (b.update) b.update();
+    ctx.fillRect(b.x - 2, b.y, 4, 12);
+    if (b.isOffScreen && b.isOffScreen()) bullets.splice(i, 1);
+  }
+  requestAnimationFrame(loop);
+}
+loop();
+@test new Bullet(10, 200): x, y и speed = 8
+(function () { var b = new Bullet(10, 200); return b.x === 10 && b.y === 200 && b.speed === 8; })()
+@test update сдвигает пулю вверх на speed
+(function () { var b = new Bullet(10, 200); b.update(); b.update(); return b.y === 184 && b.x === 10; })()
+@test isOffScreen: false на экране, true за верхним краем
+(function () { var b = new Bullet(10, 5); var a = b.isOffScreen() === false; b.update(); return a && b.isOffScreen() === true; })()
+@hint
+Шаблон: `class Bullet { constructor(x, y) { ... } update() { ... } isOffScreen() { ... } }`
+@hint
+`update() { this.y -= this.speed; }` и `isOffScreen() { return this.y < 0; }`
+@quiz
+? Как внутри метода класса обратиться к свойству speed этого объекта?
++ `this.speed`
+- `speed`
+- `Bullet.speed`
+= this — это объект, у которого вызван метод.
+
+@lesson cls-3
+title: Наследование — босс тоже враг
+@theory
+Обычный враг: здоровье, движение, получение урона. Босс: всё то же самое, **плюс** больше здоровья и особая атака. Копировать весь код врага в босса? Нет — можно сказать, что босс **наследует** всё от врага.
+
+```js
+class Enemy {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.hp = 20;
+  }
+
+  takeDamage(amount) {
+    this.hp -= amount;
+    if (this.hp <= 0) console.log("Враг повержен!");
+  }
+}
+
+class Boss extends Enemy {
+  constructor(x, y) {
+    super(x, y);
+    this.hp = 200;
+  }
+
+  roar() {
+    console.log("БОСС РЫЧИТ! 🐉");
+  }
+}
+
+const boss = new Boss(240, 50);
+boss.roar();
+boss.takeDamage(50);
+console.log("У босса осталось " + boss.hp);
+```
+
+## Разбор
+
+- `class Boss extends Enemy` — «Boss **расширяет** Enemy» (`extends` [экстэ́ндз]). Boss получает **все** свойства и методы Enemy.
+- `super(x, y)` [су́пер] — вызвать конструктор **родителя** (Enemy), чтобы он настроил x, y и hp. Пишется первой строчкой в конструкторе.
+- После `super` можно поменять или добавить свои свойства: у босса `hp = 200`.
+- `roar()` — новый метод, которого у обычного врага нет.
+- `takeDamage` у босса работает, хотя мы его не писали, — он унаследован!
+
+## Переопределение метода
+
+Если у наследника написать метод с тем же именем — он **заменит** родительский:
+
+```js
+class Enemy {
+  attack() { return 5; }
+}
+class Archer extends Enemy {
+  attack() { return 12; }
+}
+console.log(new Enemy().attack(), new Archer().attack());
+```
+
+> 🎮 В больших играх целые «деревья» классов: `GameObject` → `Enemy` → `FlyingEnemy` → `Dragon`. Каждый следующий берёт всё от предыдущего и добавляет своё.
+@task
+1. Создай класс `Enemy`: `constructor(x, y)` сохраняет координаты и ставит `hp = 20`; метод `takeDamage(amount)` уменьшает `hp` на `amount`; метод `isDead()` возвращает `true`, если `hp <= 0`.
+2. Создай класс `Boss`, который **наследует** `Enemy` (`extends`): в конструкторе вызови `super(x, y)` и поставь `hp = 100`.
+@starter
+
+@solution
+class Enemy {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.hp = 20;
+  }
+
+  takeDamage(amount) {
+    this.hp -= amount;
+  }
+
+  isDead() {
+    return this.hp <= 0;
+  }
+}
+
+class Boss extends Enemy {
+  constructor(x, y) {
+    super(x, y);
+    this.hp = 100;
+  }
+}
+
+const boss = new Boss(240, 50);
+boss.takeDamage(30);
+console.log(boss.hp);
+@test Enemy: координаты и hp = 20
+(function () { var e = new Enemy(3, 4); return e.x === 3 && e.y === 4 && e.hp === 20; })()
+@test takeDamage и isDead работают
+(function () { var e = new Enemy(0, 0); e.takeDamage(15); var a = e.hp === 5 && e.isDead() === false; e.takeDamage(5); return a && e.isDead() === true; })()
+@test Boss наследует Enemy
+/class\s+Boss\s+extends\s+Enemy/.test(__codeNS) && new Boss(0, 0) instanceof Enemy
+@test У босса hp = 100 и координаты из super
+(function () { var b = new Boss(7, 8); return b.hp === 100 && b.x === 7 && b.y === 8; })()
+@test Босс умеет получать урон (метод унаследован)
+(function () { var b = new Boss(0, 0); b.takeDamage(40); return b.hp === 60 && b.isDead() === false; })()
+@hint
+У Enemy три части: constructor, `takeDamage(amount) { this.hp -= amount; }` и `isDead() { return this.hp <= 0; }`
+@hint
+`class Boss extends Enemy { constructor(x, y) { super(x, y); this.hp = 100; } }`
+@quiz
+? Что делает super(x, y) в конструкторе наследника?
++ Вызывает конструктор родительского класса
+- Создаёт суперобъект
+- Удаляет родителя
+= super — это «родитель». Сначала родитель настраивает объект, потом наследник добавляет своё.
+? Есть ли у Boss метод takeDamage, если его написали только в Enemy?
++ Да, он унаследован
+- Нет
+= extends передаёт наследнику все методы родителя.
+
+@lesson cls-4
+title: Менеджер объектов — волны врагов
+@theory
+Соберём всё вместе: класс врага, массив, создание волн и удаление погибших. Это скелет почти любой игры с врагами.
+
+```js canvas
+class Enemy {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.size = 30;
+    this.speed = 0.5 + Math.random();
+    this.hp = 3;
+  }
+  update() { this.y += this.speed; }
+  draw() {
+    ctx.font = this.size + "px Arial";
+    ctx.fillText("👾", this.x, this.y);
+  }
+  isDead() { return this.hp <= 0 || this.y > canvas.height + 40; }
+}
+
+let enemies = [];
+let wave = 0;
+
+function spawnWave(count) {
+  wave++;
+  for (let i = 0; i < count; i++) {
+    enemies.push(new Enemy(20 + Math.random() * 420, -20 - Math.random() * 200));
+  }
+}
+
+canvas.addEventListener("click", (e) => {
+  const r = canvas.getBoundingClientRect();
+  const mx = (e.clientX - r.left) * canvas.width / r.width;
+  const my = (e.clientY - r.top) * canvas.height / r.height;
+  for (const en of enemies) {
+    if (mx > en.x && mx < en.x + en.size && my > en.y - en.size && my < en.y) en.hp--;
+  }
+});
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const en of enemies) { en.update(); en.draw(); }
+  enemies = enemies.filter((en) => !en.isDead());
+  if (enemies.length === 0) spawnWave(3 + wave * 2);
+  ctx.fillStyle = "white"; ctx.font = "18px Arial";
+  ctx.fillText(`Волна ${wave} · кликай по пришельцам (3 клика)`, 10, 24);
+  requestAnimationFrame(loop);
+}
+loop();
+```
+
+## Главные идеи
+
+1. **Класс** описывает одного врага.
+2. **Функция `spawnWave(count)`** создаёт пачку врагов и кладёт их в массив. С каждой волной врагов больше — растёт сложность.
+3. **Игровой цикл** обновляет и рисует всех.
+4. **Уборка:** `enemies = enemies.filter((en) => !en.isDead())` — оставляем только живых. Это ещё один способ удалять (вместо `splice` с конца). Для этого массив объявлен через `let`: мы заменяем его новым.
+5. **Новая волна**, когда враги кончились.
+
+> 🎮 Поздравляю: теперь ты знаешь всё, чтобы делать настоящие игры! Дальше — пять игровых проектов, где мы соберём всё вместе.
+@task
+Напиши менеджер врагов:
+
+1. Функцию `spawnWave(count)` — добавляет в массив `enemies` ровно `count` новых врагов (`new Enemy(x, y)`, координаты любые, например случайный x и y = 0).
+2. Функцию `removeDead()` — убирает из `enemies` всех, у кого `isDead()` возвращает `true`.
+
+Класс `Enemy` уже готов.
+@canvas
+@starter
+class Enemy {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.hp = 3;
+    this.speed = 1;
+  }
+  update() { this.y += this.speed; }
+  draw() {
+    ctx.fillStyle = "tomato";
+    ctx.fillRect(this.x, this.y, 24, 24);
+  }
+  isDead() { return this.hp <= 0 || this.y > canvas.height; }
+}
+
+let enemies = [];
+
+function spawnWave(count) {
+
+}
+
+function removeDead() {
+
+}
+
+spawnWave(5);
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const e of enemies) { e.update(); e.draw(); }
+  removeDead();
+  if (enemies.length === 0) spawnWave(5);
+  requestAnimationFrame(loop);
+}
+loop();
+@solution
+class Enemy {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.hp = 3;
+    this.speed = 1;
+  }
+  update() { this.y += this.speed; }
+  draw() {
+    ctx.fillStyle = "tomato";
+    ctx.fillRect(this.x, this.y, 24, 24);
+  }
+  isDead() { return this.hp <= 0 || this.y > canvas.height; }
+}
+
+let enemies = [];
+
+function spawnWave(count) {
+  for (let i = 0; i < count; i++) {
+    enemies.push(new Enemy(Math.random() * (canvas.width - 24), 0));
+  }
+}
+
+function removeDead() {
+  enemies = enemies.filter((e) => !e.isDead());
+}
+
+spawnWave(5);
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const e of enemies) { e.update(); e.draw(); }
+  removeDead();
+  if (enemies.length === 0) spawnWave(5);
+  requestAnimationFrame(loop);
+}
+loop();
+@test spawnWave(4) добавляет 4 врага класса Enemy
+(function () { enemies.length = 0; spawnWave(4); return enemies.length === 4 && enemies.every(function (e) { return e instanceof Enemy; }); })()
+@test spawnWave добавляет, а не заменяет
+(function () { enemies.length = 0; spawnWave(2); spawnWave(3); return enemies.length === 5; })()
+@test removeDead убирает погибших и оставляет живых
+(function () { enemies.length = 0; spawnWave(4); enemies[0].hp = 0; enemies[2].hp = -1; var alive1 = enemies[1], alive3 = enemies[3]; removeDead(); return enemies.length === 2 && enemies.indexOf(alive1) !== -1 && enemies.indexOf(alive3) !== -1; })()
+@hint
+`function spawnWave(count) { for (let i = 0; i < count; i++) { enemies.push(new Enemy(Math.random() * 450, 0)); } }`
+@hint
+`function removeDead() { enemies = enemies.filter((e) => !e.isDead()); }`
+@quiz
+? Что оставит `list.filter((e) => !e.isDead())`?
++ Только живых
+- Только погибших
+- Всех
+= `!` переворачивает: оставляем тех, кто НЕ погиб.

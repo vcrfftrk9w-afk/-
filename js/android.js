@@ -10,7 +10,13 @@
     window.SpeechSynthesisUtterance = function (text) { this.text = String(text || ''); this.lang = 'ru-RU'; this.rate = 1; };
     window.speechSynthesis = {
       getVoices: () => [],
-      speak: (u) => { try { A.speak(String(u.text || ''), Number(u.rate) || 1); } catch (e) {} },
+      speak: (u) => {
+        try {
+          const lang = String(u.lang || 'ru-RU');
+          if (A.speakLang) A.speakLang(String(u.text || ''), Number(u.rate) || 1, lang);
+          else A.speak(String(u.text || ''), Number(u.rate) || 1);
+        } catch (e) {}
+      },
       cancel: () => { try { A.stopSpeaking(); } catch (e) {} },
     };
   }

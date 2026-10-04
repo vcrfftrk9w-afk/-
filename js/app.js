@@ -224,6 +224,7 @@ const App = (() => {
   /* ---------- роутинг ---------- */
   const screenByTab = {
     mytasks: () => Screens.mytasks,
+    courses: () => Screens.courses,
     dashboard: () => Screens.dashboard,
     day: () => Screens.day,
     tasks: () => Screens.tasks,
@@ -243,8 +244,8 @@ const App = (() => {
     if (currentTab === 'day' && tab !== 'day' && Screens.day) Screens.day.onLeave();
     currentTab = tab;
     // два окна: «Мои дела» — отдельный экран, всё остальное — вкладки как раньше
-    setSpace(tab === 'mytasks' ? 'tasks' : 'all');
-    if (tab !== 'mytasks') lastAllTab = tab;
+    setSpace(tab === 'mytasks' ? 'tasks' : tab === 'courses' ? 'learn' : 'all');
+    if (tab !== 'mytasks' && tab !== 'courses') lastAllTab = tab;
 
     if (tab === 'rewards') State.s.seenAchievements = State.unlockedAchievements();
 
@@ -1201,8 +1202,9 @@ const App = (() => {
       const b = e.target.closest('[data-space]');
       if (!b || !b.closest('.space-switch, #mytasks-root')) return;
       Sound.sfx('pop');
-      if (b.dataset.space === 'tasks') { if (currentTab !== 'mytasks') lastAllTab = currentTab; go('mytasks'); }
-      else go(lastAllTab && lastAllTab !== 'mytasks' ? lastAllTab : 'dashboard');
+      if (b.dataset.space === 'tasks') go('mytasks');
+      else if (b.dataset.space === 'learn') go('courses');
+      else go(lastAllTab && lastAllTab !== 'mytasks' && lastAllTab !== 'courses' ? lastAllTab : 'dashboard');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }
@@ -1213,7 +1215,7 @@ const App = (() => {
     safely('ensureDaySetup', ensureDaySetup);
     safely('spaces', bindSpaces);
     // по умолчанию открывается окно «Мои дела»
-    safely('go', () => go(State.s.space === 'all' ? 'dashboard' : 'mytasks'));
+    safely('go', () => go(State.s.space === 'all' ? 'dashboard' : State.s.space === 'learn' ? 'courses' : 'mytasks'));
     safely('tilt', () => UI.initTilt());
     safely('ghosts', offerGhostCleanup);
     safely('env', noteEnv);
@@ -1339,6 +1341,8 @@ const App = (() => {
       const fresh = safely('weekCheck', () => !Week.installed() || Week.outdated());
       if (fresh) safely('weekInstall', () => Week.install());
       if (fresh || !DayTpl.appliedToday()) safely('tplApply', () => DayTpl.apply({ quiet: true }));
+      // курсы: урок дня — задачей в ежедневник на выбранное время
+      safely('courses', () => { if (typeof Courses !== 'undefined') Courses.ensureTasks(); });
       if (typeof Planner === 'undefined') return;
       const pl = Planner.plan();
       if (fresh || !pl || (Planner.inScript() && !pl.script)) safely('planBuild', () => Planner.build({}));

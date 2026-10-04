@@ -206,7 +206,16 @@ public class MainActivity extends Activity {
     private class Bridge {
         @JavascriptInterface
         public void speak(String text, float rate) {
+            speakLang(text, rate, "ru-RU");
+        }
+
+        /** голос на нужном языке: английские фразы в курсе — английским голосом */
+        @JavascriptInterface
+        public void speakLang(String text, float rate, String lang) {
             if (!ttsReady || text == null) return;
+            Locale loc = Locale.forLanguageTag(lang == null || lang.isEmpty() ? "ru-RU" : lang);
+            int r = tts.setLanguage(loc);
+            if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(new Locale("ru", "RU"));
             tts.setSpeechRate(rate > 0 ? rate : 1f);
             tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "say");
         }

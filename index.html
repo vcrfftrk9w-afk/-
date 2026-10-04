@@ -20,6 +20,7 @@
 <link rel="stylesheet" href="css/components.css">
 <link rel="stylesheet" href="css/screens.css">
 <link rel="stylesheet" href="css/animations.css">
+<link rel="stylesheet" href="css/courses.css">
 </head>
 <body>
 <!-- ==================== BODY-START ==================== -->
@@ -190,6 +191,7 @@
 
   <div class="space-switch" role="tablist" aria-label="Окно">
     <button class="space-btn" data-space="tasks" role="tab">🎯 Мои дела</button>
+    <button class="space-btn" data-space="learn" role="tab">🎓 Курсы</button>
     <button class="space-btn" data-space="all" role="tab">🧩 Всё остальное</button>
   </div>
 
@@ -214,6 +216,10 @@
     <!-- ==================== ГЛАВНАЯ ==================== -->
     <section id="tab-mytasks" class="tab-panel" aria-label="Мои дела">
       <div id="mytasks-root"></div>
+    </section>
+
+    <section id="tab-courses" class="tab-panel" aria-label="Курсы">
+      <div id="courses-root"></div>
     </section>
 
     <section id="tab-dashboard" class="tab-panel active">
@@ -1070,6 +1076,8 @@
 <script src="js/modes.js"></script>
 <script src="js/plans.js"></script>
 <script src="js/levels.js"></script>
+<script src="js/courses-data.js"></script>
+<script src="js/courses.js"></script>
 <script src="js/palette.js"></script>
 <script src="js/app.js"></script>
 <!-- ==================== BODY-END ==================== -->

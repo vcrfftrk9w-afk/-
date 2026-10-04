@@ -169,6 +169,8 @@ const Remind = (() => {
     })));
     // свои дела из «Моих дел»: у каждого дня своё время
     if (typeof Plans !== 'undefined') out.push(...Plans.alarms());
+    // курсы из вкладки «🎓 Курсы»: урок дня в выбранное время
+    if (typeof Courses !== 'undefined') out.push(...Courses.alarms());
     return out;
   }
 
@@ -220,7 +222,8 @@ const Remind = (() => {
   }
 
   const anyOn = (cfg) => cfg.wake || cfg.publish || (cfg.custom || []).some((a) => a.on !== false)
-    || (typeof Plans !== 'undefined' && Plans.alarms().length > 0);
+    || (typeof Plans !== 'undefined' && Plans.alarms().length > 0)
+    || (typeof Courses !== 'undefined' && Courses.alarms().length > 0);
   let draft = null; // новый свой будильник, пока его настраивают
   const toMin = (v) => { const m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? Math.min(23, +m[1]) * 60 + Math.min(59, +m[2]) : null; };
 

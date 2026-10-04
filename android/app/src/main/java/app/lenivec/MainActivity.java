@@ -18,6 +18,9 @@ import android.os.Environment;
 import android.media.RingtoneManager;
 import android.provider.MediaStore;
 import android.provider.Settings;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -31,7 +34,11 @@ import android.widget.Toast;
 
 import androidx.webkit.WebViewAssetLoader;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.File;
+import java.util.ArrayList;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -50,12 +57,15 @@ public class MainActivity extends Activity {
     private static final int REQ_NOTIFY = 1;
     private static final int REQ_FILE = 2;
     private static final int REQ_SOUND = 3;
+    private static final int REQ_MIC = 4;
 
     private WebView web;
     private TextToSpeech tts;
     private volatile boolean ttsReady;
     private ValueCallback<Uri[]> fileCallback;
     private int notifyId = 100;
+    private SpeechRecognizer recognizer;
+    private String pendingListen;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -154,6 +164,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (tts != null) tts.shutdown();
+        if (recognizer != null) recognizer.destroy();
         web.destroy();
         super.onDestroy();
     }
@@ -181,6 +192,65 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQ_NOTIFY) prefs().edit().putBoolean("notifyAsked", true).apply();
+        if (requestCode == REQ_MIC) {
+            String lang = pendingListen;
+            pendingListen = null;
+            boolean ok = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (ok && lang != null) startListening(lang);
+            else sendSpeech(null, "not-allowed");
+        }
+    }
+
+    /* Распознавание речи (говорение в курсе английского): в WebView нет
+       webkitSpeechRecognition — слушаем через SpeechRecognizer Android
+       и отдаём текст странице в window.__speech({ texts, error }). */
+    private void startListening(String lang) {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pendingListen = lang;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC);
+            return;
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) { sendSpeech(null, "no-service"); return; }
+        if (recognizer == null) {
+            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            recognizer.setRecognitionListener(new RecognitionListener() {
+                @Override public void onReadyForSpeech(Bundle params) {}
+                @Override public void onBeginningOfSpeech() {}
+                @Override public void onRmsChanged(float rmsdB) {}
+                @Override public void onBufferReceived(byte[] buffer) {}
+                @Override public void onEndOfSpeech() {}
+                @Override public void onPartialResults(Bundle partialResults) {}
+                @Override public void onEvent(int eventType, Bundle params) {}
+                @Override public void onError(int error) {
+                    sendSpeech(null, error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ? "no-speech"
+                            : error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ? "not-allowed" : "error-" + error);
+                }
+                @Override public void onResults(Bundle results) {
+                    ArrayList<String> texts = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    sendSpeech(texts, null);
+                }
+            });
+        }
+        Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang);
+        i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+        try {
+            recognizer.startListening(i);
+        } catch (RuntimeException e) {
+            sendSpeech(null, "error");
+        }
+    }
+
+    private void sendSpeech(ArrayList<String> texts, String error) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("texts", new JSONArray(texts == null ? new ArrayList<String>() : texts));
+            if (error != null) o.put("error", error);
+            final String js = "window.__speech && window.__speech(" + o.toString() + ")";
+            runOnUiThread(() -> web.evaluateJavascript(js, null));
+        } catch (Exception ignored) {
+        }
     }
 
     private SharedPreferences prefs() {
@@ -218,6 +288,16 @@ public class MainActivity extends Activity {
             if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(new Locale("ru", "RU"));
             tts.setSpeechRate(rate > 0 ? rate : 1f);
             tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "say");
+        }
+
+        @JavascriptInterface
+        public void listen(String lang) {
+            runOnUiThread(() -> startListening(lang == null || lang.isEmpty() ? "en-US" : lang));
+        }
+
+        @JavascriptInterface
+        public void stopListening() {
+            runOnUiThread(() -> { if (recognizer != null) recognizer.stopListening(); });
         }
 
         @JavascriptInterface

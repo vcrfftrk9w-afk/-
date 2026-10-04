@@ -27,13 +27,16 @@ const Courses = (() => {
   };
   function cs(id) {
     const s = S();
-    return s.courses[id] || null;
+    const st = s.courses[id] || null;
+    const c = st && C.byId(id);
+    if (c && c.path) c.path.migrate(st); // старый 30-дневный английский → путь A0 → C1
+    return st;
   }
-  const total = (c, st) => c.days + ((st && st.extra) || 0);
+  const total = (c, st) => (c.path ? Infinity : c.days + ((st && st.extra) || 0));
   const doneDays = (st) => Object.keys(st.done || {}).length;
   const doneToday = (st) => Object.values(st.done || {}).includes(today());
   const isActive = (id) => S().active.includes(id);
-  const pct = (c, st) => Math.min(100, Math.round((doneDays(st) / total(c, st)) * 100));
+  const pct = (c, st) => (c.path ? c.path.pct(st) : Math.min(100, Math.round((doneDays(st) / total(c, st)) * 100)));
   function streak(st) {
     const set = new Set(Object.values(st.done || {}));
     let n = 0;
@@ -42,7 +45,14 @@ const Courses = (() => {
     while (set.has(State.dateKey(d))) { n += 1; d.setDate(d.getDate() - 1); }
     return n;
   }
-  const dayOf = (c, st, n) => c.day(n, { days: total(c, st) });
+  // у английского день — не номер, а место на пути (уровень, урок, часть, повторение, экзамен)
+  const dayOf = (c, st, n) => (c.path && st ? c.path.today(st) : c.day(n, { days: total(c, st) }));
+  const minutesOf = (c, st) => (c.path && st ? c.path.minutes(st) : c.minutes);
+  const dayLabel = (c, st) => (c.path ? c.path.label(st) : `урок ${st.day}`);
+  function levelChip(c, st) {
+    const L = c.path && c.path.confirmedLevel(st);
+    return L ? `Уровень ${L.id} ✓ · ` : '';
+  }
 
   /* ---------- куда смотрим ---------- */
   let view = { name: 'home' };
@@ -66,7 +76,9 @@ const Courses = (() => {
     for (let i = a.length - 1; i > 0; i -= 1) { x = (x * 9301 + 49297) % 233280; const j = Math.floor((x / 233280) * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
     return a;
   };
-  const norm = (s) => String(s).toLowerCase().replace(/[.?!,]/g, '').replace(/’/g, "'").trim();
+  const norm = (s) => String(s).toLowerCase().replace(/[.?!,;:«»"—]/g, ' ').replace(/’/g, "'").replace(/\s+/g, ' ').trim();
+  const plural = (n, one, few, many) => { const a = n % 10; const b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };
+  const hasAI = () => typeof window !== 'undefined' && !!window.claude && typeof window.claude.use === 'function' && typeof Coach !== 'undefined' && !!Coach.getSample;
 
   /* ---------- урок дня в «Всё остальное» ---------- */
   function ensureTasks() {
@@ -79,7 +91,7 @@ const Courses = (() => {
       if (st.taskDay === k && State.s.tasks.some((t) => t.id === st.taskId)) return;
       // вчерашний несделанный урок не копим — он и так ждёт сегодня
       State.s.tasks = State.s.tasks.filter((t) => !(t.courseId === id && !t.done && t.due && t.due < k));
-      Screens.tasks.add(`🎓 ${c.short}: урок ${st.day}`, c.cat, 'mid', false, { due: k, at: st.time, estimate: c.minutes, silent: true });
+      Screens.tasks.add(`🎓 ${c.short}: ${dayLabel(c, st)}`, c.cat, 'mid', false, { due: k, at: st.time, estimate: minutesOf(c, st), silent: true });
       const t = State.s.tasks[0];
       if (t) { t.courseId = id; st.taskId = t.id; st.taskDay = k; }
     });
@@ -92,16 +104,18 @@ const Courses = (() => {
       const c = C.byId(id);
       const st = cs(id);
       if (!c || !st || st.finished || st.alarm === false) return;
-      ORDER.forEach((dow) => out.push({ dow, min: st.time, title: `🎓 ${c.short}: урок дня`, text: `${c.minutes} минут — и день засчитан.` }));
+      ORDER.forEach((dow) => out.push({ dow, min: st.time, title: `🎓 ${c.short}: урок дня`, text: `${minutesOf(c, st)} минут — и день засчитан.` }));
     });
     return out;
   }
   const syncAlarms = () => { if (typeof Remind !== 'undefined' && Remind.syncAlarms) Remind.syncAlarms(); };
 
   /* ---------- старт и сброс ---------- */
-  function start(id, time) {
+  function start(id, time, opts) {
     const s = S();
+    const c = C.byId(id);
     s.courses[id] = { started: today(), day: 1, done: {}, prog: {}, metrics: {}, extra: 0, time: time == null ? 18 * 60 : time, alarm: true, video: {}, vid: {}, finished: null, failed: false };
+    if (c && c.path) s.courses[id].path = c.path.init(opts);
     if (!s.active.includes(id)) s.active.push(id);
     State.commit();
     ensureTasks();
@@ -134,19 +148,20 @@ const Courses = (() => {
         <div class="cr-active" style="${grad(c)}">
           <button class="cr-active-top" data-cr-open="${c.id}">
             <span class="cr-emoji">${c.emoji}</span>
-            <span class="cr-active-txt"><b>${esc(c.title)}</b><small>${fin ? '🏆 Курс пройден' : `День ${Math.min(st.day, total(c, st))} из ${total(c, st)}`}${run ? ` · 🔥 ${run}` : ''}</small></span>
+            <span class="cr-active-txt"><b>${esc(c.title)}</b><small>${fin ? '🏆 Курс пройден' : c.path ? `${levelChip(c, st)}${esc(c.path.label(st))}` : `День ${Math.min(st.day, total(c, st))} из ${total(c, st)}`}${run ? ` · 🔥 ${run}` : ''}</small></span>
             ${ring(p, 58, 6, null, 'light')}
           </button>
           ${fin ? `<button class="cr-go done" data-cr-open="${c.id}">🏆 Посмотреть результат</button>`
-            : tdone ? `<button class="cr-go done" data-cr-open="${c.id}">✓ Сегодня пройдено — завтра урок ${st.day}</button>`
-              : `<button class="cr-go" data-cr-lesson="${c.id}">▶ Урок дня · ${c.minutes} мин</button>`}
+            : tdone ? `<button class="cr-go done" data-cr-open="${c.id}">✓ Сегодня пройдено — завтра ${esc(dayLabel(c, st))}</button>`
+              : `<button class="cr-go" data-cr-lesson="${c.id}">▶ Урок дня · ${minutesOf(c, st)} мин</button>`}
         </div>`;
     };
     const catCard = (c) => `
       <button class="cr-cat" data-cr-open="${c.id}">
         <span class="cr-cat-ico" style="${grad(c)}">${c.emoji}</span>
         <span class="cr-cat-txt"><b>${esc(c.title)}</b><small>${esc(c.tag)}</small>
-          <span class="cr-chips"><i>${c.days} дней</i><i>${c.minutes} мин/день</i><i>${esc(c.level)}</i></span></span>
+          <span class="cr-chips">${c.path ? '<i>6 уровней</i><i>экзамены</i>' : `<i>${c.days} дней</i>`}<i>${c.minutes} мин/день</i><i>${esc(c.level)}</i></span></span>
+
         <span class="cr-arrow">→</span>
       </button>`;
     return `
@@ -177,15 +192,25 @@ const Courses = (() => {
         <b>🤝 Обещание курса</b>
         <p>${esc(c.promise)}</p>
         <ul>${c.outcomes.map((o) => `<li>✓ ${esc(o)}</li>`).join('')}</ul>
-        <p class="cr-guarantee">Как это гарантируется: курс не засчитывается, пока ты не сдашь итоговую проверку. Не получилось — курс сам добавит ${c.review ? `${c.review} дней повторения` : 'время'} и проверит ещё раз. Пропустил день — ничего не сгорает, курс подождёт.</p>
+        <p class="cr-guarantee">Как это гарантируется: ${c.guarantee ? esc(c.guarantee) : `курс не засчитывается, пока ты не сдашь итоговую проверку. Не получилось — курс сам добавит ${c.review ? `${c.review} дней повторения` : 'время'} и проверит ещё раз. Пропустил день — ничего не сгорает, курс подождёт.`}</p>
+        ${c.honest ? `<p class="cr-honest">${esc(c.honest)}</p>` : ''}
       </div>`;
+    const pathStart = c.path ? `
+          <div class="en-start">
+            <span class="cr-field-l">С чего начать?</span>
+            <label class="en-opt"><input type="radio" name="en-start" value="zero" checked><span><b>С нуля</b><small>Урок 1 уровня A0 — всё по порядку</small></span></label>
+            <label class="en-opt"><input type="radio" name="en-start" value="place"><span><b>Определить мой уровень</b><small>Тест на 10 минут — начнёшь с подходящего уровня</small></span></label>
+            <span class="cr-field-l">Сколько видео в день?</span>
+            <div class="en-mins">${[20, 30, 45].map((m) => `<button type="button" class="chip ${m === 30 ? 'active' : ''}" data-en-pick="${m}">${m} мин</button>`).join('')}</div>
+          </div>` : '';
     if (!st) {
       return `${header}
         <div class="cr-sheet">
           <h2 class="cr-title">${c.emoji} ${esc(c.title)}</h2>
           <p class="muted">${esc(c.about)}</p>
-          <div class="cr-chips big"><i>📅 ${c.days} дней</i><i>⏱ ${c.minutes} мин в день</i><i>📈 ${esc(c.level)}</i></div>
+          <div class="cr-chips big">${c.path ? '<i>🪜 6 уровней · 300 уроков</i>' : `<i>📅 ${c.days} дней</i>`}<i>⏱ ${c.path ? '~30–60' : c.minutes} мин в день</i><i>📈 ${esc(c.level)}</i></div>
           ${promise}
+          ${pathStart}
           ${c.safety ? `<div class="cr-safety"><b>⚠️ Безопасность</b><p>${esc(c.safety)}</p></div>` : ''}
           <label class="cr-field"><span>Во сколько заниматься? Урок встанет в ежедневник и будильник</span>
             <input type="time" id="cr-time" value="18:00"></label>
@@ -199,7 +224,7 @@ const Courses = (() => {
     const D = dayOf(c, st, n);
     // карта: недели по 7 дней
     const weeks = [];
-    for (let w = 0; w * 7 < T; w += 1) {
+    for (let w = 0; !c.path && w * 7 < T; w += 1) {
       const cells = [];
       for (let d = w * 7 + 1; d <= Math.min(T, w * 7 + 7); d += 1) {
         const dd = dayOf(c, st, d);
@@ -220,16 +245,18 @@ const Courses = (() => {
     return `${header}
       <div class="cr-sheet">
         <h2 class="cr-title">${c.emoji} ${esc(c.title)}</h2>
-        <p class="muted">${st.finished ? '🏆 Курс пройден! Обещание выполнено.' : `День ${n} из ${T}${st.extra ? ` · +${st.extra} дней повторения` : ''}`}</p>
-        ${view.celebrate && !st.finished ? `<div class="cr-win">🎉 День ${view.celebrate} пройден! +25 опыта. Следующий урок откроется завтра.</div>` : ''}
+        <p class="muted">${st.finished ? '🏆 Курс пройден! Обещание выполнено.' : c.path ? `Занимаешься ${doneDays(st)} ${plural(doneDays(st), 'день', 'дня', 'дней')} · путь до C1 пройден на ${pct(c, st)}%` : `День ${n} из ${T}${st.extra ? ` · +${st.extra} дней повторения` : ''}`}</p>
+        ${view.celebrate && !st.finished ? `<div class="cr-win">🎉 ${view.msg ? esc(view.msg) : `День ${view.celebrate} пройден!`} +25 опыта.</div>` : ''}
         ${st.finished ? `<div class="cr-win">🏆 Ты прошёл курс «${esc(c.title)}» и сдал проверку.</div>`
           : `<button class="cr-today" data-cr-lesson="${c.id}" ${tdone ? 'disabled' : ''}>
-              <span><small>${tdone ? 'Сегодня пройдено ✓' : `Сегодня · день ${n}`}</small><b>${esc(tdone ? `Завтра: ${dayOf(c, st, st.day).title}` : D.title)}</b><em>${esc(tdone ? 'Возвращайся завтра — урок уже ждёт' : D.sub)}</em></span>
+              <span><small>${tdone ? 'Сегодня пройдено ✓' : c.path ? `Сегодня · ${esc(c.path.label(st))}` : `Сегодня · день ${n}`}</small><b>${esc(tdone ? `Завтра: ${dayOf(c, st, st.day).title}` : D.title)}</b><em>${esc(tdone ? 'Возвращайся завтра — урок уже ждёт' : D.sub)}</em></span>
               <i>${tdone ? '✓' : '▶'}</i></button>`}
         ${metricRows ? `<h4 class="cr-sec">📈 Твой прогресс</h4><div class="cr-metrics">${metricRows}</div>` : ''}
-        <h4 class="cr-sec">🗺 Путь</h4>
-        <div class="cr-map">${weeks.join('')}</div>
+        ${c.path ? c.path.pageHTML(st, esc) : `<h4 class="cr-sec">🗺 Путь</h4>
+        <div class="cr-map">${weeks.join('')}</div>`}
+        ${c.path && hasAI() ? `<button class="btn btn-primary btn-block en-tutor" id="en-tutor">💬 Поговорить с ИИ-тренером по-английски</button>` : ''}
         ${promise}
+
         ${c.safety ? `<div class="cr-safety"><b>⚠️ Безопасность</b><p>${esc(c.safety)}</p></div>` : ''}
         <h4 class="cr-sec">⚙️ Напоминание</h4>
         <div class="cr-settings">
@@ -279,7 +306,7 @@ const Courses = (() => {
     const vi = D.steps.findIndex((s) => s.type === 'video');
     const v = vi >= 0 ? D.steps[vi].video : null;
     const vs = v ? videoSrc(v, st) : null;
-    const icon = { video: '🎬', 'puzzle-en': '🧩', 'puzzle-ru': '🧩', listening: '🎧', test: '✍️', session: '⏱', measure: '📏', todo: '✅' };
+    const icon = { video: '🎬', 'puzzle-en': '🧩', 'puzzle-ru': '🧩', listening: '🎧', test: '✍️', session: '⏱', measure: '📏', todo: '✅', speak: '🎤' };
     const rows = D.steps.map((s, i) => {
       const pr = stepProg(st, i);
       const open = unlocked(st, D, i);
@@ -297,7 +324,7 @@ const Courses = (() => {
         <span class="cr-fire">🔥 ${streak(st)}</span>
       </header>
       <div class="cr-sheet lesson">
-        <div class="cr-lesson-title"><small>День ${n} из ${total(c, st)}</small><b>${esc(D.title)}</b></div>
+        <div class="cr-lesson-title"><small>${c.path ? esc(c.path.label(st)) : `День ${n} из ${total(c, st)}`}</small><b>${esc(D.title)}</b></div>
         ${vs ? `
           <div class="cr-video ${videoHidden ? 'hidden' : ''}">
             <iframe id="cr-yt" src="${esc(vs.src)}" title="Видеоурок" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" loading="lazy"></iframe>
@@ -307,7 +334,7 @@ const Courses = (() => {
             <a class="linkbtn" href="${esc(vs.open)}" target="_blank" rel="noopener">Открыть в YouTube ↗</a>
           </div>
           <p class="cr-vhint" id="cr-vhint" hidden></p>` : ''}
-        ${D.steps.find((s) => s.type === 'video' && s.video.lesson) ? `<p class="muted small cr-vnote">Видео: курс Александра Бебриса «Английский язык с нуля до продвинутого» (English Galaxy), уровень A0.</p>` : ''}
+        ${vs && c.videoNote ? `<p class="muted small cr-vnote">${esc(c.videoNote)}</p>` : ''}
         <ul class="cr-steps">${rows}</ul>
         ${p >= 100 ? `<div class="cr-win">🎉 День ${n} пройден!</div>` : ''}
       </div>`;
@@ -339,6 +366,7 @@ const Courses = (() => {
     const st = cs(c.id);
     setProg(c, i, 1);
     if (extra && extra.failed) st.failed = true;
+    State.save();
     const n = Math.min(st.day, total(c, st));
     const D = dayOf(c, st, n);
     if (D.steps.every((_, j) => stepProg(st, j) >= 1)) { completeDay(c, el); return; }
@@ -361,7 +389,12 @@ const Courses = (() => {
     State.addXP(25);
     let msg = `День ${n} пройден! Завтра — следующий урок`;
     const isFinal = D.check === true || D.check === 'final';
-    if (isFinal) {
+    if (c.path) {
+      // английский: путь сам решает — следующая часть, урок, экзамен, уровень
+      const r = c.path.complete(st, D);
+      msg = r.msg;
+      if (r.finished) st.finished = today();
+    } else if (isFinal) {
       if (st.failed) {
         st.extra = (st.extra || 0) + (c.review || 5);
         msg = `Пока не дотянул до цели — курс добавил ${c.review || 5} дней повторения, потом проверка снова. Так и работает гарантия.`;
@@ -373,50 +406,85 @@ const Courses = (() => {
       // промежуточная проверка: просто замер, курс идёт дальше
       msg = st.failed ? `Проверка записана. До цели ещё чуть-чуть — к финалу подтянешь, курс как раз на это.` : `Промежуточная цель взята! Идём дальше.`;
     }
+    const failedNow = st.failed;
     st.failed = false;
-    if (!st.finished) st.day = Math.min(n + 1, total(c, st));
+    if (c.path) st.day = n + 1;
+    else if (!st.finished) st.day = Math.min(n + 1, total(c, st));
     if (st.finished) { State.s.tasks = State.s.tasks.filter((x) => !(x.courseId === c.id && !x.done)); }
     State.commit();
     syncAlarms();
     Sound.sfx('fanfare');
     FX.fireworks(st.finished ? 6 : 3);
-    UI.toast(msg, 'level', st.finished ? '🏆' : '🎉');
-    view = { name: 'course', id: c.id, celebrate: n };
+    UI.toast(msg, 'level', st.finished ? '🏆' : failedNow ? '💪' : '🎉');
+    view = { name: 'course', id: c.id, celebrate: n, msg: c.path ? msg : null };
+
     render(true);
     window.scrollTo({ top: 0 });
   }
 
-  /* --- пазл: собери предложение из слов --- */
+  /* --- голос: английская фраза вслух --- */
+  function sayEn(text, slow) {
+    try {
+      if (!window.speechSynthesis) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US';
+      u.rate = slow ? 0.6 : 0.9;
+      const v = speechSynthesis.getVoices && speechSynthesis.getVoices().find((x) => /^en/i.test(x.lang));
+      if (v) u.voice = v;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(u);
+    } catch (e) { /* без голоса — есть текст */ }
+  }
+  /* ответ засчитан: курс узнаёт, что повторять и какие темы слабые */
+  function itemDone(c, s, item, ok) {
+    if (!c.path) return;
+    const st = cs(c.id);
+    if (s.place) c.path.onPlace(st, item, ok);
+    else c.path.onItem(st, s, item, ok);
+  }
+  /* итог проверки с порогом: кольцо и «сдано / не сдано» */
+  function scoreScreen(c, i, s, box, right, N) {
+    const score = N ? right / N : 0;
+    const passNeed = s.pass || 0;
+    const failed = !!(passNeed && score < passNeed);
+    box.innerHTML = `
+      <div class="cr-ex-body">
+        <div class="cr-score ${failed ? 'bad' : ''}">${ring(score * 100, 120, 10, `${Math.round(score * 100)}<small>%</small>`)}</div>
+        <p class="cr-q">${failed ? `Нужно ${Math.round(passNeed * 100)}%. Ничего страшного: курс добавит повторение и проверит снова.` : passNeed ? 'Проверка сдана!' : `Верно ${right} из ${N}`}</p>
+        <button class="btn btn-primary btn-lg btn-block" id="cr-done">Готово</button>
+      </div>`;
+    box.querySelector('#cr-done').onclick = () => finishStep(c, i, box, { failed });
+  }
+
+  /* --- пазл: собери предложение из слов ---
+     В уроке ошибку не засчитывают: фраза уходит в конец и вернётся.
+     На экзамене (есть порог) — одна попытка на фразу, в конце процент. */
   function runPuzzle(c, i, s) {
     const box = $('#cr-ex');
     const mode = s.type; // puzzle-en | puzzle-ru | listening
+    const exam = !!s.pass;
     const queue = s.items.map((x, k) => ({ x, k }));
+    const tried = new Set();
     let solved = 0;
+    let answered = 0;
+    let right = 0;
     const totalN = s.items.length;
-    const say = (text, slow) => {
-      try {
-        if (!window.speechSynthesis) return;
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'en-US';
-        u.rate = slow ? 0.6 : 0.9;
-        const v = speechSynthesis.getVoices && speechSynthesis.getVoices().find((x) => /^en/i.test(x.lang));
-        if (v) u.voice = v;
-        speechSynthesis.cancel();
-        speechSynthesis.speak(u);
-      } catch (e) { /* без голоса — есть текст */ }
-    };
-    const count = () => { const el = $('#cr-ex-count'); if (el) el.textContent = `${solved} из ${totalN}`; };
+    const count = () => { const el = $('#cr-ex-count'); if (el) el.textContent = `${exam ? answered : solved} из ${totalN}`; };
 
     function next() {
       count();
-      setProg(c, i, solved / totalN);
-      if (!queue.length) { finishStep(c, i, box); return; }
+      setProg(c, i, (exam ? answered : solved) / totalN * (exam ? 0.99 : 1));
+      if (!queue.length) {
+        if (exam) scoreScreen(c, i, s, box, right, totalN);
+        else finishStep(c, i, box);
+        return;
+      }
       const { x, k } = queue[0];
       const target = mode === 'puzzle-en' ? x.words : x.ruWords;
       // лишнее слово — из другого предложения, чтобы ответ не угадывался по количеству
       const others = s.items.filter((y) => y !== x).flatMap((y) => (mode === 'puzzle-en' ? y.words : y.ruWords));
       const extra = others.find((w) => !target.map(norm).includes(norm(w)));
-      const chips = shuffle(target.concat(extra ? [extra] : []), k + solved * 13 + 3);
+      const chips = shuffle(target.concat(extra ? [extra] : []), k + solved * 13 + answered * 7 + 3);
       let picked = []; // индексы фишек по порядку
       let state = '';
 
@@ -427,6 +495,7 @@ const Courses = (() => {
       function draw() {
         box.innerHTML = `
           <div class="cr-ex-body ${state}">
+            ${exam ? '<p class="cr-exam-tag">🏁 Экзамен — одна попытка</p>' : ''}
             ${prompt}
             <div class="cr-answer" id="cr-answer">${picked.map((j, pos) => `<button class="cr-chip in" data-cr-out="${pos}">${esc(chips[j])}</button>`).join('') || '<span class="muted small">Нажимай на слова ниже</span>'}</div>
             ${state === 'wrong' ? `<p class="cr-right">Правильно: <b>${esc(mode === 'puzzle-en' ? x.en : x.ru)}</b>${mode === 'listening' ? `<br><span class="muted">${esc(x.en)}</span>` : ''}</p>` : ''}
@@ -442,19 +511,24 @@ const Courses = (() => {
           if (chk) chk.onclick = check;
         }
         const nx = box.querySelector('#cr-next');
-        if (nx) nx.onclick = () => { queue.push(queue.shift()); next(); };
-        const sp = box.querySelector('#cr-speak'); if (sp) sp.onclick = () => say(x.en);
-        const sl = box.querySelector('#cr-slow'); if (sl) sl.onclick = () => say(x.en, true);
+        if (nx) nx.onclick = () => { if (exam) queue.shift(); else queue.push(queue.shift()); next(); };
+        const sp = box.querySelector('#cr-speak'); if (sp) sp.onclick = () => sayEn(x.en);
+        const sl = box.querySelector('#cr-slow'); if (sl) sl.onclick = () => sayEn(x.en, true);
       }
       function check() {
-        const ok = norm(picked.map((j) => chips[j]).join(' ')) === norm(target.join(' '));
+        const got = picked.map((j) => chips[j]);
+        // по-русски порядок слов свободный — засчитываем любой; по-английски — только верный
+        const ok = mode === 'puzzle-en'
+          ? norm(got.join(' ')) === norm(target.join(' '))
+          : got.map(norm).sort().join(' ') === target.map(norm).sort().join(' ');
+        if (!tried.has(k)) { tried.add(k); itemDone(c, s, x, ok); if (exam) { answered += 1; if (ok) right += 1; } }
         if (ok) {
           Sound.sfx('success');
           queue.shift();
           solved += 1;
           state = 'ok';
           draw();
-          if (mode !== 'puzzle-ru') say(x.en);
+          if (mode !== 'puzzle-ru') sayEn(x.en);
           setTimeout(next, 1100);
         } else {
           Sound.sfx('deny');
@@ -463,7 +537,7 @@ const Courses = (() => {
         }
       }
       draw();
-      if (mode === 'listening') setTimeout(() => say(x.en), 300);
+      if (mode === 'listening') setTimeout(() => sayEn(x.en), 300);
     }
     next();
   }
@@ -477,25 +551,14 @@ const Courses = (() => {
     const count = () => { const el = $('#cr-ex-count'); if (el) el.textContent = `${k} из ${N}`; };
     function q() {
       count();
-      setProg(c, i, k / N);
-      if (k >= N) {
-        const score = right / N;
-        const passNeed = s.pass || 0;
-        const failed = passNeed && score < passNeed;
-        box.innerHTML = `
-          <div class="cr-ex-body">
-            <div class="cr-score ${failed ? 'bad' : ''}">${ring(score * 100, 120, 10, `${Math.round(score * 100)}<small>%</small>`)}</div>
-            <p class="cr-q">${failed ? `Нужно ${Math.round(passNeed * 100)}%. Ничего страшного: курс добавит повторение и проверит снова.` : passNeed ? 'Проверка сдана!' : `Верно ${right} из ${N}`}</p>
-            <button class="btn btn-primary btn-lg btn-block" id="cr-done">Готово</button>
-          </div>`;
-        box.querySelector('#cr-done').onclick = () => finishStep(c, i, box, { failed });
-        return;
-      }
+      setProg(c, i, (k / N) * 0.99);
+      if (k >= N) { scoreScreen(c, i, s, box, right, N); return; }
       const it = s.items[k];
       const opts = shuffle(it.o, k * 7 + 11);
       const parts = it.q.split('___');
       box.innerHTML = `
         <div class="cr-ex-body">
+          ${s.place ? `<p class="cr-exam-tag">Вопрос ${k + 1} из ${N} · не знаешь — выбирай наугад</p>` : s.pass ? '<p class="cr-exam-tag">🏁 Экзамен</p>' : ''}
           <p class="cr-q-label">Заполни пропуск</p>
           <p class="cr-q en">${esc(parts[0])}<span class="cr-gap" id="cr-gap">___</span>${esc(parts[1] || '')}</p>
           <div class="cr-opts">${opts.map((o) => `<button class="cr-opt" data-cr-opt="${esc(o)}">${esc(o)}</button>`).join('')}</div>
@@ -507,12 +570,141 @@ const Courses = (() => {
           if (!ok) b.classList.add('wrong');
           $('#cr-gap').textContent = it.a;
           $('#cr-gap').classList.add(ok ? 'ok' : 'bad');
-          Sound.sfx(ok ? 'success' : 'error');
+          Sound.sfx(ok ? 'success' : 'deny');
+          itemDone(c, s, it, ok);
           if (ok) right += 1;
           k += 1;
           setTimeout(q, ok ? 700 : 1500);
         };
       });
+    }
+    q();
+  }
+
+  /* --- говорение: скажи фразу по-английски вслух ---
+     Слушает распознавание речи (в браузере — webkitSpeechRecognition,
+     в APK — распознавание Android). Засчитывается, если совпало ≥ 70 % слов.
+     Нет микрофона — говоришь вслух, открываешь ответ и честно отмечаешь сам. */
+  function speechAPI() {
+    return typeof window !== 'undefined' ? (window.webkitSpeechRecognition || window.SpeechRecognition || null) : null;
+  }
+  function matchScore(said, target) {
+    const t = norm(target).split(' ').filter(Boolean);
+    const pool = norm(said).split(' ').filter(Boolean);
+    let hit = 0;
+    t.forEach((w) => { const j = pool.indexOf(w); if (j >= 0) { hit += 1; pool.splice(j, 1); } });
+    return t.length ? hit / t.length : 0;
+  }
+  function runSpeak(c, i, s) {
+    const box = $('#cr-ex');
+    const exam = !!s.pass;
+    const N = s.items.length;
+    let k = 0;
+    let right = 0;
+    let tries = 0;
+    let manual = !speechAPI();
+    let rec = null;
+    const count = () => { const el = $('#cr-ex-count'); if (el) el.textContent = `${k} из ${N}`; };
+    function settle(ok, wait) {
+      itemDone(c, s, s.items[k], ok);
+      if (ok) right += 1;
+      k += 1;
+      tries = 0;
+      setTimeout(q, wait || (ok ? 900 : 200));
+    }
+    function q(note) {
+      count();
+      setProg(c, i, (k / N) * 0.99);
+      if (k >= N) {
+        if (exam) scoreScreen(c, i, s, box, right, N);
+        else finishStep(c, i, box);
+        return;
+      }
+      const x = s.items[k];
+      box.innerHTML = `
+        <div class="cr-ex-body">
+          ${exam ? '<p class="cr-exam-tag">🏁 Экзамен — две попытки на фразу</p>' : ''}
+          <p class="cr-q-label">Скажи по-английски вслух</p>
+          <p class="cr-q">${esc(x.ru)}</p>
+          ${manual ? `
+            <p class="muted small">Скажи фразу вслух, потом открой ответ и проверь себя честно.</p>
+            <div id="cr-sp-ans"></div>
+            <button class="btn btn-primary btn-lg btn-block" id="cr-sp-show">Показать ответ</button>`
+          : `
+            <button class="cr-mic" id="cr-mic" aria-label="Говорить">🎤</button>
+            <p class="cr-mic-hint" id="cr-mic-hint">${note ? esc(note) : 'Нажми и скажи фразу'}</p>
+            <div id="cr-sp-ans"></div>
+            ${exam ? '' : '<button class="linkbtn" id="cr-sp-hint">Подсказка</button>'}
+            <button class="linkbtn" id="cr-sp-manual">Нет микрофона — проверю себя сам</button>`}
+        </div>`;
+      const ans = box.querySelector('#cr-sp-ans');
+      const showAnswer = (said, score) => {
+        ans.innerHTML = `
+          ${said != null ? `<p class="cr-said">Ты сказал: <b>${esc(said || '…')}</b></p>` : ''}
+          <p class="cr-right ${score != null && score >= 0.7 ? 'ok' : ''}">${score != null ? (score >= 0.7 ? 'Верно! ' : 'Правильно: ') : ''}<b>${esc(x.en)}</b>
+            <button class="cr-speak mini" id="cr-sp-say" aria-label="Послушать">🔊</button></p>`;
+        ans.querySelector('#cr-sp-say').onclick = () => sayEn(x.en);
+      };
+      if (manual) {
+        box.querySelector('#cr-sp-show').onclick = () => {
+          showAnswer(null, null);
+          sayEn(x.en);
+          box.querySelector('#cr-sp-show').outerHTML = `<div class="cr-self">
+            <button class="btn btn-primary btn-lg" id="cr-sp-ok">Сказал верно ✓</button>
+            <button class="btn btn-ghost btn-lg" id="cr-sp-bad">Ошибся</button></div>`;
+          box.querySelector('#cr-sp-ok').onclick = () => { Sound.sfx('success'); settle(true); };
+          box.querySelector('#cr-sp-bad').onclick = () => { Sound.sfx('deny'); settle(false); };
+        };
+        return;
+      }
+      const hintBtn = box.querySelector('#cr-sp-hint');
+      if (hintBtn) hintBtn.onclick = () => { hintBtn.outerHTML = `<p class="muted small cr-hint-words">${esc(x.words.slice(0, Math.ceil(x.words.length / 2)).join(' '))} …</p>`; };
+      box.querySelector('#cr-sp-manual').onclick = () => { manual = true; if (rec) try { rec.abort(); } catch (e) {} q(); };
+      const mic = box.querySelector('#cr-mic');
+      const hint = box.querySelector('#cr-mic-hint');
+      mic.onclick = () => {
+        const API = speechAPI();
+        if (!API) { manual = true; q(); return; }
+        try {
+          rec = new API();
+          rec.lang = 'en-US';
+          rec.interimResults = false;
+          rec.maxAlternatives = 3;
+        } catch (e) { manual = true; q(); return; }
+        let got = false;
+        mic.classList.add('on');
+        hint.textContent = 'Слушаю… говори';
+        rec.onresult = (ev) => {
+          got = true;
+          const alts = Array.from((ev.results && ev.results[0]) || []).map((r) => r.transcript);
+          const best = alts.reduce((b, t) => (matchScore(t, x.en) > matchScore(b, x.en) ? t : b), alts[0] || '');
+          const score = matchScore(best, x.en);
+          tries += 1;
+          showAnswer(best, score);
+          mic.classList.remove('on');
+          if (score >= 0.7) { Sound.sfx('success'); mic.disabled = true; hint.textContent = 'Отлично!'; settle(true); return; }
+          Sound.sfx('deny');
+          if (exam && tries >= 2) { mic.disabled = true; hint.textContent = 'Не засчитано'; settle(false, 1800); return; }
+          if (!exam && tries === 1) itemDone(c, s, x, false);
+          hint.textContent = exam ? 'Ещё одна попытка — нажми и скажи' : 'Послушай и скажи ещё раз';
+          if (!exam && tries >= 3) {
+            hint.innerHTML = 'Не выходит — не страшно, фраза вернётся на повторение. <button class="linkbtn" id="cr-sp-skip">Дальше</button>';
+            box.querySelector('#cr-sp-skip').onclick = () => { tries = 0; k += 1; q(); };
+          }
+        };
+        rec.onerror = (ev) => {
+          mic.classList.remove('on');
+          const err = ev && ev.error;
+          if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'no-service' || err === 'audio-capture') {
+            manual = true;
+            q('Микрофон недоступен — проверим себя вручную');
+            return;
+          }
+          hint.textContent = err === 'no-speech' ? 'Ничего не услышал — нажми и скажи погромче' : 'Не расслышал — попробуй ещё раз';
+        };
+        rec.onend = () => { mic.classList.remove('on'); if (!got && hint.textContent === 'Слушаю… говори') hint.textContent = 'Нажми и скажи фразу'; };
+        try { rec.start(); } catch (e) { mic.classList.remove('on'); hint.textContent = 'Нажми ещё раз'; }
+      };
     }
     q();
   }
@@ -622,7 +814,7 @@ const Courses = (() => {
     const D = dayOf(c, st, n);
     const i = D.steps.findIndex((s) => s.type === 'video');
     const v = D.steps[i].video;
-    yt = { c, i, lesson: v.lesson || null, minutes: v.minutes || 0, last: null, watched: Math.round(stepProg(st, i) * (v.minutes || 0) * 60), saveAt: 0 };
+    yt = { c, i, lesson: v.lesson || null, num: v.num || (typeof v.lesson === 'number' ? v.lesson : null), minutes: v.minutes || 0, last: null, watched: Math.round(stepProg(st, i) * (v.minutes || 0) * 60), saveAt: 0, wrong: false, duration: 0 };
     const hello = () => { try { frame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*'); } catch (e) {} };
     frame.addEventListener('load', () => { hello(); setTimeout(hello, 600); setTimeout(hello, 2000); });
   }
@@ -638,23 +830,33 @@ const Courses = (() => {
     const st = cs(yt.c.id);
     if (!st) return;
     // видео не тот урок (плейлист открылся не с того места) — предложим переключить
-    if (yt.lesson && info.videoData && info.videoData.title) {
+    if (yt.num && info.videoData && info.videoData.title) {
       const m = /Урок\s*(\d+)/i.exec(info.videoData.title);
       const hint = $('#cr-vhint');
-      if (m && Number(m[1]) === yt.lesson && info.videoData.video_id) {
+      if (m && Number(m[1]) === yt.num && info.videoData.video_id) {
+        yt.wrong = false;
         st.vid = st.vid || {};
         if (st.vid[yt.lesson] !== info.videoData.video_id) { st.vid[yt.lesson] = info.videoData.video_id; State.save(); }
         if (hint) hint.hidden = true;
       } else if (m && hint && typeof info.playlistIndex === 'number') {
-        const target = info.playlistIndex + (yt.lesson - Number(m[1]));
+        yt.wrong = true;
+        const target = info.playlistIndex + (yt.num - Number(m[1]));
         hint.hidden = false;
-        hint.innerHTML = `Сейчас в плеере урок ${m[1]}, а у тебя урок ${yt.lesson}. <button class="linkbtn" id="cr-vfix">Включить урок ${yt.lesson}</button>`;
+        hint.innerHTML = `Сейчас в плеере урок ${m[1]}, а у тебя урок ${yt.num}. <button class="linkbtn" id="cr-vfix">Включить урок ${yt.num}</button>`;
         const fix = $('#cr-vfix');
         if (fix) fix.onclick = () => { try { $('#cr-yt').contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideoAt', args: [target] }), '*'); } catch (err) {} };
       }
     }
-    if (typeof info.currentTime === 'number') {
+    if (typeof info.duration === 'number' && info.duration > 0 && !yt.wrong) yt.duration = info.duration;
+    if (typeof info.currentTime === 'number' && !yt.wrong) {
       const t = info.currentTime;
+      // урок досмотрен до конца — у пути завтра следующий урок
+      if (yt.c.path && yt.duration > 600 && t >= yt.duration - 45 && !yt.endSeen) {
+        yt.endSeen = true;
+        yt.c.path.videoEnded(st, yt.lesson);
+        State.save();
+        UI.toast('Видеоурок досмотрен до конца! Завтра — следующий урок', 'success', '🎬');
+      }
       const playing = info.playerState === 1 || info.playerState === undefined;
       if (yt.last != null && playing) {
         const dt = t - yt.last;
@@ -675,8 +877,9 @@ const Courses = (() => {
       }
       if (Date.now() - yt.saveAt > 15000) { yt.saveAt = Date.now(); State.save(); }
     }
-    if (info.playerState === 0) {
+    if (info.playerState === 0 && !yt.wrong) {
       // урок досмотрен до конца
+      if (yt.c.path && !yt.endSeen) { yt.endSeen = true; yt.c.path.videoEnded(st, yt.lesson); State.save(); }
       if (stepProg(st, yt.i) < 1) finishStep(yt.c, yt.i, $('#cr-yt'));
     }
   }
@@ -711,6 +914,7 @@ const Courses = (() => {
     if (view.name === 'ex') {
       const s = dayOf(c, st, Math.min(st.day, total(c, st))).steps[view.step];
       if (s.type === 'test') runTest(c, view.step, s);
+      else if (s.type === 'speak') runSpeak(c, view.step, s);
       else if (s.type === 'session') runSession(c, view.step, s);
       else if (s.type === 'measure') runMeasure(c, view.step, s);
       else if (s.type === 'todo') runTodo(c, view.step, s);
@@ -756,10 +960,14 @@ const Courses = (() => {
               <h2>🎬 ${esc(D.steps[i].title)}</h2>
               <p class="muted">${esc(D.steps[i].sub || '')}</p>
               <button class="btn btn-primary btn-lg btn-block" id="cr-vwatch">▶ Смотреть</button>
-              <button class="btn btn-ghost btn-block" id="cr-vseen">Посмотрел ✓</button>
+              <button class="btn btn-ghost btn-block" id="cr-vseen">${c.path ? `Посмотрел ${st.path.videoMin} минут ✓` : 'Посмотрел ✓'}</button>
+              ${c.path ? '<button class="btn btn-ghost btn-block" id="cr-vend">Досмотрел урок до конца ✓✓</button><p class="muted small">«До конца» — завтра начнётся следующий видеоурок.</p>' : ''}
             </div>`);
           body.querySelector('#cr-vwatch').onclick = () => { UI.closeModal('#sheet-modal'); runVideo(c, i); };
           body.querySelector('#cr-vseen').onclick = () => { UI.closeModal('#sheet-modal'); finishStep(c, i, b); render(true); };
+          const vend = body.querySelector('#cr-vend');
+          if (vend) vend.onclick = () => { c.path.videoEnded(st, D.steps[i].video.lesson); UI.closeModal('#sheet-modal'); finishStep(c, i, b); render(true); };
+
           return;
         }
         view = { name: 'ex', id: c.id, step: i };
@@ -776,7 +984,9 @@ const Courses = (() => {
         const gate = root.querySelector('#cr-gate');
         if (gate && !gate.checked) { root.querySelector('#cr-err').textContent = 'Без мягкого покрытия и страхующего этот курс не начинаем — это про твою безопасность.'; return; }
         const tm = Track.parseHHMM(root.querySelector('#cr-time').value);
-        start(c.id, tm == null ? 18 * 60 : tm);
+        const mode = root.querySelector('input[name="en-start"]:checked');
+        const mins = root.querySelector('[data-en-pick].active');
+        start(c.id, tm == null ? 18 * 60 : tm, { start: mode ? mode.value : 'zero', min: mins ? Number(mins.dataset.enPick) : 30 });
         view = { name: 'course', id: c.id };
         render(true);
       };
@@ -795,7 +1005,39 @@ const Courses = (() => {
         UI.toast(`Урок теперь в ${Track.hhmm(tm)}`, 'success', '⏰');
       };
     }
+    root.querySelectorAll('[data-en-pick]').forEach((b) => {
+      b.onclick = () => { root.querySelectorAll('[data-en-pick]').forEach((x) => x.classList.toggle('active', x === b)); Sound.sfx('pop'); };
+    });
+    root.querySelectorAll('[data-en-min]').forEach((b) => {
+      b.onclick = () => {
+        c.path.setMinutes(st, Number(b.dataset.enMin));
+        const t = State.s.tasks.find((x) => x.id === st.taskId && !x.done);
+        if (t) t.estimate = minutesOf(c, st);
+        State.commit();
+        syncAlarms();
+        render(true);
+        UI.toast(`Теперь ${b.dataset.enMin} минут видео в день`, 'success', '🎬');
+      };
+    });
+    const exNow = root.querySelector('#en-exam-now');
+    if (exNow) {
+      let armed = false;
+      exNow.onclick = () => {
+        if (doneToday(st)) { UI.toast('Сегодня урок уже пройден — экзамен можно завтра', 'default', '🏁'); return; }
+        if (!armed) { armed = true; exNow.textContent = 'Экзамен вместо урока сегодня. Не сдашь — вернёшься к урокам. Нажми ещё раз'; return; }
+        c.path.examNow(st);
+        const t = State.s.tasks.find((x) => x.id === st.taskId && !x.done);
+        if (t) t.title = `🎓 ${c.short}: ${dayLabel(c, st)}`;
+        State.commit();
+        view = { name: 'lesson', id: c.id };
+        render(true);
+        window.scrollTo({ top: 0 });
+      };
+    }
+    const tutor = root.querySelector('#en-tutor');
+    if (tutor) tutor.onclick = () => openTutor(c);
     const al = root.querySelector('#cr-alarm');
+
     if (al && st) al.onchange = () => { st.alarm = al.checked; State.commit(); syncAlarms(); };
     const rs = root.querySelector('#cr-reset');
     if (rs) {
@@ -810,6 +1052,69 @@ const Courses = (() => {
   }
 
   function open(id, name) { view = { name: name || 'course', id }; render(true); }
+
+  /* ---------- разговорный тренер: ИИ в Claude говорит на твоём уровне и исправляет ошибки ---------- */
+  function openTutor(c) {
+    const st = cs(c.id);
+    const lead = { role: 'user', content: c.path.tutorPrompt(st) };
+    const turns = [];
+    let busy = false;
+    const body = UI.sheet(`
+      <div class="plan-ed en-chat">
+        <h2>💬 Разговор по-английски</h2>
+        <p class="muted small">Тренер говорит на твоём уровне, задаёт вопросы и исправляет ошибки (✏️). Пиши или нажми 🎤 и говори.</p>
+        <div class="en-chat-log" id="en-log"></div>
+        <form class="en-chat-form" id="en-form">
+          <input id="en-q" autocomplete="off" placeholder="Напиши по-английски…">
+          ${speechAPI() ? '<button type="button" class="cr-speak mini" id="en-mic" aria-label="Говорить">🎤</button>' : ''}
+          <button class="btn btn-primary" type="submit">➤</button>
+        </form>
+      </div>`);
+    const log = body.querySelector('#en-log');
+    const bubble = (cls, text) => { const d = document.createElement('div'); d.className = `ai-bubble ${cls}`; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; };
+    async function ask(text) {
+      if (busy) return;
+      busy = true;
+      if (text) { bubble('me', text); turns.push({ role: 'user', content: text }); }
+      const bot = bubble('bot', '…');
+      try {
+        const sample = await Coach.getSample();
+        if (!sample) { bot.textContent = 'ИИ-тренер работает, когда приложение открыто в Claude.'; return; }
+        const msgs = [lead, { role: 'assistant', content: 'OK.' }].concat(turns.length ? turns.slice(-10) : [{ role: 'user', content: 'Start the conversation with a greeting and one simple question.' }]);
+        const { text: out } = await sample(msgs, { cache: false, onText: ({ text: t }) => { bot.textContent = t; log.scrollTop = log.scrollHeight; } });
+        bot.textContent = out;
+        turns.push({ role: 'assistant', content: out });
+        if (!/✏️/.test(out)) sayEn(out.replace(/[^\x20-\x7E]+/g, ' '));
+      } catch (e) {
+        if (text) turns.pop();
+        bot.textContent = (e && e.code === 'rate_limited') ? 'Слишком много сообщений — подожди пару минут.' : 'Не получилось связаться с ИИ. Попробуй ещё раз.';
+      } finally { busy = false; }
+    }
+    body.querySelector('#en-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const q = body.querySelector('#en-q');
+      const t = q.value.trim();
+      if (!t) return;
+      q.value = '';
+      ask(t);
+    });
+    const mic = body.querySelector('#en-mic');
+    if (mic) {
+      mic.onclick = () => {
+        const API = speechAPI();
+        if (!API) return;
+        const rec = new API();
+        rec.lang = 'en-US';
+        mic.classList.add('on');
+        rec.onresult = (ev) => { const t = ev.results && ev.results[0] && ev.results[0][0] ? ev.results[0][0].transcript : ''; if (t) ask(t); };
+        rec.onend = () => mic.classList.remove('on');
+        rec.onerror = () => mic.classList.remove('on');
+        try { rec.start(); } catch (e) { mic.classList.remove('on'); }
+      };
+    }
+    ask(null);
+  }
+
 
   return { render, ensureTasks, alarms, start, reset, open, state: cs, dayOf: (id, n) => { const c = C.byId(id); return dayOf(c, cs(id), n); } };
 })();

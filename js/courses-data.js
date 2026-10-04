@@ -4,135 +4,11 @@
 
    Каждый курс — дни по порядку. День = шаги: видео, упражнения,
    тренировка с таймером, замер результата, дела-чекбоксы.
-   Видео — конкретные ролики YouTube (найдены и проверены по названию),
-   для английского — курс Александра Бебриса «Английский язык с нуля
-   до продвинутого. Практический курс по приложению English Galaxy», A0.
-   Упражнения к английскому — свои, по темам уроков в том же порядке.
+   Видео — конкретные ролики YouTube (найдены и проверены по названию).
+   Английский — отдельный путь A0 → C1 с экзаменами: js/english-path.js.
    ========================================================= */
 
 const CourseData = (() => {
-  /* ---------------- 🇬🇧 АНГЛИЙСКИЙ С НУЛЯ ---------------- */
-  const EN_LIST = 'PLD6SPjEPomauFCdDQwuHubP7F2yIVJnwN'; // плейлист A0, уроки по порядку
-  // 10 видеоуроков по 3 дня: каждый урок ~1–1,5 часа, за день — около 25 минут
-  const EN_LESSONS = [
-    { n: 1, id: 'HJwTaPns-D0', topic: 'Я, ты, мы, они + глагол', block: 0 },
-    { n: 2, id: 'dN5KiZOGFyY', topic: 'Больше глаголов и «and»', block: 0 },
-    { n: 3, id: null, topic: 'He / She / It: глагол + s', block: 1 },
-    { n: 4, id: null, topic: 'He / She / It — закрепляем', block: 1 },
-    { n: 5, id: null, topic: 'Отрицание: don’t / doesn’t', block: 2 },
-    { n: 6, id: null, topic: 'Отрицание — закрепляем', block: 2 },
-    { n: 7, id: null, topic: 'Вопросы: Do / Does', block: 3 },
-    { n: 8, id: null, topic: 'Вопросы и короткие ответы', block: 3 },
-    { n: 9, id: null, topic: 'Глагол to be: am / is / are', block: 4 },
-    { n: 10, id: null, topic: 'To be: «не» и вопросы', block: 4 },
-  ];
-
-  // [английский, русский]
-  const EN_BANK = [
-    [ // 0 — I / you / we / they + глагол
-      ['I work', 'Я работаю'], ['I live in Moscow', 'Я живу в Москве'], ['You know me', 'Ты знаешь меня'],
-      ['We play football', 'Мы играем в футбол'], ['They like music', 'Они любят музыку'], ['I understand you', 'Я понимаю тебя'],
-      ['We want coffee', 'Мы хотим кофе'], ['You speak English', 'Ты говоришь по-английски'], ['I see you', 'Я вижу тебя'],
-      ['I read books', 'Я читаю книги'], ['You love music', 'Ты любишь музыку'], ['I watch films', 'Я смотрю фильмы'],
-      ['They live in London', 'Они живут в Лондоне'], ['We work and they play', 'Мы работаем и они играют'],
-      ['I need water', 'Мне нужна вода'], ['They know you', 'Они знают тебя'],
-    ],
-    [ // 1 — he / she / it + s
-      ['He works', 'Он работает'], ['She lives in London', 'Она живёт в Лондоне'], ['He likes football', 'Он любит футбол'],
-      ['She speaks English', 'Она говорит по-английски'], ['It works', 'Это работает'], ['He knows me', 'Он знает меня'],
-      ['She reads books', 'Она читает книги'], ['He watches films', 'Он смотрит фильмы'], ['She wants coffee', 'Она хочет кофе'],
-      ['My brother plays football', 'Мой брат играет в футбол'], ['He goes to work', 'Он ходит на работу'],
-      ['She understands you', 'Она понимает тебя'], ['My friend lives here', 'Мой друг живёт здесь'], ['It helps me', 'Это помогает мне'],
-    ],
-    [ // 2 — don't / doesn't
-      ['I don’t know', 'Я не знаю'], ['We don’t work today', 'Мы не работаем сегодня'], ['They don’t like coffee', 'Они не любят кофе'],
-      ['You don’t understand me', 'Ты не понимаешь меня'], ['He doesn’t work', 'Он не работает'],
-      ['She doesn’t speak English', 'Она не говорит по-английски'], ['It doesn’t work', 'Это не работает'],
-      ['He doesn’t live here', 'Он не живёт здесь'], ['I don’t watch TV', 'Я не смотрю телевизор'],
-      ['She doesn’t want tea', 'Она не хочет чай'], ['We don’t need help', 'Нам не нужна помощь'], ['My friend doesn’t play football', 'Мой друг не играет в футбол'],
-    ],
-    [ // 3 — Do / Does
-      ['Do you speak English', 'Ты говоришь по-английски'], ['Do you like music', 'Ты любишь музыку'], ['Do they live here', 'Они живут здесь'],
-      ['Does he work', 'Он работает'], ['Does she know you', 'Она знает тебя'], ['Does it work', 'Это работает'],
-      ['Where do you live', 'Где ты живёшь'], ['What do you want', 'Что ты хочешь'], ['Does he play football', 'Он играет в футбол'],
-      ['Do we need water', 'Нам нужна вода'], ['Where does she work', 'Где она работает'], ['What does he read', 'Что он читает'],
-    ],
-    [ // 4 — to be
-      ['I am a student', 'Я студент'], ['You are my friend', 'Ты мой друг'], ['He is at home', 'Он дома'],
-      ['She is happy', 'Она счастлива'], ['It is good', 'Это хорошо'], ['We are here', 'Мы здесь'],
-      ['They are busy', 'Они заняты'], ['I am not tired', 'Я не устал'], ['Is he at work', 'Он на работе'],
-      ['Are you ready', 'Ты готов'], ['She is at work', 'Она на работе'], ['We are not late', 'Мы не опаздываем'],
-    ],
-  ];
-  // вопросы — с вопросительным знаком, остальное — с точкой
-  const endOf = (en) => (/^(do|does|where|what|is|are)\b/i.test(en) ? '?' : '.');
-
-  // [предложение с ___, правильный ответ, варианты]
-  const EN_GAPS = [
-    [['I ___ in Moscow.', 'live', ['live', 'lives', 'living']], ['We ___ football.', 'play', ['play', 'plays', 'player']],
-      ['They ___ music.', 'like', ['like', 'likes', 'liking']], ['___ understand you.', 'I', ['I', 'Me', 'My']],
-      ['You ___ English.', 'speak', ['speak', 'speaks', 'speaking']], ['I ___ you.', 'see', ['see', 'sees', 'seeing']],
-      ['We ___ coffee.', 'want', ['want', 'wants', 'wanting']], ['They ___ you.', 'know', ['know', 'knows', 'knowing']]],
-    [['She ___ in London.', 'lives', ['live', 'lives', 'living']], ['He ___ football.', 'plays', ['play', 'plays', 'playes']],
-      ['It ___.', 'works', ['work', 'works', 'working']], ['He ___ films.', 'watches', ['watch', 'watchs', 'watches']],
-      ['She ___ to work.', 'goes', ['go', 'gos', 'goes']], ['My brother ___ English.', 'speaks', ['speak', 'speaks', 'speakes']],
-      ['She ___ coffee.', 'wants', ['want', 'wants', 'wanting']], ['___ knows me.', 'He', ['He', 'Him', 'His']]],
-    [['He ___ work.', 'doesn’t', ['don’t', 'doesn’t', 'not']], ['I ___ know.', 'don’t', ['don’t', 'doesn’t', 'not']],
-      ['She ___ like coffee.', 'doesn’t', ['don’t', 'doesn’t', 'isn’t']], ['They ___ live here.', 'don’t', ['don’t', 'doesn’t', 'aren’t']],
-      ['It ___ work.', 'doesn’t', ['don’t', 'doesn’t', 'not']], ['He doesn’t ___ English.', 'speak', ['speak', 'speaks', 'speaking']],
-      ['We ___ need help.', 'don’t', ['don’t', 'doesn’t', 'not']], ['She doesn’t ___ TV.', 'watch', ['watch', 'watches', 'watching']]],
-    [['___ you speak English?', 'Do', ['Do', 'Does', 'Are']], ['___ he work?', 'Does', ['Do', 'Does', 'Is']],
-      ['Does she ___ you?', 'know', ['know', 'knows', 'knowing']], ['Where ___ you live?', 'do', ['do', 'does', 'are']],
-      ['___ it work?', 'Does', ['Do', 'Does', 'Is']], ['What ___ he want?', 'does', ['do', 'does', 'is']],
-      ['___ they like music?', 'Do', ['Do', 'Does', 'Are']], ['Where does she ___?', 'work', ['work', 'works', 'working']]],
-    [['I ___ a student.', 'am', ['am', 'is', 'are']], ['She ___ happy.', 'is', ['am', 'is', 'are']],
-      ['They ___ busy.', 'are', ['am', 'is', 'are']], ['___ you ready?', 'Are', ['Am', 'Is', 'Are']],
-      ['He ___ at home.', 'is', ['am', 'is', 'are']], ['We ___ here.', 'are', ['am', 'is', 'are']],
-      ['I ___ not tired.', 'am', ['am', 'is', 'are']], ['___ he at work?', 'Is', ['Am', 'Is', 'Are']]],
-  ];
-
-  // выбрать k элементов из списка, по-разному для разных дней
-  const pick = (arr, k, seed) => Array.from({ length: Math.min(k, arr.length) }, (_, i) => arr[(seed * 3 + i * 5) % arr.length])
-    .filter((x, i, a) => a.indexOf(x) === i);
-  const sentence = ([en, ru]) => ({ en: en + endOf(en), ru: ru + endOf(en), words: en.split(' '), ruWords: ru.split(' ') });
-
-  function englishDay(n, total) {
-    const lessonIdx = Math.min(EN_LESSONS.length - 1, Math.floor((n - 1) / 3));
-    const L = EN_LESSONS[lessonIdx];
-    const part = ((n - 1) % 3) + 1;
-    const bank = EN_BANK[L.block];
-    const gaps = EN_GAPS[L.block];
-    const isFinal = n === total;
-    if (n > EN_LESSONS.length * 3 || isFinal) {
-      // итоговая проверка (и дни повторения, если её не сдать с первого раза)
-      const all = EN_BANK.flatMap((b) => b);
-      const allGaps = EN_GAPS.flatMap((g) => g);
-      return {
-        title: isFinal ? 'Итоговая проверка' : 'Повторение всего курса',
-        sub: isFinal ? '12 вопросов и 4 пазла — 80% и курс пройден' : 'Все темы вперемешку',
-        check: isFinal,
-        steps: [
-          { type: 'puzzle-en', title: 'Пазл на изучаемом языке', sub: 'Собери предложение по-английски', items: pick(all, 4, n + 2).map(sentence) },
-          { type: 'listening', title: 'Аудирование', sub: 'Переведи услышанное предложение', items: pick(all, 3, n + 7).map(sentence) },
-          { type: 'test', title: isFinal ? 'Итоговый тест' : 'Тест', sub: 'Заполни пропуск', pass: isFinal ? 0.8 : 0, items: pick(allGaps, isFinal ? 12 : 6, n).map(([q, a, o]) => ({ q, a, o })) },
-        ],
-      };
-    }
-    return {
-      title: `Урок ${L.n}: ${L.topic}`,
-      sub: `Видео — часть ${part} из 3, около 25 минут`,
-      lesson: L.n,
-      steps: [
-        { type: 'video', title: `Видео: урок ${L.n}, часть ${part}`, sub: 'Смотри ~25 минут — продолжишь с того же места',
-          video: { id: L.id, list: EN_LIST, index: L.n - 1, lesson: L.n, start: (part - 1) * 25 * 60, minutes: 25 } },
-        { type: 'puzzle-en', title: 'Пазл на изучаемом языке', sub: 'Составление предложения', items: pick(bank, 4, n).map(sentence) },
-        { type: 'puzzle-ru', title: 'Пазл на родном языке', sub: 'Составление предложения', items: pick(bank, 3, n + 4).map(sentence) },
-        { type: 'listening', title: 'Аудирование', sub: 'Переведите услышанное предложение', items: pick(bank, 3, n + 9).map(sentence) },
-        { type: 'test', title: 'Тест', sub: 'Заполните пропуск', items: pick(gaps, 5, n).map(([q, a, o]) => ({ q, a, o })) },
-      ],
-    };
-  }
-
   /* ---------------- 🤸 СТОЙКА НА РУКАХ ---------------- */
   // упражнение: [название, секунды или повторы, как делать]
   const HS = {
@@ -284,13 +160,15 @@ const CourseData = (() => {
   /* ---------------- КАТАЛОГ ---------------- */
   const COURSES = [
     {
-      id: 'english', emoji: '🇬🇧', title: 'Английский с нуля', short: 'Английский', level: 'A0 → начало A1', days: 30, minutes: 35,
-      cat: 'study', grad: ['#4f7cff', '#7b5cff'], tag: 'Видео + пазлы + аудирование',
-      about: 'Видеоуроки Александра Бебриса (English Galaxy, A0) и упражнения после каждого: пазлы, аудирование, тест.',
-      outcomes: ['Строишь предложения в настоящем времени: «я работаю», «он живёт», «мы не знаем»', 'Задаёшь вопросы Do / Does и отвечаешь', 'Говоришь о себе с am / is / are', 'Понимаешь медленную речь на эти темы на слух'],
-      promise: 'Если проходить урок дня — 25 минут видео и упражнения, — через 30 дней ты сможешь рассказать о себе 10 простыми предложениями и понять такие же на слух.',
-      finalPass: 0.8, review: 5,
-      day: (n, c) => englishDay(n, c.days),
+      id: 'english', emoji: '🇬🇧', title: 'Английский A0 → C1', short: 'Английский', level: 'с нуля до C1', days: 0, minutes: 42,
+      cat: 'study', grad: ['#4f7cff', '#7b5cff'], tag: '6 уровней · экзамены · уровень подтверждён',
+      about: 'Полный путь от нуля до продвинутого: 300 видеоуроков Александра Бебриса (English Galaxy, A0–C1) и после каждого — пазлы, аудирование, тест и говорение вслух. Ошибки возвращаются на повторение, пока не запомнишь.',
+      outcomes: ['A1 — рассказываешь, что было вчера и будет завтра', 'A2 — говоришь о планах и опыте, справляешься в поездке', 'B1 — держишь разговор, понимаешь сериалы с субтитрами', 'B2 — свободно общаешься с носителями', 'C1 — говоришь бегло, понимаешь фильмы без субтитров'],
+      promise: 'Каждый уровень засчитывается только после экзамена. Уровень, который показывает приложение, — подтверждённый, а не «на глаз».',
+      guarantee: 'Экзамен уровня: грамматика ≥ 80 %, аудирование и перевод ≥ 70 %, говорение вслух ≥ 60 %. Не сдал — 5 дней повторения по твоим слабым темам и пересдача, сколько понадобится. Ошибки из уроков возвращаются через 1, 2, 4, 8, 16 и 32 дня — так фразы уходят в долгую память. Пропустил день — ничего не сгорает.',
+      honest: 'Это не международный сертификат (IELTS, Cambridge), а проверка внутри приложения по тем же навыкам. Для свободной речи нужна живая практика — разговор с ИИ-тренером тоже здесь.',
+      review: 5, videoNote: 'Видео: курс Александра Бебриса «Английский язык с нуля до продвинутого» (English Galaxy), отдельный плейлист на каждый уровень.',
+      path: EnglishPath,
     },
     {
       id: 'handstand', emoji: '🤸', title: 'Стойка на руках', short: 'Стойка на руках', level: 'с нуля', days: 35, minutes: 20,
@@ -324,5 +202,5 @@ const CourseData = (() => {
     },
   ];
 
-  return { COURSES, byId: (id) => COURSES.find((c) => c.id === id), EN_LESSONS, EN_LIST };
+  return { COURSES, byId: (id) => COURSES.find((c) => c.id === id) };
 })();

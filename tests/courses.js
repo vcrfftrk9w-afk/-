@@ -1,9 +1,11 @@
 const { chromium } = require('./_browser');
 /* Вкладка «🎓 Курсы»: третье окно рядом с «Мои дела» и «Всё остальное».
-   Английский: старт → урок дня в ежедневнике (18:00) и в будильнике APK; шаги открываются
-   по очереди; пазлы, аудирование, тест; видео: позиция и просмотренные минуты из плеера;
-   день закрыт → задача в ежедневнике закрыта, следующий урок — завтра.
-   Итоговая проверка: не сдал → +5 дней повторения → сдал → курс пройден.
+   Английский A0 → C1: старт → урок дня в ежедневнике и будильнике; шаги по очереди;
+   пазлы (по-русски любой порядок слов), аудирование, тест, говорение с микрофоном;
+   видео: позиция, минуты, «досмотрел до конца» → следующий урок, иначе часть 2;
+   ошибки → интервальное повторение; экзамен уровня: не сдал → 5 дней повторения → сдал →
+   уровень подтверждён; досрочный экзамен; тест на уровень; C1 сдан → путь пройден;
+   старый 30-дневный курс переносится на путь.
    Стойка (замер), сальто (без подтверждения страховки не начать), деньги (дела-чекбоксы).
    «Мои дела» курсы не трогают. */
 const mock = `(() => {
@@ -15,6 +17,16 @@ const mock = `(() => {
     alarmStatus: () => JSON.stringify({ exact: true, fullScreen: true }),
     testAlarm: () => {}, ringNow: () => {}, pickSound: () => {}, openSettings: () => {},
   };
+  // микрофон: «слышит» то, что положили в window.__say
+  window.__say = '';
+  window.webkitSpeechRecognition = function () {
+    this.start = () => setTimeout(() => {
+      if (this.onresult) this.onresult({ results: [[{ transcript: window.__say, confidence: 0.9 }]] });
+      if (this.onend) this.onend();
+    }, 60);
+    this.stop = () => {}; this.abort = () => {};
+  };
+  window.SpeechRecognition = window.webkitSpeechRecognition;
 })();`;
 
 (async () => {
@@ -35,105 +47,171 @@ const mock = `(() => {
   const home = await p.evaluate(() => ({ space: document.body.dataset.space, panel: document.querySelector('.tab-panel.active').id, tabbar: getComputedStyle(document.querySelector('.tabbar')).display, cards: document.querySelectorAll('.cr-cat').length, btns: document.querySelectorAll('.space-btn').length }));
   check('третье окно «🎓 Курсы» рядом с «Мои дела» и «Всё остальное»', home.btns === 3 && home.space === 'learn' && home.panel === 'tab-courses' && home.tabbar === 'none' && home.cards === 4, home);
 
-  // --- английский: страница курса и старт ---
+  // --- английский A0 → C1: страница курса и старт ---
   await p.click('[data-cr-open="english"]'); await p.waitForTimeout(300);
   const page = await p.evaluate(() => document.querySelector('#courses-root').textContent);
-  check('страница курса: обещание и как работает гарантия', /Обещание курса/.test(page) && /не засчитывается, пока ты не сдашь итоговую проверку/.test(page), page.slice(0, 80));
+  check('страница английского: обещание, экзамены и выбор старта', /Обещание курса/.test(page) && /засчитывается только после экзамена/.test(page) && /Определить мой уровень/.test(page) && /20 мин/.test(page), page.slice(0, 80));
   await p.fill('#cr-time', '19:30');
+  await p.click('[data-en-pick="20"]');
   await p.click('[data-cr-start="english"]'); await p.waitForTimeout(600); await clean();
   const started = await p.evaluate(() => ({ st: Courses.state('english'), task: State.s.tasks.find((t) => t.courseId === 'english'), alarms: window.__alarms.slice(-1)[0].filter((a) => /Английский/.test(a.title)) }));
-  check('урок дня встал задачей в «Всё остальное» на 19:30', started.task && started.task.at === 19 * 60 + 30 && started.task.due === (await p.evaluate(() => State.todayKey())) && /урок 1/.test(started.task.title), started.task);
+  check('урок дня встал задачей «A0 · урок 1» в «Всё остальное» на 19:30', started.task && started.task.at === 19 * 60 + 30 && started.task.due === (await p.evaluate(() => State.todayKey())) && /A0 · урок 1/.test(started.task.title) && started.task.estimate === 32, started.task);
+  check('путь начат: A0, урок 1, 20 минут видео в день', started.st.path.level === 0 && started.st.path.lesson === 1 && started.st.path.videoMin === 20, started.st.path);
   check('и будильником в APK на каждый день в 19:30', started.alarms.length === 7 && started.alarms.every((a) => a.min === 19 * 60 + 30), started.alarms[0]);
   const myAfter = await p.evaluate(() => document.querySelector('#mytasks-root').textContent.replace(/\s+/g, ' ').replace(/\d/g, ''));
   check('«Мои дела» не тронуты', myAfter === myBefore && await p.evaluate(() => !State.s.plans || !State.s.plans.length));
+  const cpage = await p.evaluate(() => document.querySelector('#courses-root').textContent);
+  check('на странице: подтверждённый уровень, лестница A0…C1, прогноз', /Твой подтверждённый уровень/.test(cpage) && ['A0', 'A1', 'A2', 'B1', 'B2', 'C1'].every((x) => cpage.includes(x)) && await p.evaluate(() => document.querySelectorAll('.en-lv').length === 6 && document.querySelector('.en-lv.now .en-lv-badge').textContent === 'A0') && /Когда подтвердишь уровень/.test(cpage));
 
   // --- урок: видео и шаги ---
   await p.click('.cr-today'); await p.waitForTimeout(500);
   const lesson = await p.evaluate(() => ({ src: (document.querySelector('#cr-yt') || {}).src, steps: Array.from(document.querySelectorAll('.cr-step')).map((x) => [x.querySelector('b').textContent, x.classList.contains('locked')]) }));
-  check('в уроке — встроенное видео урока 1 Бебриса', /youtube-nocookie\.com\/embed\/HJwTaPns-D0/.test(lesson.src || '') && /list=PLD6SPjEPomauFCdDQwuHubP7F2yIVJnwN/.test(lesson.src), lesson.src);
-  check('шаги как в English Galaxy, открываются по очереди', lesson.steps.length === 5 && /Пазл на изучаемом/.test(lesson.steps[1][0]) && !lesson.steps[1][1] && lesson.steps[2][1] && lesson.steps[3][1] && lesson.steps[4][1], lesson.steps);
+  check('в уроке — встроенное видео урока 1 A0 (плейлист Бебриса)', /youtube-nocookie\.com\/embed\/HJwTaPns-D0/.test(lesson.src || '') && /list=PLD6SPjEPomauFCdDQwuHubP7F2yIVJnwN/.test(lesson.src), lesson.src);
+  check('шаги: видео, пазлы, аудирование, тест, говорение — по очереди', lesson.steps.length === 6 && /Пазл на изучаемом/.test(lesson.steps[1][0]) && /Говорение/.test(lesson.steps[5][0]) && !lesson.steps[1][1] && lesson.steps.slice(2).every((x) => x[1]), lesson.steps);
 
-  // плеер присылает время: позиция и «тот самый урок» запоминаются
-  await p.evaluate(() => {
-    const send = (info) => window.dispatchEvent(new MessageEvent('message', { origin: 'https://www.youtube-nocookie.com', data: JSON.stringify({ event: 'infoDelivery', info }) }));
-    send({ videoData: { title: 'Английский язык с нуля до продвинутого. Практический курс по приложению English Galaxy. А0. Урок 1', video_id: 'HJwTaPns-D0' }, playlistIndex: 0 });
-    for (let t = 100; t <= 160; t += 1) send({ currentTime: t, playerState: 1 });
-  });
-  const vstate = await p.evaluate(() => { const st = Courses.state('english'); return { pos: st.video[1], vid: st.vid[1], prog: st.prog[0] }; });
+  const send = (info) => p.evaluate((i) => window.dispatchEvent(new MessageEvent('message', { origin: 'https://www.youtube-nocookie.com', data: JSON.stringify({ event: 'infoDelivery', info: i }) })), info);
+  await send({ videoData: { title: 'Английский язык с нуля до продвинутого. Практический курс по приложению English Galaxy. А0. Урок 1', video_id: 'HJwTaPns-D0' }, playlistIndex: 0, duration: 4200 });
+  for (let t = 100; t <= 160; t += 1) await send({ currentTime: t, playerState: 1 });
+  const vstate = await p.evaluate(() => { const st = Courses.state('english'); return { pos: st.video['A0-1'], vid: st.vid['A0-1'], prog: st.prog[0] }; });
   check('видео: место остановки и прогресс просмотра сохраняются', vstate.pos === 160 && vstate.vid === 'HJwTaPns-D0' && vstate.prog > 0 && vstate.prog < 0.1, vstate);
 
-  // --- решатель пазлов: нажимает слова по порядку ---
-  const solve = async (stepIdx, wrongFirst) => {
-    await p.click(`[data-cr-step="${stepIdx}"]`); await p.waitForTimeout(300);
-    const s = await p.evaluate((i) => Courses.dayOf('english', Courses.state('english').day).steps[i], stepIdx);
+  // --- решатель шагов ---
+  const W = (ms) => p.waitForTimeout(ms);
+  const stepsNow = () => p.evaluate(() => Courses.dayOf('english').steps);
+  async function doStep(i, o = {}) {
+    const s = (await stepsNow())[i];
+    await p.click(`[data-cr-step="${i}"]`); await W(300);
+    if (s.type === 'video') { await p.click(o.end ? '#cr-vend' : '#cr-vseen'); await W(800); await clean(); return s; }
+    if (s.type === 'test') {
+      for (const it of s.items) {
+        const ans = o.wrong ? it.o.find((x) => x !== it.a) : o.place ? (o.place(it) ? it.a : it.o.find((x) => x !== it.a)) : it.a;
+        await p.evaluate((a) => Array.from(document.querySelectorAll('[data-cr-opt]')).find((x) => x.dataset.crOpt === a).click(), ans);
+        await W(ans === it.a ? 780 : 1560);
+      }
+      await p.click('#cr-done'); await W(600); await clean();
+      return s;
+    }
+    if (s.type === 'speak') {
+      for (const it of s.items) {
+        await p.evaluate((t) => { window.__say = t; }, o.wrong ? 'banana banana' : it.en);
+        await p.click('#cr-mic'); await W(1200);
+        if (o.wrong && s.pass) { await p.click('#cr-mic'); await W(2300); }
+      }
+      if (s.pass) { await p.click('#cr-done'); }
+      await W(600); await clean();
+      return s;
+    }
+    // пазлы и аудирование
     for (let k = 0; k < s.items.length; k += 1) {
       const it = s.items[k];
-      const words = s.type === 'puzzle-en' ? it.words : it.ruWords;
-      if (wrongFirst && k === 0) {
+      let ws = s.type === 'puzzle-en' ? it.words.slice() : it.ruWords.slice();
+      if (o.wrongFirst && k === 0) {
         await p.evaluate(() => document.querySelector('[data-cr-in]').click());
-        await p.click('#cr-check'); await p.waitForTimeout(150);
+        await p.click('#cr-check'); await W(150);
         const right = await p.textContent('.cr-right');
         check('ошибка — показывает правильный ответ и «Дальше»', /Правильно/.test(right) && await p.isVisible('#cr-next'), right);
-        await p.click('#cr-next'); await p.waitForTimeout(150);
-        // ошибочное предложение ушло в конец очереди
+        await p.click('#cr-next'); await W(150);
         s.items.push(s.items[0]); continue;
       }
-      for (const w of words) {
-        await p.evaluate((word) => { const btn = Array.from(document.querySelectorAll('.cr-pool [data-cr-in]')).find((x) => x.textContent === word); btn.click(); }, w);
-      }
-      await p.click('#cr-check'); await p.waitForTimeout(1250);
+      if (o.wrong) { await p.evaluate(() => document.querySelector('[data-cr-in]').click()); await p.click('#cr-check'); await W(150); await p.click('#cr-next'); await W(150); continue; }
+      if (o.reverse) ws = ws.reverse();
+      for (const w of ws) await p.evaluate((word) => Array.from(document.querySelectorAll('.cr-pool [data-cr-in]')).find((x) => x.textContent === word).click(), w);
+      await p.click('#cr-check'); await W(1250);
     }
-    await p.waitForTimeout(300);
-  };
+    if (s.pass) { await p.click('#cr-done'); }
+    await W(500); await clean();
+    return s;
+  }
+  const freshDay = () => p.evaluate(() => { const st = Courses.state('english'); st.done = {}; st.prog = {}; st.path.plan = null; State.save(); Courses.open('english', 'lesson'); });
 
-  await solve(1, true);
-  const after1 = await p.evaluate(() => ({ view: document.querySelector('#courses-root').dataset.view, locked: Array.from(document.querySelectorAll('.cr-step')).map((x) => x.classList.contains('locked')), prog: Courses.state('english').prog[1] }));
+  const s1 = await doStep(1, { wrongFirst: true });
+  const after1 = await p.evaluate((k) => ({ view: document.querySelector('#courses-root').dataset.view, locked: Array.from(document.querySelectorAll('.cr-step')).map((x) => x.classList.contains('locked')), prog: Courses.state('english').prog[1], srs: Courses.state('english').path.srs[k] }), s1.items[0].key);
   check('пазл решён — снова урок, следующий шаг открылся', after1.view === 'lesson' && after1.prog === 1 && !after1.locked[2] && after1.locked[3], after1);
+  check('ошибка ушла в интервальное повторение на завтра', after1.srs && after1.srs.b === 0 && after1.srs.d > (await p.evaluate(() => State.todayKey())), after1.srs);
 
   // мягкая перерисовка не сбрасывает упражнение
-  await p.click('[data-cr-step="2"]'); await p.waitForTimeout(300);
+  await p.click('[data-cr-step="2"]'); await W(300);
   await p.evaluate(() => document.querySelector('.cr-pool [data-cr-in]').click());
   await p.evaluate(() => { App.renderActive(); State.commit(); });
-  await p.waitForTimeout(200);
+  await W(200);
   check('пока решаешь — экран не сбрасывается', await p.evaluate(() => document.querySelectorAll('.cr-answer .cr-chip').length === 1));
-  await p.click('.cr-head.ex .cr-back'); await p.waitForTimeout(300);
-  await solve(2); await solve(3);
+  await p.click('.cr-head.ex .cr-back'); await W(300);
+  await doStep(2, { reverse: true });
+  check('по-русски засчитывается любой порядок слов', await p.evaluate(() => Courses.state('english').prog[2] === 1));
+  await doStep(3); await doStep(4);
+  // говорение: микрофон услышал не то, потом то
+  await p.click('[data-cr-step="5"]'); await W(300);
+  const sp = (await stepsNow())[5];
+  await p.evaluate(() => { window.__say = 'hello world'; }); await p.click('#cr-mic'); await W(500);
+  const spWrong = await p.textContent('.cr-ex-body');
+  check('говорение: распознал «не то» — показывает правильную фразу', /Ты сказал/.test(spWrong) && spWrong.includes(sp.items[0].en), spWrong.slice(0, 160));
+  for (const it of sp.items) { await p.evaluate((t) => { window.__say = t.toLowerCase(); }, it.en); await p.click('#cr-mic'); await W(1300); }
+  await W(400); await clean();
+  // видео досмотрено до конца → завтра урок 2
+  await send({ currentTime: 4190, playerState: 1 });
+  await send({ playerState: 0 });
+  await W(900); await clean();
+  const day1 = await p.evaluate(() => { const st = Courses.state('english'); const t = State.s.tasks.find((x) => x.courseId === 'english'); return { day: st.day, done: st.done[1], path: st.path, task: t && t.done, view: document.querySelector('#courses-root').dataset.view, win: (document.querySelector('.cr-win') || {}).textContent, today: (document.querySelector('.cr-today') || {}).disabled }; });
+  check('день пройден: задача закрыта, видео досмотрено → завтра урок 2', day1.done && day1.task === true && day1.view === 'course' && day1.path.lesson === 2 && day1.path.part === 1 && /Урок 1 досмотрен/.test(day1.win || '') && day1.today === true, { lesson: day1.path.lesson, win: day1.win });
+  check('выученные фразы считаются', day1.path.learned >= 8, day1.path.learned);
 
-  // тест — правильные ответы
-  await p.click('[data-cr-step="4"]'); await p.waitForTimeout(300);
-  const t4 = await p.evaluate(() => Courses.dayOf('english', 1).steps[4].items);
-  for (const it of t4) { await p.evaluate((a) => document.querySelector(`[data-cr-opt="${a}"]`).click(), it.a); await p.waitForTimeout(800); }
-  await p.click('#cr-done'); await p.waitForTimeout(400); await clean();
-  // видео отмечаем вручную
-  await p.click('[data-cr-step="0"]'); await p.waitForTimeout(300);
-  await p.click('#cr-vseen'); await p.waitForTimeout(800); await clean();
-  const day1 = await p.evaluate(() => { const st = Courses.state('english'); const t = State.s.tasks.find((x) => x.courseId === 'english'); return { day: st.day, done: st.done[1], task: t && t.done, view: document.querySelector('#courses-root').dataset.view, win: (document.querySelector('.cr-win') || {}).textContent, today: (document.querySelector('.cr-today') || {}).disabled }; });
-  check('день 1 пройден: задача в ежедневнике закрыта, завтра урок 2', day1.day === 2 && !!day1.done && day1.task === true && day1.view === 'course' && /День 1 пройден/.test(day1.win || '') && day1.today === true, day1);
+  // --- день без конца видео → часть 2 того же урока; повторение ошибок в уроке ---
+  await p.evaluate(() => { const st = Courses.state('english'); Object.keys(st.path.srs).forEach((k) => { st.path.srs[k].d = State.todayKey(); }); });
+  await freshDay(); await W(400);
+  const d2 = await stepsNow();
+  check('пора повторить — в уроке шаг «Повторение: твои фразы»', d2[1].srs === true && d2[1].items.length === 6, d2.map((s) => s.title));
+  for (let i = 1; i < d2.length; i += 1) await doStep(i);
+  await doStep(0); await W(400);
+  const d2s = await p.evaluate(() => Courses.state('english').path);
+  check('видео не досмотрено до конца — завтра часть 2 того же урока', d2s.lesson === 2 && d2s.part === 2, { l: d2s.lesson, p: d2s.part });
+  check('верно вспомнил — интервал вырос', Object.values(d2s.srs).some((x) => x.b >= 2), Object.values(d2s.srs).slice(0, 3));
 
-  // --- итоговая проверка: не сдал → повторение, сдал → курс пройден ---
-  const finalDay = async (answerRight) => {
-    await p.evaluate(() => { const st = Courses.state('english'); st.done = {}; st.prog = {}; State.save(); Courses.open('english', 'lesson'); });
-    await p.waitForTimeout(400);
-    await solve(0); await solve(1);
-    await p.click('[data-cr-step="2"]'); await p.waitForTimeout(300);
-    const items = await p.evaluate(() => Courses.dayOf('english', Courses.state('english').day).steps[2].items);
-    for (const it of items) {
-      const pickAns = answerRight ? it.a : it.o.find((o) => o !== it.a);
-      await p.evaluate((a) => document.querySelector(`[data-cr-opt="${a}"]`).click(), pickAns);
-      await p.waitForTimeout(answerRight ? 800 : 1600);
-    }
-    const res = await p.textContent('.cr-ex-body');
-    await p.click('#cr-done'); await p.waitForTimeout(600); await clean();
-    return res;
-  };
-  await p.evaluate(() => { const st = Courses.state('english'); st.day = 30; State.save(); });
-  const fail = await finalDay(false);
-  const afterFail = await p.evaluate(() => { const st = Courses.state('english'); return { day: st.day, extra: st.extra, fin: st.finished, title: Courses.dayOf('english', st.day).title }; });
-  check('итоговая не сдана — курс добавил 5 дней повторения', /Нужно 80%/.test(fail) && afterFail.extra === 5 && afterFail.day === 31 && !afterFail.fin && /Повторение/.test(afterFail.title), afterFail);
-  await p.evaluate(() => { const st = Courses.state('english'); st.day = 35; State.save(); });
-  await finalDay(true);
-  const fin = await p.evaluate(() => ({ fin: Courses.state('english').finished, page: document.querySelector('#courses-root').textContent }));
-  check('итоговая сдана — курс пройден, обещание выполнено', !!fin.fin && /Курс пройден/.test(fin.page), fin.fin);
+  // --- экзамен уровня: не сдал → повторение → сдал → уровень подтверждён ---
+  await p.evaluate(() => { const st = Courses.state('english'); st.path.lesson = 51; st.path.srs = {}; });
+  await freshDay(); await W(400);
+  const ex = await stepsNow();
+  check('после 50 уроков — экзамен: тест 80%, аудирование, перевод, говорение', ex.length === 4 && ex[0].pass === 0.8 && ex[0].items.length === 15 && ex[1].type === 'listening' && ex[3].type === 'speak' && ex[3].pass === 0.6, ex.map((s) => [s.type, s.pass]));
+  const failRes = await (async () => { await doStep(0, { wrong: true }); return 1; })();
+  const failTxt = await p.evaluate(() => Courses.state('english').failed);
+  await doStep(1); await doStep(2); await doStep(3);
+  const afterFail = await p.evaluate(() => ({ path: Courses.state('english').path, title: Courses.dayOf('english').title }));
+  check('экзамен не сдан — 5 дней повторения слабых тем, уровень не засчитан', failRes && afterFail.path.review === 5 && !afterFail.path.confirmed.A0 && afterFail.path.level === 0 && /Повторение перед пересдачей/.test(afterFail.title) && afterFail.path.weak['0.0'] > 0, { review: afterFail.path.review, title: afterFail.title, failTxt });
+  await p.evaluate(() => { Courses.state('english').path.review = 0; });
+  await freshDay(); await W(400);
+  for (let i = 0; i < 4; i += 1) await doStep(i);
+  const passed = await p.evaluate(() => ({ path: Courses.state('english').path, page: document.querySelector('#courses-root').textContent, main: document.querySelector('.en-level-main b').textContent, task: State.s.tasks.find((t) => t.courseId === 'english' && !t.done) }));
+  check('экзамен сдан — A0 подтверждён, открыт A1', passed.path.confirmed.A0 && passed.path.level === 1 && passed.path.lesson === 1 && passed.main === 'A0' && /подтверждён экзаменом/.test(passed.page), { main: passed.main, lv: passed.path.level });
+
+  // --- досрочный экзамен: не сдал — вернулся к своему уроку ---
+  await p.evaluate(() => { const st = Courses.state('english'); st.path.lesson = 7; st.done = {}; st.path.plan = null; State.save(); Courses.open('english'); });
+  await W(300);
+  await p.click('#en-exam-now'); await p.click('#en-exam-now'); await W(400);
+  const early = await stepsNow();
+  check('«Сдать экзамен досрочно» — экзамен A1 вместо урока', /Экзамен уровня A1/.test(await p.evaluate(() => Courses.dayOf('english').title)) && early.length === 4);
+  await doStep(0, { wrong: true }); await doStep(1); await doStep(2); await doStep(3);
+  const earlyAfter = await p.evaluate(() => Courses.state('english').path);
+  check('досрочный не сдан — снова урок 7 A1, без штрафных дней', earlyAfter.level === 1 && earlyAfter.lesson === 7 && earlyAfter.review === 0 && !earlyAfter.confirmed.A1, earlyAfter);
+
+  // --- последний экзамен C1 → путь пройден ---
+  await p.evaluate(() => { const st = Courses.state('english'); st.path.level = 5; st.path.lesson = 51; ['A1', 'A2', 'B1', 'B2'].forEach((x) => { st.path.confirmed[x] = State.todayKey(); }); });
+  await freshDay(); await W(400);
+  for (let i = 0; i < 4; i += 1) await doStep(i);
+  const fin = await p.evaluate(() => ({ st: Courses.state('english'), page: document.querySelector('#courses-root').textContent }));
+  check('экзамен C1 сдан — английский до C1 пройден', !!fin.st.finished && fin.st.path.confirmed.C1 && /Курс пройден/.test(fin.page), fin.st.path.confirmed);
+
+  // --- тест на уровень вместо старта с нуля ---
+  await p.evaluate(() => { Courses.reset('english'); Courses.open('english'); }); await W(300);
+  await p.check('input[name="en-start"][value="place"]');
+  await p.click('[data-cr-start="english"]'); await W(600); await clean();
+  check('«Определить уровень» — первым днём тест на 30 вопросов A0…C1', await p.evaluate(() => { const D = Courses.dayOf('english'); return D.kind === 'place' && D.steps[0].items.length === 30; }));
+  await p.evaluate(() => Courses.open('english', 'lesson')); await W(300);
+  await doStep(0, { place: (it) => it.lv <= 1 });
+  const placed = await p.evaluate(() => ({ path: Courses.state('english').path, task: State.s.tasks.find((t) => t.courseId === 'english' && !t.done) }));
+  check('знает A0 и A1 — начинает с A2, A0–A1 засчитаны по тесту', placed.path.level === 2 && placed.path.placed.A0 && placed.path.placed.A1 && !placed.path.placed.A2 && !placed.path.confirmed.A1, placed.path);
+
+  // --- старый 30-дневный курс переносится на путь ---
+  const mig = await p.evaluate(() => { const s = State.s.learn.courses; s.english = { started: State.todayKey(), day: 8, done: { 1: '2026-01-01' }, prog: {}, metrics: {}, extra: 0, time: 1080, alarm: true, video: {}, vid: {}, finished: null, failed: false }; return Courses.state('english').path; });
+  check('старый курс английского (день 8) → A0, урок 3', mig && mig.level === 0 && mig.lesson === 3, mig);
 
   // --- стойка: тренировка и замер ---
   await p.evaluate(() => Courses.open('handstand'));

@@ -888,7 +888,7 @@ ${digest()}
     openTraining, openWalk, openCook, openShop, openAI,
     recipeFor, shopList, shopWeek, strengthSteps, walkSteps, trainingWeek, roundsNow, typeFor,
     WORKOUTS, RECIPES, MENUS, weekIndex, digest, prompt,
-    say, SESSIONS, runSteps: startRun,
+    say, SESSIONS, runSteps: startRun, getSample,
     get running() { return !!run; },
   };
 })();

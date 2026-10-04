@@ -21,6 +21,31 @@
     };
   }
 
+  // распознавание речи: в WebView нет webkitSpeechRecognition — слушаем через Android
+  if (!window.SpeechRecognition && !window.webkitSpeechRecognition && A.listen) {
+    let current = null;
+    window.__speech = (r) => {
+      const rec = current;
+      current = null;
+      if (!rec) return;
+      const texts = (r && r.texts) || [];
+      if (r && r.error && !texts.length) { if (rec.onerror) rec.onerror({ error: r.error }); }
+      else if (rec.onresult) {
+        const alts = texts.map((t) => ({ transcript: String(t), confidence: 1 }));
+        rec.onresult({ resultIndex: 0, results: [Object.assign(alts, { isFinal: true })] });
+      }
+      if (rec.onend) rec.onend();
+    };
+    window.webkitSpeechRecognition = function () {
+      this.lang = 'en-US';
+      this.interimResults = false;
+      this.maxAlternatives = 3;
+      this.start = () => { current = this; try { A.listen(String(this.lang || 'en-US')); } catch (e) { window.__speech({ error: 'error' }); } };
+      this.stop = () => { try { A.stopListening(); } catch (e) {} };
+      this.abort = () => { current = null; try { A.stopListening(); } catch (e) {} };
+    };
+  }
+
   // уведомления: в WebView нет Notification — показываем системные уведомления Android
   if (typeof window.Notification === 'undefined') {
     const N = function (title, opts) {

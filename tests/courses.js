@@ -80,6 +80,7 @@ const mock = `(() => {
   const stepsNow = () => p.evaluate(() => Courses.dayOf('english').steps);
   async function doStep(i, o = {}) {
     const s = (await stepsNow())[i];
+    await clean(); // поздравление с новым уровнем опыта может закрыть кнопку
     await p.click(`[data-cr-step="${i}"]`); await W(300);
     if (s.type === 'video') { await p.click(o.end ? '#cr-vend' : '#cr-vseen'); await W(800); await clean(); return s; }
     if (s.type === 'test') {

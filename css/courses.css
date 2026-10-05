@@ -303,3 +303,13 @@
 @media (max-width: 360px) {
   .en-level { grid-template-columns: 1fr; }
 }
+
+/* объяснение простыми словами: карточки */
+.cr-card { position: relative; display: grid; gap: 10px; padding: 22px 18px 20px; border-radius: 22px; background: linear-gradient(160deg, color-mix(in srgb, #4f7cff 16%, var(--surface-2)), var(--surface-2)); }
+.cr-card b { font-size: 21px; font-weight: 900; line-height: 1.2; padding-right: 36px; }
+.cr-card p { margin: 0; font-size: 17px; line-height: 1.5; }
+.cr-card-n { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 900; color: #fff; background: linear-gradient(135deg, #4f7cff, #7b5cff); }
+.cr-dots { display: flex; justify-content: center; gap: 6px; }
+.cr-dots i { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--text) 18%, transparent); }
+.cr-dots i.on { background: #4f7cff; }
+.cr-session .cr-err { color: #f5a623; }

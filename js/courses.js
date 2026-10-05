@@ -306,7 +306,7 @@ const Courses = (() => {
     const vi = D.steps.findIndex((s) => s.type === 'video');
     const v = vi >= 0 ? D.steps[vi].video : null;
     const vs = v ? videoSrc(v, st) : null;
-    const icon = { video: '🎬', 'puzzle-en': '🧩', 'puzzle-ru': '🧩', listening: '🎧', test: '✍️', session: '⏱', measure: '📏', todo: '✅', speak: '🎤' };
+    const icon = { video: '🎬', 'puzzle-en': '🧩', 'puzzle-ru': '🧩', listening: '🎧', test: '✍️', session: '⏱', measure: '📏', todo: '✅', speak: '🎤', read: '📖' };
     const rows = D.steps.map((s, i) => {
       const pr = stepProg(st, i);
       const open = unlocked(st, D, i);
@@ -559,8 +559,8 @@ const Courses = (() => {
       box.innerHTML = `
         <div class="cr-ex-body">
           ${s.place ? `<p class="cr-exam-tag">Вопрос ${k + 1} из ${N} · не знаешь — выбирай наугад</p>` : s.pass ? '<p class="cr-exam-tag">🏁 Экзамен</p>' : ''}
-          <p class="cr-q-label">Заполни пропуск</p>
-          <p class="cr-q en">${esc(parts[0])}<span class="cr-gap" id="cr-gap">___</span>${esc(parts[1] || '')}</p>
+          ${parts.length > 1 ? `<p class="cr-q-label">Заполни пропуск</p>
+          <p class="cr-q en">${esc(parts[0])}<span class="cr-gap" id="cr-gap">___</span>${esc(parts[1] || '')}</p>` : `<p class="cr-q-label">Вопрос</p><p class="cr-q">${esc(it.q)}</p>`}
           <div class="cr-opts">${opts.map((o) => `<button class="cr-opt" data-cr-opt="${esc(o)}">${esc(o)}</button>`).join('')}</div>
         </div>`;
       box.querySelectorAll('[data-cr-opt]').forEach((b) => {
@@ -568,8 +568,8 @@ const Courses = (() => {
           const ok = b.dataset.crOpt === it.a;
           box.querySelectorAll('[data-cr-opt]').forEach((x) => { x.disabled = true; if (x.dataset.crOpt === it.a) x.classList.add('right'); });
           if (!ok) b.classList.add('wrong');
-          $('#cr-gap').textContent = it.a;
-          $('#cr-gap').classList.add(ok ? 'ok' : 'bad');
+          const gapEl = $('#cr-gap');
+          if (gapEl) { gapEl.textContent = it.a; gapEl.classList.add(ok ? 'ok' : 'bad'); }
           Sound.sfx(ok ? 'success' : 'deny');
           itemDone(c, s, it, ok);
           if (ok) right += 1;
@@ -715,7 +715,7 @@ const Courses = (() => {
     const sets = s.sets || 1;
     box.innerHTML = `
       <div class="cr-ex-body">
-        <ul class="cr-session">${s.session.map((x) => `<li><b>${esc(x.t)}</b><span>${x.sec ? `${x.sec >= 60 ? `${Math.round(x.sec / 60)} мин` : `${x.sec} с`}` : esc(x.reps)}</span><small>${esc(x.how || '')}</small></li>`).join('')}</ul>
+        <ul class="cr-session">${s.session.map((x) => `<li><b>${esc(x.t)}</b><span>${x.sec ? `${x.sec >= 60 ? `${Math.round(x.sec / 60)} мин` : `${x.sec} с`}` : esc(x.reps)}</span><small>${esc(x.how || '')}</small>${x.err ? `<small class="cr-err">⚠️ Частая ошибка: ${esc(x.err)}</small>` : ''}</li>`).join('')}</ul>
         ${sets > 1 ? `<p class="muted small">${sets} круга, между упражнениями — отдых 30 секунд.</p>` : ''}
         <button class="btn btn-primary btn-lg btn-block" id="cr-run">▶ Начать с таймером и голосом</button>
         <button class="btn btn-ghost btn-block" id="cr-self">Сделал сам, без таймера ✓</button>
@@ -727,12 +727,35 @@ const Courses = (() => {
       for (let r = 0; r < sets; r += 1) {
         s.session.forEach((x, j) => {
           if (steps.length) steps.push({ kind: 'rest', t: 'Отдых', sec: 30 });
-          steps.push({ kind: 'task', t: x.t, sec: x.sec, reps: x.reps, how: x.how, label: sets > 1 ? `Круг ${r + 1} · ${j + 1}/${s.session.length}` : `${j + 1}/${s.session.length}` });
+          steps.push({ kind: 'task', t: x.t, sec: x.sec, reps: x.reps, how: x.err ? `${x.how} ⚠️ Не делай так: ${x.err}` : x.how, label: sets > 1 ? `Круг ${r + 1} · ${j + 1}/${s.session.length}` : `${j + 1}/${s.session.length}` });
         });
       }
       if (typeof Coach !== 'undefined' && Coach.runSteps) Coach.runSteps('session', steps, `${c.emoji} ${c.short}`, null, done);
       else done();
     };
+  }
+
+  /* --- объяснение простыми словами: карточки по одной --- */
+  function runRead(c, i, s) {
+    const box = $('#cr-ex');
+    let k = 0;
+    const N = s.cards.length;
+    function draw() {
+      const el = $('#cr-ex-count'); if (el) el.textContent = `${k + 1} из ${N}`;
+      setProg(c, i, (k / N) * 0.99);
+      const [h, t] = s.cards[k];
+      box.innerHTML = `
+        <div class="cr-ex-body">
+          <div class="cr-card"><span class="cr-card-n">${k + 1}</span><b>${esc(h)}</b><p>${esc(t)}</p></div>
+          <div class="cr-dots">${s.cards.map((_, j) => `<i class="${j <= k ? 'on' : ''}"></i>`).join('')}</div>
+          <button class="btn btn-primary btn-lg btn-block" id="cr-rnext">${k < N - 1 ? 'Дальше →' : 'Понял ✓'}</button>
+          ${k > 0 ? '<button class="btn btn-ghost btn-block" id="cr-rback">← Назад</button>' : ''}
+        </div>`;
+      box.querySelector('#cr-rnext').onclick = () => { Sound.sfx('pop'); if (k < N - 1) { k += 1; draw(); } else finishStep(c, i, box); };
+      const back = box.querySelector('#cr-rback');
+      if (back) back.onclick = () => { k -= 1; draw(); };
+    }
+    draw();
   }
 
   /* --- замер: сколько секунд / раз / денег --- */
@@ -915,6 +938,8 @@ const Courses = (() => {
       const s = dayOf(c, st, Math.min(st.day, total(c, st))).steps[view.step];
       if (s.type === 'test') runTest(c, view.step, s);
       else if (s.type === 'speak') runSpeak(c, view.step, s);
+      else if (s.type === 'read') runRead(c, view.step, s);
+
       else if (s.type === 'session') runSession(c, view.step, s);
       else if (s.type === 'measure') runMeasure(c, view.step, s);
       else if (s.type === 'todo') runTodo(c, view.step, s);

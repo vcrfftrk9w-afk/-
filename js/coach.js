@@ -266,6 +266,7 @@ const Coach = (() => {
   function stopRun() {
     if (run && run.timer) clearInterval(run.timer);
     run = null;
+    if (typeof Awake !== 'undefined') Awake.release('coach');
     const body = $('#sheet-body');
     if (body) body.onclick = null;
   }
@@ -296,6 +297,8 @@ const Coach = (() => {
   function startRun(kind, steps, title, block, onDone) {
     stopRun();
     run = { kind, steps, i: 0, endsAt: 0, timer: null, started: Date.now(), block, title, paused: false, onDone };
+    // тренировка с таймером: экран не гаснет, иначе таймер и голос замирают
+    if (typeof Awake !== 'undefined') Awake.hold('coach');
     // старт — это событие: звук, вибрация и голос, как у тренера
     Sound.sfx('fanfare');
     FX.vibrate([60, 40, 120]);

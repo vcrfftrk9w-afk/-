@@ -23,7 +23,8 @@ const EnglishPath = (() => {
   const LESSON_MIN = 70;       // средняя длина видеоурока, минут
   const REVIEW_DAYS = 5;       // дней повторения после несданного экзамена
   const SRS_DAYS = [1, 2, 4, 8, 16, 32];
-  const PASS = { test: 0.8, listening: 0.7, 'puzzle-en': 0.7, speak: 0.6 };
+  const PASS = { test: 0.8, listening: 0.7, 'puzzle-en': 0.7, speak: 0.6, words: 0.7 };
+
 
   /* ---------- уровни: плейлист, что умеешь, грамматика ----------
      s: [английский, русский] — для пазлов, аудирования, говорения
@@ -369,6 +370,54 @@ const EnglishPath = (() => {
     return L && L.blocks[bi] && L.blocks[bi].s[si] ? sentence(lv, bi, si) : null;
   };
 
+  /* ---------- слова и правила (содержание — js/english-content.js) ---------- */
+  const EC = typeof EnglishContent !== 'undefined' ? EnglishContent : { RULES: [], WORDS: [] };
+  const WORDS = LEVELS.map((_, lv) => EC.WORDS[lv] || []);
+  const rulesOf = (lv, bi) => ((EC.RULES[lv] || [])[bi]) || null;
+  const NEW_WORDS = 4;        // новых слов в обычный день
+  const KNOWN_BOX = 3;        // слово «выучено», когда угадано по интервалам 3 раза подряд
+  // слово с вариантами ответа (переводы и английские слова того же уровня)
+  function wordItem(key, extra) {
+    const [lv, i] = key.slice(1).split('.').map(Number);
+    const list = WORDS[lv];
+    if (!list || !list[i]) return null;
+    const others = [7, 19, 31, 43, 57].map((d) => (i + d) % list.length).filter((j) => j !== i);
+    const three = [...new Set(others)].slice(0, 3);
+    const rot = i % 4; // правильный ответ не всегда первым
+    const ru = three.map((j) => list[j][1]);
+    const en = three.map((j) => list[j][0]);
+    ru.splice(rot, 0, list[i][1]);
+    en.splice(rot, 0, list[i][0]);
+    return Object.assign({ key, en: list[i][0], ru: list[i][1], lv, word: true, o: ru, oe: en }, extra || {});
+  }
+  const wordsDue = (p) => {
+    const k = today();
+    return Object.keys(p.wsrs || {}).filter((x) => p.wsrs[x].d <= k && wordItem(x))
+      .sort((a, b) => (p.wsrs[a].d < p.wsrs[b].d ? -1 : p.wsrs[a].d > p.wsrs[b].d ? 1 : p.wsrs[a].b - p.wsrs[b].b));
+  };
+  // новые слова по порядку: сначала своего уровня, кончились — следующего
+  function newWordKeys(p, n) {
+    const out = [];
+    for (let lv = p.level; lv < LEVELS.length && lv <= p.level + 1 && out.length < n; lv += 1) {
+      for (let i = (p.wnext || {})[lv] || 0; i < WORDS[lv].length && out.length < n; i += 1) {
+        const key = `w${lv}.${i}`;
+        if (!(p.wsrs || {})[key]) out.push(key);
+      }
+    }
+    return out;
+  }
+  function wordsStep(newKeys, dueKeys, title, sub) {
+    const items = newKeys.map((k) => wordItem(k, { isNew: true })).concat(dueKeys.map((k) => wordItem(k, { due: true }))).filter(Boolean);
+    if (!items.length) return [];
+    const nNew = items.filter((x) => x.isNew).length;
+    const nDue = items.length - nNew;
+    return [{ type: 'words', title: title || 'Слова', sub: sub || [nNew ? `${nNew} новых` : '', nDue ? `${nDue} повторить` : ''].filter(Boolean).join(' · '), items }];
+  }
+  const ruleStep = (lv, bi, title) => {
+    const cards = rulesOf(lv, bi);
+    return cards ? [{ type: 'read', title: title || `Правило: ${LEVELS[lv].blocks[bi].t}`, sub: 'Простыми словами · 1 минута', cards, rule: true }] : [];
+  };
+
   /* ---------- состояние пути ---------- */
   function init(opts) {
     const o = opts || {};
@@ -376,6 +425,7 @@ const EnglishPath = (() => {
       level: 0, lesson: 1, part: 1, videoMin: [20, 30, 45].includes(o.min) ? o.min : 30,
       confirmed: {}, placed: {}, tries: {}, weak: {}, srs: {}, learned: 0,
       review: 0, ended: {}, plan: null, early: null,
+      wsrs: {}, wnext: {}, ruleSeen: {},
       placement: o.start === 'place' ? 'todo' : null,
     };
   }
@@ -389,7 +439,14 @@ const EnglishPath = (() => {
     st.extra = 0;
     return p;
   }
-  const P = (st) => migrate(st);
+  // у пути, начатого до появления слов и правил, этих полей ещё нет
+  const P = (st) => {
+    const p = migrate(st);
+    if (!p.wsrs) p.wsrs = {};
+    if (!p.wnext) p.wnext = {};
+    if (!p.ruleSeen) p.ruleSeen = {};
+    return p;
+  };
 
   /* ---------- урок дня ---------- */
   const blockOf = (lv, lesson) => Math.min(LEVELS[lv].blocks.length - 1, Math.floor(((lesson - 1) * LEVELS[lv].blocks.length) / LESSONS));
@@ -412,7 +469,13 @@ const EnglishPath = (() => {
     if (p.plan && p.plan.date === k) return p.plan;
     const kind = p.placement === 'todo' ? 'place' : p.review > 0 ? 'review' : p.lesson > LESSONS ? 'exam' : 'lesson';
     const pl = { date: k, kind, level: p.level, lesson: p.lesson, part: p.part, srs: dueKeys(p).slice(0, kind === 'exam' || kind === 'place' ? 0 : 6) };
-    const sig = (x) => (x ? `${x.kind}|${x.level}|${x.lesson}|${x.part}|${x.srs.length ? 1 : 0}` : '');
+    // правило темы — в первый день новой темы; слова — новые в урок, повторение в урок и в повторение
+    const bi = blockOf(p.level, Math.min(p.lesson, LESSONS));
+    pl.rule = kind === 'lesson' && !p.ruleSeen[`${p.level}.${bi}`];
+    pl.wn = kind === 'lesson' ? newWordKeys(p, NEW_WORDS) : [];
+    pl.wd = kind === 'lesson' || kind === 'review' ? wordsDue(p).slice(0, 6) : [];
+    const sig = (x) => (x ? `${x.kind}|${x.level}|${x.lesson}|${x.part}|${x.srs.length ? 1 : 0}|${x.rule ? 1 : 0}|${(x.wn || []).length + (x.wd || []).length ? 1 : 0}` : '');
+
     if (p.plan && sig(p.plan) !== sig(pl)) st.prog = {};
     p.plan = pl;
     return pl;
@@ -447,6 +510,8 @@ const EnglishPath = (() => {
           { type: 'listening', title: 'Аудирование', sub: '5 фраз на слух · нужно 70%', items: pick(sentencesOf(lv, all), 5, seed + 5), pass: PASS.listening },
           { type: 'puzzle-en', title: 'Перевод на английский', sub: '5 предложений · нужно 70%', items: pick(sentencesOf(lv, all), 5, seed + 9), pass: PASS['puzzle-en'] },
           speakStep(pick(sentencesOf(lv, all), 4, seed + 13), 'Говорение', '4 фразы вслух · нужно 60%', PASS.speak),
+          { type: 'words', title: 'Слова уровня', sub: '10 слов · нужно 70%', pass: PASS.words, exam: true,
+            items: pick(WORDS[lv].map((_, i) => `w${lv}.${i}`), 10, seed + 17).map((k) => wordItem(k)).filter(Boolean) },
         ],
       };
     }
@@ -457,7 +522,7 @@ const EnglishPath = (() => {
       const left = REVIEW_DAYS - p.review + 1;
       return {
         kind: 'review', title: `Повторение перед пересдачей ${L.id} · ${left} из ${REVIEW_DAYS}`, sub: `Слабые темы: ${wb.map((bi) => L.blocks[bi].t).join(', ')}`,
-        steps: srsStep.concat([
+        steps: ruleStep(lv, wb[0], `Правило слабой темы: ${L.blocks[wb[0]].t}`).concat(wordsStep([], pl.wd || [], 'Слова: повторение'), srsStep, [
           { type: 'puzzle-en', title: 'Пазл на изучаемом языке', sub: 'Слабые темы', items: pick(sentencesOf(lv, wb), 5, seed) },
           { type: 'listening', title: 'Аудирование', sub: 'Переведи услышанное', items: pick(sentencesOf(lv, wb), 3, seed + 4) },
           { type: 'test', title: 'Тест', sub: 'Заполни пропуск', items: pick(gapsOf(lv, wb), 8, seed + 2) },
@@ -477,8 +542,8 @@ const EnglishPath = (() => {
       steps: [
         { type: 'video', title: `Видеоурок ${pl.lesson} · ${L.id}`, sub: `Смотри ~${p.videoMin} минут — продолжишь с того же места`,
           video: { id: L.ids[pl.lesson] || null, list: L.list, index: pl.lesson - 1, lesson: key, num: pl.lesson, minutes: p.videoMin, start: 0 }, path: true },
-      ].concat(srsStep, [
-        { type: 'puzzle-en', title: 'Пазл на изучаемом языке', sub: 'Составление предложения', items: pick(bank, 4, seed) },
+      ].concat(pl.rule ? ruleStep(lv, bi) : [], wordsStep(pl.wn || [], pl.wd || []), srsStep, [
+        { type: 'puzzle-en', title: 'Пазл на изучаемом языке', sub: 'Составление предложения', items: pick(bank, pl.rule ? 3 : 4, seed) },
         { type: 'puzzle-ru', title: 'Пазл на родном языке', sub: 'Составление предложения', items: pick(bank, 2, seed + 4) },
         { type: 'listening', title: 'Аудирование', sub: 'Переведите услышанное предложение', items: pick(bank, 3, seed + 8) },
         { type: 'test', title: 'Тест', sub: 'Заполните пропуск', items: pick(gapsOf(lv, [bi]), 5, seed) },
@@ -487,10 +552,75 @@ const EnglishPath = (() => {
     };
   }
 
+  /* ---------- лёгкий день: 5 минут, когда нет сил ----------
+     Фразы, которые пора повторить (или 4 фразы текущей темы), и одна фраза вслух.
+     Урок и план дня не трогаем — завтра продолжишь с того же места. */
+  function lightDay(st) {
+    const p = P(st);
+    const lv = Math.min(p.level, LEVELS.length - 1);
+    const bi = blockOf(lv, Math.min(p.lesson, LESSONS));
+    const bank = sentencesOf(lv, [bi]);
+    const seed = Number(today().replace(/-/g, '')) % 97;
+    const due = dueKeys(p).slice(0, 4).map(byKey).filter(Boolean);
+    const items = due.length >= 3 ? due : due.concat(pick(bank.filter((x) => !due.some((d) => d.key === x.key)), 4 - due.length, seed));
+    return {
+      kind: 'light', light: true, title: '😮‍💨 Лёгкий день', sub: '5 минут — серия не прервётся, урок останется на завтра',
+      steps: wordsStep([], wordsDue(p).slice(0, 5), 'Слова: повторение').concat([
+        { type: 'puzzle-en', title: due.length ? 'Повторение: твои фразы' : 'Пазл на изучаемом языке', sub: `${items.length} фразы`, items, srs: due.length > 0 },
+        speakStep(pick(bank, 1, seed + 5), 'Говорение', 'Одна фраза вслух'),
+      ]),
+    };
+  }
+
+  /* ---------- повторить слова в любой момент (на день не влияет) ----------
+     Пора повторить — их; нет — 8 уже знакомых слов вперемешку. */
+  function practice(st) {
+    const p = P(st);
+    const due = wordsDue(p).slice(0, 10);
+    const keys = due.length ? due : pick(Object.keys(p.wsrs).filter((k) => wordItem(k)), 8, Number(today().replace(/-/g, '')) % 89);
+    if (!keys.length) return null;
+    return { type: 'words', title: 'Повторить слова', sub: `${keys.length} слов`, practice: true, items: keys.map((k) => wordItem(k, { due: due.includes(k) })).filter(Boolean) };
+  }
+  // карточки правила темы — для кнопки «📖 Правило» в уроке
+  function rulesFor(st) {
+    const p = P(st);
+    const lv = Math.min(p.level, LEVELS.length - 1);
+    const bi = blockOf(lv, Math.min(p.lesson, LESSONS));
+    const cards = rulesOf(lv, bi);
+    return cards ? { title: LEVELS[lv].blocks[bi].t, cards } : null;
+  }
+  // словарь по уровням: сколько слов в работе и сколько выучено
+  function wordStats(st) {
+    const p = P(st);
+    const per = LEVELS.map((L, lv) => ({ id: L.id, total: WORDS[lv].length, seen: 0, known: 0 }));
+    Object.keys(p.wsrs).forEach((k) => {
+      const lv = Number(k.slice(1).split('.')[0]);
+      if (!per[lv]) return;
+      per[lv].seen += 1;
+      if (p.wsrs[k].b >= KNOWN_BOX) per[lv].known += 1;
+    });
+    return { per, seen: per.reduce((a, x) => a + x.seen, 0), known: per.reduce((a, x) => a + x.known, 0), total: per.reduce((a, x) => a + x.total, 0), due: wordsDue(p).length };
+  }
+
   /* ---------- ответы: интервальное повторение и слабые темы ---------- */
   function onItem(st, step, item, ok) {
     const p = P(st);
     if (item.place) return;
+    // слово: новое → в повторение; угадал при повторении → интервал растёт, ошибся → завтра снова
+    if (item.word) {
+      const cur = p.wsrs[item.key];
+      if (item.isNew) {
+        const [lv, i] = item.key.slice(1).split('.').map(Number);
+        p.wnext[lv] = Math.max(p.wnext[lv] || 0, i + 1);
+      }
+      if (!ok) { p.wsrs[item.key] = { b: 0, d: addDays(today(), 1) }; return; }
+      if (!cur) { p.wsrs[item.key] = { b: 1, d: addDays(today(), SRS_DAYS[1]) }; return; }
+      if (!item.due) return; // уже в повторении, а сегодня оно не по графику — интервал не трогаем
+      const b = Math.min(cur.b + 1, SRS_DAYS.length);
+      p.wsrs[item.key] = { b, d: b >= SRS_DAYS.length ? '9999-12-31' : addDays(today(), SRS_DAYS[b]) };
+      return;
+    }
+
     if (item.q && item.lv != null) {
       if (!ok) { const k = `${item.lv}.${item.bi}`; p.weak[k] = (p.weak[k] || 0) + 1; }
       else if (p.weak[`${item.lv}.${item.bi}`]) p.weak[`${item.lv}.${item.bi}`] -= 0.5;
@@ -513,14 +643,15 @@ const EnglishPath = (() => {
     if (b >= SRS_DAYS.length) { delete p.srs[item.key]; return; } // выучено надолго
     p.srs[item.key] = { b, d: addDays(today(), SRS_DAYS[b]) };
   }
-  // тест на уровень: копим верные ответы по уровням
+  // тест на уровень: ответ на каждый вопрос хранится по его ключу —
+  // вышел посреди теста и прошёл заново, ответы не задвоятся
   function onPlace(st, item, ok) {
     const p = P(st);
-    p.placeRes = p.placeRes || {};
-    const r = p.placeRes[item.lv] || (p.placeRes[item.lv] = [0, 0]);
-    r[1] += 1;
-    if (ok) r[0] += 1;
+    if (!p.placeRes || typeof p.placeRes !== 'object' || Array.isArray(p.placeRes)) p.placeRes = {};
+    p.placeRes[item.key] = ok ? 1 : 0;
   }
+  // сколько верных ответов на уровне lv в тесте на уровень
+  const placeRight = (p, lv) => Object.keys(p.placeRes || {}).filter((k) => k.indexOf(`g${lv}.`) === 0 && p.placeRes[k] === 1).length;
 
   /* видео урока досмотрено до конца */
   function videoEnded(st, key) {
@@ -537,9 +668,10 @@ const EnglishPath = (() => {
     let msg = 'Урок дня пройден! Завтра — продолжение';
     let finished = false;
     if (D.kind === 'place') {
-      const res = p.placeRes || {};
+      // уровень засчитан, если на его 5 вопросов 4 верных ответа — и все уровни ниже тоже
       let lv = 0;
-      while (lv < LEVELS.length && res[lv] && res[lv][0] >= 4) { p.placed[LEVELS[lv].id] = today(); lv += 1; }
+      while (lv < LEVELS.length && placeRight(p, lv) >= 4) { p.placed[LEVELS[lv].id] = today(); lv += 1; }
+
       p.level = Math.min(lv, LEVELS.length - 1);
       p.lesson = 1; p.part = 1;
       p.placement = 'done';
@@ -562,6 +694,11 @@ const EnglishPath = (() => {
       p.review = Math.max(0, p.review - 1);
       msg = p.review ? `Повторение засчитано. Осталось ${p.review}.` : `Повторение закончено — завтра пересдача ${L.id}.`;
     } else {
+      // правило темы прочитано — в следующие дни этой темы его не показываем (оно всегда есть по кнопке «📖»)
+      if (pl.rule) {
+        const lvR = pl.level != null ? pl.level : p.level;
+        p.ruleSeen[`${lvR}.${blockOf(lvR, Math.min(pl.lesson || p.lesson, LESSONS))}`] = today();
+      }
       const key = `${L.id}-${pl.lesson || p.lesson}`;
       if ((p.ended || {})[key]) {
         delete p.ended[key];
@@ -669,6 +806,7 @@ const EnglishPath = (() => {
         <div><b>${srsN}</b><small>на повторении</small></div>
         <div><b>${dueN}</b><small>вспомнить сегодня</small></div>
       </div>
+      ${vocabHTML(st, esc)}
       <h4 class="cr-sec">📅 Когда подтвердишь уровень</h4>
       <div class="en-forecast">${fc || '<span><b>C1</b>пройден 🏆</span>'}</div>
       <p class="muted small">Если заниматься каждый день. Расчёт: ${LESSONS} уроков по ~${LESSON_MIN} мин на уровень, у тебя ~${p.videoMin} мин видео в день. Пропуск дня сдвигает срок, но ничего не сгорает.</p>
@@ -679,6 +817,20 @@ const EnglishPath = (() => {
         <div class="en-mins">${[20, 30, 45].map((m) => `<button class="chip ${p.videoMin === m ? 'active' : ''}" data-en-min="${m}">${m} мин</button>`).join('')}</div>
       </div>
       ${p.lesson <= LESSONS && !p.review && p.placement !== 'todo' ? `<button class="btn btn-ghost btn-block" id="en-exam-now">Уже знаю ${cur.id}? Сдать экзамен досрочно</button>` : ''}`;
+  }
+  /* словарь: слова по уровням, сколько выучено, повторить прямо сейчас */
+  function vocabHTML(st, esc) {
+    const w = wordStats(st);
+    const rows = w.per.map((x) => `
+      <div class="en-voc-row"><b>${x.id}</b><span class="en-bar"><i style="width:${Math.round((x.known / x.total) * 100)}%"></i><i class="seen" style="width:${Math.round(((x.seen - x.known) / x.total) * 100)}%"></i></span><small>${x.known}/${x.total}</small></div>`).join('');
+    return `
+      <h4 class="cr-sec">🔤 Словарь</h4>
+      <div class="en-voc">
+        <p class="en-voc-top"><b>${w.known}</b> выучено · ${w.seen} в работе · ${w.total} слов всего</p>
+        ${rows}
+        <p class="muted small">Каждый урок — 4 новых слова. Слово «выучено», когда ты вспомнил его 3 раза с растущим перерывом.</p>
+        <button class="btn btn-ghost btn-block" id="en-words-now" ${w.seen ? '' : 'disabled'}>${w.due ? `🔁 Повторить слова (${w.due} пора)` : '🔁 Повторить слова'}</button>
+      </div>`;
   }
   function fmt(key) {
     if (!key) return '';
@@ -706,7 +858,9 @@ Rules:
   }
 
   return {
-    LEVELS, LESSONS, PASS, IDX, init, migrate, today: today_, complete, onItem, onPlace, videoEnded, examNow,
+    LEVELS, LESSONS, PASS, IDX, WORDS, init, migrate, today: today_, lightDay, practice, rulesFor, wordStats, complete, onItem, onPlace, videoEnded, examNow,
+
+
     label, pct, minutes, pageHTML, setMinutes, confirmedLevel, tutorPrompt, daysLeftTo, byKey, words,
   };
 })();

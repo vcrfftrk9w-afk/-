@@ -241,6 +241,8 @@ const App = (() => {
   function go(tab) {
     if (!screenByTab[tab]) return;
     if (currentTab === 'adhd' && tab !== 'adhd') Screens.focus.onLeave();
+    // ушёл из «Курсов» — видеоурок больше не держит экран
+    if (tab !== 'courses' && typeof Awake !== 'undefined') Awake.release('lesson-video');
     if (currentTab === 'day' && tab !== 'day' && Screens.day) Screens.day.onLeave();
     currentTab = tab;
     // два окна: «Мои дела» — отдельный экран, всё остальное — вкладки как раньше
@@ -1122,10 +1124,13 @@ const App = (() => {
     /* Облако спрашиваем сразу, параллельно с заставкой. */
     const cloudPromise = Cloud.init(8000);
 
+    // знакомого человека не держим на заставке: приложение открывается сразу
+    const known = !!State.s.onboarded;
     const hideLoader = (then) => {
       const loader = $('#loader');
+      if (known) loader.style.transition = 'opacity .2s ease';
       loader.style.opacity = '0';
-      setTimeout(() => { loader.classList.add('hidden'); then(); }, 450);
+      setTimeout(() => { loader.classList.add('hidden'); then(); }, known ? 200 : 450);
     };
 
     setTimeout(async () => {
@@ -1167,8 +1172,9 @@ const App = (() => {
         }
         afterCloud();
       });
-    }, 850);
+    }, known ? 60 : 850);
   }
+
 
   /* Каждый шаг запуска — отдельно: если один упал, остальные всё равно
      отработают. Раньше ошибка в сборке дня оставляла приложение без плана. */
@@ -1219,7 +1225,24 @@ const App = (() => {
     safely('tilt', () => UI.initTilt());
     safely('ghosts', offerGhostCleanup);
     safely('env', noteEnv);
+    safely('alarmOpen', openFromAlarm);
   }
+
+  /* В APK будильник звонил, нажали «Начинаю» — приложение открывается сразу на этом деле:
+     урок курса — на уроке, остальное — на «Моих делах». */
+  function openFromAlarm() {
+    const A = window.AndroidApp;
+    if (!A || !A.takeOpen || $('#app').classList.contains('hidden')) return;
+    let title = '';
+    try { title = String(A.takeOpen() || ''); } catch (e) { return; }
+    if (!title) return;
+    if (/^🎓/.test(title) && typeof Courses !== 'undefined') {
+      const c = CourseData.COURSES.find((x) => title.includes(x.short));
+      if (c && Courses.state(c.id)) { go('courses'); Courses.open(c.id, 'lesson'); return; }
+    }
+    go('mytasks');
+  }
+  window.onAlarmOpen = () => safely('alarmOpen', openFromAlarm);
 
   /* размеры экрана внутри просмотрщика — чтобы понять, куда девается нижняя панель */
   function noteEnv() {

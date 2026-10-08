@@ -37,13 +37,31 @@ const Courses = (() => {
   const doneToday = (st) => Object.values(st.done || {}).includes(today());
   const isActive = (id) => S().active.includes(id);
   const pct = (c, st) => (c.path ? c.path.pct(st) : Math.min(100, Math.round((doneDays(st) / total(c, st)) * 100)));
+  // лёгкий день (5 минут, когда нет сил): серия не рвётся, урок остаётся на завтра
+  const lightToday = (st) => !!(st.light && st.light[today()]);
+  // все дни занятий: полные уроки и лёгкие дни
+  const studyDays = (st) => new Set(Object.values(st.done || {}).concat(Object.keys(st.light || {})));
   function streak(st) {
-    const set = new Set(Object.values(st.done || {}));
+    const set = studyDays(st);
     let n = 0;
     const d = new Date();
     if (!set.has(State.dateKey(d))) d.setDate(d.getDate() - 1);
     while (set.has(State.dateKey(d))) { n += 1; d.setDate(d.getDate() - 1); }
     return n;
+  }
+  // самая длинная серия за всё время
+  function bestStreak(st) {
+    const days = [...studyDays(st)].sort();
+    let best = 0;
+    let run = 0;
+    let prev = null;
+    days.forEach((k) => {
+      const d = new Date(`${k}T12:00:00`);
+      run = prev && Math.round((d - prev) / 86400000) === 1 ? run + 1 : 1;
+      best = Math.max(best, run);
+      prev = d;
+    });
+    return best;
   }
   // у английского день — не номер, а место на пути (уровень, урок, часть, повторение, экзамен)
   const dayOf = (c, st, n) => (c.path && st ? c.path.today(st) : c.day(n, { days: total(c, st) }));
@@ -58,6 +76,7 @@ const Courses = (() => {
   let view = { name: 'home' };
   let exState = null; // идущее упражнение
   let videoHidden = false;
+  let lightMode = false; // открыт «лёгкий день», а не полный урок
 
   /* ---------- маленькие детали ---------- */
   const esc = (s) => UI.esc(String(s == null ? '' : s));
@@ -104,7 +123,9 @@ const Courses = (() => {
       const c = C.byId(id);
       const st = cs(id);
       if (!c || !st || st.finished || st.alarm === false) return;
-      ORDER.forEach((dow) => out.push({ dow, min: st.time, title: `🎓 ${c.short}: урок дня`, text: `${minutesOf(c, st)} минут — и день засчитан.` }));
+      // урок (или лёгкий день) сегодня уже пройден — сегодня будильник молчит
+      const skip = doneToday(st) || lightToday(st) ? today() : undefined;
+      ORDER.forEach((dow) => out.push({ dow, min: st.time, title: `🎓 ${c.short}: урок дня`, text: `${minutesOf(c, st)} минут — и день засчитан.`, skip }));
     });
     return out;
   }
@@ -136,6 +157,11 @@ const Courses = (() => {
   /* ---------- главная вкладки ---------- */
   function homeHTML() {
     const s = S();
+    // всего по всем курсам: дни занятий и время
+    const allSet = new Set();
+    let allMins = 0;
+    s.active.forEach((id) => { const st = cs(id); if (!st) return; studyDays(st).forEach((k) => allSet.add(k)); allMins += st.mins || 0; });
+    const allDays = allSet.size;
     const act = s.active.map((id) => C.byId(id)).filter(Boolean);
     const rest = C.COURSES.filter((c) => !s.active.includes(c.id));
     const activeCard = (c) => {
@@ -153,7 +179,11 @@ const Courses = (() => {
           </button>
           ${fin ? `<button class="cr-go done" data-cr-open="${c.id}">🏆 Посмотреть результат</button>`
             : tdone ? `<button class="cr-go done" data-cr-open="${c.id}">✓ Сегодня пройдено — завтра ${esc(dayLabel(c, st))}</button>`
-              : `<button class="cr-go" data-cr-lesson="${c.id}">▶ Урок дня · ${minutesOf(c, st)} мин</button>`}
+              : `<div class="cr-go-row">
+                  <button class="cr-go" data-cr-lesson="${c.id}">▶ Урок дня · ${minutesOf(c, st)} мин</button>
+                  ${lightToday(st) ? '<span class="cr-go-light done" title="Лёгкий день засчитан">🔥 ✓</span>'
+                    : `<button class="cr-go-light" data-cr-light="${c.id}" aria-label="Лёгкий день — 5 минут">😮‍💨 5 мин</button>`}
+                </div>`}
         </div>`;
     };
     const catCard = (c) => `
@@ -169,6 +199,7 @@ const Courses = (() => {
         <header class="cr-hero">
           <h2>🎓 Курсы</h2>
           <p>С нуля до результата: каждый день один урок — видео, практика и проверка. Урок сам встаёт в ежедневник и будильник.</p>
+          ${allDays ? `<p class="cr-hero-stat">📅 ${allDays} ${plural(allDays, 'день', 'дня', 'дней')} учёбы · ⏱ ${fmtMins(allMins)}</p>` : ''}
         </header>
         ${act.length ? `<h4 class="cr-sec">Мои курсы</h4><div class="cr-actives">${act.map(activeCard).join('')}</div>` : ''}
         <h4 class="cr-sec">${act.length ? 'Ещё можно научиться' : 'Чему научиться?'}</h4>
@@ -245,18 +276,22 @@ const Courses = (() => {
     return `${header}
       <div class="cr-sheet">
         <h2 class="cr-title">${c.emoji} ${esc(c.title)}</h2>
-        <p class="muted">${st.finished ? '🏆 Курс пройден! Обещание выполнено.' : c.path ? `Занимаешься ${doneDays(st)} ${plural(doneDays(st), 'день', 'дня', 'дней')} · путь до C1 пройден на ${pct(c, st)}%` : `День ${n} из ${T}${st.extra ? ` · +${st.extra} дней повторения` : ''}`}</p>
+        <p class="muted">${st.finished ? '🏆 Курс пройден! Обещание выполнено.' : c.path ? `Занимаешься ${studyDays(st).size} ${plural(studyDays(st).size, 'день', 'дня', 'дней')} · путь до C1 пройден на ${pct(c, st)}%` : `День ${n} из ${T}${st.extra ? ` · +${st.extra} дней повторения` : ''}`}</p>
         ${view.celebrate && !st.finished ? `<div class="cr-win">🎉 ${view.msg ? esc(view.msg) : `День ${view.celebrate} пройден!`} +25 опыта.</div>` : ''}
         ${st.finished ? `<div class="cr-win">🏆 Ты прошёл курс «${esc(c.title)}» и сдал проверку.</div>`
           : `<button class="cr-today" data-cr-lesson="${c.id}" ${tdone ? 'disabled' : ''}>
               <span><small>${tdone ? 'Сегодня пройдено ✓' : c.path ? `Сегодня · ${esc(c.path.label(st))}` : `Сегодня · день ${n}`}</small><b>${esc(tdone ? `Завтра: ${dayOf(c, st, st.day).title}` : D.title)}</b><em>${esc(tdone ? 'Возвращайся завтра — урок уже ждёт' : D.sub)}</em></span>
               <i>${tdone ? '✓' : '▶'}</i></button>`}
+        ${view.lightWin ? '<div class="cr-win">🔥 Лёгкий день засчитан — серия цела! +10 опыта.</div>' : ''}
+        ${!st.finished && !tdone ? (lightToday(st)
+          ? (view.lightWin ? '' : '<p class="cr-light-ok">🔥 Лёгкий день засчитан, серия цела. Полный урок можно пройти сейчас или завтра.</p>')
+          : `<button class="cr-light" data-cr-light="${c.id}"><span>😮‍💨</span><span><b>Нет сил? Лёгкий день — 5 минут</b><small>Серия не прервётся, урок останется на завтра</small></span></button>`) : ''}
         ${metricRows ? `<h4 class="cr-sec">📈 Твой прогресс</h4><div class="cr-metrics">${metricRows}</div>` : ''}
         ${c.path ? c.path.pageHTML(st, esc) : `<h4 class="cr-sec">🗺 Путь</h4>
         <div class="cr-map">${weeks.join('')}</div>`}
+        ${statsHTML(st)}
         ${c.path && hasAI() ? `<button class="btn btn-primary btn-block en-tutor" id="en-tutor">💬 Поговорить с ИИ-тренером по-английски</button>` : ''}
         ${promise}
-
         ${c.safety ? `<div class="cr-safety"><b>⚠️ Безопасность</b><p>${esc(c.safety)}</p></div>` : ''}
         <h4 class="cr-sec">⚙️ Напоминание</h4>
         <div class="cr-settings">
@@ -267,8 +302,67 @@ const Courses = (() => {
       </div>`;
   }
 
+  /* ---------- статистика: календарь занятий, серия, время, точность ---------- */
+  const fmtMins = (m) => (m >= 60 ? `${Math.floor(m / 60)} ч${m % 60 ? ` ${m % 60} мин` : ''}` : `${m || 0} мин`);
+  function calendarHTML(st, weeksN) {
+    const full = new Set(Object.values(st.done || {}));
+    const light = new Set(Object.keys(st.light || {}));
+    const now = new Date();
+    const k0 = today();
+    const start = new Date(now);
+    start.setDate(now.getDate() - ((now.getDay() + 6) % 7) - 7 * (weeksN - 1)); // понедельник N недель назад
+    const cells = [];
+    for (let i = 0; i < weeksN * 7; i += 1) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const k = State.dateKey(d);
+      const cls = k > k0 ? 'future' : full.has(k) ? 'full' : light.has(k) ? 'light' : '';
+      cells.push(`<i class="${cls} ${k === k0 ? 'today' : ''}" title="${k.split('-').reverse().join('.')}${full.has(k) ? ' — урок' : light.has(k) ? ' — лёгкий день' : ''}"></i>`);
+    }
+    return `<div class="cr-cal" style="--weeks:${weeksN}" aria-label="Календарь занятий за ${weeksN} недель">${cells.join('')}</div>`;
+  }
+  function statsHTML(st) {
+    const days = studyDays(st).size;
+    const acc = st.acc && st.acc.t >= 5 ? Math.round((st.acc.r / st.acc.t) * 100) : null;
+    return `
+      <h4 class="cr-sec">📅 Твои занятия</h4>
+      <div class="cr-stats">
+        <div><b>🔥 ${streak(st)}</b><small>серия · рекорд ${bestStreak(st)}</small></div>
+        <div><b>${days}</b><small>${plural(days, 'день', 'дня', 'дней')} занятий</small></div>
+        <div><b>${fmtMins(st.mins || 0)}</b><small>учёбы всего</small></div>
+        <div><b>${acc == null ? '—' : `${acc}%`}</b><small>верных ответов</small></div>
+      </div>
+      ${calendarHTML(st, 12)}
+      <p class="cr-cal-legend"><span><i class="full"></i>урок</span><span><i class="light"></i>лёгкий день</span><span><i></i>пропуск</span></p>`;
+  }
+
   /* ---------- урок дня ---------- */
-  function stepProg(st, i) { return Math.max(0, Math.min(1, Number((st.prog || {})[i]) || 0)); }
+  // прогресс шагов: у полного урока — st.prog, у лёгкого дня — свой, на сегодня
+
+  function progOf(st) {
+    if (!lightMode) return st.prog || (st.prog = {});
+    const k = today();
+    if (!st.lprog || st.lprog.date !== k) st.lprog = { date: k, prog: {} };
+    return st.lprog.prog;
+  }
+  function stepProg(st, i) { return Math.max(0, Math.min(1, Number(progOf(st)[i]) || 0)); }
+  /* лёгкий день: 5 минут из сегодняшнего урока — серия не рвётся, сам урок ждёт завтра */
+  function lightDayOf(c, st) {
+    if (c.path) return c.path.lightDay(st);
+    const D = dayOf(c, st, Math.min(st.day, total(c, st)));
+    const steps = [];
+    const ses = D.steps.find((s) => s.type === 'session');
+    if (ses) steps.push({ type: 'session', title: 'Мини-тренировка', sub: 'Разминка и одно упражнение · 1 круг', session: ses.session.slice(0, 2), sets: 1 });
+    const read = D.steps.find((s) => s.type === 'read');
+    if (read && !ses) steps.push(read);
+    const quiz = D.steps.find((s) => s.type === 'test' && !s.pass);
+    if (quiz && !ses) steps.push(quiz);
+    if (!steps.length) steps.push({ type: 'read', title: 'Вспомни, зачем ты здесь', sub: '1 карточка', cards: [[c.title, c.promise]] });
+    return { light: true, title: '😮‍💨 Лёгкий день', sub: '5 минут — серия не прервётся, урок останется на завтра', steps };
+  }
+  // какой день сейчас открыт: полный урок или лёгкий день
+  const todayDay = (c, st) => (lightMode ? lightDayOf(c, st) : dayOf(c, st, Math.min(st.day, total(c, st))));
+
   function lessonPct(st, D) {
     if (!D.steps.length) return 0;
     return Math.round((D.steps.reduce((a, _, i) => a + stepProg(st, i), 0) / D.steps.length) * 100);
@@ -301,12 +395,13 @@ const Courses = (() => {
   function lessonHTML(c) {
     const st = cs(c.id);
     const n = Math.min(st.day, total(c, st));
-    const D = dayOf(c, st, n);
+    const D = todayDay(c, st);
     const p = lessonPct(st, D);
     const vi = D.steps.findIndex((s) => s.type === 'video');
     const v = vi >= 0 ? D.steps[vi].video : null;
     const vs = v ? videoSrc(v, st) : null;
-    const icon = { video: '🎬', 'puzzle-en': '🧩', 'puzzle-ru': '🧩', listening: '🎧', test: '✍️', session: '⏱', measure: '📏', todo: '✅', speak: '🎤', read: '📖' };
+    const icon = { video: '🎬', 'puzzle-en': '🧩', 'puzzle-ru': '🧩', listening: '🎧', test: '✍️', session: '⏱', measure: '📏', todo: '✅', speak: '🎤', read: '📖', words: '🔤' };
+
     const rows = D.steps.map((s, i) => {
       const pr = stepProg(st, i);
       const open = unlocked(st, D, i);
@@ -324,7 +419,8 @@ const Courses = (() => {
         <span class="cr-fire">🔥 ${streak(st)}</span>
       </header>
       <div class="cr-sheet lesson">
-        <div class="cr-lesson-title"><small>${c.path ? esc(c.path.label(st)) : `День ${n} из ${total(c, st)}`}</small><b>${esc(D.title)}</b></div>
+        <div class="cr-lesson-title"><small>${lightMode ? 'Лёгкий день · серия не прервётся' : c.path ? esc(c.path.label(st)) : `День ${n} из ${total(c, st)}`}</small><b>${esc(D.title)}</b>${lightMode ? `<em>${esc(D.sub)}</em>` : ''}</div>
+        ${c.path && D.kind === 'lesson' && !lightMode ? '<button class="cr-rule-btn" id="cr-rule">📖 Правило простыми словами</button>' : ''}
         ${vs ? `
           <div class="cr-video ${videoHidden ? 'hidden' : ''}">
             <iframe id="cr-yt" src="${esc(vs.src)}" title="Видеоурок" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" loading="lazy"></iframe>
@@ -336,18 +432,30 @@ const Courses = (() => {
           <p class="cr-vhint" id="cr-vhint" hidden></p>` : ''}
         ${vs && c.videoNote ? `<p class="muted small cr-vnote">${esc(c.videoNote)}</p>` : ''}
         <ul class="cr-steps">${rows}</ul>
-        ${p >= 100 ? `<div class="cr-win">🎉 День ${n} пройден!</div>` : ''}
+        ${p >= 100 && !lightMode ? `<div class="cr-win">🎉 День ${n} пройден!</div>` : ''}
+
       </div>`;
   }
 
   /* ---------- упражнения ---------- */
   function exHTML(c, i) {
     const st = cs(c.id);
-    const D = dayOf(c, st, Math.min(st.day, total(c, st)));
+    const D = todayDay(c, st);
     const s = D.steps[i];
     return `
       <header class="cr-head ex" style="${grad(c)}">
-        <button class="cr-back" data-cr-lesson="${c.id}" aria-label="Назад к уроку">✕</button>
+        <button class="cr-back" data-cr-tolesson="${c.id}" aria-label="Назад к уроку">✕</button>
+        <b class="cr-ex-title">${esc(s.title)}</b>
+        <span class="cr-ex-count" id="cr-ex-count"></span>
+      </header>
+      <div class="cr-sheet ex"><div id="cr-ex"></div></div>`;
+  }
+
+  // «Повторить слова» со страницы курса
+  function practiceHTML(c, s) {
+    return `
+      <header class="cr-head ex" style="${grad(c)}">
+        <button class="cr-back" data-cr-open="${c.id}" aria-label="Назад к курсу">✕</button>
         <b class="cr-ex-title">${esc(s.title)}</b>
         <span class="cr-ex-count" id="cr-ex-count"></span>
       </header>
@@ -356,8 +464,8 @@ const Courses = (() => {
 
   function setProg(c, i, v) {
     const st = cs(c.id);
-    st.prog = st.prog || {};
-    st.prog[i] = Math.max(stepProg(st, i), v);
+    const prog = progOf(st);
+    prog[i] = Math.max(stepProg(st, i), v);
     State.save();
   }
 
@@ -365,11 +473,14 @@ const Courses = (() => {
   function finishStep(c, i, el, extra) {
     const st = cs(c.id);
     setProg(c, i, 1);
-    if (extra && extra.failed) st.failed = true;
+    if (extra && extra.failed && !lightMode) st.failed = true;
     State.save();
-    const n = Math.min(st.day, total(c, st));
-    const D = dayOf(c, st, n);
-    if (D.steps.every((_, j) => stepProg(st, j) >= 1)) { completeDay(c, el); return; }
+    const D = todayDay(c, st);
+    if (D.steps.every((_, j) => stepProg(st, j) >= 1)) {
+      if (lightMode) completeLight(c, el);
+      else completeDay(c, el);
+      return;
+    }
     // упражнение закрыто — обратно к уроку, следующий шаг уже открыт
     const fromEx = view.name === 'ex';
     if (fromEx) view = { name: 'lesson', id: c.id };
@@ -377,12 +488,45 @@ const Courses = (() => {
     if (fromEx) { render(true); window.scrollTo({ top: 0 }); }
   }
 
+  /* лёгкий день пройден: серия цела, урок ждёт завтра */
+  function completeLight(c, el) {
+    const st = cs(c.id);
+    st.light = st.light || {};
+    st.light[today()] = true;
+    st.lprog = null;
+    st.mins = (st.mins || 0) + 5;
+    // сначала — куда смотрим, потом сохранение: перерисовка после него уже покажет страницу курса
+    lightMode = false;
+    view = { name: 'course', id: c.id, lightWin: true };
+    State.addXP(10);
+    State.commit();
+    syncAlarms();
+    Sound.sfx('success');
+    FX.fireworks(1);
+    UI.toast('Лёгкий день засчитан — серия цела! Полный урок ждёт тебя', 'success', '🔥');
+    render(true);
+    window.scrollTo({ top: 0 });
+    if (el && el.blur) el.blur();
+  }
+
+  /* урок английского закрывает и «Английский» из шаблона дня, и задание уровня в «Моих делах» */
+  function closeLinked(c, el) {
+    if (!c.links) return;
+    c.links.forEach((id) => {
+      try {
+        if (typeof Levels !== 'undefined' && Levels.QUESTS[id] && !Levels.isDone(id)) Levels.complete(id, el || document.body);
+      } catch (e) { /* задание уровня не закрылось — урок всё равно засчитан */ }
+    });
+  }
+
   function completeDay(c, el) {
     const st = cs(c.id);
     const n = Math.min(st.day, total(c, st));
     const D = dayOf(c, st, n);
+    st.mins = (st.mins || 0) + minutesOf(c, st);
     st.done[n] = today();
     st.prog = {};
+    closeLinked(c, el);
     // задача «урок дня» в ежедневнике — тоже закрыта
     const t = State.s.tasks.find((x) => x.id === st.taskId && !x.done);
     if (t) Screens.tasks.complete(t, el || document.body);
@@ -435,10 +579,19 @@ const Courses = (() => {
       speechSynthesis.speak(u);
     } catch (e) { /* без голоса — есть текст */ }
   }
-  /* ответ засчитан: курс узнаёт, что повторять и какие темы слабые */
+  /* ответ засчитан: точность ответов для статистики (первая попытка на каждый вопрос),
+     а у английского — что повторять и какие темы слабые */
+  const counted = new WeakSet();
   function itemDone(c, s, item, ok) {
-    if (!c.path) return;
     const st = cs(c.id);
+    // тест на уровень не считаем: там нарочно отвечают наугад
+    if (st && item && typeof item === 'object' && !s.place && !counted.has(item)) {
+      counted.add(item);
+      st.acc = st.acc || { r: 0, t: 0 };
+      st.acc.t += 1;
+      if (ok) st.acc.r += 1;
+    }
+    if (!c.path) return;
     if (s.place) c.path.onPlace(st, item, ok);
     else c.path.onItem(st, s, item, ok);
   }
@@ -735,6 +888,95 @@ const Courses = (() => {
     };
   }
 
+  /* --- слова: знакомство с новыми, потом проверка тремя способами ---
+     EN → RU, RU → EN и на слух. Ошибся — слово вернётся в конце (на экзамене — одна попытка).
+     practice: «Повторить слова» со страницы курса — на день не влияет. */
+  function runWords(c, i, s, practice) {
+    const box = $('#cr-ex');
+    const exam = !!s.pass;
+    const news = exam ? [] : s.items.filter((x) => x.isNew);
+    const N = s.items.length;
+    const queue = s.items.map((x, k) => ({ x, k, mode: exam || x.isNew ? 'en-ru' : ['ru-en', 'listen', 'en-ru'][k % 3] }));
+    const tried = new Set();
+    let li = 0;
+    let answered = 0;
+    let right = 0;
+    const count = (t) => { const el = $('#cr-ex-count'); if (el) el.textContent = t; };
+    const prog = (v) => { if (!practice) setProg(c, i, v); };
+
+    function learn() {
+      const x = news[li];
+      count(`новое ${li + 1} из ${news.length}`);
+      box.innerHTML = `
+        <div class="cr-ex-body">
+          <p class="cr-q-label">Новое слово</p>
+          <div class="cr-word">
+            <b>${esc(x.en)}</b>
+            <button class="cr-speak mini" id="cr-w-say" aria-label="Послушать">🔊</button>
+            <span>${esc(x.ru)}</span>
+          </div>
+          <p class="muted small">Скажи слово вслух 2 раза — так оно запомнится быстрее.</p>
+          <button class="btn btn-primary btn-lg btn-block" id="cr-w-next">${li < news.length - 1 ? 'Дальше →' : 'Проверить себя →'}</button>
+        </div>`;
+      sayEn(x.en);
+      box.querySelector('#cr-w-say').onclick = () => sayEn(x.en);
+      box.querySelector('#cr-w-next').onclick = () => {
+        Sound.sfx('pop');
+        li += 1;
+        if (li < news.length) learn(); else quiz();
+      };
+    }
+
+    function done() {
+      if (exam) { scoreScreen(c, i, s, box, right, N); return; }
+      if (practice) {
+        Sound.sfx('fanfare');
+        UI.toast(`Слова повторены: верно ${right} из ${N}`, 'success', '🔤');
+        view = { name: 'course', id: c.id };
+        State.commit();
+        render(true);
+        return;
+      }
+      finishStep(c, i, box);
+    }
+
+    function quiz() {
+      count(`${answered} из ${N}`);
+      prog((answered / N) * 0.99);
+      if (!queue.length) { done(); return; }
+      const { x, k, mode } = queue[0];
+      const answer = mode === 'ru-en' ? x.en : x.ru;
+      const opts = mode === 'ru-en' ? x.oe : x.o;
+      box.innerHTML = `
+        <div class="cr-ex-body">
+          ${exam ? '<p class="cr-exam-tag">🏁 Экзамен — одна попытка</p>' : ''}
+          <p class="cr-q-label">${mode === 'ru-en' ? 'Как это по-английски?' : mode === 'listen' ? 'Послушай и выбери перевод' : 'Что значит слово?'}</p>
+          ${mode === 'listen'
+            ? '<div class="cr-listen"><button class="cr-speak" id="cr-w-say" aria-label="Послушать ещё раз">🔊</button></div>'
+            : `<p class="cr-q ${mode === 'ru-en' ? '' : 'en'}">${esc(mode === 'ru-en' ? x.ru : x.en)}${mode === 'en-ru' ? ' <button class="cr-speak mini" id="cr-w-say" aria-label="Послушать">🔊</button>' : ''}</p>`}
+          <div class="cr-opts">${opts.map((o) => `<button class="cr-opt" data-cr-w="${esc(o)}">${esc(o)}</button>`).join('')}</div>
+        </div>`;
+      const sayBtn = box.querySelector('#cr-w-say');
+      if (sayBtn) sayBtn.onclick = () => sayEn(x.en);
+      if (mode === 'listen') setTimeout(() => sayEn(x.en), 250);
+      box.querySelectorAll('[data-cr-w]').forEach((b) => {
+        b.onclick = () => {
+          const ok = b.dataset.crW === answer;
+          box.querySelectorAll('[data-cr-w]').forEach((y) => { y.disabled = true; if (y.dataset.crW === answer) y.classList.add('right'); });
+          if (!ok) b.classList.add('wrong');
+          Sound.sfx(ok ? 'success' : 'deny');
+          if (!tried.has(k)) { tried.add(k); answered += 1; if (ok) right += 1; itemDone(c, s, x, ok); }
+          if (ok || mode !== 'listen') sayEn(x.en);
+          if (ok || exam) queue.shift();
+          else queue.push(queue.shift()); // ошибся — слово вернётся в конце
+          setTimeout(quiz, ok ? 750 : 1500);
+        };
+      });
+    }
+
+    if (news.length) learn(); else quiz();
+  }
+
   /* --- объяснение простыми словами: карточки по одной --- */
   function runRead(c, i, s) {
     const box = $('#cr-ex');
@@ -918,29 +1160,44 @@ const Courses = (() => {
     if (view.id && !C.byId(view.id)) view = { name: 'home' };
     const c = view.id ? C.byId(view.id) : null;
     const st = c ? cs(c.id) : null;
-    if ((view.name === 'lesson' || view.name === 'ex') && (!st || st.finished || doneToday(st))) view = { name: 'course', id: view.id, celebrate: view.celebrate };
+    // урок сегодня пройден (или лёгкий день, если открыт он) — показываем страницу курса
+    if ((view.name === 'lesson' || view.name === 'ex') && (!st || st.finished || doneToday(st) || (lightMode && lightToday(st)))) view = { name: 'course', id: view.id, celebrate: view.celebrate };
     if (view.name === 'course' && !c) view = { name: 'home' };
-    const key = `${view.name}|${view.id || ''}|${view.step == null ? '' : view.step}`;
+    if (view.name === 'course' || view.name === 'home') lightMode = false;
+    const key = `${view.name}|${view.id || ''}|${view.step == null ? '' : view.step}|${lightMode ? 'light' : ''}`;
     if (!force && root.dataset.key === key) {
-      if (view.name === 'ex') return;
+      if (view.name === 'ex' || view.name === 'practice') return;
       if (view.name === 'lesson') { softLesson(root, c); return; }
     }
+    const practice = view.name === 'practice' && c && c.path && st ? c.path.practice(st) : null;
+    if (view.name === 'practice' && !practice) view = { name: 'course', id: view.id };
     root.innerHTML = view.name === 'course' ? courseHTML(c)
       : view.name === 'lesson' ? lessonHTML(c)
         : view.name === 'ex' ? exHTML(c, view.step)
-          : homeHTML();
+          : view.name === 'practice' ? practiceHTML(c, practice)
+            : homeHTML();
     root.dataset.view = view.name;
     root.dataset.key = key;
     bind(root, c);
     if (view.name === 'lesson') hookVideo(c);
     else yt = null;
+    // идёт видеоурок — экран не гаснет; ушёл из урока — отпускаем
+    if (typeof Awake !== 'undefined') {
+      if (view.name === 'lesson' && root.querySelector('#cr-yt')) Awake.hold('lesson-video');
+      else Awake.release('lesson-video');
+    }
+    if (view.name === 'practice') runWords(c, -1, practice, true);
     if (view.name === 'ex') {
-      const s = dayOf(c, st, Math.min(st.day, total(c, st))).steps[view.step];
+      const s = todayDay(c, st).steps[view.step];
+      // шага нет или это видео (смотрят в уроке) — возвращаемся к уроку
+      if (!s || s.type === 'video') { view = { name: 'lesson', id: c.id }; render(true); return; }
+
       if (s.type === 'test') runTest(c, view.step, s);
       else if (s.type === 'speak') runSpeak(c, view.step, s);
       else if (s.type === 'read') runRead(c, view.step, s);
-
+      else if (s.type === 'words') runWords(c, view.step, s);
       else if (s.type === 'session') runSession(c, view.step, s);
+
       else if (s.type === 'measure') runMeasure(c, view.step, s);
       else if (s.type === 'todo') runTodo(c, view.step, s);
       else runPuzzle(c, view.step, s);
@@ -965,17 +1222,39 @@ const Courses = (() => {
       b.onclick = () => {
         const st = cs(b.dataset.crLesson);
         if (!st || doneToday(st)) return;
+        lightMode = false;
         view = { name: 'lesson', id: b.dataset.crLesson };
         Sound.sfx('pop');
         render(true);
         window.scrollTo({ top: 0 });
       };
     });
+    // нет сил — лёгкий день на 5 минут: серия цела, урок остаётся на завтра
+    root.querySelectorAll('[data-cr-light]').forEach((b) => {
+      b.onclick = () => {
+        const st = cs(b.dataset.crLight);
+        if (!st || doneToday(st) || lightToday(st)) return;
+        lightMode = true;
+        view = { name: 'lesson', id: b.dataset.crLight };
+        Sound.sfx('pop');
+        render(true);
+        window.scrollTo({ top: 0 });
+      };
+    });
+    // из упражнения назад к уроку — в том же режиме (полный урок или лёгкий день)
+    root.querySelectorAll('[data-cr-tolesson]').forEach((b) => {
+      b.onclick = () => {
+        view = { name: 'lesson', id: b.dataset.crTolesson };
+        render(true);
+        window.scrollTo({ top: 0 });
+      };
+    });
+
     root.querySelectorAll('[data-cr-step]').forEach((b) => {
       b.onclick = () => {
         const i = Number(b.dataset.crStep);
         const st = cs(c.id);
-        const D = dayOf(c, st, Math.min(st.day, total(c, st)));
+        const D = todayDay(c, st);
         if (!unlocked(st, D, i)) return;
         if (D.steps[i].type === 'video') {
           if (stepProg(st, i) >= 1) { runVideo(c, i); return; }
@@ -1061,6 +1340,26 @@ const Courses = (() => {
     }
     const tutor = root.querySelector('#en-tutor');
     if (tutor) tutor.onclick = () => openTutor(c);
+    // повторить слова в любой момент
+    const wn = root.querySelector('#en-words-now');
+    if (wn) wn.onclick = () => { view = { name: 'practice', id: c.id }; Sound.sfx('pop'); render(true); window.scrollTo({ top: 0 }); };
+    // правило темы урока — карточки в шторке
+    const rb = root.querySelector('#cr-rule');
+    if (rb) {
+      rb.onclick = () => {
+        const r = c.path.rulesFor(cs(c.id));
+        if (!r) return;
+        Sound.sfx('pop');
+        const body = UI.sheet(`
+          <div class="plan-ed">
+            <h2>📖 ${esc(r.title)}</h2>
+            ${r.cards.map(([h, t], k) => `<div class="cr-card"><span class="cr-card-n">${k + 1}</span><b>${esc(h)}</b><p>${esc(t)}</p></div>`).join('')}
+            <button class="btn btn-primary btn-block" id="cr-rule-ok">Понятно</button>
+          </div>`);
+        body.querySelector('#cr-rule-ok').onclick = () => UI.closeModal('#sheet-modal');
+      };
+    }
+
     const al = root.querySelector('#cr-alarm');
 
     if (al && st) al.onchange = () => { st.alarm = al.checked; State.commit(); syncAlarms(); };
@@ -1141,7 +1440,13 @@ const Courses = (() => {
   }
 
 
-  return { render, ensureTasks, alarms, start, reset, open, state: cs, dayOf: (id, n) => { const c = C.byId(id); return dayOf(c, cs(id), n); } };
+  return {
+    render, ensureTasks, alarms, start, reset, open, state: cs,
+    dayOf: (id, n) => { const c = C.byId(id); const st = cs(id); return dayOf(c, st, n == null && st ? Math.min(st.day, total(c, st)) : n); },
+    // день, открытый сейчас: полный урок или лёгкий день
+    current: (id) => { const c = C.byId(id); const st = cs(id); return c && st ? todayDay(c, st) : null; },
+    get light() { return lightMode; },
+  };
 })();
 
 Screens.courses = { render: () => Courses.render() };

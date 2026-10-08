@@ -47,6 +47,10 @@ const mock = `(() => {
   await p.evaluate(() => document.querySelectorAll('.modal.modal-open').forEach((m) => { if (m.id !== 'sheet-modal') UI.closeModal('#' + m.id); }));
   const done = await p.evaluate(() => ({ cls: document.querySelector('#mytasks-root .plans .mt-row').className, xp: State.s.xp, head: document.querySelector('#mytasks-root .plans .my-sec').textContent }));
   check('отметил — сделано, +опыт, «1 из 1»', /done/.test(done.cls) && done.xp > xp0 && /1 из 1/.test(done.head), done);
+  const todayK = await p.evaluate(() => State.todayKey());
+  await p.waitForTimeout(2300); // будильники переставляются через 2 секунды после изменения
+  const skipAl = (await lastAlarms()).filter((a) => /Тренировка/.test(a.title));
+  check('сделано сегодня — сегодня будильник этого дела молчит, в другие дни звонит', skipAl.length === 2 && skipAl.every((a) => a.skip === todayK), skipAl);
 
   // список всех дел и правка: одно время всем дням
   const allTxt = await p.evaluate(() => document.querySelector('#mytasks-root .plans-all').textContent.replace(/\s+/g, ' '));

@@ -10,7 +10,9 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -22,6 +24,10 @@ import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
+import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -30,6 +36,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import androidx.webkit.WebViewAssetLoader;
@@ -66,6 +73,14 @@ public class MainActivity extends Activity {
     private int notifyId = 100;
     private SpeechRecognizer recognizer;
     private String pendingListen;
+    // видео на весь экран (кнопка ⛶ в плеере YouTube) и «экран не гаснет» во время урока
+    private FrameLayout root;
+    private View fullView;
+    private WebChromeClient.CustomViewCallback fullCallback;
+    private boolean keepAwake;
+    // будильник: «Начинаю» открывает приложение — какое дело звонило, чтобы открыть нужный экран
+    static final String EXTRA_OPEN = "open";
+    private volatile String pendingOpen;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,7 +88,11 @@ public class MainActivity extends Activity {
 
         web = new WebView(this);
         web.setBackgroundColor(0xFF0F0E17);
-        setContentView(web);
+        root = new FrameLayout(this);
+        root.setBackgroundColor(Color.BLACK);
+        root.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(root);
+        pendingOpen = getIntent() != null ? getIntent().getStringExtra(EXTRA_OPEN) : null;
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -123,6 +142,25 @@ public class MainActivity extends Activity {
                 }
                 return true;
             }
+
+            // плеер YouTube просит весь экран — показываем видео поверх приложения, телефон боком
+            @Override
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (fullView != null) { callback.onCustomViewHidden(); return; }
+                fullView = view;
+                fullCallback = callback;
+                view.setBackgroundColor(Color.BLACK);
+                root.addView(view, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+                web.setVisibility(View.INVISIBLE);
+                systemBars(false);
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            }
+
+            @Override
+            public void onHideCustomView() {
+                exitFullscreen();
+            }
         });
 
         web.addJavascriptInterface(new Bridge(), "AndroidApp");
@@ -146,8 +184,53 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (fullView != null) { exitFullscreen(); return; }
         if (web.canGoBack()) web.goBack();
         else super.onBackPressed();
+    }
+
+    /** выйти из видео на весь экран: обратно приложение, вертикально, панели на месте */
+    private void exitFullscreen() {
+        if (fullView == null) return;
+        root.removeView(fullView);
+        fullView = null;
+        web.setVisibility(View.VISIBLE);
+        systemBars(true);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        if (!keepAwake) getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        WebChromeClient.CustomViewCallback cb = fullCallback;
+        fullCallback = null;
+        if (cb != null) cb.onCustomViewHidden();
+    }
+
+    /** спрятать или вернуть строку состояния и кнопки навигации */
+    @SuppressWarnings("deprecation")
+    private void systemBars(boolean show) {
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController c = getWindow().getInsetsController();
+            if (c == null) return;
+            if (show) c.show(WindowInsets.Type.systemBars());
+            else {
+                c.hide(WindowInsets.Type.systemBars());
+                c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(show ? View.SYSTEM_UI_FLAG_VISIBLE
+                    : View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        }
+    }
+
+    /** приложение уже открыто, а будильник позвал «Начинаю» — открываем экран этого дела */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String open = intent != null ? intent.getStringExtra(EXTRA_OPEN) : null;
+        if (open != null && !open.isEmpty()) {
+            pendingOpen = open;
+            web.evaluateJavascript("window.onAlarmOpen && window.onAlarmOpen()", null);
+        }
     }
 
     @Override
@@ -288,6 +371,24 @@ public class MainActivity extends Activity {
             if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(new Locale("ru", "RU"));
             tts.setSpeechRate(rate > 0 ? rate : 1f);
             tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "say");
+        }
+
+        /** экран не гаснет, пока идёт видеоурок или тренировка с таймером */
+        @JavascriptInterface
+        public void keepAwake(boolean on) {
+            runOnUiThread(() -> {
+                keepAwake = on;
+                if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                else if (fullView == null) getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            });
+        }
+
+        /** какое дело звонило перед открытием приложения («Начинаю» в будильнике); отдаётся один раз */
+        @JavascriptInterface
+        public String takeOpen() {
+            String o = pendingOpen;
+            pendingOpen = null;
+            return o == null ? "" : o;
         }
 
         @JavascriptInterface

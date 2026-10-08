@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ldm-cache-v8';
+const CACHE_NAME = 'ldm-cache-v12';
 const ASSETS = [
   './',
   './index.html',
@@ -11,7 +11,9 @@ const ASSETS = [
   './css/components.css',
   './css/screens.css',
   './css/animations.css',
+  './css/courses.css',
   './js/android.js',
+  './js/awake.js',
   './js/account.js',
   './js/icons.js',
   './js/data.js',
@@ -40,6 +42,10 @@ const ASSETS = [
   './js/remind.js',
   './js/modes.js',
   './js/plans.js',
+  './js/english-content.js',
+  './js/english-path.js',
+  './js/courses-data.js',
+  './js/courses.js',
   './js/levels.js',
   './js/palette.js',
   './js/app.js'

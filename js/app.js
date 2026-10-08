@@ -224,6 +224,7 @@ const App = (() => {
   /* ---------- роутинг ---------- */
   const screenByTab = {
     mytasks: () => Screens.mytasks,
+    courses: () => Screens.courses,
     dashboard: () => Screens.dashboard,
     day: () => Screens.day,
     tasks: () => Screens.tasks,
@@ -240,11 +241,13 @@ const App = (() => {
   function go(tab) {
     if (!screenByTab[tab]) return;
     if (currentTab === 'adhd' && tab !== 'adhd') Screens.focus.onLeave();
+    // ушёл из «Курсов» — видеоурок больше не держит экран
+    if (tab !== 'courses' && typeof Awake !== 'undefined') Awake.release('lesson-video');
     if (currentTab === 'day' && tab !== 'day' && Screens.day) Screens.day.onLeave();
     currentTab = tab;
     // два окна: «Мои дела» — отдельный экран, всё остальное — вкладки как раньше
-    setSpace(tab === 'mytasks' ? 'tasks' : 'all');
-    if (tab !== 'mytasks') lastAllTab = tab;
+    setSpace(tab === 'mytasks' ? 'tasks' : tab === 'courses' ? 'learn' : 'all');
+    if (tab !== 'mytasks' && tab !== 'courses') lastAllTab = tab;
 
     if (tab === 'rewards') State.s.seenAchievements = State.unlockedAchievements();
 
@@ -1121,10 +1124,13 @@ const App = (() => {
     /* Облако спрашиваем сразу, параллельно с заставкой. */
     const cloudPromise = Cloud.init(8000);
 
+    // знакомого человека не держим на заставке: приложение открывается сразу
+    const known = !!State.s.onboarded;
     const hideLoader = (then) => {
       const loader = $('#loader');
+      if (known) loader.style.transition = 'opacity .2s ease';
       loader.style.opacity = '0';
-      setTimeout(() => { loader.classList.add('hidden'); then(); }, 450);
+      setTimeout(() => { loader.classList.add('hidden'); then(); }, known ? 200 : 450);
     };
 
     setTimeout(async () => {
@@ -1166,8 +1172,9 @@ const App = (() => {
         }
         afterCloud();
       });
-    }, 850);
+    }, known ? 60 : 850);
   }
+
 
   /* Каждый шаг запуска — отдельно: если один упал, остальные всё равно
      отработают. Раньше ошибка в сборке дня оставляла приложение без плана. */
@@ -1201,8 +1208,9 @@ const App = (() => {
       const b = e.target.closest('[data-space]');
       if (!b || !b.closest('.space-switch, #mytasks-root')) return;
       Sound.sfx('pop');
-      if (b.dataset.space === 'tasks') { if (currentTab !== 'mytasks') lastAllTab = currentTab; go('mytasks'); }
-      else go(lastAllTab && lastAllTab !== 'mytasks' ? lastAllTab : 'dashboard');
+      if (b.dataset.space === 'tasks') go('mytasks');
+      else if (b.dataset.space === 'learn') go('courses');
+      else go(lastAllTab && lastAllTab !== 'mytasks' && lastAllTab !== 'courses' ? lastAllTab : 'dashboard');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }
@@ -1213,11 +1221,28 @@ const App = (() => {
     safely('ensureDaySetup', ensureDaySetup);
     safely('spaces', bindSpaces);
     // по умолчанию открывается окно «Мои дела»
-    safely('go', () => go(State.s.space === 'all' ? 'dashboard' : 'mytasks'));
+    safely('go', () => go(State.s.space === 'all' ? 'dashboard' : State.s.space === 'learn' ? 'courses' : 'mytasks'));
     safely('tilt', () => UI.initTilt());
     safely('ghosts', offerGhostCleanup);
     safely('env', noteEnv);
+    safely('alarmOpen', openFromAlarm);
   }
+
+  /* В APK будильник звонил, нажали «Начинаю» — приложение открывается сразу на этом деле:
+     урок курса — на уроке, остальное — на «Моих делах». */
+  function openFromAlarm() {
+    const A = window.AndroidApp;
+    if (!A || !A.takeOpen || $('#app').classList.contains('hidden')) return;
+    let title = '';
+    try { title = String(A.takeOpen() || ''); } catch (e) { return; }
+    if (!title) return;
+    if (/^🎓/.test(title) && typeof Courses !== 'undefined') {
+      const c = CourseData.COURSES.find((x) => title.includes(x.short));
+      if (c && Courses.state(c.id)) { go('courses'); Courses.open(c.id, 'lesson'); return; }
+    }
+    go('mytasks');
+  }
+  window.onAlarmOpen = () => safely('alarmOpen', openFromAlarm);
 
   /* размеры экрана внутри просмотрщика — чтобы понять, куда девается нижняя панель */
   function noteEnv() {
@@ -1339,6 +1364,8 @@ const App = (() => {
       const fresh = safely('weekCheck', () => !Week.installed() || Week.outdated());
       if (fresh) safely('weekInstall', () => Week.install());
       if (fresh || !DayTpl.appliedToday()) safely('tplApply', () => DayTpl.apply({ quiet: true }));
+      // курсы: урок дня — задачей в ежедневник на выбранное время
+      safely('courses', () => { if (typeof Courses !== 'undefined') Courses.ensureTasks(); });
       if (typeof Planner === 'undefined') return;
       const pl = Planner.plan();
       if (fresh || !pl || (Planner.inScript() && !pl.script)) safely('planBuild', () => Planner.build({}));

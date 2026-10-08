@@ -17,11 +17,14 @@ import android.os.Build;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
 
 /**
  * Будильники приложения: подъём и публикации по графику недели.
- * Страница присылает список {dow, min, title, text} (dow: 0 — воскресенье), мы храним его
+ * Страница присылает список {dow, min, title, text, skip?} (dow: 0 — воскресенье), мы храним его
  * и ставим каждый на ближайший такой день недели через AlarmManager.setAlarmClock —
  * это настоящий будильник: срабатывает минута в минуту, в режиме сна и при закрытом приложении.
  */
@@ -64,6 +67,11 @@ final class Alarms {
     static boolean canFullScreen(Context c) {
         if (Build.VERSION.SDK_INT < 34) return true;
         return c.getSystemService(NotificationManager.class).canUseFullScreenIntent();
+    }
+
+    /** дата будильника в виде «2026-10-08» — как State.todayKey() на странице */
+    static String dayKey(long at) {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(at));
     }
 
     /** ближайший момент «день недели dow, минута дня min» строго позже now */
@@ -111,6 +119,9 @@ final class Alarms {
             JSONObject a = arr.optJSONObject(i);
             if (a == null) continue;
             long at = nextTime(a.optInt("dow"), a.optInt("min"), now);
+            // дело на сегодня уже сделано (урок пройден, «Встал» нажат) — сегодня не звоним, следующий раз через неделю
+            String skip = a.optString("skip", "");
+            if (!skip.isEmpty() && skip.equals(dayKey(at))) at = nextTime(a.optInt("dow"), a.optInt("min"), at);
             setAlarm(c, at, fireIntent(c, CODE_BASE + i, a.optString("title"), a.optString("text")));
             if (next == 0 || at < next) {
                 next = at;

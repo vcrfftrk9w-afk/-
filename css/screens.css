@@ -2399,7 +2399,7 @@ body[data-mode="adhd"] .bg-aurora span, body .bg-aurora span { opacity: 0.16; }
    ДВА ОКНА: «Мои дела» и «Всё остальное»
    ========================================================= */
 .space-switch {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px;
   margin: 10px 14px 4px; padding: 4px; border-radius: 16px;
   background: var(--surface-2); border: 1px solid var(--border);
 }
@@ -2411,7 +2411,9 @@ body[data-mode="adhd"] .bg-aurora span, body .bg-aurora span { opacity: 0.16; }
 @media (min-width: 761px) { .space-switch { max-width: 520px; margin: 12px auto 4px; } }
 /* в окне «Мои дела» — ничего лишнего: ни вкладок, ни счётчиков */
 body[data-space="tasks"] .tabbar,
-body[data-space="tasks"] .stat-pills { display: none !important; }
+body[data-space="tasks"] .stat-pills,
+body[data-space="learn"] .tabbar,
+body[data-space="learn"] .stat-pills { display: none !important; }
 
 .my-head { display: flex; align-items: center; gap: 14px; margin: 6px 2px 14px; }
 .my-ring { position: relative; width: 72px; height: 72px; flex: 0 0 72px; display: grid; place-items: center; }
@@ -2472,6 +2474,7 @@ body[data-space="tasks"] .stat-pills { display: none !important; }
 .lv-up-list b { display: inline; }
 .lv-up-list small { display: block; color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
 @media (prefers-reduced-motion: reduce) { .lv-up-badge { animation: none; } }
-body[data-space="tasks"] .mini-clock { display: none !important; }
+body[data-space="tasks"] .mini-clock,
+body[data-space="learn"] .mini-clock { display: none !important; }
 .remind-tg ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 6px; font-size: 13px; }
 .remind-tg code { font-size: 12px; padding: 1px 5px; border-radius: 6px; background: color-mix(in srgb, var(--text) 10%, transparent); overflow-wrap: anywhere; }

@@ -147,16 +147,21 @@ const Remind = (() => {
   /* подъём — первый блок дня по графику; публикации — за 10 минут до фиксированного времени */
   function phoneAlarms(cfg) {
     const out = [];
+    // уже сделано сегодня — сегодня этот будильник не звонит (skip: дата), в другие дни звонит как обычно
+    const k = State.todayKey();
+    const woke = typeof Track !== 'undefined' && Track.today().wakeAt != null;
     for (let dow = 0; dow < 7; dow++) {
       const day = Week.scriptFor(dow);
       if (cfg.wake && day[0]) {
-        out.push({ dow, min: day[0].start, title: '☀️ Подъём', text: 'Вода, умывание — и открой приложение: план дня уже готов.' });
+        out.push({ dow, min: day[0].start, title: '☀️ Подъём', text: 'Вода, умывание — и открой приложение: план дня уже готов.', skip: woke ? k : undefined });
       }
       // публикации: у каждой свой будильник (⏰ у задания в «Моих делах») — вкл/выкл и за сколько минут
       day.filter((b) => b.hard).forEach((b) => {
-        const pc = pubCfg(questOf(b.task), cfg);
+        const qid = questOf(b.task);
+        const pc = pubCfg(qid, cfg);
         if (!pc.on) return;
         out.push({
+          skip: qid && Levels.isDone(qid) ? k : undefined,
           dow, min: b.start - pc.lead,
           title: `${b.emoji || '⏰'} ${pc.lead ? `Через ${pc.lead} минут` : 'Сейчас'}: ${b.title}`,
           text: pc.lead ? `Ровно в ${Track.hhmm(b.start)}. Подпись, хэштеги и обложка — готовь сейчас.` : 'Жми «Опубликовать» — прямо сейчас.',
@@ -169,6 +174,8 @@ const Remind = (() => {
     })));
     // свои дела из «Моих дел»: у каждого дня своё время
     if (typeof Plans !== 'undefined') out.push(...Plans.alarms());
+    // курсы из вкладки «🎓 Курсы»: урок дня в выбранное время
+    if (typeof Courses !== 'undefined') out.push(...Courses.alarms());
     return out;
   }
 
@@ -220,7 +227,8 @@ const Remind = (() => {
   }
 
   const anyOn = (cfg) => cfg.wake || cfg.publish || (cfg.custom || []).some((a) => a.on !== false)
-    || (typeof Plans !== 'undefined' && Plans.alarms().length > 0);
+    || (typeof Plans !== 'undefined' && Plans.alarms().length > 0)
+    || (typeof Courses !== 'undefined' && Courses.alarms().length > 0);
   let draft = null; // новый свой будильник, пока его настраивают
   const toMin = (v) => { const m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? Math.min(23, +m[1]) * 60 + Math.min(59, +m[2]) : null; };
 

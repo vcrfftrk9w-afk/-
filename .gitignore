@@ -2,3 +2,7 @@ android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+umnik/.gradle/
+umnik/build/
+umnik/app/build/
+umnik/local.properties

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#F4F1FB</color>
+    <color name="card">#FFFFFF</color>
+    <color name="chip">#F1ECFF</color>
+    <color name="line">#DDD5F0</color>
+    <color name="text">#1C1A22</color>
+    <color name="text_secondary">#625D70</color>
+    <color name="accent">#6B4EFF</color>
+    <color name="on_accent">#FFFFFF</color>
+    <color name="bubble_mine">#E3DBFF</color>
+    <color name="dim">#66000000</color>
+    <color name="danger">#C62828</color>
+    <!-- круглая кнопка одинаковая днём и ночью -->
+    <color name="bubble_top">#8F73FF</color>
+    <color name="bubble_bottom">#4A2FD0</color>
+</resources>

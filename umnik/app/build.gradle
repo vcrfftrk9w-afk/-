@@ -1,0 +1,73 @@
+plugins {
+    id 'com.android.application'
+}
+
+// номер сборки приходит из GitHub Actions (-PversionCode=N), чтобы новый APK ставился поверх старого
+def buildNumber = (project.findProperty('versionCode') ?: '1').toString().toInteger()
+
+// Ключ подписи и пароль берутся из окружения (в GitHub Actions — из секретов репозитория),
+// в репозитории их нет. Без них APK подписывается отладочным ключом — так тоже ставится.
+def keystorePath = System.getenv('UMNIK_KEYSTORE')
+def keystorePassword = System.getenv('UMNIK_KEYSTORE_PASSWORD')
+def ownKey = keystorePath && keystorePassword && file(keystorePath).exists()
+
+android {
+    namespace 'app.umnik'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'app.umnik'
+        minSdk 26
+        targetSdk 35
+        versionCode buildNumber
+        versionName "1.${buildNumber}"
+    }
+
+    signingConfigs {
+        if (ownKey) {
+            release {
+                storeFile file(keystorePath)
+                storePassword keystorePassword
+                keyAlias System.getenv('UMNIK_KEY_ALIAS') ?: 'umnik'
+                keyPassword keystorePassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig ownKey ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            all {
+                // откуда Robolectric качает образ Android для тестов (по умолчанию — Maven Central)
+                def repo = System.getenv('ROBOLECTRIC_REPO')
+                if (repo) systemProperty 'robolectric.dependency.repo.url', repo
+                maxHeapSize = '2g'
+            }
+        }
+    }
+
+    packaging {
+        resources.excludes += ['META-INF/*.kotlin_module', 'META-INF/versions/**', 'META-INF/DEPENDENCIES',
+                               'META-INF/LICENSE*', 'META-INF/NOTICE*', 'META-INF/*.version']
+    }
+}
+
+dependencies {
+    // официальный SDK Claude для Java (вместе с ним приходят OkHttp и Jackson)
+    implementation 'com.anthropic:anthropic-java:2.70.0'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation 'org.robolectric:robolectric:4.16.1'
+}

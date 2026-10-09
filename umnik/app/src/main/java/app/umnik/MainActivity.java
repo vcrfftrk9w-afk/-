@@ -193,8 +193,8 @@ public final class MainActivity extends Activity {
                 break;
             case READY:
                 buttons.addView(Ui.chip(this, "Проверить", v -> checkFree()));
-                buttons.addView(Ui.chip(this, "Удалить (освободить 2,6 ГБ)", v -> new AlertDialog.Builder(this)
-                        .setMessage("Удалить бесплатный ИИ из телефона? Чтобы снова им пользоваться, его придётся скачать заново.")
+                buttons.addView(Ui.chip(this, "Удалить из телефона", v -> new AlertDialog.Builder(this)
+                        .setMessage("Удалить бесплатный ИИ из телефона? Освободится 3–4 ГБ. Чтобы снова им пользоваться, его придётся скачать заново.")
                         .setPositiveButton("Удалить", (d, w) -> {
                             ModelStore.delete(this);
                             setup();
@@ -228,7 +228,7 @@ public final class MainActivity extends Activity {
             case FAILED:
                 return "⚠️ Не скачалось: " + st.error + ".";
             default:
-                return "Файл модели — 2,6 ГБ, качается один раз. Лучше по Wi-Fi.";
+                return "Файл модели — 2,6 ГБ, качается один раз, лучше по Wi-Fi. Всего нужно около 4 ГБ свободного места.";
         }
     }
 
@@ -248,12 +248,12 @@ public final class MainActivity extends Activity {
     }
 
     private void download(boolean mirror) {
-        long need = ModelStore.SIZE + (300L << 20);
+        long need = ModelStore.NEED;
         long free = ModelStore.freeSpace(this);
         if (free < need) {
             new AlertDialog.Builder(this)
-                    .setMessage("Не хватает места: нужно " + gb(need) + " ГБ свободных, а сейчас свободно " + gb(free)
-                            + " ГБ. Удали ненужные видео или приложения и попробуй снова.")
+                    .setMessage("Не хватает места: нужно около " + gb(need) + " ГБ свободных (модель и её кэш для быстрого "
+                            + "запуска), а сейчас свободно " + gb(free) + " ГБ. Удали ненужные видео или приложения и попробуй снова.")
                     .setPositiveButton("Ок", null)
                     .show();
             return;

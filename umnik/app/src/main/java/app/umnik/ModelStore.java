@@ -19,6 +19,8 @@ import java.security.MessageDigest;
 final class ModelStore {
     static final String NAME = "gemma-4-E2B-it.litertlm";
     static final long SIZE = 2_588_147_712L;
+    /** сколько нужно места: сама модель и до гигабайта кэша, который ИИ делает себе для быстрого запуска */
+    static final long NEED = SIZE + (1400L << 20);
     static final String SHA256 = "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c";
     private static final String PATH = "litert-community/gemma-4-E2B-it-litert-lm/resolve/"
             + "b3ca0d2f076785a8f4b2219ddbd2bdb99954eae1/" + NAME;
@@ -102,6 +104,8 @@ final class ModelStore {
         cancel(c);
         LocalMind.release();
         file(c).delete();
+        File[] cache = c.getCacheDir().listFiles();
+        if (cache != null) for (File f : cache) if (f.getName().startsWith(NAME)) f.delete();
         Prefs.of(c).edit().putBoolean("model_verified", false).remove("model_error").remove("gpu_failed").apply();
     }
 

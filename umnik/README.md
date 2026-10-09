@@ -81,6 +81,8 @@
 
 ## Сборка
 
+Нужны JDK 21 (библиотека LiteRT-LM собрана под Java 21) и Android SDK 35.
+
 ```bash
 gradle -p umnik :app:assembleRelease      # APK: umnik/app/build/outputs/apk/release/app-release.apk
 gradle -p umnik :app:testReleaseUnitTest  # тесты: правила шахмат (perft), движок, «зрение», запросы к Claude, экраны

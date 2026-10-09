@@ -58,7 +58,7 @@ public final class UmnikService extends AccessibilityService implements Overlay.
             "wallet", "gosuslugi", "qiwi", "yoomoney", "password", "bitwarden", "keepass", "authenticator", "otp"};
     private static final String[] BREAK_PHRASES = {
             "Ты в телефоне уже %s без перерыва. Встань, потянись и посмотри в окно секунд двадцать 🙂",
-            "%s подряд в экране! Попей воды и разомни шею — глазам тоже нужен отдых 👀",
+            "%s подряд у экрана! Попей воды и разомни шею — глазам тоже нужен отдых 👀",
             "Перерыв! %s в телефоне. Пройдись по комнате пару минут и возвращайся 🚶",
             "Уже %s без остановки. Закрой глаза на минуту и глубоко подыши — потом будет легче сосредоточиться 🌿"};
 
@@ -236,7 +236,7 @@ public final class UmnikService extends AccessibilityService implements Overlay.
         }
         String app = currentPkg == null ? "" : Apps.label(this, currentPkg);
         String ask = "Человек в телефоне без перерыва " + ScreenTime.format(session) + ". Сейчас открыто «" + app + "». "
-                + Session.context(null, null) + (night ? " Уже ночь — главное, чтобы он лёг спать." : "");
+                + Session.context(null, null) + (night ? " Уже ночь — главное, чтобы человек лёг спать." : "");
         work.execute(() -> {
             String text;
             try {

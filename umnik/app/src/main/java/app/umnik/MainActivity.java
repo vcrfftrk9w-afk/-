@@ -141,7 +141,7 @@ public final class MainActivity extends Activity {
             }
         }
         if (Build.VERSION.SDK_INT < 30) {
-            c.addView(Ui.text(this, "На этом телефоне Android старше 11-й версии: снимки экрана Умнику недоступны, он видит "
+            c.addView(Ui.text(this, "На этом телефоне Android ниже 11-й версии: снимки экрана Умнику недоступны, он видит "
                     + "только текст с экрана. Шахматные подсказки работают с Android 11.", 13, R.color.danger), Ui.margins(Ui.fill(), this, 0, 12, 0, 0));
         }
         content.addView(c, Ui.margins(Ui.fill(), this, 0, 0, 0, 12));

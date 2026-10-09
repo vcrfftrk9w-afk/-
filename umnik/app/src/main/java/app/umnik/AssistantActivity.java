@@ -32,7 +32,7 @@ import app.umnik.chess.Hint;
 
 /**
  * Окно помощника снизу поверх любого приложения: снимок экрана, быстрые кнопки под то, что открыто,
- * беседа с Claude (ответ печатается по мере прихода), голосовой вопрос и чтение ответа вслух.
+ * беседа с ИИ (ответ печатается по мере прихода), голосовой вопрос и чтение ответа вслух.
  */
 public final class AssistantActivity extends Activity {
     static final String MODE = "mode";
@@ -131,9 +131,11 @@ public final class AssistantActivity extends Activity {
             ask("Почему этот ход лучший? Объясни простыми словами.");
         } else if (REFRESHED.equals(mode)) {
             add(new Session.Line(false, "📸 Новый снимок экрана — спрашивай.", null));
-        } else if (Session.lines.isEmpty() && !Prefs.hasKey(this)) {
-            needKey();
+        } else if (Session.lines.isEmpty() && !Prefs.ready(this)) {
+            needMind();
         }
+        // бесплатный ИИ начинает загружаться в память, пока человек читает и печатает вопрос
+        if (Prefs.free(this) && Prefs.ready(this)) LocalMind.get(this).warmUp();
     }
 
     /* ---------- разметка ---------- */
@@ -168,7 +170,7 @@ public final class AssistantActivity extends Activity {
         LinearLayout header = Ui.row(this);
         TextView title = Ui.title(this, "🧠 Умник", 19);
         header.addView(title);
-        TextView model = Ui.text(this, "  " + Prefs.modelName(this).split(" — ")[0].replace("Claude ", ""), 13, R.color.text_secondary);
+        TextView model = Ui.text(this, "  " + Prefs.engineTitle(this), 13, R.color.text_secondary);
         header.addView(model, Ui.weight());
         speakToggle = Ui.chip(this, "", v -> {
             Prefs.put(this, "speak", !Prefs.speak(this));
@@ -378,7 +380,8 @@ public final class AssistantActivity extends Activity {
         c.addView(board, lp);
         ViewGroup buttons = Ui.flow(this);
         if (h.result.move != 0) buttons.addView(Ui.chip(this, "🤔 Почему?", v -> ask("Почему этот ход лучший? Объясни простыми словами.")));
-        buttons.addView(Ui.chip(this, h.whiteToMove() ? "⇄ Ход чёрных" : "⇄ Ход белых", v -> flip(h)));
+        buttons.addView(Ui.chip(this, h.whiteToMove() ? "⇄ Ход чёрных" : "⇄ Ход белых", v -> recount(h, false)));
+        buttons.addView(Ui.chip(this, "🔃 Доска наоборот", v -> recount(h, true)));
         c.addView(buttons, Ui.margins(Ui.fill(), this, 0, 10, 0, 0));
         return c;
     }
@@ -398,8 +401,24 @@ public final class AssistantActivity extends Activity {
         chips.setAlpha(b ? 0.4f : 1f);
     }
 
-    private void needKey() {
-        add(new Session.Line(false, "Чтобы я мог отвечать, нужен ключ Claude API. Открой настройки Умника — там написано, где его взять.", null));
+    /** спрашивать пока нечем: бесплатный ИИ не скачан или нет ключа Claude */
+    private void needMind() {
+        String text;
+        if (Prefs.free(this)) {
+            ModelStore.Status st = ModelStore.status(this);
+            if (st.state == ModelStore.State.DOWNLOADING) {
+                text = "Бесплатный ИИ ещё качается: " + st.percent() + "%" + (st.error == null ? "" : " (" + st.error + ")")
+                        + ". Как докачается — спрашивай! Шахматные подсказки ♟ работают уже сейчас.";
+            } else if (st.state == ModelStore.State.CHECKING) {
+                text = "Бесплатный ИИ скачан, проверяю файл — это меньше минуты.";
+            } else {
+                text = "Чтобы я мог отвечать, скачай бесплатный ИИ — один раз, 2,6 ГБ (лучше по Wi-Fi). Он работает прямо "
+                        + "в телефоне, без интернета. Шахматные подсказки ♟ работают и без него.";
+            }
+        } else {
+            text = "Чтобы я мог отвечать, нужен ключ Claude API — или выбери бесплатный ИИ в телефоне. Всё это в настройках Умника.";
+        }
+        add(new Session.Line(false, text, null));
         TextView open = Ui.button(this, "Открыть настройки", v -> {
             startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             finish();
@@ -418,13 +437,19 @@ public final class AssistantActivity extends Activity {
 
     private void ask(String question) {
         if (busy) return;
-        if (!Prefs.hasKey(this)) {
-            needKey();
+        if (!Prefs.ready(this)) {
+            needMind();
             return;
         }
         Brain.Chat chat = Session.chat;
-        if (chat == null) {
-            chat = new Brain.Chat(Prefs.model(this), Prefs.about(this));
+        if (chat == null || chat.isLocal() != Prefs.free(this)) {
+            // «мозг» сменили посреди беседы — новая беседа с тем же снимком
+            if (chat != null) {
+                chat.cancel();
+                chat.dropLocal();
+                if (Session.shot != null) Session.shotFresh = true;
+            }
+            chat = Session.newChat(this);
             Session.chat = chat;
             shown = chat;
         }
@@ -438,14 +463,15 @@ public final class AssistantActivity extends Activity {
         Session.shotFresh = false;
 
         add(new Session.Line(true, question, null));
-        Session.Line answer = new Session.Line(false, "…", null);
+        boolean loading = chat.isLocal() && !LocalMind.loaded();
+        Session.Line answer = new Session.Line(false, loading ? "⏳ Запускаю ИИ в телефоне — в первый раз это до полуминуты…" : "…", null);
         TextView view = add(answer);
         setBusy(true);
         Brain.Chat c = chat;
         String ctx = context;
         work.execute(() -> {
             try {
-                String text = Session.brain(this).ask(c, question, jpeg, ctx, soFar -> runOnUiThread(() -> {
+                String text = Session.mind(this, c).ask(c, question, jpeg, ctx, soFar -> runOnUiThread(() -> {
                     if (c != shown) return;
                     answer.text = soFar;
                     view.setText(soFar);
@@ -473,10 +499,6 @@ public final class AssistantActivity extends Activity {
 
     private void runChess() {
         if (busy) return;
-        if (!Prefs.hasKey(this)) {
-            needKey();
-            return;
-        }
         Shot shot = Session.shot;
         if (shot == null || shot.jpeg == null) {
             add(new Session.Line(false, "♟ Нужен снимок экрана с доской: закрой это окно, открой партию и нажми кнопку ♟ или кнопку Умника.", null));
@@ -489,14 +511,15 @@ public final class AssistantActivity extends Activity {
         Brain.Chat c = shown;
         work.execute(() -> {
             try {
-                Hint h = Session.chess(Session.brain(this), Prefs.model(this), shot.jpeg);
+                Session.Chess r = Session.chess(this, shot);
                 runOnUiThread(() -> {
                     if (c != shown) return;
                     Session.lines.remove(wait);
                     list.removeView(view);
-                    add(new Session.Line(false, h.headline, h));
+                    if (r.note != null) add(new Session.Line(false, r.note, null));
+                    add(new Session.Line(false, r.hint.headline, r.hint));
                     setBusy(false);
-                    if (visible && Prefs.speak(this)) speaker.say(h.headline);
+                    if (visible && Prefs.speak(this)) speaker.say(r.hint.headline);
                 });
             } catch (Brain.Failure e) {
                 runOnUiThread(() -> {
@@ -509,13 +532,14 @@ public final class AssistantActivity extends Activity {
         });
     }
 
-    private void flip(Hint h) {
+    /** пересчитать: ходит другая сторона (rotate = false) или доска на экране стоит наоборот (rotate = true) */
+    private void recount(Hint h, boolean rotate) {
         if (busy) return;
         setBusy(true);
         Brain.Chat c = shown;
         work.execute(() -> {
             try {
-                Hint f = Session.flip(h);
+                Hint f = rotate ? Session.rotate(h) : Session.flip(h);
                 runOnUiThread(() -> {
                     if (c != shown) return;
                     add(new Session.Line(false, f.headline, f));

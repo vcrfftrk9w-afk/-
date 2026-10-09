@@ -1,5 +1,6 @@
 package app.umnik.chess;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -31,6 +32,21 @@ public final class Hint {
 
     public boolean whiteToMove() {
         return board.side == Board.WHITE;
+    }
+
+    /** доска так, как она видна на экране: 8 строк сверху вниз, клетки слева направо */
+    public List<String> screenRows() {
+        List<String> rows = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            int rank = whiteBottom ? 7 - i : i;
+            StringBuilder r = new StringBuilder();
+            for (int j = 0; j < 8; j++) {
+                int p = board.sq[rank * 16 + (whiteBottom ? j : 7 - j)];
+                r.append(p == 0 ? '.' : Board.letterOf(p));
+            }
+            rows.add(r.toString());
+        }
+        return rows;
     }
 
     /**

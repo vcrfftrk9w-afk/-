@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- узнать, Wi-Fi сейчас или мобильный интернет, перед загрузкой бесплатного ИИ (2,6 ГБ) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- чтобы по названию пакета узнать, что за приложение открыто (название, игра ли это) -->
     <uses-permission
@@ -27,6 +29,14 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="false"
         android:theme="@style/Umnik">
+
+        <!-- видеокарта для бесплатного ИИ (если на телефоне её библиотеки есть) -->
+        <uses-native-library
+            android:name="libOpenCL.so"
+            android:required="false" />
+        <uses-native-library
+            android:name="libvndksupport.so"
+            android:required="false" />
 
         <activity
             android:name=".MainActivity"

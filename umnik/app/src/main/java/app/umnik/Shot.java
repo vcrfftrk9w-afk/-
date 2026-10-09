@@ -7,9 +7,23 @@ import java.io.ByteArrayOutputStream;
 
 /** Снимок экрана для ИИ: JPEG (уменьшенный), маленькое превью и что за приложение было открыто. */
 final class Shot {
+    /** пиксели ARGB уменьшенного снимка — по ним «зрение» узнаёт шахматную доску без ИИ */
+    static final class Pixels {
+        final int[] px;
+        final int w, h;
+
+        Pixels(int[] px, int w, int h) {
+            this.px = px;
+            this.w = w;
+            this.h = h;
+        }
+    }
+
     /** null — снимка нет (Android старше 11, приложение запрещает снимки или ошибка) */
     final byte[] jpeg;
     final Bitmap preview;
+    /** null, если снимка нет */
+    Pixels pixels;
     final String pkg;
     final String app;
     final Apps.Kind kind;
@@ -39,6 +53,15 @@ final class Shot {
         b.compress(Bitmap.CompressFormat.JPEG, 85, out);
         if (b != full) b.recycle();
         return out.toByteArray();
+    }
+
+    static Pixels pixels(Bitmap full, int maxEdge) {
+        Bitmap b = scale(full, maxEdge);
+        int w = b.getWidth(), h = b.getHeight();
+        int[] px = new int[w * h];
+        b.getPixels(px, 0, w, 0, 0, w, h);
+        if (b != full) b.recycle();
+        return new Pixels(px, w, h);
     }
 
     static Bitmap scale(Bitmap full, int maxEdge) {

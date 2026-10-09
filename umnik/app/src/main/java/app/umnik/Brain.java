@@ -42,10 +42,12 @@ import java.util.concurrent.CancellationException;
  * чтение шахматной доски со скриншота, короткие подсказки и напоминания.
  * Методы блокирующие — вызывать не из главного потока.
  */
-public final class Brain {
+public final class Brain implements Mind {
     public static final String OPUS = "claude-opus-5-5";
     public static final String SONNET = "claude-sonnet-5-5";
     public static final String HAIKU = "claude-haiku-5-5";
+    /** «модель» беседы с бесплатным ИИ в телефоне */
+    public static final String LOCAL = "local";
 
     /** если классификаторы безопасности отклонят запрос, сервер сам повторит его на подходящей модели */
     private static final String FALLBACK_BETA = "server-side-fallback-2026-07-01";
@@ -71,11 +73,13 @@ public final class Brain {
         final String model;
         final String system;
         final List<BetaMessageParam> history = new ArrayList<>();
+        /** беседа внутри модели в телефоне (там история хранится в самой модели) */
+        volatile Object local;
         volatile boolean cancelled;
 
         public Chat(String model, String aboutUser) {
             this.model = model;
-            this.system = Prompts.assistant(aboutUser);
+            this.system = LOCAL.equals(model) ? Prompts.local(aboutUser) : Prompts.assistant(aboutUser);
         }
 
         public int turns() {
@@ -85,6 +89,18 @@ public final class Brain {
         /** прервать ответ, который сейчас печатается */
         public void cancel() {
             cancelled = true;
+        }
+
+        /** беседа в телефоне или у Claude */
+        boolean isLocal() {
+            return LOCAL.equals(model);
+        }
+
+        /** закрыть беседу внутри модели в телефоне — память нужна другим */
+        synchronized void dropLocal() {
+            Object c = local;
+            local = null;
+            if (c != null) LocalMind.forget(c);
         }
     }
 
@@ -104,14 +120,29 @@ public final class Brain {
     }
 
     private final AnthropicClient client;
+    private final String model;
 
-    public Brain(String apiKey) {
-        this(AnthropicOkHttpClient.builder().apiKey(apiKey).maxRetries(2).build());
+    public Brain(String apiKey, String model) {
+        this(AnthropicOkHttpClient.builder().apiKey(apiKey).maxRetries(2).build(), model);
     }
 
     /** для тестов — клиент с подставным сервером */
-    Brain(AnthropicClient client) {
+    Brain(AnthropicClient client, String model) {
         this.client = client;
+        this.model = model;
+    }
+
+    @Override
+    public String title() {
+        for (int i = 0; i < Prefs.MODELS.length; i++) {
+            if (Prefs.MODELS[i].equals(model)) return Prefs.MODEL_NAMES[i].split(" — ")[0].replace("Claude ", "");
+        }
+        return model;
+    }
+
+    @Override
+    public String once(String system, String text, byte[] jpeg, int maxTokens) throws Failure {
+        return once(model, system, text, jpeg, BetaOutputConfig.Effort.LOW, maxTokens);
     }
 
     /* ---------- беседа ---------- */
@@ -120,6 +151,7 @@ public final class Brain {
      * Задать вопрос в беседе. jpeg — снимок экрана или null, context — строка «что сейчас происходит».
      * Текст ответа по мере прихода отдаётся в listener. Ответ дописывается в историю беседы.
      */
+    @Override
     public String ask(Chat chat, String question, byte[] jpeg, String context, Listener listener) throws Failure {
         List<BetaContentBlockParam> content = new ArrayList<>();
         if (jpeg != null) content.add(image(jpeg));
@@ -317,7 +349,7 @@ public final class Brain {
             AnthropicServiceException s = (AnthropicServiceException) e;
             String message = errorMessage(s);
             if (ErrorType.BILLING_ERROR.equals(s.errorType().orElse(null)) || message.contains("credit balance")) {
-                return new Failure("На счёте Anthropic закончились деньги. Пополни баланс на console.anthropic.com.", e);
+                return new Failure("На счёте Anthropic закончились деньги. Пополни баланс на platform.claude.com.", e);
             }
             return new Failure("Claude не принял запрос (" + s.statusCode() + "): " + message, e);
         }

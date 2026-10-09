@@ -5,6 +5,8 @@ import android.content.SharedPreferences;
 
 /** Настройки Умника. Ключ API хранится только в памяти телефона (резервная копия в облако выключена). */
 final class Prefs {
+    /** чем думает Умник: бесплатный ИИ в телефоне или Claude по ключу */
+    static final String FREE = "free", CLAUDE = "claude";
     static final String[] MODELS = {Brain.OPUS, Brain.SONNET, Brain.HAIKU};
     static final String[] MODEL_NAMES = {
             "Claude Opus 5.5 — самый умный",
@@ -26,6 +28,27 @@ final class Prefs {
 
     static boolean hasKey(Context c) {
         return !apiKey(c).isEmpty();
+    }
+
+    /** Если ещё не выбирали: есть ключ — Claude (так было до бесплатного режима), нет — бесплатный ИИ. */
+    static String engine(Context c) {
+        String e = of(c).getString("engine", null);
+        if (FREE.equals(e) || CLAUDE.equals(e)) return e;
+        return hasKey(c) ? CLAUDE : FREE;
+    }
+
+    static boolean free(Context c) {
+        return FREE.equals(engine(c));
+    }
+
+    /** можно спрашивать: бесплатный ИИ скачан или вставлен ключ Claude */
+    static boolean ready(Context c) {
+        return free(c) ? ModelStore.ready(c) : hasKey(c);
+    }
+
+    /** короткое имя для заголовка окна */
+    static String engineTitle(Context c) {
+        return free(c) ? LocalMind.TITLE : modelName(c).split(" — ")[0].replace("Claude ", "");
     }
 
     static String model(Context c) {

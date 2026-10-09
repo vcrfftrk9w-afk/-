@@ -41,6 +41,8 @@ final class Overlay {
 
         void onFlip();
 
+        void onRotate();
+
         void onExplain();
     }
 
@@ -337,12 +339,14 @@ final class Overlay {
         return cardBase(text, true);
     }
 
-    void showChess(Hint h) {
-        showCard(chessCard(h), false);
+    void showChess(Hint h, String note) {
+        showCard(chessCard(h, note), false);
     }
 
-    LinearLayout chessCard(Hint h) {
+    /** note — строчка сверху, например «запомнил фигуры» */
+    LinearLayout chessCard(Hint h, String note) {
         LinearLayout c = cardBase("♟ Подсказка хода", false);
+        if (note != null) c.addView(Ui.text(ctx, note, 13, R.color.text_secondary), Ui.margins(Ui.fill(), ctx, 0, 4, 0, 0));
         TextView head = Ui.text(ctx, h.headline, 16, R.color.text);
         head.setTypeface(Typeface.DEFAULT_BOLD);
         c.addView(head, Ui.margins(Ui.fill(), ctx, 0, 6, 0, 0));
@@ -357,6 +361,7 @@ final class Overlay {
         ViewGroup buttons = Ui.flow(ctx);
         if (h.result.move != 0) buttons.addView(Ui.chip(ctx, "🤔 Почему?", v -> actions.onExplain()));
         buttons.addView(Ui.chip(ctx, h.whiteToMove() ? "⇄ Ход чёрных" : "⇄ Ход белых", v -> actions.onFlip()));
+        buttons.addView(Ui.chip(ctx, "🔃 Доска наоборот", v -> actions.onRotate()));
         c.addView(buttons, Ui.margins(Ui.fill(), ctx, 0, 10, 0, 0));
         return c;
     }

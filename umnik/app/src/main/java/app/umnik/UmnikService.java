@@ -23,8 +23,6 @@ import android.view.inputmethod.InputMethodInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Toast;
 
-import com.anthropic.models.beta.messages.BetaOutputConfig;
-
 import org.json.JSONObject;
 
 import java.util.ArrayDeque;
@@ -45,7 +43,7 @@ import app.umnik.chess.Hint;
 /**
  * Глаза Умника — служба спецвозможностей. Знает, какое приложение открыто, делает снимок экрана по нажатию
  * кнопки, считает время в телефоне и напоминает о перерывах, по желанию сама подсказывает по экрану.
- * Снимки никуда не сохраняются: уходят в Claude только вместе с вопросом.
+ * Снимки никуда не сохраняются: бесплатный ИИ разбирает их прямо в телефоне, а в Claude они уходят только вместе с вопросом.
  */
 public final class UmnikService extends AccessibilityService implements Overlay.Actions {
     static volatile UmnikService instance;
@@ -230,7 +228,8 @@ public final class UmnikService extends AccessibilityService implements Overlay.
         String fallback = night
                 ? "Уже поздно — пора закругляться и ложиться спать 🌙 Сон важнее ленты."
                 : String.format(BREAK_PHRASES[random.nextInt(BREAK_PHRASES.length)], ScreenTime.format(session));
-        if (!Prefs.smartBreaks(this) || !Prefs.hasKey(this)) {
+        // бесплатный ИИ ради напоминания в память не грузим — только если он уже загружен
+        if (!Prefs.smartBreaks(this) || !Prefs.ready(this) || (Prefs.free(this) && !LocalMind.loaded())) {
             showReminder(fallback);
             return;
         }
@@ -240,7 +239,7 @@ public final class UmnikService extends AccessibilityService implements Overlay.
         work.execute(() -> {
             String text;
             try {
-                text = Session.brain(this).once(Prefs.model(this), Prompts.BREAK, ask, null, BetaOutputConfig.Effort.LOW, 1500);
+                text = Session.mind(this).once(Prompts.BREAK, ask, null, 1500);
             } catch (Brain.Failure e) {
                 text = "";
             }
@@ -261,7 +260,7 @@ public final class UmnikService extends AccessibilityService implements Overlay.
     /** Умник сам смотрит на экран, если это включено, — и молчит, если сказать нечего. */
     private void watch(long now) {
         int every = Prefs.watchMinutes(this);
-        if (every <= 0 || Build.VERSION.SDK_INT < 30 || !Prefs.hasKey(this) || Session.sheetOpen) return;
+        if (every <= 0 || Build.VERSION.SDK_INT < 30 || !Prefs.ready(this) || Session.sheetOpen) return;
         if (!overlay.bubbleVisible() || overlay.cardVisible() || now < nextWatch) return;
         nextWatch = now + every * 60_000L;
         if (currentPkg == null || Apps.kind(this, currentPkg) == Apps.Kind.HOME || isPrivate(currentPkg) || typingPassword()) return;
@@ -275,8 +274,8 @@ public final class UmnikService extends AccessibilityService implements Overlay.
             }
             work.execute(() -> {
                 try {
-                    String tip = Session.brain(this).once(Prefs.model(this), Prompts.WATCH, ask.toString(), shot.jpeg,
-                            BetaOutputConfig.Effort.LOW, 3000);
+                    String tip = Session.mind(this).once(Prefs.free(this) ? Prompts.WATCH_LOCAL : Prompts.WATCH,
+                            ask.toString(), shot.jpeg, 3000);
                     if (tip.isEmpty() || tip.toUpperCase(Locale.ROOT).startsWith("SKIP")) return;
                     tips.addLast(tip);
                     while (tips.size() > 5) tips.removeFirst();
@@ -344,6 +343,7 @@ public final class UmnikService extends AccessibilityService implements Overlay.
                     } else {
                         shot = new Shot(Shot.jpeg(full, maxEdge), Shot.scale(full, 360), pkg, app, kind, text, null,
                                 Shot.fingerprint(full));
+                        shot.pixels = Shot.pixels(full, 1600);
                     }
                 } catch (RuntimeException e) {
                     shot = new Shot(null, null, pkg, app, kind, text, "снимок не получился", 0);
@@ -402,10 +402,6 @@ public final class UmnikService extends AccessibilityService implements Overlay.
 
     @Override
     public void onChessTap() {
-        if (!Prefs.hasKey(this)) {
-            overlay.showMessage("♟ Шахматы", "Сначала вставь ключ Claude в приложении «Умник».", false);
-            return;
-        }
         if (Build.VERSION.SDK_INT < 30) {
             overlay.showMessage("♟ Шахматы", "Чтобы видеть доску, нужен Android 11 или новее.", false);
             return;
@@ -420,8 +416,8 @@ public final class UmnikService extends AccessibilityService implements Overlay.
             overlay.showProgress("Смотрю на доску и считаю ходы…");
             work.execute(() -> {
                 try {
-                    Hint h = Session.chess(Session.brain(this), Prefs.model(this), shot.jpeg);
-                    main.post(() -> overlay.showChess(h));
+                    Session.Chess r = Session.chess(this, shot);
+                    main.post(() -> overlay.showChess(r.hint, r.note));
                 } catch (Brain.Failure e) {
                     main.post(() -> overlay.showMessage("♟ Не получилось", e.getMessage(), false));
                 }
@@ -437,7 +433,22 @@ public final class UmnikService extends AccessibilityService implements Overlay.
         work.execute(() -> {
             try {
                 Hint f = Session.flip(h);
-                main.post(() -> overlay.showChess(f));
+                main.post(() -> overlay.showChess(f, null));
+            } catch (Brain.Failure e) {
+                main.post(() -> overlay.showMessage("♟ Шахматы", e.getMessage(), false));
+            }
+        });
+    }
+
+    @Override
+    public void onRotate() {
+        Hint h = Session.hint;
+        if (h == null) return;
+        overlay.showProgress("Переворачиваю доску и считаю заново…");
+        work.execute(() -> {
+            try {
+                Hint r = Session.rotate(h);
+                main.post(() -> overlay.showChess(r, null));
             } catch (Brain.Failure e) {
                 main.post(() -> overlay.showMessage("♟ Шахматы", e.getMessage(), false));
             }
@@ -469,7 +480,7 @@ public final class UmnikService extends AccessibilityService implements Overlay.
     }
 
     private void newChat(Shot shot) {
-        Session.start(shot, new Brain.Chat(Prefs.model(this), Prefs.about(this)));
+        Session.start(shot, Session.newChat(this));
     }
 
     private void open(String mode) {

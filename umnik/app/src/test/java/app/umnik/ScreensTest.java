@@ -100,6 +100,16 @@ public class ScreensTest {
     }
 
     @Test
+    public void sheetFreeModelNotDownloaded() throws Exception {
+        // ключа нет — по умолчанию бесплатный ИИ, но он ещё не скачан
+        Session.start(new Shot(null, null, "com.android.chrome", "Chrome", Apps.Kind.BROWSER, null,
+                "снимок не получился", 0), Session.newChat(org.robolectric.RuntimeEnvironment.getApplication()));
+        AssistantActivity a = start(AssistantActivity.class);
+        snap(a.getWindow().getDecorView(), "sheet-free.png", true);
+        assertTrue(Session.lines.get(0).text, Session.lines.get(0).text.contains("скачай бесплатный ИИ"));
+    }
+
+    @Test
     public void sheetWithChessHint() throws Exception {
         Prefs.put(org.robolectric.RuntimeEnvironment.getApplication(), "api_key", "sk-ant-test-1234");
         Hint h = Hint.analyze(Arrays.asList("r.bqkbnr", "pppp.ppp", "..n.....", "....p..Q",
@@ -124,7 +134,7 @@ public class ScreensTest {
         page.setPadding(30, 200, 30, 0);
         android.widget.LinearLayout column = Ui.column(host);
         column.addView(o.bubbleView(), new android.widget.LinearLayout.LayoutParams(Ui.dp(host, 56), Ui.dp(host, 56)));
-        column.addView(o.chessCard(h), Ui.margins(Ui.fill(), host, 0, 16, 0, 0));
+        column.addView(o.chessCard(h, null), Ui.margins(Ui.fill(), host, 0, 16, 0, 0));
         column.addView(o.messageCard("⏰ Пора сделать перерыв",
                 "Ты в телефоне уже 47 мин без перерыва. Встань, потянись и посмотри в окно секунд двадцать 🙂", true),
                 Ui.margins(Ui.fill(), host, 0, 16, 0, 0));

@@ -21,6 +21,8 @@ android {
         targetSdk 35
         versionCode buildNumber
         versionName "1.${buildNumber}"
+        // бесплатный ИИ (LiteRT-LM) есть только для 64-битных ARM — это почти все телефоны последних лет
+        ndk { abiFilters 'arm64-v8a' }
     }
 
     signingConfigs {
@@ -59,6 +61,8 @@ android {
     }
 
     packaging {
+        // библиотека бесплатного ИИ сжимается в APK втрое (22 → 10 МБ) — скачивать меньше
+        jniLibs.useLegacyPackaging = true
         resources.excludes += ['META-INF/*.kotlin_module', 'META-INF/versions/**', 'META-INF/DEPENDENCIES',
                                'META-INF/LICENSE*', 'META-INF/NOTICE*', 'META-INF/*.version']
     }
@@ -67,6 +71,8 @@ android {
 dependencies {
     // официальный SDK Claude для Java (вместе с ним приходят OkHttp и Jackson)
     implementation 'com.anthropic:anthropic-java:2.70.0'
+    // бесплатный ИИ в телефоне: Gemma от Google через LiteRT-LM
+    implementation 'com.google.ai.edge.litertlm:litertlm-android:0.18.0'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
     testImplementation 'org.robolectric:robolectric:4.16.1'

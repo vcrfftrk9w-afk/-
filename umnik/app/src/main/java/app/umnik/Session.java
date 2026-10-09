@@ -3,6 +3,7 @@ package app.umnik;
 import android.content.Context;
 
 import app.umnik.chess.Board;
+import app.umnik.chess.Eye;
 import app.umnik.chess.Hint;
 import app.umnik.chess.Position;
 
@@ -40,25 +41,55 @@ final class Session {
     static volatile String note;
     static volatile boolean sheetOpen;
 
+    /** Что увидели на доске и что сказать сверху («запомнил фигуры»). */
+    static final class Chess {
+        final Hint hint;
+        final String note;
+
+        Chess(Hint hint, String note) {
+            this.hint = hint;
+            this.note = note;
+        }
+    }
+
     private static Brain brain;
-    private static String brainKey;
+    private static String brainKey, brainModel;
 
     private Session() {
     }
 
-    /** один клиент Claude на всё приложение; новый — если сменился ключ */
+    /** один клиент Claude на всё приложение; новый — если сменился ключ или модель */
     static synchronized Brain brain(Context c) {
-        String key = Prefs.apiKey(c);
-        if (brain == null || !key.equals(brainKey)) {
-            brain = new Brain(key);
+        String key = Prefs.apiKey(c), model = Prefs.model(c);
+        if (brain == null || !key.equals(brainKey) || !model.equals(brainModel)) {
+            brain = new Brain(key, model);
             brainKey = key;
+            brainModel = model;
         }
         return brain;
     }
 
-    /** Новый снимок — новая беседа. */
+    /** чем Умник думает сейчас: бесплатный ИИ в телефоне или Claude */
+    static Mind mind(Context c) {
+        return Prefs.free(c) ? LocalMind.get(c) : brain(c);
+    }
+
+    /** чем отвечать в этой беседе (она могла начаться до того, как сменили «мозг») */
+    static Mind mind(Context c, Brain.Chat chat) {
+        return chat.isLocal() ? LocalMind.get(c) : brain(c);
+    }
+
+    static Brain.Chat newChat(Context c) {
+        return new Brain.Chat(Prefs.free(c) ? Brain.LOCAL : Prefs.model(c), Prefs.about(c));
+    }
+
+    /** Новый снимок — новая беседа. Старая прерывается и освобождает память модели. */
     static synchronized void start(Shot s, Brain.Chat c) {
-        if (chat != null) chat.cancel();
+        Brain.Chat old = chat;
+        if (old != null && old != c) {
+            old.cancel();
+            old.dropLocal();
+        }
         shot = s;
         shotFresh = true;
         chat = c;
@@ -106,8 +137,45 @@ final class Session {
         return c.toString();
     }
 
-    /** Прочитать доску со снимка и найти лучший ход. Если позиция вышла невозможной — вторая, внимательная попытка. */
-    static Hint chess(Brain brain, String model, byte[] jpeg) throws Brain.Failure {
+    /**
+     * Лучший ход по снимку. Доску узнаёт своё «зрение» — бесплатно и без интернета; фигуры каждого приложения
+     * оно один раз запоминает по начальной расстановке. Не вышло, а выбран Claude, — доску читает Claude.
+     */
+    static Chess chess(Context c, Shot s) throws Brain.Failure {
+        if (s == null || (s.pixels == null && s.jpeg == null)) {
+            throw new Brain.Failure("Нужен снимок экрана с доской.", null);
+        }
+        String problem = "Не нашёл на экране шахматную доску. Я узнаю обычные плоские доски 8×8 — как в chess.com, "
+                + "lichess и шахматных приложениях. Доска должна быть видна целиком.";
+        if (s.pixels != null) {
+            String key = "eye_" + (s.pkg == null ? "" : s.pkg);
+            Eye.Pieces known = Eye.Pieces.load(Prefs.of(c).getString(key, null));
+            Eye.Result r = Eye.look(s.pixels.px, s.pixels.w, s.pixels.h, known);
+            if (r.learned != null) Prefs.put(c, key, r.learned.save());
+            if (r.rows != null) {
+                try {
+                    Hint h = Hint.analyze(r.rows, r.whiteBottom, r.start ? "white" : r.turn, 2000);
+                    setHint(h);
+                    String note = r.learned != null && known == null
+                            ? "✅ Запомнил, как выглядят фигуры в этом приложении. Теперь подсказываю в любой позиции." : null;
+                    return new Chess(h, note);
+                } catch (IllegalArgumentException e) {
+                    problem = "Похоже, я неточно узнал фигуры (" + e.getMessage() + "). Открой новую партию и нажми ♟, "
+                            + "пока фигуры стоят на начальных местах, — я заново запомню, как они выглядят в этом приложении.";
+                }
+            } else if (r.found) {
+                problem = "Доску вижу, но фигуры этого приложения ещё не знаю. Открой новую партию и нажми ♟, пока фигуры "
+                        + "стоят на начальных местах, — я один раз их запомню и дальше буду подсказывать в любой позиции.";
+            }
+        }
+        if (!Prefs.free(c) && Prefs.hasKey(c) && s.jpeg != null) {
+            return new Chess(chessByClaude(brain(c), Prefs.model(c), s.jpeg), null);
+        }
+        throw new Brain.Failure(problem, null);
+    }
+
+    /** Доску переписывает Claude. Если позиция вышла невозможной — вторая, внимательная попытка. */
+    static Hint chessByClaude(Brain brain, String model, byte[] jpeg) throws Brain.Failure {
         String error = null;
         for (int attempt = 0; attempt < 2; attempt++) {
             Brain.BoardRead read = brain.readBoard(model, jpeg, error);
@@ -121,6 +189,18 @@ final class Session {
             }
         }
         throw new Brain.Failure("Не получилось разобрать доску (" + error + "). Попробуй ещё раз.", null);
+    }
+
+    /** Доска на экране стоит наоборот: внизу на самом деле другой цвет. Ходит тот, кто теперь снизу. */
+    static Hint rotate(Hint h) throws Brain.Failure {
+        try {
+            boolean whiteBottom = !h.whiteBottom;
+            Hint r = Hint.analyze(h.screenRows(), whiteBottom, whiteBottom ? "white" : "black", 2000);
+            setHint(r);
+            return r;
+        } catch (IllegalArgumentException e) {
+            throw new Brain.Failure("Наоборот так фигуры стоять не могут: " + e.getMessage() + ".", null);
+        }
     }
 
     /** Та же позиция, но ходит другая сторона. */

@@ -39,7 +39,7 @@ public class BrainTest {
                 .apiKey("sk-ant-test")
                 .baseUrl(server.url("/").toString())
                 .maxRetries(0)
-                .build());
+                .build(), Brain.OPUS);
     }
 
     @After
@@ -260,7 +260,7 @@ public class BrainTest {
 
     @Test
     public void noNetworkIsExplained() {
-        Brain offline = new Brain(AnthropicOkHttpClient.builder().apiKey("k").baseUrl("http://127.0.0.1:9").maxRetries(0).build());
+        Brain offline = new Brain(AnthropicOkHttpClient.builder().apiKey("k").baseUrl("http://127.0.0.1:9").maxRetries(0).build(), Brain.OPUS);
         try {
             offline.once(Brain.OPUS, "s", "t", null, BetaOutputConfig.Effort.LOW, 100);
             fail("ожидали ошибку сети");

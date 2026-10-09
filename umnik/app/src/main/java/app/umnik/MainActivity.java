@@ -2,14 +2,18 @@ package app.umnik;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.View;
@@ -23,15 +27,21 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.anthropic.models.beta.messages.BetaOutputConfig;
-
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Главный экран: подключить ключ и доступ к экрану, настройки, статистика за сегодня. */
+/** Главный экран: выбрать «мозг» (бесплатный ИИ в телефоне или Claude), доступ к экрану, настройки, статистика. */
 public final class MainActivity extends Activity {
     private static final ExecutorService BACKGROUND = Executors.newSingleThreadExecutor();
+    private static final long GB = 1L << 30;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable poll = this::pollModel;
     private LinearLayout content;
+    /** карточка «Подключение» — при загрузке модели обновляется только она */
+    private LinearLayout setupBox;
+    private TextView modelStatus;
+    private ModelStore.State shownState;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -60,9 +70,17 @@ public final class MainActivity extends Activity {
         render();
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        handler.removeCallbacks(poll);
+    }
+
     private void render() {
         content.removeAllViews();
         header();
+        setupBox = Ui.column(this);
+        content.addView(setupBox, Ui.fill());
         setup();
         howTo();
         settings();
@@ -87,40 +105,34 @@ public final class MainActivity extends Activity {
     /* ---------- три шага подключения ---------- */
 
     private void setup() {
+        handler.removeCallbacks(poll);
+        setupBox.removeAllViews();
+        modelStatus = null;
         LinearLayout c = card("Подключение");
-        boolean key = Prefs.hasKey(this), access = accessOn(), notify = notifyOn();
+        boolean free = Prefs.free(this), access = accessOn(), notify = notifyOn();
 
-        c.addView(step(key, "1. Ключ Claude API", key
-                ? "Ключ сохранён (…" + tail(Prefs.apiKey(this)) + "). Можно проверить или вставить новый."
-                : "Умник думает с помощью Claude. Возьми ключ на console.anthropic.com → API Keys → Create Key "
-                + "(на счёте нужны деньги — нескольких долларов хватит надолго) и вставь сюда."));
-        EditText field = new EditText(this);
-        field.setHint(key ? "новый ключ sk-ant-…" : "sk-ant-…");
-        field.setSingleLine(true);
-        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
-        field.setTextColor(Ui.color(this, R.color.text));
-        field.setHintTextColor(Ui.color(this, R.color.text_secondary));
-        c.addView(field, Ui.margins(Ui.fill(), this, 0, 4, 0, 0));
-        ViewGroup buttons = Ui.flow(this);
-        buttons.addView(Ui.button(this, "Сохранить", v -> {
-            String k = field.getText().toString().trim();
-            if (k.isEmpty()) {
-                Toast.makeText(this, "Сначала вставь ключ", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            Prefs.put(this, "api_key", k);
-            Toast.makeText(this, "Ключ сохранён", Toast.LENGTH_SHORT).show();
+        c.addView(step(Prefs.ready(this), "1. Чем думает Умник", free
+                ? "Бесплатный ИИ Gemma 4 от Google работает прямо в телефоне: без интернета, без ключей и денег. "
+                + "Видит снимки экрана и отвечает по-русски. Нужно один раз скачать 2,6 ГБ."
+                : "Claude от Anthropic — самый умный, но платный: нужен ключ API и деньги на счёте."));
+        ViewGroup pick = Ui.flow(this);
+        pick.addView(option("📱 Бесплатно, в телефоне", free, v -> {
+            Prefs.put(this, "engine", Prefs.FREE);
             render();
-            checkKey();
         }));
-        if (key) buttons.addView(Ui.chip(this, "Проверить", v -> checkKey()));
-        buttons.addView(Ui.chip(this, "Где взять ключ?", v -> open("https://console.anthropic.com/settings/keys")));
-        c.addView(buttons, Ui.margins(Ui.fill(), this, 0, 6, 0, 14));
+        pick.addView(option("🔑 Claude по ключу", !free, v -> {
+            Prefs.put(this, "engine", Prefs.CLAUDE);
+            render();
+        }));
+        c.addView(pick, Ui.margins(Ui.fill(), this, 0, 8, 0, 0));
+        if (free) freeModel(c);
+        else claudeKey(c);
 
         c.addView(step(access, "2. Доступ к экрану", access
                 ? "Включено: кнопка Умника видна поверх приложений."
                 : "В «Спецвозможностях» найди «Умник» и включи. Так Умник видит, какое приложение открыто, делает снимок "
-                + "экрана, когда ты нажимаешь его кнопку, и считает время в телефоне. Сам он ничего не нажимает и снимки не хранит."));
+                + "экрана, когда ты нажимаешь его кнопку, и считает время в телефоне. Сам он ничего не нажимает и снимки не хранит."),
+                Ui.margins(Ui.fill(), this, 0, 14, 0, 0));
         if (!access) {
             c.addView(Ui.button(this, "Включить в спецвозможностях", v -> openAccessibility()), Ui.margins(Ui.wrap(), this, 0, 6, 0, 6));
             if (Build.VERSION.SDK_INT >= 33) {
@@ -144,7 +156,189 @@ public final class MainActivity extends Activity {
             c.addView(Ui.text(this, "На этом телефоне Android ниже 11-й версии: снимки экрана Умнику недоступны, он видит "
                     + "только текст с экрана. Шахматные подсказки работают с Android 11.", 13, R.color.danger), Ui.margins(Ui.fill(), this, 0, 12, 0, 0));
         }
-        content.addView(c, Ui.margins(Ui.fill(), this, 0, 0, 0, 12));
+        setupBox.addView(c, Ui.margins(Ui.fill(), this, 0, 0, 0, 12));
+    }
+
+    /** выбор из двух: выбранный — залит цветом */
+    private TextView option(String label, boolean selected, View.OnClickListener click) {
+        TextView t = Ui.chip(this, label, click);
+        if (selected) {
+            t.setBackground(Ui.pressable(this, Ui.round(this, Ui.color(this, R.color.accent), 18)));
+            t.setTextColor(Ui.color(this, R.color.on_accent));
+        }
+        return t;
+    }
+
+    /* ---------- бесплатный ИИ: скачать, проверить, удалить ---------- */
+
+    private void freeModel(LinearLayout c) {
+        ModelStore.Status st = ModelStore.status(this);
+        shownState = st.state;
+        modelStatus = Ui.text(this, modelText(st), 14, st.state == ModelStore.State.FAILED ? R.color.danger : R.color.text);
+        c.addView(modelStatus, Ui.margins(Ui.fill(), this, 0, 10, 0, 0));
+        ViewGroup buttons = Ui.flow(this);
+        switch (st.state) {
+            case NONE:
+                buttons.addView(Ui.button(this, "⬇️ Скачать бесплатный ИИ (2,6 ГБ)", v -> download(false)));
+                break;
+            case FAILED:
+                buttons.addView(Ui.button(this, "Скачать заново", v -> download(false)));
+                buttons.addView(Ui.chip(this, "Скачать с зеркала", v -> download(true)));
+                break;
+            case DOWNLOADING:
+                buttons.addView(Ui.chip(this, "Отменить загрузку", v -> {
+                    ModelStore.cancel(this);
+                    setup();
+                }));
+                break;
+            case READY:
+                buttons.addView(Ui.chip(this, "Проверить", v -> checkFree()));
+                buttons.addView(Ui.chip(this, "Удалить (освободить 2,6 ГБ)", v -> new AlertDialog.Builder(this)
+                        .setMessage("Удалить бесплатный ИИ из телефона? Чтобы снова им пользоваться, его придётся скачать заново.")
+                        .setPositiveButton("Удалить", (d, w) -> {
+                            ModelStore.delete(this);
+                            setup();
+                        })
+                        .setNegativeButton("Отмена", null)
+                        .show()));
+                break;
+            default:
+                break;
+        }
+        if (buttons.getChildCount() > 0) c.addView(buttons, Ui.margins(Ui.fill(), this, 0, 8, 0, 0));
+        long ram = totalRam();
+        if (ram > 0 && ram < 5_500L << 20) {
+            c.addView(Ui.text(this, String.format(Locale.ROOT, "⚠️ В телефоне %.1f ГБ оперативной памяти. Бесплатному ИИ нужно "
+                    + "хотя бы 4 ГБ, лучше 6 и больше — иначе он может отвечать медленно или не запуститься. Тогда выбери Claude.",
+                    ram / (double) GB).replace('.', ','), 13, R.color.danger), Ui.margins(Ui.fill(), this, 0, 8, 0, 0));
+        }
+        if (st.state == ModelStore.State.DOWNLOADING || st.state == ModelStore.State.CHECKING) handler.postDelayed(poll, 1000);
+    }
+
+    private static String modelText(ModelStore.Status st) {
+        switch (st.state) {
+            case READY:
+                return "✅ Бесплатный ИИ скачан. Отвечает прямо в телефоне — даже без интернета.";
+            case DOWNLOADING:
+                return "⬇️ Качаю: " + gb(st.done) + " из " + gb(ModelStore.SIZE) + " ГБ (" + st.percent() + "%)"
+                        + (st.error == null ? "" : " — " + st.error)
+                        + ".\nМожно закрыть приложение — загрузка идёт сама, прогресс в уведомлениях.";
+            case CHECKING:
+                return "🔎 Скачалось! Проверяю файл — это меньше минуты…";
+            case FAILED:
+                return "⚠️ Не скачалось: " + st.error + ".";
+            default:
+                return "Файл модели — 2,6 ГБ, качается один раз. Лучше по Wi-Fi.";
+        }
+    }
+
+    private static String gb(long bytes) {
+        return String.format(Locale.ROOT, "%.1f", bytes / (double) GB).replace('.', ',');
+    }
+
+    /** раз в секунду — прогресс загрузки; поменялось состояние — перерисовать карточку */
+    private void pollModel() {
+        ModelStore.Status st = ModelStore.status(this);
+        if (st.state != shownState || modelStatus == null) {
+            setup();
+            return;
+        }
+        modelStatus.setText(modelText(st));
+        handler.postDelayed(poll, 1000);
+    }
+
+    private void download(boolean mirror) {
+        long need = ModelStore.SIZE + (300L << 20);
+        long free = ModelStore.freeSpace(this);
+        if (free < need) {
+            new AlertDialog.Builder(this)
+                    .setMessage("Не хватает места: нужно " + gb(need) + " ГБ свободных, а сейчас свободно " + gb(free)
+                            + " ГБ. Удали ненужные видео или приложения и попробуй снова.")
+                    .setPositiveButton("Ок", null)
+                    .show();
+            return;
+        }
+        ConnectivityManager cm = getSystemService(ConnectivityManager.class);
+        if (cm != null && !cm.isActiveNetworkMetered()) {
+            ModelStore.start(this, false, mirror);
+            setup();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Сейчас нет Wi-Fi")
+                .setMessage("Файл большой — 2,6 ГБ. По мобильному интернету уйдёт столько же трафика. Подождать Wi-Fi?")
+                .setPositiveButton("Подождать Wi-Fi", (d, w) -> {
+                    ModelStore.start(this, false, mirror);
+                    setup();
+                })
+                .setNegativeButton("Качать сейчас", (d, w) -> {
+                    ModelStore.start(this, true, mirror);
+                    setup();
+                })
+                .setNeutralButton("Отмена", null)
+                .show();
+    }
+
+    private void checkFree() {
+        Toast.makeText(this, "Запускаю ИИ — в первый раз это до минуты…", Toast.LENGTH_LONG).show();
+        BACKGROUND.execute(() -> {
+            long t0 = System.currentTimeMillis();
+            String result;
+            try {
+                String a = LocalMind.get(this).once("Отвечай очень коротко, по-русски.", "Скажи одним словом: работает?", null, 16);
+                double secs = (System.currentTimeMillis() - t0) / 1000.0;
+                result = "✅ Бесплатный ИИ работает " + (LocalMind.onGpu() ? "на видеокарте" : "на процессоре")
+                        + String.format(Locale.ROOT, " — запуск и ответ за %.1f с.", secs).replace('.', ',')
+                        + "\nОн ответил: «" + a + "»";
+            } catch (Brain.Failure e) {
+                result = "⚠️ " + e.getMessage();
+            }
+            String r = result;
+            runOnUiThread(() -> {
+                if (!isFinishing()) new AlertDialog.Builder(this).setMessage(r).setPositiveButton("Ок", null).show();
+            });
+        });
+    }
+
+    private long totalRam() {
+        ActivityManager am = getSystemService(ActivityManager.class);
+        if (am == null) return 0;
+        ActivityManager.MemoryInfo m = new ActivityManager.MemoryInfo();
+        am.getMemoryInfo(m);
+        return m.totalMem;
+    }
+
+    /* ---------- Claude: ключ ---------- */
+
+    private void claudeKey(LinearLayout c) {
+        boolean key = Prefs.hasKey(this);
+        c.addView(Ui.text(this, key
+                ? "Ключ сохранён (…" + tail(Prefs.apiKey(this)) + "). Можно проверить или вставить новый."
+                : "Возьми ключ на platform.claude.com → Settings → API keys → Create key и вставь сюда. На счёте нужны "
+                + "деньги — нескольких долларов хватит надолго. Claude работает не во всех странах: например, в России и "
+                + "Беларуси его API недоступен — там выбирай бесплатный ИИ.", 14, R.color.text_secondary), Ui.margins(Ui.fill(), this, 0, 10, 0, 0));
+        EditText field = new EditText(this);
+        field.setHint(key ? "новый ключ sk-ant-…" : "sk-ant-…");
+        field.setSingleLine(true);
+        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        field.setTextColor(Ui.color(this, R.color.text));
+        field.setHintTextColor(Ui.color(this, R.color.text_secondary));
+        c.addView(field, Ui.margins(Ui.fill(), this, 0, 4, 0, 0));
+        ViewGroup buttons = Ui.flow(this);
+        buttons.addView(Ui.button(this, "Сохранить", v -> {
+            String k = field.getText().toString().trim();
+            if (k.isEmpty()) {
+                Toast.makeText(this, "Сначала вставь ключ", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            Prefs.put(this, "api_key", k);
+            Toast.makeText(this, "Ключ сохранён", Toast.LENGTH_SHORT).show();
+            render();
+            checkKey();
+        }));
+        if (key) buttons.addView(Ui.chip(this, "Проверить", v -> checkKey()));
+        buttons.addView(Ui.chip(this, "Где взять ключ?", v -> open("https://platform.claude.com/settings/keys")));
+        c.addView(buttons, Ui.margins(Ui.fill(), this, 0, 6, 0, 0));
     }
 
     private LinearLayout step(boolean done, String title, String text) {
@@ -163,8 +357,7 @@ public final class MainActivity extends Activity {
         BACKGROUND.execute(() -> {
             String result;
             try {
-                Session.brain(this).once(Prefs.model(this), "Отвечай одним словом.", "Скажи «работает».", null,
-                        BetaOutputConfig.Effort.LOW, 1000);
+                Session.brain(this).once("Отвечай одним словом.", "Скажи «работает».", null, 1000);
                 result = "✅ Ключ работает, Умник готов";
             } catch (Brain.Failure e) {
                 result = "⚠️ " + e.getMessage();
@@ -181,13 +374,14 @@ public final class MainActivity extends Activity {
         String text = "• Нажми круглую кнопку Умника поверх любого приложения — он сделает снимок экрана и откроет окно: "
                 + "быстрые кнопки под то, что открыто, или свой вопрос текстом и голосом 🎤.\n"
                 + "• В шахматах рядом появится кнопка ♟ — нажми в свой ход, и Умник покажет лучший ход стрелкой на мини-доске. "
-                + "Доску читает ИИ, а ход считает встроенный шахматный движок.\n"
+                + "Доску он узнаёт сам, а ход считает встроенный шахматный движок — бесплатно и без интернета. В новом "
+                + "приложении один раз нажми ♟ в начале партии: Умник запомнит, как там выглядят фигуры.\n"
                 + "• Кнопку можно перетащить пальцем. Долгое нажатие — спрятать на 30 минут.\n"
                 + "• Если долго сидишь в телефоне, Умник напомнит сделать перерыв.";
         c.addView(Ui.text(this, text, 14.5f, R.color.text));
         ViewGroup row = Ui.flow(this);
         row.addView(Ui.button(this, "💬 Спросить без снимка", v -> {
-            Session.start(null, new Brain.Chat(Prefs.model(this), Prefs.about(this)));
+            Session.start(null, Session.newChat(this));
             startActivity(new Intent(this, AssistantActivity.class));
         }));
         if (Prefs.hiddenUntil(this) > System.currentTimeMillis()) {
@@ -204,8 +398,11 @@ public final class MainActivity extends Activity {
 
     private void settings() {
         LinearLayout c = card("Настройки");
-        c.addView(choice("Модель", Prefs.modelName(this), Prefs.MODEL_NAMES, indexOf(Prefs.MODELS, Prefs.model(this)),
-                i -> Prefs.put(this, "model", Prefs.MODELS[i])));
+        boolean free = Prefs.free(this);
+        if (!free) {
+            c.addView(choice("Модель Claude", Prefs.modelName(this), Prefs.MODEL_NAMES, indexOf(Prefs.MODELS, Prefs.model(this)),
+                    i -> Prefs.put(this, "model", Prefs.MODELS[i])));
+        }
         c.addView(toggle("Кнопка поверх приложений", "bubble", Prefs.bubble(this)));
         c.addView(choice("Напоминать о перерыве", minutes(Prefs.breakMinutes(this), "через %d мин без перерыва"),
                 labels(Prefs.BREAK_CHOICES, "через %d мин"), indexOf(Prefs.BREAK_CHOICES, Prefs.breakMinutes(this)),
@@ -216,8 +413,10 @@ public final class MainActivity extends Activity {
                 labels(Prefs.WATCH_CHOICES, "раз в %d мин"), indexOf(Prefs.WATCH_CHOICES, Prefs.watchMinutes(this)),
                 i -> Prefs.put(this, "watch_minutes", Prefs.WATCH_CHOICES[i])));
         c.addView(Ui.text(this, "Умник сам посмотрит на экран и скажет, только если заметит что-то важное: ошибку в тексте, "
-                + "похожее на развод сообщение, подсказку в задаче. Каждый взгляд — это запрос к Claude, он стоит денег "
-                + "(на Opus примерно 1–2 цента, на Haiku — в десятки раз дешевле). В банках и при вводе пароля не смотрит.",
+                + "похожее на развод сообщение, подсказку в задаче. " + (free
+                ? "Бесплатный ИИ думает прямо в телефоне — частые взгляды заметно тратят заряд батареи."
+                : "Каждый взгляд — это запрос к Claude, он стоит денег (на Opus примерно 1–2 цента, на Haiku — в десятки "
+                + "раз дешевле).") + " В банках и при вводе пароля не смотрит.",
                 12.5f, R.color.text_secondary), Ui.margins(Ui.fill(), this, 0, 0, 0, 8));
         c.addView(toggle("Читать ответы вслух", "speak", Prefs.speak(this)));
 
@@ -301,9 +500,11 @@ public final class MainActivity extends Activity {
     }
 
     private void notes() {
-        TextView t = Ui.text(this, "🔒 Снимок экрана уходит в Claude (Anthropic) только вместе с вопросом — когда ты нажал кнопку "
-                + "или включил «Сам подсказывать». В телефоне снимки не сохраняются. Приложения банков и кино снимать "
-                + "экран не дают — там Умник видит только название приложения.\n\n"
+        TextView t = Ui.text(this, (Prefs.free(this)
+                ? "🔒 Бесплатный ИИ разбирает снимки экрана прямо в телефоне — они никуда не отправляются и не сохраняются. "
+                : "🔒 Снимок экрана уходит в Claude (Anthropic) только вместе с вопросом — когда ты нажал кнопку "
+                + "или включил «Сам подсказывать». В телефоне снимки не сохраняются. ")
+                + "Приложения банков и кино снимать экран не дают — там Умник видит только название приложения.\n\n"
                 + "♟ Подсказки в рейтинговых партиях против живых людей запрещены правилами chess.com и lichess — за это "
                 + "банят аккаунт. Для учёбы, задач и игры с ботом — пожалуйста.", 12.5f, R.color.text_secondary);
         content.addView(t, Ui.margins(Ui.fill(), this, 4, 0, 4, 24));

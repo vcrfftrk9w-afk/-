@@ -117,8 +117,9 @@ public class ScreensTest {
     public void overlayCards() throws Exception {
         Activity host = start(Activity.class);
         Overlay o = new Overlay(host, null);
-        Hint h = Hint.analyze(Arrays.asList("rnbqkbnr", "pppppppp", "........", "........",
-                "........", "........", "PPPPPPPP", "RNBQKBNR"), false, "black", 500);
+        // после 1.e4, играем чёрными — доска на экране перевёрнута
+        Hint h = Hint.analyze(Arrays.asList("RNBKQBNR", "PPP.PPPP", "........", "...P....",
+                "........", "........", "pppppppp", "rnbkqbnr"), false, "black", 500);
         FrameLayout page = new FrameLayout(host);
         page.setPadding(30, 200, 30, 0);
         android.widget.LinearLayout column = Ui.column(host);

@@ -48,7 +48,13 @@ const mock = `(() => {
   await p.goto('http://localhost:8792/index.html'); await p.waitForTimeout(800);
   await p.evaluate(() => { State.s.onboarded = true; State.s.mode = 'adhd'; State.save(); location.reload(); });
   await p.waitForTimeout(2600);
-  const clean = () => p.evaluate(() => { document.querySelectorAll('.toast').forEach((t) => t.remove()); document.querySelectorAll('.modal.modal-open').forEach((m) => { if (m.id !== 'sheet-modal') UI.closeModal('#' + m.id); }); });
+  // строгий режим планировщика требует ответа, когда по часам начинается блок дня, — в этой проверке он мешает
+  await p.evaluate(() => { const pr = Track.profile(); pr.strict = false; State.save(); });
+  const clean = () => p.evaluate(() => {
+    document.querySelectorAll('.toast').forEach((t) => t.remove());
+    document.querySelectorAll('.modal.modal-open').forEach((m) => { if (m.id !== 'sheet-modal') UI.closeModal('#' + m.id); });
+    if (document.querySelector('#sheet-modal.modal-open .demand')) UI.closeModal('#sheet-modal');
+  });
   // поздравление с уровнем опыта всплывает в любой момент — закрываем его перед каждым нажатием
   const tap = async (sel) => { await clean(); await p.click(sel); };
   const myBefore = await p.evaluate(() => document.querySelector('#mytasks-root').textContent.replace(/\s+/g, ' ').replace(/\d/g, ''));

@@ -2478,3 +2478,8 @@ body[data-space="tasks"] .mini-clock,
 body[data-space="learn"] .mini-clock { display: none !important; }
 .remind-tg ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 6px; font-size: 13px; }
 .remind-tg code { font-size: 12px; padding: 1px 5px; border-radius: 6px; background: color-mix(in srgb, var(--text) 10%, transparent); overflow-wrap: anywhere; }
+
+/* ---------- 💃 танец из TikTok: как повторить за видео ---------- */
+.lv-dance { display: grid; gap: 12px; }
+.lv-dance h2 { margin: 0; }
+.lv-dance-steps { margin: 0; padding-left: 22px; display: grid; gap: 8px; font-size: 15.5px; line-height: 1.45; text-align: left; }

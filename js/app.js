@@ -1241,6 +1241,12 @@ const App = (() => {
       if (c && Courses.state(c.id)) { go('courses'); Courses.open(c.id, 'lesson'); return; }
     }
     go('mytasks');
+    // будильник дела уровня (Тренировка, Тишина без телефона…) — «Начинаю» сразу запускает это дело
+    if (typeof Plans !== 'undefined' && typeof Levels !== 'undefined') {
+      const k = State.todayKey();
+      const p = Plans.list().find((x) => x.quest && `${x.emoji || '📌'} ${x.title}` === title);
+      if (p && Levels.questsAt(Levels.levelOn(k)).includes(p.quest) && !Levels.isDone(p.quest, k)) setTimeout(() => Levels.start(p.quest), 350);
+    }
   }
   window.onAlarmOpen = () => safely('alarmOpen', openFromAlarm);
 

@@ -1,0 +1,111 @@
+{
+  "name": "Starfall",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Shared": {
+        "$path": "src/shared"
+      },
+      "Remotes": {
+        "$className": "Folder",
+        "Action": {
+          "$className": "RemoteEvent"
+        },
+        "Push": {
+          "$className": "RemoteEvent"
+        }
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "StreamingEnabled": false
+      },
+      "StudioPreview": {
+        "$className": "Part",
+        "$properties": {
+          "Anchored": true,
+          "Size": [
+            48,
+            1,
+            48
+          ],
+          "Color": [
+            0.22,
+            0.2,
+            0.45
+          ],
+          "Material": "SmoothPlastic",
+          "TopSurface": "Smooth"
+        },
+        "Sign": {
+          "$className": "SurfaceGui",
+          "$properties": {
+            "Face": "Top",
+            "PixelsPerStud": 20
+          },
+          "Text": {
+            "$className": "TextLabel",
+            "$properties": {
+              "Size": {
+                "UDim2": [
+                  [
+                    1,
+                    0
+                  ],
+                  [
+                    1,
+                    0
+                  ]
+                ]
+              },
+              "BackgroundTransparency": 1,
+              "TextScaled": true,
+              "TextColor3": [
+                1.0,
+                0.9,
+                0.5
+              ],
+              "Font": "FredokaOne",
+              "Text": "⭐ ЗВЕЗДОПАД\nКарта появится сама, когда игра запустится.\nНажми File → Publish to Roblox"
+            }
+          }
+        }
+      }
+    },
+    "Lighting": {
+      "$className": "Lighting"
+    },
+    "Players": {
+      "$className": "Players"
+    },
+    "ServerStorage": {
+      "$className": "ServerStorage"
+    },
+    "StarterGui": {
+      "$className": "StarterGui"
+    },
+    "StarterPack": {
+      "$className": "StarterPack"
+    },
+    "SoundService": {
+      "$className": "SoundService"
+    }
+  }
+}

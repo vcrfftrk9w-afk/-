@@ -56,9 +56,10 @@ const I18n = (() => {
     }
     return bare ? w : Fmt.num(n) + ' ' + w;
   }
-  function set(l) {
+  /* keep = false — только показать (язык из профиля или браузера), не запоминать как выбор человека */
+  function set(l, keep) {
     lang = l === 'kz' ? 'kz' : 'ru';
-    Store.set('sauda_lang', lang);
+    if (keep !== false) Store.set('sauda_lang', lang);
     document.documentElement.lang = lang === 'kz' ? 'kk' : 'ru';
   }
   return { t, tp, set, add: (d) => Object.assign(KZ, d), KZ, get lang() { return lang; } };

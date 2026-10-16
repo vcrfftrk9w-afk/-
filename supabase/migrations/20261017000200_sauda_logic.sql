@@ -199,7 +199,7 @@ begin
      where id in (select id from sauda.lot_items where lot_id = l.id and order_id is null order by id limit p_qty for update skip locked);
     get diagnostics n = row_count;
     if n < p_qty then raise exception 'not_enough_stock'; end if;
-    select string_agg(payload, E'\n' order by id) into items from sauda.lot_items where order_id = oid;
+    select string_agg(payload, chr(10) order by id) into items from sauda.lot_items where order_id = oid;
     update sauda.orders set payload = items, status = 'delivered', delivered_at = now(),
            complete_at = now() + make_interval(hours => sauda.cfgn('complete_hours_auto')::int)
      where id = oid;
@@ -317,7 +317,8 @@ begin
     and (select count(*) from sauda.lot_items i where i.lot_id = l.id and i.order_id is null) < 5;
   update sauda.lots l set qty = (select count(*) from sauda.lot_items i where i.lot_id = l.id and i.order_id is null),
          status = case when l.status = 'sold' then 'active' else l.status end
-   where l.is_demo and l.auto and l.status in ('active', 'sold');
+   where l.is_demo and l.auto and l.status in ('active', 'sold')
+     and (l.status = 'sold' or l.qty is distinct from (select count(*) from sauda.lot_items i where i.lot_id = l.id and i.order_id is null));
 
   for r in select s.* from sauda.subs s where s.active and s.next_at <= now() order by s.next_at limit 100 loop
     begin
@@ -345,7 +346,7 @@ begin
     begin
       perform sauda.tick();
     exception when others then
-      raise warning 'sauda.tick: %', sqlerrm;
+      raise warning using message = 'sauda.tick: ' || sqlerrm;
     end;
   end if;
 end $$;

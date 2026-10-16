@@ -156,7 +156,6 @@ declare
   off int := greatest(coalesce((p->>'offset')::int, 0), 0);
   tm boolean := sauda.test_mode(); res jsonb; total bigint;
 begin
-  if q is not null then q := replace(replace(replace(q, '\', '\\'), '%', '\%'), '_', '\_'); end if;
   select coalesce(jsonb_agg(sauda.card(l, u) order by x.rn), '[]'::jsonb), coalesce(max(x.total), 0) into res, total
   from (
     select l.id, count(*) over () total, row_number() over (order by
@@ -174,7 +173,7 @@ begin
     join sauda.games gg on gg.id = l.game
     where l.status = 'active' and not u.banned and (tm or not l.is_demo)
       and (g is null or l.game = g) and (s is null or l.section = s) and (k is null or gg.kind = k)
-      and (q is null or lower(l.title) like '%' || q || '%' or lower(l.descr) like '%' || q || '%' or lower(gg.name) like '%' || q || '%')
+      and (q is null or strpos(lower(l.title), q) > 0 or strpos(lower(l.descr), q) > 0 or strpos(lower(gg.name), q) > 0)
       and (mn is null or l.price >= mn) and (mx is null or l.price <= mx)
       and (not au or l.auto) and (not onl or u.last_seen > now() - interval '5 minutes')
       and (sel is null or u.login = sel) and (ct is null or l.city = ct)
@@ -228,7 +227,7 @@ begin
   if not found then raise exception 'bad_game'; end if;
   sec := coalesce(p->>'section', '');
   if not exists (select 1 from jsonb_array_elements(gm.sections) x where x->>'id' = sec) then raise exception 'bad_section'; end if;
-  t := regexp_replace(trim(coalesce(p->>'title', '')), '\s+', ' ', 'g');
+  t := regexp_replace(trim(coalesce(p->>'title', '')), '[[:space:]]+', ' ', 'g');
   d := trim(coalesce(p->>'descr', ''));
   pr := (p->>'price')::bigint;
   op := nullif(p->>'old_price', '')::bigint;
@@ -462,7 +461,7 @@ begin
     if u.id <> o.seller then raise exception 'forbidden'; end if;
     if o.status <> 'paid' then raise exception 'bad_status'; end if;
     update sauda.orders set status = 'delivered', delivered_at = now(),
-           payload = case when txt = '' then payload when payload = '' then txt else payload || E'\n' || txt end,
+           payload = case when txt = '' then payload when payload = '' then txt else payload || chr(10) || txt end,
            complete_at = now() + make_interval(hours => sauda.cfgn('complete_hours')::int)
      where id = o.id;
     if txt <> '' then perform sauda.post(sauda.chat_of(o.buyer, o.seller), o.seller, 'text', txt, o.id); end if;
@@ -644,7 +643,7 @@ begin
   m := sauda.post(c, p_me, p_kind, v_body);
   -- демо-продавец отвечает сам (не чаще раза в 10 минут)
   if pr.is_demo and not exists (select 1 from sauda.messages where chat_id = c and sender = p_peer and kind = 'system'
-                                  and body like '%demo_reply%' and created_at > now() - interval '10 minutes') then
+                                  and strpos(body, 'demo_reply') > 0 and created_at > now() - interval '10 minutes') then
     perform sauda.post(c, p_peer, 'system', '{"k":"demo_reply"}');
   end if;
   if pr.id = sauda.platform() and me.role not in ('admin', 'moder') then
@@ -714,25 +713,25 @@ declare s int := 0; d int; i int; n int := length(p);
 begin
   for i in 1..n loop
     d := substr(p, n - i + 1, 1)::int;
-    if i % 2 = 0 then d := d * 2; if d > 9 then d := d - 9; end if; end if;
+    if mod(i, 2) = 0 then d := d * 2; if d > 9 then d := d - 9; end if; end if;
     s := s + d;
   end loop;
-  return s % 10 = 0;
+  return mod(s, 10) = 0;
 end $$;
 
 -- вывод: деньги списываются сразу и ждут, пока администратор переведёт их на Kaspi / карту
 create or replace function public.sauda_withdraw(p_token text, p_amount bigint, p_method text, p_details text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare u sauda.users; d text := regexp_replace(coalesce(p_details, ''), '\D', '', 'g'); v_fee bigint; wid bigint; b bigint;
+declare u sauda.users; d text := regexp_replace(coalesce(p_details, ''), '[^0-9]', '', 'g'); v_fee bigint; wid bigint; b bigint;
 begin
   u := sauda.me(p_token);
   if p_method not in ('kaspi', 'halyk', 'card', 'freedom') then raise exception 'bad_input'; end if;
   if p_method = 'card' then
     if length(d) not between 16 and 19 or not sauda.luhn(d) then raise exception 'bad_card'; end if;
   else
-    if length(d) = 10 and d like '7%' then d := '7' || d; end if;
-    if length(d) = 11 and d like '8%' then d := '7' || substr(d, 2); end if;
-    if d !~ '^77\d{9}$' then raise exception 'bad_phone'; end if;
+    if length(d) = 10 and left(d, 1) = '7' then d := '7' || d; end if;
+    if length(d) = 11 and left(d, 1) = '8' then d := '7' || substr(d, 2); end if;
+    if d !~ '^77[0-9]{9}$' then raise exception 'bad_phone'; end if;
   end if;
   if p_amount is null or p_amount < sauda.cfgn('min_withdraw') then raise exception 'bad_amount'; end if;
   if (select count(*) from sauda.withdrawals where user_id = u.id and status = 'pending') >= 3 then raise exception 'too_many_pending'; end if;

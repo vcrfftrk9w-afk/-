@@ -57,7 +57,7 @@ begin
     res := (select coalesce(jsonb_agg(sauda.order_json(x, u.id) order by x.id desc), '[]'::jsonb) from (
       select o2.* from sauda.orders o2
       where (coalesce(p->>'status', '') = '' or o2.status = p->>'status')
-        and (q = '' or o2.id::text = q or lower(o2.title) like '%' || q || '%'
+        and (q = '' or o2.id::text = q or strpos(lower(o2.title), q) > 0
              or exists (select 1 from sauda.users z where z.id in (o2.buyer, o2.seller) and z.login = q))
       order by o2.id desc limit 100) x);
 
@@ -105,7 +105,7 @@ begin
   elsif p_action = 'users' then
     res := (select coalesce(jsonb_agg(sauda.mini(z) || jsonb_build_object('balance', z.balance, 'role', z.role, 'ban_reason', z.ban_reason,
               'purchases', z.purchases, 'pro_until', z.pro_until) order by z.created_at desc), '[]'::jsonb)
-            from (select * from sauda.users where (q = '' or login like '%' || q || '%' or lower(name) like '%' || q || '%')
+            from (select * from sauda.users where (q = '' or strpos(login, q) > 0 or strpos(lower(name), q) > 0)
                   and role <> 'bot' order by created_at desc limit 100) z);
 
   elsif p_action = 'user_set' then
@@ -142,7 +142,7 @@ begin
   elsif p_action = 'lots' then
     res := (select coalesce(jsonb_agg(sauda.card(l, z) order by l.created_at desc), '[]'::jsonb) from (
         select * from sauda.lots x where (coalesce(p->>'status', '') = '' or x.status = p->>'status')
-          and (q = '' or x.id::text = q or lower(x.title) like '%' || q || '%') and not x.is_demo
+          and (q = '' or x.id::text = q or strpos(lower(x.title), q) > 0) and not x.is_demo
         order by x.created_at desc limit 100) l join sauda.users z on z.id = l.seller);
 
   elsif p_action = 'lot_block' then

@@ -7,6 +7,7 @@
 
 const App = (() => {
   const app = { me: null, meta: null, counters: {} };
+  let started = false;
   let lastNotifs = null, lastUnread = null;
 
   const logo = (s) => `<svg width="${s}" height="${s}" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg${s}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#00c2e0"/><stop offset="1" stop-color="#0077b6"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#lg${s})"/><circle cx="32" cy="32" r="17" fill="none" stroke="#ffc93c" stroke-width="4"/><path d="M15 32h34M32 15v34M20 20c8 6 16 6 24 0M20 44c8-6 16-6 24 0" fill="none" stroke="#ffc93c" stroke-width="3.2" stroke-linecap="round"/></svg>`;
@@ -31,7 +32,7 @@ const App = (() => {
   }
 
   /* ---- кто вошёл и счётчики */
-  let refreshing = null;
+  let refreshing = null, langChanged = false;
   async function refresh(force) {
     if (refreshing && !force) return refreshing;
     refreshing = (async () => {
@@ -41,13 +42,14 @@ const App = (() => {
         app.me = j.user;
         app.counters = { unread: j.unread, notifs: j.notifs, active_buy: j.active_buy, active_sell: j.active_sell };
         if (app.meta) app.meta.config.test_mode = j.test_mode;
-        if (j.user.lang && j.user.lang !== I18n.lang && !Store.get('sauda_lang', null)) setLang(j.user.lang, true);
+        if (j.user.lang && j.user.lang !== I18n.lang && !Store.get('sauda_lang', null)) { I18n.set(j.user.lang, false); langChanged = true; }
         ping(j);
       } else if (j.error === 'no_session' || j.error === 'banned') {
         app.me = null; app.counters = {};
         if (j.error === 'banned') { Api.setToken(''); UI.toast(errText('banned'), 'err'); }
       }
       header();
+      if (langChanged && started) { langChanged = false; Router.go(); }
     })();
     try { await refreshing; } finally { refreshing = null; }
   }
@@ -188,7 +190,7 @@ const App = (() => {
 
   async function boot() {
     setTheme(Store.get('sauda_theme', window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
-    I18n.set(I18n.lang);
+    I18n.set(I18n.lang, false);
     const ref = new URLSearchParams(location.search).get('ref');
     if (ref) { Store.set('sauda_ref', ref.slice(0, 16)); history.replaceState(null, '', location.pathname + location.hash); }
     document.getElementById('logo').innerHTML = logo(34) + '<b>Sauda</b>';
@@ -205,6 +207,8 @@ const App = (() => {
     }
     header();
     await refresh();
+    started = true;
+    langChanged = false;
     Router.go();
     loadMeta();
     Api.on(() => { app.me = null; header(); });

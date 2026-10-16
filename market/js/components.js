@@ -75,7 +75,7 @@ const C = {
 
   /* компактно для карточки: аватар, имя, Pro, онлайн, звезда */
   sellerMini(u) {
-    return html`<span class="seller-line">${C.avatar(u, 20)}<span class="seller-name">${u.name}</span>${u.pro ? html`<span class="pro-badge">PRO</span>` : ''}${C.online(u)}${u.reviews ? html`<span class="rating mini"><b>★ ${(+u.rating).toFixed(1)}</b></span>` : ''}</span>`;
+    return html`<span class="seller-line">${C.avatar(u, 20)}<span class="seller-name">${u.name}</span>${u.verified ? html`<span class="vbadge" title="${t('Проверенный продавец')}">✔</span>` : ''}${u.pro ? html`<span class="pro-badge">PRO</span>` : ''}${C.online(u)}${u.reviews ? html`<span class="rating mini"><b>★ ${(+u.rating).toFixed(1)}</b> <span class="muted">(${Fmt.num(u.reviews)})</span></span>` : ''}</span>`;
   },
 
   sellerLine(u) {
@@ -122,7 +122,7 @@ const C = {
     const attrs = Object.entries(l.attrs || {}).slice(0, 3).map(([k, v]) => html`<span class="tag">${k}: ${v}</span>`);
     return html`<a class="lot-row" href="#/lot/${l.id}">
       <div class="lr-main"><div class="lr-title">${l.title}</div><div class="lr-tags">${C.lotTags(l)}${attrs}${l.demo ? html`<span class="tag tag-demo">${t('демо')}</span>` : ''}</div></div>
-      <div class="lr-seller">${C.sellerLine(l.seller)}</div>
+      <div class="lr-seller">${C.sellerMini(l.seller)}</div>
       <div class="lr-qty">${l.qty === null || l.qty === undefined ? '∞' : Fmt.num(l.qty)}</div>
       <div class="lr-price"><b>${Fmt.money(l.price)}</b>${d ? html`<s>${Fmt.money(l.old_price)}</s>` : ''}</div>
     </a>`;

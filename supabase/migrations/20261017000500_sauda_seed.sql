@@ -124,7 +124,7 @@ insert into sauda.lots(seller, game, section, title, descr, price, old_price, qt
 select (select id from sauda.users where login = v.s), v.g, v.sec, v.t,
        case when v.au then 'Демо-лот для проверки сделки. Код приходит автоматически сразу после оплаты — в заказе и в чате.'
             else 'Демо-лот для проверки сделки. Продавец-робот выполнит заказ сам примерно за минуту, затем подтвердите получение.' end
-       || case when v.pd is not null then E'\nМожно включить автопродление: подписка будет продлеваться сама с баланса.' else '' end,
+       || case when v.pd is not null then chr(10) || 'Можно включить автопродление: подписка будет продлеваться сама с баланса.' else '' end,
        v.pr, v.op, case when v.au then 0 else v.q end, v.au, v.nid, coalesce(v.idl, ''), v.dm, v.pd, coalesce(v.at, '{}')::jsonb, coalesce(v.ct, ''), true,
        now() - make_interval(mins => v.ord * 7)
 from (values
@@ -202,12 +202,12 @@ do $$
 declare f record;
 begin
   for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-           where n.nspname = 'public' and p.proname like 'sauda\_%' loop
-    execute format('revoke all on function %s from public', f.sig);
-    execute format('grant execute on function %s to anon, authenticated', f.sig);
+           where n.nspname = 'public' and left(p.proname, 6) = 'sauda_' loop
+    execute 'revoke all on function ' || f.sig::text || ' from public';
+    execute 'grant execute on function ' || f.sig::text || ' to anon, authenticated';
   end loop;
   for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'sauda' loop
-    execute format('revoke all on function %s from public, anon, authenticated', f.sig);
+    execute 'revoke all on function ' || f.sig::text || ' from public, anon, authenticated';
   end loop;
 end $$;

@@ -210,7 +210,7 @@ const Remind = (() => {
           <div class="seg" role="group" aria-label="За сколько минут">
             ${[0, 5, 10, 15].map((m) => `<button class="seg-btn ${pc.on && pc.lead === m ? 'sel' : ''}" data-pub-lead="${m}">${m ? `за ${m} мин` : 'в момент'}</button>`).join('')}
           </div>
-          <p class="remind-next">${pc.on ? `Будильник: каждый день в <b>${Track.hhmm(at - pc.lead)}</b>` : '🔕 Будильник выключен'}${phone() ? '' : '<br><small class="muted">Звонит в приложении на Android</small>'}</p>
+          <p class="remind-next">${pc.on ? `Будильник: каждый день в <b>${Track.hhmm(at - pc.lead)}</b>` : '🔕 Будильник выключен'}${phone() ? '' : '<br><small class="muted">На Android звонит будильник, на айфоне — уведомление 🔔</small>'}</p>
           <button class="btn ${pc.on ? 'btn-ghost' : 'btn-primary'} btn-block" id="pub-toggle">${pc.on ? '🔕 Выключить будильник' : '⏰ Включить будильник'}</button>
           <button class="btn btn-ghost btn-block" id="pub-close">Готово</button>
         </div>`);
@@ -355,7 +355,7 @@ const Remind = (() => {
         <div class="coach-sheet remind">
           <div class="why-tag">Звонит, даже когда приложение закрыто</div>
           <h2>⏰ Напоминания в телефон</h2>
-          ${phone() ? alarmBlock() : ''}
+          ${phone() ? alarmBlock() : typeof Push !== 'undefined' ? Push.card() : ''}
           <p class="muted small">Я превращу твой график в календарь: каждое дело станет повторяющимся событием с сигналом. Импортируешь один раз — дальше телефон сам зовёт.</p>
 
           <div class="remind-opts">
@@ -411,6 +411,7 @@ const Remind = (() => {
 
       if (phone()) window.onAlarmSound = () => { if (body.isConnected) render(); };
       body.onclick = (e) => {
+        if (e.target.closest('[data-push-open]')) { Push.open(); return; }
         const tIn = body.querySelector('#al-time');
         if (tIn && draft && toMin(tIn.value) != null) draft.min = toMin(tIn.value);
         const s1 = e.target.closest('[data-rset]'), s2 = e.target.closest('[data-rbefore]');
@@ -478,13 +479,16 @@ const Remind = (() => {
     render();
   }
 
+  /* тот же список — на сервер: айфон получит уведомления в эти минуты (js/push.js) */
+  const pushList = () => phoneAlarms(alarmCfg());
+
   /* после любых изменений: если список будильников стал другим — отдать телефону новый */
   function syncIfChanged() {
     if (!phone() || lastSent === null) return;
     if (JSON.stringify(phoneAlarms(alarmCfg())) !== lastSent) syncAlarms();
   }
 
-  return { events, ics, googleLink, alarmClock, open, IMPORTANT, phoneAlarms, syncAlarms, syncIfChanged, alarmLine, pubCfg, pubSheet };
+  return { events, ics, googleLink, alarmClock, open, IMPORTANT, phoneAlarms, pushList, syncAlarms, syncIfChanged, alarmLine, pubCfg, pubSheet };
 })();
 
 /* в APK будильники ставятся сами при каждом запуске — по актуальному графику */

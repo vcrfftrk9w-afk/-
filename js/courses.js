@@ -296,7 +296,7 @@ const Courses = (() => {
         <h4 class="cr-sec">⚙️ Напоминание</h4>
         <div class="cr-settings">
           <label class="cr-field"><span>Время урока</span><input type="time" id="cr-time" value="${Track.hhmm(st.time)}"></label>
-          <label class="remind-sw"><input type="checkbox" id="cr-alarm" ${st.alarm !== false ? 'checked' : ''}><span>⏰ Будильник в это время (APK на Android)</span></label>
+          <label class="remind-sw"><input type="checkbox" id="cr-alarm" ${st.alarm !== false ? 'checked' : ''}><span>⏰ Будильник в это время <small class="muted">(на Android — будильник, на айфоне — уведомление)</small></span></label>
         </div>
         <button class="btn btn-ghost btn-block cr-reset" id="cr-reset">Начать курс заново</button>
       </div>`;

@@ -78,9 +78,26 @@ const Account = (() => {
 
   async function signOut() {
     const a = acc;
+    // уведомления этого телефона привязаны к аккаунту — при выходе выключаем
+    if (typeof Push !== 'undefined') { try { Push.disable(); } catch (e) { /* и так выходим */ } }
     keep(null);
     Object.keys(lastSeen).forEach((k) => delete lastSeen[k]);
     if (a) { try { await rpc('ldm_logout', { p_token: a.token }, 6000); } catch (e) { /* ключ и так забыт на телефоне */ } }
+  }
+
+  /* функция сервера от имени этого телефона — ключ входа подставляется сам (уведомления на айфон).
+     anon — функция без входа (открытый ключ сервера). Ответ { ok, … } или { ok:false, error } */
+  async function call(fn, args, opts) {
+    const o = opts || {};
+    if (!o.anon && !acc) return { ok: false, error: 'no_session' };
+    let j;
+    try {
+      j = await rpc(fn, o.anon ? (args || {}) : Object.assign({ p_token: acc.token }, args), o.ms);
+    } catch (e) {
+      return { ok: false, error: 'network' };
+    }
+    if (!o.anon && j && j.ok === false && j.error === 'no_session') lost();
+    return j;
   }
 
   /* ключ входа отозван (вышел на другом устройстве, аккаунт удалён) — забываем его */
@@ -300,7 +317,7 @@ const Account = (() => {
   }
 
   return {
-    available, backend, signIn, signOut, open, line, gate, needGate,
+    available, backend, signIn, signOut, open, line, gate, needGate, call,
     get signedIn() { return !!acc; },
     get login() { return acc ? acc.login : null; },
   };

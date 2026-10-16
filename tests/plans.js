@@ -12,6 +12,7 @@ const mock = `(() => {
     setAlarms: (json) => { calls.push(JSON.parse(json)); return JSON.stringify({ exact: true, fullScreen: true, next: 0 }); },
     alarmStatus: () => JSON.stringify({ exact: true, fullScreen: true }),
     testAlarm: () => {}, ringNow: () => {}, pickSound: () => {}, openSettings: () => {},
+    takeOpen: () => { const t = window.__open || ''; window.__open = ''; return t; },
   };
 })();`;
 (async () => {
@@ -47,6 +48,10 @@ const mock = `(() => {
   await p.evaluate(() => document.querySelectorAll('.modal.modal-open').forEach((m) => { if (m.id !== 'sheet-modal') UI.closeModal('#' + m.id); }));
   const done = await p.evaluate(() => ({ cls: document.querySelector('#mytasks-root .plans .mt-row').className, xp: State.s.xp, head: document.querySelector('#mytasks-root .plans .my-sec').textContent }));
   check('отметил — сделано, +опыт, «1 из 1»', /done/.test(done.cls) && done.xp > xp0 && /1 из 1/.test(done.head), done);
+  const todayK = await p.evaluate(() => State.todayKey());
+  await p.waitForTimeout(2300); // будильники переставляются через 2 секунды после изменения
+  const skipAl = (await lastAlarms()).filter((a) => /Тренировка/.test(a.title));
+  check('сделано сегодня — сегодня будильник этого дела молчит, в другие дни звонит', skipAl.length === 2 && skipAl.every((a) => a.skip === todayK), skipAl);
 
   // список всех дел и правка: одно время всем дням
   const allTxt = await p.evaluate(() => document.querySelector('#mytasks-root .plans-all').textContent.replace(/\s+/g, ' '));
@@ -110,6 +115,12 @@ const mock = `(() => {
   await p.click('#pl-save'); await p.waitForTimeout(500);
   const tr = await p.evaluate(() => ({ plan: State.s.plans[0], bell: document.querySelector('#mytasks-root [data-lvalarm="train"]').textContent }));
   check('«Тренировка»: пн 07:00, вт 10:00, ⏰ горит, к заданию уровня', tr.plan.quest === 'train' && tr.plan.times['1'] === 420 && tr.plan.times['2'] === 600 && /⏰/.test(tr.bell), tr);
+
+  // будильник «Тренировки» звонит → «✅ Начинаю» → открываются «Мои дела» и сразу идёт тренировка
+  await p.evaluate(() => { App.go('dashboard'); window.__open = `${State.s.plans[0].emoji || '📌'} ${State.s.plans[0].title}`; window.onAlarmOpen(); });
+  await p.waitForTimeout(800);
+  const fromAlarm = await p.evaluate(() => ({ space: document.body.dataset.space, running: Coach.running, title: (document.querySelector('.run-top span') || {}).textContent }));
+  check('будильник дела уровня → «Начинаю» → сразу запускается это дело', fromAlarm.space === 'tasks' && fromAlarm.running && /Тренировка/.test(fromAlarm.title || ''), fromAlarm);
 
   check('без ошибок на странице', errs.length === 0, errs);
 

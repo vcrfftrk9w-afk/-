@@ -99,7 +99,9 @@ public class AlarmActivity extends Activity {
         Button up = button(Alarms.okLabel(title), 0xFF7C3AED);
         up.setOnClickListener(v -> {
             Alarms.stopRinging(this);
-            startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            // открываем приложение сразу на нужном экране: урок курса, «Мои дела»
+            startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra(MainActivity.EXTRA_OPEN, title == null ? "" : title));
             finish();
         });
         Button later = button("😴 Ещё " + Alarms.SNOOZE_MIN + " минут", 0xFF2E2B45);

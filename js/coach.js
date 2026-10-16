@@ -266,6 +266,7 @@ const Coach = (() => {
   function stopRun() {
     if (run && run.timer) clearInterval(run.timer);
     run = null;
+    if (typeof Awake !== 'undefined') Awake.release('coach');
     const body = $('#sheet-body');
     if (body) body.onclick = null;
   }
@@ -296,6 +297,8 @@ const Coach = (() => {
   function startRun(kind, steps, title, block, onDone) {
     stopRun();
     run = { kind, steps, i: 0, endsAt: 0, timer: null, started: Date.now(), block, title, paused: false, onDone };
+    // тренировка с таймером: экран не гаснет, иначе таймер и голос замирают
+    if (typeof Awake !== 'undefined') Awake.hold('coach');
     // старт — это событие: звук, вибрация и голос, как у тренера
     Sound.sfx('fanfare');
     FX.vibrate([60, 40, 120]);
@@ -888,7 +891,7 @@ ${digest()}
     openTraining, openWalk, openCook, openShop, openAI,
     recipeFor, shopList, shopWeek, strengthSteps, walkSteps, trainingWeek, roundsNow, typeFor,
     WORKOUTS, RECIPES, MENUS, weekIndex, digest, prompt,
-    say, SESSIONS, runSteps: startRun,
+    say, SESSIONS, runSteps: startRun, getSample,
     get running() { return !!run; },
   };
 })();

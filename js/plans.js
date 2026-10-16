@@ -222,7 +222,7 @@ const Plans = (() => {
     list().filter((p) => p.alarm !== false).forEach((p) => {
       ORDER.forEach((dow) => {
         const min = timeOn(p, dow);
-        if (min != null) out.push({ dow, min, title: `${p.emoji || '📌'} ${p.title}`, text: 'Пора! Нажми «Начинаю» — и сразу за дело.' });
+        if (min != null) out.push({ dow, min, title: `${p.emoji || '📌'} ${p.title}`, text: 'Пора! Нажми «Начинаю» — и сразу за дело.', skip: isDone(p) ? today() : undefined });
       });
     });
     return out;

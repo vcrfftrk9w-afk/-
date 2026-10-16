@@ -1,9 +1,11 @@
-// ldm-push — отправляет пуши из очереди ldm.push_outbox на айфоны (и в браузеры) аккаунтов.
+// ldm-push — отправляет пуши из очереди ldm.push_outbox на айфоны (и в браузеры) аккаунтов:
+// уведомлением сайта (Web Push) или громким сигналом через приложение Bark.
 // Зовёт её база: ldm.push_tick() раз в минуту (только когда наступил будильник) и «Проверить» в приложении.
 // Пароль между базой и функцией — заголовок x-push-token (ldm.push_cfg.cron_token).
 // Ключи VAPID функция создаёт сама при первом запуске и хранит в ldm.push_cfg — они не покидают сервер.
 import postgres from 'npm:postgres@3.4.5';
 import { importVapid, makeVapidKeys, send } from './webpush.mjs';
+import { isBark, sendBark } from './bark.mjs';
 
 const SUBJECT = 'https://vcrfftrk9w-afk.github.io/-/'; // контакт отправителя для Apple/Google: адрес приложения
 const sql = postgres(Deno.env.get('SUPABASE_DB_URL')!, { prepare: false, max: 2, idle_timeout: 20, connect_timeout: 10 });
@@ -50,11 +52,11 @@ async function deliver() {
   if (jobs.length) {
     const subs = await sql<Sub[]>`
       select endpoint, account_id, p256dh, auth from ldm.push_subs
-       where account_id in ${sql([...new Set(jobs.map((j) => j.account_id))])}`;
+       where device <> 'bark-off' and account_id in ${sql([...new Set(jobs.map((j) => j.account_id))])}`;
     for (const j of jobs) {
       const mine = subs.filter((s) => s.account_id === j.account_id);
       const res = await Promise.all(mine.map((s) =>
-        send(s, j.payload, { key: k.key, pub: k.pub, subject: SUBJECT })
+        (isBark(s.endpoint) ? sendBark(s.endpoint, j.payload) : send(s, j.payload, { key: k.key, pub: k.pub, subject: SUBJECT }))
           .catch((e: Error) => ({ status: 0, text: String((e && e.message) || e).slice(0, 200) }))));
       res.forEach((r, i) => {
         if (r.status >= 200 && r.status < 300) { fine.add(mine[i].endpoint); sent += 1; }
@@ -81,6 +83,7 @@ async function deliver() {
 async function tidy() {
   await sql`delete from ldm.push_outbox where created_at < now() - interval '3 days'`;
   await sql`delete from ldm.push_sent where day < current_date - 3`;
+  await sql`delete from ldm.push_subs where device = 'bark-off'`; // Bark отключили в приложении
   try {
     await sql`delete from cron.job_run_details
                where jobid in (select jobid from cron.job where jobname = 'ldm-push-tick')

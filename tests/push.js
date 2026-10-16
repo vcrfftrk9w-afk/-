@@ -10,7 +10,10 @@ const crypto = require('crypto');
       из нажатия) → подписка и расписание на сервере, то же, что будильники APK → «Проверить» →
       сделал дело — сегодня о нём не напомнит → раз в сутки подписка обновляется →
       нажатие на уведомление открывает «Мои дела» → «Выключить» → запрет в настройках → выход.
-   4) APK: строки уведомлений нет (звонит будильник), но расписание на сервер уходит. */
+   4) APK: строки уведомлений нет (звонит будильник), но расписание на сервер уходит.
+   5) Bark (громкий будильник из App Store): в Safari без экрана «Домой» — войти, скопировать
+      ссылку в Bark, «Вставить и подключить» → ключ на сервере, расписание, проверочный сигнал;
+      мусор вместо ссылки — понятная подсказка; вручную; отключить. */
 const API = 'https://lgsharkholmydihgtvis.supabase.co/rest/v1/rpc/';
 const ecdh = crypto.createECDH('prime256v1'); ecdh.generateKeys();
 const VAPID = ecdh.getPublicKey().toString('base64url');
@@ -58,12 +61,28 @@ function handle(fn, a) {
       server.plans[l] = { items: clean, tz: a.p_tz, off: a.p_off, n: (server.plans[l] ? server.plans[l].n : 0) + 1 };
       return { ok: true, n: clean.length, devices: Object.values(server.subs).filter((s) => s.login === l).length };
     }
+    case 'ldm_push_bark': {
+      const l = acc(a.p_token); if (!l) return { ok: false, error: 'no_session' };
+      const k = String(a.p_key || '').trim() || null;
+      if (k && !/^[A-Za-z0-9]{8,64}$/.test(k)) return { ok: false, error: 'bad_key' };
+      const ep = 'https://api.day.app/' + k;
+      Object.entries(server.subs).forEach(([e, s]) => { if (s.login === l && s.device === 'bark' && (!k || e !== ep)) s.device = 'bark-off'; });
+      if (!k) return { ok: true, bark: false };
+      server.subs[ep] = { login: l, p256dh: '', auth: '', device: 'bark' };
+      return { ok: true, bark: true };
+    }
+    case 'ldm_push_status': {
+      const l = acc(a.p_token); if (!l) return { ok: false, error: 'no_session' };
+      const mine = Object.values(server.subs).filter((s) => s.login === l);
+      return { ok: true, bark: mine.some((s) => s.device === 'bark'), web: mine.filter((s) => s.device !== 'bark' && s.device !== 'bark-off').length, last: server.last || null };
+    }
     case 'ldm_push_test': {
       const l = acc(a.p_token); if (!l) return { ok: false, error: 'no_session' };
-      const n = Object.values(server.subs).filter((s) => s.login === l).length;
+      const n = Object.values(server.subs).filter((s) => s.login === l && s.device !== 'bark-off').length;
       if (!n) return { ok: false, error: 'no_devices' };
       if (server.tests.some((t) => t.login === l && Date.now() - t.at < 20000)) return { ok: false, error: 'too_often' };
       server.tests.push({ login: l, at: Date.now() });
+      server.last = Object.values(server.subs).some((s) => s.login === l && s.device === 'bark') ? 'api.day.app 201' : 'web.push.apple.com 201';
       return { ok: true, devices: n };
     }
     default: return { ok: false, error: 'unknown' };
@@ -166,19 +185,78 @@ async function swChecks(check) {
 
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 
-  /* ---------- 2. айфон, Safari: сначала добавить на экран «Домой» ---------- */
-  const S = await phone(b, 'safari', { ua: IPHONE, init: () => { try { localStorage.setItem('ldm_auth_skip', '1'); } catch (e) {} } });
+  /* ---------- 2. айфон, Safari: Bark — громкий будильник без экрана «Домой» ---------- */
+  const S = await phone(b, 'safari', { ua: IPHONE, init: () => {
+    try { localStorage.setItem('ldm_auth_skip', '1'); } catch (e) {}
+    // буфер обмена: что «скопировали» в Bark
+    try { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { readText: () => Promise.resolve(window.__clip || ''), writeText: () => Promise.resolve() } }); } catch (e) {}
+  } });
   await S.goto('http://localhost:8792/index.html'); await S.waitForTimeout(800);
   await S.evaluate(() => { State.s.onboarded = true; State.s.mode = 'adhd'; State.save(); location.reload(); });
   await S.waitForTimeout(2200); await closeModals(S);
-  check('айфон в Safari: строка зовёт добавить на экран «Домой»', /экран «Домой»/.test(await lineText(S) || ''), await lineText(S));
+  check('айфон без входа: строка «Будильник на айфон — подключи за 2 минуты»', /Будильник на айфон — подключи/.test(await lineText(S) || ''), await lineText(S));
   await S.click('#mytasks-root [data-push]'); await S.waitForTimeout(400);
-  const steps = await S.evaluate(() => [...document.querySelectorAll('#sheet-body .push-steps li')].map((li) => li.textContent));
-  check('инструкция: Safari → «Поделиться» → «На экран „Домой“» → открыть и включить', steps.length === 4 && /Поделиться/.test(steps[1]) && /На экран/.test(steps[2]) && /Включить уведомления/.test(steps[3]), steps);
-  check('в Safari кнопки «Включить» нет (айфон не даст)', await S.evaluate(() => !document.querySelector('#push-on')));
+  check('без аккаунта окно сначала просит войти', await S.evaluate(() => !!document.querySelector('#push-login') && !document.querySelector('.push-bark')));
+  await S.click('#push-login'); await S.waitForTimeout(500);
+  await S.click('[data-accmode="create"]'); await S.waitForTimeout(200);
+  await S.fill('#acc-login', 'lenivec'); await S.fill('#acc-pass', 'secret123');
+  await S.click('#acc-go'); await S.waitForTimeout(2500); await closeModals(S);
+  check('вошёл (аккаунт создан) — строка всё ещё зовёт подключить', await S.evaluate(() => Account.signedIn) && /подключи/.test(await lineText(S) || ''), await lineText(S));
+
+  await S.click('#mytasks-root [data-push]'); await S.waitForTimeout(500);
+  const sh = await S.evaluate(() => ({
+    bark: !!document.querySelector('#sheet-body .push-bark'),
+    store: (document.querySelector('#sheet-body .push-bark a') || {}).href || '',
+    paste: !!document.querySelector('#bark-paste'),
+    webOpen: (document.querySelector('#sheet-body details.push-web') || {}).open,
+    steps: [...document.querySelectorAll('#sheet-body details.push-web .push-steps li')].length,
+    pushOn: !!document.querySelector('#push-on'),
+    diag: (document.querySelector('#sheet-body .push-diag') || {}).textContent || '',
+  }));
+  check('окно: Bark первым — ссылка на App Store и «Вставить и подключить»', sh.bark && /apps\.apple\.com\/app\/id1403753865/.test(sh.store) && sh.paste, sh);
+  check('уведомления сайта — свёрнуты ниже, внутри инструкция «На экран „Домой“», кнопки «Включить» в Safari нет', sh.webOpen === false && sh.steps === 4 && !sh.pushOn, sh);
+  check('строка диагностики: iOS, в браузере, Bark: нет', /iOS 17\.5/.test(sh.diag) && /в браузере/.test(sh.diag) && /Bark: нет/.test(sh.diag), sh.diag);
+
+  // скопировал не то — подсказка и поле для ручной вставки
+  await S.evaluate(() => { window.__clip = 'привет'; });
+  await S.click('#bark-paste'); await S.waitForTimeout(400);
+  check('скопировано не то — «Не нашёл ключ Bark», поле вставки раскрыто', /Не нашёл ключ Bark/.test(await lastToast(S)) && await S.evaluate(() => document.querySelector('#bark-manual').open) && !Object.values(server.subs).some((x) => x.device === 'bark'), await lastToast(S));
   await closeSheet(S);
 
+  // скопировал ссылку в Bark → «Вставить и подключить»
+  await S.click('#mytasks-root [data-push]'); await S.waitForTimeout(400);
+  await S.evaluate(() => { window.__clip = 'https://api.day.app/AbCdEf123456/Тестовое%20сообщение'; });
+  const t0 = server.tests.length;
+  await S.click('#bark-paste'); await S.waitForTimeout(1500);
+  const bk = server.subs['https://api.day.app/AbCdEf123456'];
+  check('Bark подключён: ключ из ссылки на сервере', bk && bk.login === 'lenivec' && bk.device === 'bark', bk);
+  check('сразу ушло расписание и проверочный сигнал', !!server.plans.lenivec && server.plans.lenivec.items.length > 0 && server.tests.length === t0 + 1, { plan: !!server.plans.lenivec, tests: server.tests.length - t0 });
+  check('тост «Bark подключён — сейчас придёт проверочный сигнал»', /Bark подключён — сейчас придёт/.test(await lastToast(S)), await lastToast(S));
+  const on = await S.evaluate(() => ({ ok: (document.querySelector('#sheet-body .push-bark.on .push-ok') || {}).textContent || '', next: document.querySelectorAll('#sheet-body .push-next li').length, test: !!document.querySelector('#push-test'), bark: Push.bark }));
+  check('окно: «✅ Bark подключён», ближайшие будильники и «Проверить»', /Bark подключён/.test(on.ok) && on.next >= 1 && on.test && on.bark, on);
+  await closeSheet(S);
+  const ls = await lineText(S);
+  check('строка: «🔔 Будильник на айфоне: сегодня/завтра в …»', /^🔔 Будильник на айфоне: (сегодня|завтра|Пн|Вт|Ср|Чт|Пт|Сб|Вс) в \d\d:\d\d · /.test(ls || ''), ls);
+
+  // через 6 секунд окно узнаёт у сервера, что ушло последним
+  await S.click('#mytasks-root [data-push]'); await S.waitForTimeout(400);
+  await S.waitForTimeout(500);
+  const dg = await S.evaluate(() => (document.querySelector('#sheet-body .push-diag') || {}).textContent || '');
+  check('диагностика: Bark: да, последняя отправка видна', /Bark: да/.test(dg) && /последняя отправка: api\.day\.app 201/.test(dg), dg);
+
+  // отключить и подключить вручную другим ключом
+  await S.click('#bark-off'); await S.waitForTimeout(600);
+  check('«Отключить Bark» — на сервере ключ выключен, строка снова зовёт подключить', server.subs['https://api.day.app/AbCdEf123456'].device === 'bark-off' && !(await S.evaluate(() => Push.bark)), server.subs['https://api.day.app/AbCdEf123456']);
+  await S.click('#bark-manual summary'); await S.waitForTimeout(200);
+  await S.fill('#bark-url', '  XyZ987654321  ');
+  await S.click('#bark-on'); await S.waitForTimeout(1200);
+  check('вставил ключ вручную — подключено', (server.subs['https://api.day.app/XyZ987654321'] || {}).device === 'bark' && await S.evaluate(() => Push.bark));
+  await S.click('#bark-off'); await S.waitForTimeout(600);
+  await closeSheet(S);
+  check('после отключения — строка «подключи за 2 минуты»', /подключи/.test(await lineText(S) || ''), await lineText(S));
+
   /* ---------- 3. айфон, приложение с экрана «Домой» ---------- */
+  server.tests = []; // прошло больше 20 секунд с проверок в Safari
   const I = await phone(b, 'iphone', { ua: IPHONE, push: true, standalone: true });
   await I.goto('http://localhost:8792/index.html'); await I.waitForTimeout(800);
   await I.evaluate(() => { State.s.onboarded = true; State.s.mode = 'adhd'; State.s.name = 'Тест'; State.save(); location.reload(); });
@@ -186,16 +264,15 @@ async function swChecks(check) {
   // без входа: строка зовёт войти
   await I.evaluate(() => { try { localStorage.setItem('ldm_auth_skip', '1'); } catch (e) {} location.reload(); });
   await I.waitForTimeout(2200); await closeModals(I);
-  check('без аккаунта: «Войди в аккаунт — и будильники придут уведомлением»', /Войди в аккаунт/.test(await lineText(I) || ''), await lineText(I));
+  check('без аккаунта: строка зовёт подключить', /подключи/.test(await lineText(I) || ''), await lineText(I));
   await I.click('#mytasks-root [data-push]'); await I.waitForTimeout(400);
   await I.click('#push-login'); await I.waitForTimeout(500);
   await I.fill('#acc-login', 'lenivec'); await I.fill('#acc-pass', 'secret123');
-  await I.click('[data-accmode="create"]').catch(() => {});
-  await I.waitForTimeout(200);
-  await I.fill('#acc-login', 'lenivec'); await I.fill('#acc-pass', 'secret123');
   await I.click('#acc-go'); await I.waitForTimeout(2500); await closeModals(I);
-  check('вошёл из окна уведомлений — аккаунт есть', await I.evaluate(() => Account.signedIn));
-  check('строка: «Включи уведомления — будильники придут на этот телефон»', /Включи уведомления/.test(await lineText(I) || ''), await lineText(I));
+  check('вошёл из окна уведомлений тем же логином — аккаунт есть', await I.evaluate(() => Account.signedIn));
+  await I.click('#mytasks-root [data-push]'); await I.waitForTimeout(400);
+  check('с экрана «Домой»: блок уведомлений сайта раскрыт, кнопка «Включить уведомления» видна', await I.evaluate(() => document.querySelector('#sheet-body details.push-web').open && !!document.querySelector('#push-on')));
+  await closeSheet(I);
 
   // включить
   await I.click('#mytasks-root [data-push]'); await I.waitForTimeout(400);
@@ -263,7 +340,7 @@ async function swChecks(check) {
   const offState = await I.evaluate(() => ({ unsub: window.__push.unsubscribed, local: localStorage.getItem('ldm_push_v1'), st: Push.status() }));
   check('«Выключить» — подписка снята на телефоне (сервер уберёт её сам по ответу Apple)', offState.unsub === 1 && offState.local === null && offState.st === 'off', offState);
   await closeSheet(I);
-  check('строка снова зовёт включить', /Включи уведомления/.test(await lineText(I) || ''), await lineText(I));
+  check('строка снова зовёт подключить', /подключи/.test(await lineText(I) || ''), await lineText(I));
 
   // запрет: «Не разрешать» → понятно, где включить
   await I.evaluate(() => { window.__push.perm = 'default'; window.__push.answer = 'denied'; window.__keepPush(); });
@@ -272,7 +349,7 @@ async function swChecks(check) {
   const denied = await I.evaluate(() => ({ st: Push.status(), txt: document.querySelector('#sheet-body').textContent }));
   check('нажал «Не разрешать» — объясняем, где включить в настройках айфона', denied.st === 'denied' && /Настройки айфона → Уведомления → Ленивец→Миллионер/.test(denied.txt) && /запрещены/.test(await lastToast(I)), denied.st);
   await closeSheet(I);
-  check('строка: «Уведомления запрещены — как включить»', /запрещены/.test(await lineText(I) || ''), await lineText(I));
+  check('после запрета строка по-прежнему зовёт подключить (есть Bark)', /подключи/.test(await lineText(I) || ''), await lineText(I));
 
   // снова разрешил в настройках и включил; потом вышел из аккаунта — уведомления этого телефона выключены
   await I.evaluate(() => { window.__push.perm = 'granted'; window.__keepPush(); });

@@ -2300,16 +2300,28 @@ button.wk-body { min-height: 40px; }
 .push-sheet { display: grid; gap: 12px; }
 .push-sheet h2, .push-sheet p { margin: 0; }
 .push-steps { margin: 0; padding: 0; list-style: none; counter-reset: st; display: grid; gap: 10px; }
-.push-steps li { counter-increment: st; display: grid; grid-template-columns: 30px 1fr; align-items: start; gap: 10px; line-height: 1.4; }
+.push-steps li { counter-increment: st; display: grid; grid-template-columns: 30px 1fr; align-items: start; gap: 10px; line-height: 1.4; text-align: left; }
+.push-steps li > span { padding-top: 4px; }
 .push-steps li::before { content: counter(st); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
   font-weight: 800; color: #fff; background: var(--accent); }
 .push-warn { padding: 12px 14px; border-radius: 14px; font-weight: 600;
   background: color-mix(in srgb, var(--warn) 16%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); }
 .push-ok { font-weight: 700; }
 .push-next { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.push-next li { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; padding: 10px 12px; border-radius: 12px;
+.push-next li { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; padding: 10px 12px; border-radius: 12px; text-align: left;
   background: var(--surface-2); border: 1px solid var(--border); }
 .push-next li b { white-space: nowrap; }
+.push-bark { display: grid; gap: 10px; padding: 14px; border-radius: 16px; text-align: left;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+.push-bark.on { background: color-mix(in srgb, var(--success, #22c55e) 10%, transparent); border-color: color-mix(in srgb, var(--success, #22c55e) 40%, transparent); }
+.push-bark p, .push-bark ol { margin: 0; }
+.push-bark a { color: var(--accent); font-weight: 700; }
+.push-manual summary, .push-web summary { cursor: pointer; padding: 8px 2px; color: var(--text-muted); font-size: 14px; }
+.push-manual[open], .push-web[open] { display: grid; gap: 10px; }
+.push-input { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 12px; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--border); }
+.push-web { border-top: 1px solid var(--border); padding-top: 4px; }
+.push-diag { margin: 0; font-size: 12px; line-height: 1.4; color: var(--text-muted); overflow-wrap: anywhere; }
 
 .an-actions.one { grid-template-columns: 1fr; }
 

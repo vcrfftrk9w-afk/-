@@ -4,6 +4,7 @@
    Запуск: node tests/push-crypto.mjs (без браузера и без сети) */
 import crypto from 'node:crypto';
 import { encrypt, makeVapidKeys, importVapid, vapidAuth, send, b64u, unb64u } from '../supabase/functions/ldm-push/webpush.mjs';
+import { isBark, barkMessage, sendBark } from '../supabase/functions/ldm-push/bark.mjs';
 
 let fails = 0;
 const ok = (cond, name) => { console.log(`${cond ? '✅' : '❌'} ${name}`); if (!cond) fails++; };
@@ -112,5 +113,23 @@ const key = await importVapid(vk.jwk);
   ok(gone.status === 410 && gone.text.includes('Unregistered'), '410 — подписки больше нет, причина сохраняется');
 }
 
-console.log(fails ? `\n❌ Ошибок: ${fails}` : '\n✅ Шифрование и подпись пушей в порядке');
+/* 4. Bark — громкий будильник на айфоне через приложение из App Store */
+{
+  const ep = 'https://api.day.app/AbCdEf123456';
+  ok(isBark(ep) && !isBark('https://web.push.apple.com/x') && !isBark('https://api.day.app.evil.com/x') && !isBark('мусор'), 'Bark узнаётся только по адресу api.day.app');
+  const m = barkMessage(ep, { title: '☀️ Подъём', body: 'Вода, умывание', open: '☀️ Подъём' });
+  ok(m.device_key === 'AbCdEf123456' && m.title === '☀️ Подъём' && m.body === 'Вода, умывание', 'ключ, название и текст — из подписки и пуша');
+  ok(m.level === 'critical' && m.call === '1' && m.sound === 'alarm' && m.volume >= 5, 'сигнал критический: громко в беззвучном режиме, звук 30 секунд');
+  ok(m.url === 'https://vcrfftrk9w-afk.github.io/-/index.html?open=' + encodeURIComponent('☀️ Подъём'), 'нажал — откроется это дело');
+  ok(barkMessage(ep, { title: 'Только название' }).body === 'Только название', 'пустой текст — Bark получит название (пустое тело он не примет)');
+  let seen = null;
+  const ok200 = await sendBark(ep, { title: 't', body: 'b' }, { fetch: async (url, init) => { seen = { url, init }; return new Response('{"code":200,"message":"success"}', { status: 200 }); } });
+  ok(ok200.status === 201 && seen.url === 'https://api.day.app/push' && JSON.parse(seen.init.body).device_key === 'AbCdEf123456', 'отправка: POST api.day.app/push, ответ 200 — доставлено');
+  const gone = await sendBark(ep, { title: 't' }, { fetch: async () => new Response('{"code":400,"message":"failed to get device token: failed to get [x] device token from database"}', { status: 400 }) });
+  ok(gone.status === 410, 'ключа больше нет (Bark удалили) — подписка будет убрана');
+  const down = await sendBark(ep, { title: 't' }, { fetch: async () => new Response('oops', { status: 503 }) });
+  ok(down.status === 503, 'сбой Bark — попробуем ещё раз');
+}
+
+console.log(fails ? `\n❌ Ошибок: ${fails}` : '\n✅ Шифрование, подпись пушей и Bark в порядке');
 process.exit(fails ? 1 : 0);

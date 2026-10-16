@@ -232,9 +232,20 @@ const Push = (() => {
       const what = nx ? `${when(nx)} · ${UI.esc(String(nx.title).replace(/^\S+\s/, ''))}` : 'включён';
       return `<button class="lv-alarm" data-push>🔔 ${bark ? 'Будильник на айфоне' : 'Уведомления'}: ${what}</button>`;
     }
-    if (ios()) return '<button class="lv-alarm warn" data-push>🔔 Будильник на айфон — подключи за 2 минуты</button>';
+    if (ios()) return ''; // на айфоне вместо строки внизу — карточка наверху «Моих дел» (banner)
     const text = phoneUA() ? LINE[st] : LINE[st].replace('этот телефон', 'этот компьютер');
     return `<button class="lv-alarm warn" data-push>🔔 ${text}</button>`;
+  }
+
+  /* карточка наверху «Моих дел»: на айфоне будильник ещё не подключён — не заметить нельзя */
+  function banner() {
+    const st = status();
+    if (st === 'none' || !ios() || barkOn() || st === 'on') return '';
+    return `
+      <button class="push-banner" data-push>
+        <b>⏰ Будильник на айфоне не подключён</b>
+        <span>Нажми — 2 минуты, и подъём, публикации и твои дела будут звонить громко, как на Android</span>
+      </button>`;
   }
 
   /* ---------- окно «🔔 Будильник на айфоне» ---------- */
@@ -357,6 +368,9 @@ const Push = (() => {
       const iphone = ios();
       const anyOn = barkOn() || st === 'on';
       let main;
+      const accLine = signed
+        ? `<p class="push-acc">☁️ Аккаунт: <b>${UI.esc(Account.login || '')}</b> — будильники берутся из него. На Android должен быть <b>тот же логин</b>. <button type="button" class="push-link" id="push-acc">Сменить</button></p>`
+        : '';
       if (!signed) main = loginBlock();
       else if (iphone) {
         main = `${barkBlock()}
@@ -372,6 +386,7 @@ const Push = (() => {
           <div class="why-tag">На Android — будильник, на айфоне — ${iphone ? 'Bark или уведомление' : 'уведомление'}</div>
           <h2>🔔 Будильник на ${iphone ? 'айфоне' : 'этом устройстве'}</h2>
           <p class="muted">Подъём, публикации, твои дела и уроки — в ту же минуту, что звонит будильник на Android. Даже когда приложение закрыто.</p>
+          ${accLine}
           ${main}
           ${signed && anyOn ? nextBlock() : ''}
           ${WHAT}
@@ -400,6 +415,7 @@ const Push = (() => {
       body.onclick = async (e) => {
         // то же окно меняется на вход (закрыть и сразу открыть нельзя — закрытие доиграет и спрячет его)
         if (e.target.closest('#push-login')) { Account.open({ mode: 'login' }); return; }
+        if (e.target.closest('#push-acc')) { Account.open(); return; }
         const paste = e.target.closest('#bark-paste');
         if (paste) {
           let text = '';
@@ -477,6 +493,17 @@ const Push = (() => {
       </div>`;
   }
 
+  /* айфон, вошёл, будильник не подключён — один раз сам показать, как подключить */
+  const INTRO = 'ldm_push_intro_v1';
+  function intro() {
+    if (read(INTRO) || !banner()) return;
+    const app = document.getElementById('app');
+    if (!app || app.classList.contains('hidden') || !Account.signedIn) return;
+    if (document.querySelector('.modal.modal-open')) return; // другое окно открыто — покажем в другой раз
+    write(INTRO, Date.now());
+    open();
+  }
+
   if (typeof window !== 'undefined' && account()) {
     // расписание: после каждого изменения (дело сделано, время переставлено) — на сервер, если стало другим
     if (typeof State !== 'undefined' && State.on) State.on('change', planSoon);
@@ -485,14 +512,14 @@ const Push = (() => {
       refresh();
       if (!apk()) {
         const before = !!srv().bark;
-        serverStatus().then(() => { if (!!srv().bark !== before) redraw(); });
+        serverStatus().then(() => { if (!!srv().bark !== before) redraw(); intro(); });
       }
     }, 2500));
     document.addEventListener('visibilitychange', () => { if (!document.hidden) planSoon(); });
   }
 
   return {
-    status, line, open, card, enable, disable, test, sendPlan, upcoming, refresh,
+    status, line, banner, open, card, enable, disable, test, sendPlan, upcoming, refresh,
     barkKey, connectBark, disconnectBark, serverStatus, forget,
     get bark() { return barkOn(); },
     get on() { return status() === 'on' || barkOn(); },

@@ -342,6 +342,8 @@ const Levels = (() => {
         ${warnHTML}
       </div>
 
+      ${typeof Push !== 'undefined' && Push.banner ? Push.banner() : ''}
+
       ${night ? '<div class="mt-night"><b>🌙 Сейчас ночь — лучшее дело: спать</b><span>Дела уровня ждут утром.</span></div>' : ''}
 
       <h4 class="my-sec">Сегодня · ${doneN} из ${ids.length}${s.counted[k] ? ' · ✅ день засчитан' : ''}</h4>
@@ -366,7 +368,7 @@ const Levels = (() => {
     el.querySelectorAll('[data-lvalarm]').forEach((b) => { b.onclick = () => Plans.bellClick(b.dataset.lvalarm); });
     const al = el.querySelector('[data-alarm]'); if (al) al.onclick = () => Remind.open();
     const ac = el.querySelector('[data-account]'); if (ac) ac.onclick = () => Account.open();
-    const pu = el.querySelector('[data-push]'); if (pu) pu.onclick = () => Push.open();
+    el.querySelectorAll('[data-push]').forEach((b) => { b.onclick = () => Push.open(); });
   }
 
   return { render, complete, start, streak, levelOn, questsAt, isDone, LEVELS, QUESTS, checkDay, checkDemote, missedRun, MISS_DOWN, state: st };

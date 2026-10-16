@@ -159,8 +159,12 @@ ldm_get / ldm_set / ldm_logout / ldm_whoami`. После 10 неверных п�
 на WebCrypto. Ключи VAPID функция создала сама и хранит в базе. Выключил уведомления или удалил приложение —
 Apple отвечает «подписки нет», и функция сама её убирает. `sw.js` показывает уведомление и по нажатию открывает дело.
 
+**Скачать на телефон:** https://github.com/vcrfftrk9w-afk/-/releases/download/android/lenivec.apk —
+прямая ссылка на последнюю сборку из main, открывается без входа в GitHub. Ставится поверх старой версии, прогресс сохраняется.
+
 APK собирает GitHub Actions (`.github/workflows/android-apk.yml`) при каждом изменении приложения:
-Actions → **Android APK** → последний запуск → **Artifacts** → `lenivec-apk`. Внутри архива — `lenivec.apk`.
+Actions → **Android APK** → последний запуск → **Artifacts** → `lenivec-apk` (внутри архива — `lenivec.apk`);
+сборка из main сама выкладывается в Releases → «android» по ссылке выше.
 Ключ подписи `android/app/lenivec.keystore` лежит в репозитории, чтобы новая сборка ставилась поверх старой без потери прогресса.
 Вне Claude прогресс хранится в памяти телефона: облачное сохранение и «Спросить ИИ» работают только в версии внутри Claude.
 

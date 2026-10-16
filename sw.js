@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ldm-cache-v12';
+const CACHE_NAME = 'ldm-cache-v13';
 const ASSETS = [
   './',
   './index.html',
@@ -40,6 +40,7 @@ const ASSETS = [
   './js/advisor.js',
   './js/coach.js',
   './js/remind.js',
+  './js/push.js',
   './js/modes.js',
   './js/plans.js',
   './js/english-content.js',
@@ -86,4 +87,38 @@ self.addEventListener('fetch', (event) => {
       })
       .catch(() => caches.match(event.request).then((cached) => cached || caches.match('./index.html')))
   );
+});
+
+/* Уведомления на айфон: сервер (функция ldm-push) прислал будильник — показываем его,
+   даже когда приложение закрыто. Айфон требует показать уведомление на каждый пуш. */
+self.addEventListener('push', (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = { title: event.data ? event.data.text() : '' }; }
+  const title = d.title || 'Из Ленивца в Миллионеры';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: d.body || '',
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    tag: d.tag || undefined,
+    renotify: !!d.tag,
+    vibrate: [200, 100, 200, 100, 400],
+    data: { open: typeof d.open === 'string' ? d.open : title },
+  }));
+});
+
+/* нажали на уведомление — открываем приложение сразу на этом деле */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const open = (event.notification.data && event.notification.data.open) || '';
+  const url = new URL('./index.html' + (open ? '?open=' + encodeURIComponent(open) : ''), self.registration.scope).href;
+  event.waitUntil((async () => {
+    const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const win = list.find((c) => c.url.startsWith(self.registration.scope));
+    if (win) {
+      try { await win.focus(); } catch (e) { /* айфон может не дать — сообщение всё равно дойдёт */ }
+      win.postMessage({ type: 'ldm-open', title: open });
+      return;
+    }
+    await self.clients.openWindow(url);
+  })());
 });

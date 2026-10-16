@@ -1228,6 +1228,7 @@ const App = (() => {
     safely('ghosts', offerGhostCleanup);
     safely('env', noteEnv);
     safely('alarmOpen', openFromAlarm);
+    safely('pushOpen', () => { if (pushOpen !== null) { const t = pushOpen; pushOpen = null; openByTitle(t); } });
   }
 
   /* В APK будильник звонил, нажали «Начинаю» — приложение открывается сразу на этом деле:
@@ -1237,7 +1238,12 @@ const App = (() => {
     if (!A || !A.takeOpen || $('#app').classList.contains('hidden')) return;
     let title = '';
     try { title = String(A.takeOpen() || ''); } catch (e) { return; }
-    if (!title) return;
+    openByTitle(title);
+  }
+
+  /* то же по названию будильника — из APK и из уведомления на айфоне */
+  function openByTitle(title) {
+    if (!title || $('#app').classList.contains('hidden')) return;
     if (/^🎓/.test(title) && typeof Courses !== 'undefined') {
       const c = CourseData.COURSES.find((x) => title.includes(x.short));
       if (c && Courses.state(c.id)) { go('courses'); Courses.open(c.id, 'lesson'); return; }
@@ -1251,6 +1257,24 @@ const App = (() => {
     }
   }
   window.onAlarmOpen = () => safely('alarmOpen', openFromAlarm);
+
+  /* нажали на уведомление (айфон, браузер): приложение открылось с ?open=<название> —
+     или уже было открыто, и служба уведомлений прислала название сообщением */
+  let pushOpen = null;
+  try {
+    const u = new URL(location.href);
+    if (u.searchParams.has('open')) {
+      pushOpen = u.searchParams.get('open') || '';
+      u.searchParams.delete('open');
+      history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+    }
+  } catch (e) { /* старый браузер */ }
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      const d = e.data || {};
+      if (d.type === 'ldm-open') safely('pushOpen', () => openByTitle(String(d.title || '')));
+    });
+  }
 
   /* размеры экрана внутри просмотрщика — чтобы понять, куда девается нижняя панель */
   function noteEnv() {

@@ -155,7 +155,7 @@ const Plans = (() => {
             }).join('')}
           </div>
           <button type="button" class="btn btn-ghost btn-block" id="pl-same">Всем выбранным дням — время как у первого</button>
-          <label class="remind-sw"><input type="checkbox" id="pl-alarm" ${d.alarm !== false ? 'checked' : ''}><span>⏰ Будильник в это время${phone ? '' : ' <small class="muted">(звонит в приложении на Android)</small>'}</span></label>
+          <label class="remind-sw"><input type="checkbox" id="pl-alarm" ${d.alarm !== false ? 'checked' : ''}><span>⏰ Будильник в это время${phone ? '' : ' <small class="muted">(на Android — будильник, на айфоне — уведомление)</small>'}</span></label>
           <p class="acc-err" id="pl-err" role="alert"></p>
           <div class="remind-new-btns">
             <button type="button" class="btn btn-primary" id="pl-save">Сохранить</button>

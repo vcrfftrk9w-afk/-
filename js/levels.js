@@ -356,6 +356,7 @@ const Levels = (() => {
 
       ${typeof Account !== 'undefined' ? Account.line() : ''}
       ${typeof Remind !== 'undefined' ? Remind.alarmLine() : ''}
+      ${typeof Push !== 'undefined' ? Push.line() : ''}
       <button class="btn btn-ghost btn-block my-switch" data-space="all">🧩 Всё остальное — график, задачи, привычки, фокус…</button>`;
 
     el.querySelectorAll('[data-lvgo]').forEach((b) => { b.onclick = () => start(b.dataset.lvgo, b); });
@@ -365,6 +366,7 @@ const Levels = (() => {
     el.querySelectorAll('[data-lvalarm]').forEach((b) => { b.onclick = () => Plans.bellClick(b.dataset.lvalarm); });
     const al = el.querySelector('[data-alarm]'); if (al) al.onclick = () => Remind.open();
     const ac = el.querySelector('[data-account]'); if (ac) ac.onclick = () => Account.open();
+    const pu = el.querySelector('[data-push]'); if (pu) pu.onclick = () => Push.open();
   }
 
   return { render, complete, start, streak, levelOn, questsAt, isDone, LEVELS, QUESTS, checkDay, checkDemote, missedRun, MISS_DOWN, state: st };

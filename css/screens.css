@@ -2321,6 +2321,15 @@ button.wk-body { min-height: 40px; }
 .push-input { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 12px; color: var(--text);
   background: var(--surface-2); border: 1px solid var(--border); }
 .push-web { border-top: 1px solid var(--border); padding-top: 4px; }
+.push-banner { display: grid; gap: 4px; width: 100%; margin: 0 0 12px; padding: 14px 16px; border-radius: 16px; text-align: left; cursor: pointer;
+  font: inherit; color: var(--text);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--warn) 26%, transparent), color-mix(in srgb, var(--accent) 22%, transparent));
+  border: 1px solid color-mix(in srgb, var(--warn) 60%, transparent); }
+.push-banner b { font-size: 16px; }
+.push-banner span { font-size: 14px; color: var(--text-muted); }
+.push-acc { margin: 0; font-size: 14px; line-height: 1.45; text-align: left; }
+.push-link { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.acc-hint { margin: 0; font-size: 14px; color: var(--text-muted); }
 .push-diag { margin: 0; font-size: 12px; line-height: 1.4; color: var(--text-muted); overflow-wrap: anywhere; }
 
 .an-actions.one { grid-template-columns: 1fr; }

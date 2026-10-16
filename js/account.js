@@ -236,7 +236,8 @@ const Account = (() => {
 
   /* ---------- первый экран: регистрация или вход ---------- */
   function gate(root, opts) {
-    let mode = 'create';
+    // приложение с экрана «Домой» на айфоне: аккаунт почти наверняка уже есть (заводил в Safari или на Android)
+    let mode = typeof navigator !== 'undefined' && navigator.standalone ? 'login' : 'create';
     const render = () => {
       root.innerHTML = `
         <div class="auth-gate">
@@ -244,6 +245,7 @@ const Account = (() => {
           <h1>Из Ленивца<br>в Миллионеры</h1>
           <p class="muted">Один аккаунт на Android и айфон. Зарегистрируйся один раз — задания, уровень и серия будут общими на всех телефонах.</p>
           ${seg(mode, 'Регистрация', 'Вход')}
+          ${mode === 'create' ? '<p class="acc-hint">Уже есть аккаунт на Android или в Safari? Нажми <b>«Вход»</b> — новый аккаунт не нужен, иначе прогресс будет пустой.</p>' : ''}
           ${formHTML(mode)}
           <button type="button" class="auth-skip" id="auth-skip">Продолжить без аккаунта</button>
         </div>`;

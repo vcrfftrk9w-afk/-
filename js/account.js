@@ -79,7 +79,7 @@ const Account = (() => {
   async function signOut() {
     const a = acc;
     // уведомления этого телефона привязаны к аккаунту — при выходе выключаем
-    if (typeof Push !== 'undefined') { try { Push.disable(); } catch (e) { /* и так выходим */ } }
+    if (typeof Push !== 'undefined') { try { Push.forget(); } catch (e) { /* и так выходим */ } }
     keep(null);
     Object.keys(lastSeen).forEach((k) => delete lastSeen[k]);
     if (a) { try { await rpc('ldm_logout', { p_token: a.token }, 6000); } catch (e) { /* ключ и так забыт на телефоне */ } }

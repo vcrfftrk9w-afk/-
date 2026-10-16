@@ -97,7 +97,7 @@ begin
       from ldm.push_plans p
      cross join lateral (select case when p.tz is not null then now() at time zone p.tz
                                      else (now() at time zone 'UTC') + make_interval(mins => p.off) end as lt) t
-     where exists (select 1 from ldm.push_subs s where s.account_id = p.account_id)
+     where exists (select 1 from ldm.push_subs s where s.account_id = p.account_id and s.device <> 'bark-off')
   ), items as (
     select c.account_id, c.day, it,
            md5(coalesce(it->>'title', '') || '|' || (it->>'dow') || '|' || (it->>'min')) as k
@@ -154,7 +154,7 @@ begin
      or coalesce(p_auth, '') !~ '^[A-Za-z0-9_+/-]{21,24}={0,2}$' then
     return jsonb_build_object('ok', false, 'error', 'bad_subscription');
   end if;
-  if (select count(*) from ldm.push_subs where account_id = a and endpoint <> p_endpoint) >= 10 then
+  if (select count(*) from ldm.push_subs where account_id = a and device <> 'bark-off' and endpoint <> p_endpoint) >= 10 then
     return jsonb_build_object('ok', false, 'error', 'too_many_devices');
   end if;
   insert into ldm.push_subs(endpoint, account_id, p256dh, auth, device)
@@ -162,7 +162,7 @@ begin
   on conflict (endpoint) do update
     set account_id = excluded.account_id, p256dh = excluded.p256dh, auth = excluded.auth,
         device = excluded.device, created_at = now();
-  return jsonb_build_object('ok', true, 'devices', (select count(*) from ldm.push_subs where account_id = a));
+  return jsonb_build_object('ok', true, 'devices', (select count(*) from ldm.push_subs where account_id = a and device <> 'bark-off'));
 end $$;
 
 -- расписание будильников аккаунта; p_tz — часовой пояс телефона, p_off — смещение в минутах на случай незнакомого пояса
@@ -207,15 +207,15 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare a uuid := ldm.account_of(p_token); n int;
 begin
   if a is null then return jsonb_build_object('ok', false, 'error', 'no_session'); end if;
-  select count(*) into n from ldm.push_subs where account_id = a;
+  select count(*) into n from ldm.push_subs where account_id = a and device <> 'bark-off';
   if n = 0 then return jsonb_build_object('ok', false, 'error', 'no_devices'); end if;
   if exists (select 1 from ldm.push_outbox where account_id = a and payload->>'tag' = 'test'
                 and created_at > now() - interval '20 seconds') then
     return jsonb_build_object('ok', false, 'error', 'too_often');
   end if;
   insert into ldm.push_outbox(account_id, payload) values (a, jsonb_build_object(
-    'title', '🔔 Уведомления работают',
-    'body', 'Так будут приходить будильники: подъём, публикации, твои дела и уроки.',
+    'title', '🔔 Будильник на айфоне работает',
+    'body', 'Так будут приходить подъём, публикации, твои дела и уроки.',
     'tag', 'test', 'open', ''));
   perform ldm.push_poke();
   return jsonb_build_object('ok', true, 'devices', n);

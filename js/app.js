@@ -1220,6 +1220,8 @@ const App = (() => {
     safely('dailyCheckIn', dailyCheckIn);
     safely('ensureDaySetup', ensureDaySetup);
     safely('spaces', bindSpaces);
+    // 3 дня подряд без засчитанного дня в «Моих делах» — уровень понижается сразу при запуске
+    safely('levels', () => { if (typeof Levels !== 'undefined' && Levels.checkDemote) Levels.checkDemote(); });
     // по умолчанию открывается окно «Мои дела»
     safely('go', () => go(State.s.space === 'all' ? 'dashboard' : State.s.space === 'learn' ? 'courses' : 'mytasks'));
     safely('tilt', () => UI.initTilt());

@@ -1,5 +1,6 @@
 const { chromium } = require('./_browser');
-// Уровни «Моих дел»: старт — 2 дела; все дела N дней подряд → новый уровень; пропуск — счёт заново.
+// Уровни «Моих дел»: старт — 2 дела; все дела N дней подряд → новый уровень; пропуск — счёт заново;
+// 3 дня подряд без засчитанного дня — уровень понижается (каждые 3 дня — минус уровень, не ниже первого).
 (async () => {
   const b = await chromium.launch({ executablePath:'/opt/pw-browsers/chromium' });
   let ok = true; const check=(n,c,i)=>{ console.log((c?'✓ ':'✗ ')+n, i!==undefined?JSON.stringify(i).slice(0,260):''); if(!c) ok=false; };
@@ -70,6 +71,38 @@ const { chromium } = require('./_browser');
   await day('2026-11-01'); I = await info();
   const t5 = await p.evaluate(()=>document.querySelector('#mytasks-root .mt-list').textContent.replace(/\s+/g,' '));
   check('уровень 5: YouTube появился, тишина дошла до 5 минут и дальше не растёт', I.today.includes('youtube') && /YouTube/.test(t5) && /5 минут · телефон экраном вниз/.test(t5), t5.slice(0,400));
+  // --- понижение: 3 дня подряд без засчитанного дня — минус уровень ---
+  const warnTxt = () => p.evaluate(()=>(document.querySelector('#mytasks-root .lv-warn')||{}).textContent||'');
+  const lastChance = () => p.evaluate(()=>Remind.phoneAlarms({}).filter(a=>/Последний шанс/.test(a.title)));
+  // 1 ноября — ничего не сделано
+  await day('2026-11-02');
+  let warn = await warnTxt();
+  check('пропустил день — предупреждение: ещё 2 дня, и уровень понизится до 4', /Вчера день не засчитан/.test(warn) && /Ещё 2 дня/.test(warn) && /понизится до 4/.test(warn) && !(await lastChance()).length, warn);
+  await day('2026-11-03');
+  warn = await warnTxt();
+  const lc = await lastChance();
+  check('2 дня подряд — «последний шанс» и будильник в 21:30 только на сегодня', /последний шанс/.test(warn) && /станет 4/.test(warn) && lc.length===1 && lc[0].min===21*60+30 && lc[0].only==='2026-11-03', { warn, lc });
+  await day('2026-11-04'); await p.waitForTimeout(900);
+  I = await info();
+  const down = await p.evaluate(()=>({ sheet: ((document.querySelector('#sheet-modal.modal-open')||{}).textContent||'').replace(/\s+/g,' '), warn: (document.querySelector('#mytasks-root .lv-warn')||{}).textContent||'', head: document.querySelector('.lv-info h2').textContent }));
+  check('3 дня подряд без засчитанного дня → уровень 5 → 4, YouTube ушёл, тишина и танец остались', I.lvl===4 && !I.today.includes('youtube') && I.today.includes('silence') && I.today.includes('dance'), I);
+  check('шторка «Уровень понижен» — что ушло и как вернуть; плашка в карточке', /Уровень понижен/.test(down.sheet) && /LVL 5 → 4/.test(down.sheet) && /YouTube/.test(down.sheet) && /Вернуть уровень 5: 15 дней подряд/.test(down.sheet) && /Уровень понижен: 5 → 4/.test(down.warn) && /Тишина и танец/.test(down.head), down);
+  check('после понижения «последнего шанса» нет', !(await lastChance()).length);
+  await p.evaluate(()=>UI.closeModal('#sheet-modal')); await p.waitForTimeout(300);
+  // 6 дней подряд ничего — минус 2 уровня
+  await day('2026-11-10'); await p.waitForTimeout(900);
+  I = await info();
+  const down2 = await p.evaluate(()=>((document.querySelector('#sheet-modal.modal-open')||{}).textContent||'').replace(/\s+/g,' '));
+  check('6 дней подряд без засчитанного дня → минус 2 уровня (4 → 2), остались кино, orca и тренировка', I.lvl===2 && JSON.stringify(I.today)===JSON.stringify(['kino','orca','train']) && /LVL 4 → 2/.test(down2) && /Тишина без телефона/.test(down2) && /Танец из TikTok/.test(down2), { I, down2: down2.slice(0,200) });
+  await p.evaluate(()=>UI.closeModal('#sheet-modal')); await p.waitForTimeout(300);
+  // ниже первого уровня не падает
+  await day('2026-11-13'); await p.waitForTimeout(900); await p.evaluate(()=>UI.closeModal('#sheet-modal'));
+  await day('2026-11-20'); await p.waitForTimeout(900);
+  I = await info();
+  check('ниже 1-го уровня не падает', I.lvl===1 && JSON.stringify(I.today)===JSON.stringify(['kino','orca']), I);
+  // вернулся и сделал всё — день засчитан, предупреждений нет
+  await p.evaluate(()=>UI.closeModal('#sheet-modal')); await doAll();
+  check('сделал всё — день засчитан, предупреждения нет', (await info()).streak===1 && !(await warnTxt()));
   check('без ошибок', !errs.length, errs);
   console.log(ok ? '\n✓ уровни работают' : '\n✗ есть проблемы');
   await b.close();

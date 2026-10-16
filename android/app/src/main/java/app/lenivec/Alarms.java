@@ -24,7 +24,7 @@ import java.util.Locale;
 
 /**
  * Будильники приложения: подъём и публикации по графику недели.
- * Страница присылает список {dow, min, title, text, skip?} (dow: 0 — воскресенье), мы храним его
+ * Страница присылает список {dow, min, title, text, skip?, only?} (dow: 0 — воскресенье), мы храним его
  * и ставим каждый на ближайший такой день недели через AlarmManager.setAlarmClock —
  * это настоящий будильник: срабатывает минута в минуту, в режиме сна и при закрытом приложении.
  */
@@ -122,6 +122,9 @@ final class Alarms {
             // дело на сегодня уже сделано (урок пройден, «Встал» нажат) — сегодня не звоним, следующий раз через неделю
             String skip = a.optString("skip", "");
             if (!skip.isEmpty() && skip.equals(dayKey(at))) at = nextTime(a.optInt("dow"), a.optInt("min"), at);
+            // разовый будильник «только сегодня» (последний шанс сохранить уровень): не сегодня — не ставим
+            String only = a.optString("only", "");
+            if (!only.isEmpty() && !only.equals(dayKey(at))) continue;
             setAlarm(c, at, fireIntent(c, CODE_BASE + i, a.optString("title"), a.optString("text")));
             if (next == 0 || at < next) {
                 next = at;

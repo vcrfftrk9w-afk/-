@@ -176,6 +176,13 @@ const Remind = (() => {
     if (typeof Plans !== 'undefined') out.push(...Plans.alarms());
     // курсы из вкладки «🎓 Курсы»: урок дня в выбранное время
     if (typeof Courses !== 'undefined') out.push(...Courses.alarms());
+    // «Мои дела»: 2 дня подряд не засчитаны — сегодня в 21:30 последний шанс сохранить уровень (звонит только сегодня)
+    if (typeof Levels !== 'undefined' && Levels.missedRun) {
+      const ls = Levels.state();
+      if (ls.level > 0 && !ls.counted[k] && Levels.missedRun() >= Levels.MISS_DOWN - 1) {
+        out.push({ dow: new Date().getDay(), min: 21 * 60 + 30, title: '🔥 Последний шанс сохранить уровень', text: 'Закрой все дела в «Моих делах» сегодня — иначе завтра уровень понизится.', only: k });
+      }
+    }
     return out;
   }
 

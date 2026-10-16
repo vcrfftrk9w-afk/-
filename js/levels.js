@@ -4,10 +4,12 @@
 
    Начало — два дела: TikTok «кино» и TikTok «orca». Закрыл ВСЕ
    открытые дела нужное число дней ПОДРЯД — уровень растёт: открывается
-   новое дело или старое становится труднее. Пропустил день — счёт
-   уровня начинается заново, но открытое не отнимается: дела только
-   добавляются или усложняются. После повышения дни считаются с нуля.
-   Новые дела начинаются со следующего дня.
+   новое дело или старое становится труднее. Пропустил день — серия
+   уровня начинается заново. 3 дня подряд без засчитанного дня —
+   уровень ПОНИЖАЕТСЯ (каждые 3 дня — минус уровень, не ниже первого):
+   дела этого уровня уходят, тренировка снова легче. Вернуть уровень —
+   снова нужное число дней подряд. После повышения и понижения дни
+   считаются с нуля. Новые дела начинаются со следующего дня.
    ========================================================= */
 
 const Levels = (() => {
@@ -77,7 +79,63 @@ const Levels = (() => {
     }
     if (!s.counted) s.counted = {};
     if (!s.done) s.done = {};
+    // понижение за пропуски появилось позже: дни до этого не считаем пропущенными
+    if (!s.missSince) s.missSince = today();
     return s;
+  }
+
+  /* ---------- понижение: 3 дня подряд без засчитанного дня — минус уровень ---------- */
+  const MISS_DOWN = 3;
+  // сколько дней подряд до вчера включительно день не засчитан (внутри текущего уровня)
+  function missedRun() {
+    const s = st();
+    const floor = s.stageStart > s.missSince ? s.stageStart : s.missSince;
+    let n = 0;
+    let k = addDays(today(), -1);
+    while (k >= floor && !s.counted[k]) { n += 1; k = addDays(k, -1); }
+    return n;
+  }
+  // что уходит при понижении с уровня from до уровня to
+  function lostBetween(from, to) {
+    const gone = [];
+    const easier = [];
+    for (let lv = from; lv > to; lv -= 1) {
+      LEVELS[lv].adds.forEach((id) => gone.push(id));
+      (LEVELS[lv].harder || []).forEach((id) => { if (!easier.includes(id) && !gone.includes(id)) easier.push(id); });
+    }
+    return { gone, easier: easier.filter((id) => questsAt(to).includes(id)) };
+  }
+  function checkDemote() {
+    const s = st();
+    if (s.level <= 0) return false;
+    const miss = missedRun();
+    if (miss < MISS_DOWN) return false;
+    const from = s.level;
+    s.level -= Math.min(s.level, Math.floor(miss / MISS_DOWN));
+    s.from = today();
+    s.stageStart = today();
+    s.demoted = { at: today(), from, to: s.level, missed: miss };
+    State.save();
+    setTimeout(() => demotedSheet(s.demoted), 700);
+    return true;
+  }
+  function demotedSheet(d) {
+    if (!d || typeof UI === 'undefined' || !UI.sheet) return;
+    const lost = lostBetween(d.from, d.to);
+    const lines = lost.gone.map((id) => `<li>➖ ${QUESTS[id].emoji} <b>${UI.esc(QUESTS[id].title(d.to))}</b><small>ушло вместе с уровнем</small></li>`)
+      .concat(lost.easier.map((id) => `<li>⬇️ ${QUESTS[id].emoji} <b>${UI.esc(QUESTS[id].title(d.to))} — снова легче</b><small>${UI.esc(QUESTS[id].sub(d.to))}</small></li>`));
+    const next = LEVELS[d.to + 1];
+    Sound.sfx('deny');
+    const body = UI.sheet(`
+      <div class="lv-up lv-down-sheet">
+        <div class="lv-up-badge lv-down-badge">LVL ${d.from + 1} → ${d.to + 1}</div>
+        <h2>Уровень понижен</h2>
+        <p class="muted">${d.missed} ${UI.plural(d.missed, 'день', 'дня', 'дней')} подряд дела не закрыты. Теперь ты на уровне «${UI.esc(LEVELS[d.to].name)}».</p>
+        ${lines.length ? `<ul class="lv-up-list">${lines.join('')}</ul>` : ''}
+        ${next ? `<p class="muted small">Вернуть уровень ${d.to + 2}: ${next.need} ${UI.plural(next.need, 'день', 'дня', 'дней')} подряд закрывай все дела.</p>` : ''}
+        <button class="btn btn-primary btn-lg btn-block" id="lv-down-ok">Понял — возвращаю</button>
+      </div>`);
+    body.querySelector('#lv-down-ok').onclick = () => UI.closeModal('#sheet-modal');
   }
   /* уровень, который действует в этот день: повышение вступает в силу со следующего */
   const levelOn = (key) => { const s = st(); return key >= s.from ? s.level : Math.max(0, s.level - 1); };
@@ -161,7 +219,7 @@ const Levels = (() => {
         <h2>Новый уровень: ${UI.esc(L.name)}!</h2>
         <p class="muted">Ты держался ${L.need} ${UI.plural(L.need, 'день', 'дня', 'дней')} подряд. С завтрашнего дня:</p>
         <ul class="lv-up-list">${lines.join('')}</ul>
-        <p class="muted small">Ничего не отнимается — только добавляется. Следующий уровень — снова считаем дни с нуля.</p>
+        <p class="muted small">Следующий уровень — снова считаем дни с нуля. 3 дня подряд без засчитанного дня — уровень понизится.</p>
         <button class="btn btn-primary btn-lg btn-block" id="lv-ok">Погнали</button>
       </div>`);
     body.querySelector('#lv-ok').onclick = () => UI.closeModal('#sheet-modal');
@@ -214,10 +272,20 @@ const Levels = (() => {
   function render() {
     const el = $('#mytasks-root');
     if (!el) return;
-    // дело могли закрыть и в «Дне», и через ИИ — засчитываем день и здесь
+    // 3 дня подряд без засчитанного дня — уровень вниз; дело могли закрыть и в «Дне», и через ИИ — засчитываем день и здесь
+    checkDemote();
     if (checkDay()) State.save();
     const k = today();
     const s = st();
+    // предупреждение заранее: сколько дней подряд не засчитано и когда понизится уровень
+    const miss = s.level > 0 && !s.counted[k] ? missedRun() : 0;
+    const left = MISS_DOWN - miss;
+    const warnHTML = s.demoted && s.demoted.at === k
+      ? `<p class="lv-warn down">📉 Уровень понижен: ${s.demoted.from + 1} → ${s.demoted.to + 1} — ${s.demoted.missed} ${UI.plural(s.demoted.missed, 'день', 'дня', 'дней')} подряд без засчитанного дня.</p>`
+      : miss >= MISS_DOWN - 1 ? `<p class="lv-warn last">🔥 Сегодня последний шанс: не закроешь все дела — завтра уровень станет ${s.level}.</p>`
+        : miss >= 1 ? `<p class="lv-warn">⚠️ ${miss === 1 ? 'Вчера день не засчитан.' : `${miss} ${UI.plural(miss, 'день', 'дня', 'дней')} подряд не засчитаны.`} Ещё ${left} ${UI.plural(left, 'день', 'дня', 'дней')} без засчитанного дня — и уровень понизится до ${s.level}.</p>`
+          : '';
+
     const lv = levelOn(k);
     const ids = questsAt(lv);
     const doneN = ids.filter((id) => isDone(id, k)).length;
@@ -270,7 +338,8 @@ const Levels = (() => {
         </div>
         ${next ? `<div class="lv-bar"><span style="width:${pct}%"></span></div>
           ${need <= 15 ? `<div class="lv-dots">${Array.from({ length: need }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div>` : ''}` : ''}
-        <p class="lv-rule">Закрой <b>все</b> дела ниже — день засчитан. Пропустишь день — счёт этого уровня начнётся заново.</p>
+        <p class="lv-rule">Закрой <b>все</b> дела ниже — день засчитан. Пропустишь день — серия начнётся заново. <b>3 дня подряд</b> без засчитанного дня — уровень понизится.</p>
+        ${warnHTML}
       </div>
 
       ${night ? '<div class="mt-night"><b>🌙 Сейчас ночь — лучшее дело: спать</b><span>Дела уровня ждут утром.</span></div>' : ''}
@@ -298,7 +367,8 @@ const Levels = (() => {
     const ac = el.querySelector('[data-account]'); if (ac) ac.onclick = () => Account.open();
   }
 
-  return { render, complete, start, streak, levelOn, questsAt, isDone, LEVELS, QUESTS, checkDay, state: st };
+  return { render, complete, start, streak, levelOn, questsAt, isDone, LEVELS, QUESTS, checkDay, checkDemote, missedRun, MISS_DOWN, state: st };
+
 })();
 
 Screens.mytasks = { render: () => Levels.render() };

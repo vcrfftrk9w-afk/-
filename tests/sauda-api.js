@@ -154,6 +154,8 @@ const step = (name) => { passed++; console.log('  ✓', name); };
   assert.ok(disputes.some((d) => d.id === o4));
   const between = (await ok('sauda_admin', { p_token: C, p_action: 'chat_between', p: { a: meB.user.id, b: meS.user.id } })).data;
   assert.ok(between.messages.length > 3);
+  await ok('sauda_admin_claim', { p_token: S, p_code: code });
+  await no('sauda_admin', { p_token: S, p_action: 'resolve', p: { id: o4, winner: 'seller' } }, 'forbidden');
   await ok('sauda_admin', { p_token: C, p_action: 'resolve', p: { id: o4, winner: 'buyer', note: 'Не выполнено' } });
   ord = (await ok('sauda_order', { p_token: B, p_id: o4 })).order;
   assert.strictEqual(ord.status, 'refunded');

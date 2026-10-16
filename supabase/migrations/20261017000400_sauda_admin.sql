@@ -71,6 +71,7 @@ begin
   elsif p_action = 'resolve' then
     select * into o from sauda.orders where id = (p->>'id')::bigint;
     if not found then raise exception 'not_found'; end if;
+    if u.id in (o.buyer, o.seller) then raise exception 'forbidden'; end if; -- свой спор не решают
     if p->>'winner' = 'buyer' then perform sauda.refund(o.id, 'admin:' || left(coalesce(p->>'note', ''), 200));
     elsif p->>'winner' = 'seller' then perform sauda.complete(o.id, 'admin:' || left(coalesce(p->>'note', ''), 200));
     else raise exception 'bad_input'; end if;

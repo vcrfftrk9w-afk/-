@@ -15,6 +15,7 @@ const PORT = +process.argv[2] || 8793;
 const DB = process.argv[3] || 'postgres://postgres@/sauda?host=/var/tmp/saudapg&port=54329';
 const ROOT = path.join(__dirname, '..');
 const pool = new Pool({ connectionString: DB, max: 8 });
+pool.on('error', () => {}); // базу пересоздали — пул сам откроет новые соединения
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon' };

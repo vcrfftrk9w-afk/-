@@ -739,3 +739,40 @@ h1, h2, h3 { letter-spacing: -.02em; }
 fieldset.field { border: 0; padding: 0; margin: 0; }
 fieldset.field legend { font-size: 13px; color: var(--muted); margin-bottom: 6px; padding: 0; }
 .chips label.chip input { margin: 0 2px 0 0; }
+
+/* ───── оформление 3.0: орнамент «қошқар мүйіз» (бараний рог) — фирменная деталь Sauda, витрина главной ───── */
+:root { --orn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cg fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M28 38c0-9-7-15-13-13-5 2-5 9 0 10 3 1 5-2 3-4'/%3E%3Cpath d='M28 38c0-9 7-15 13-13 5 2 5 9 0 10-3 1-5-2-3-4'/%3E%3Cpath d='M28 38v9M23 47h10'/%3E%3Ccircle cx='28' cy='14' r='2.2'/%3E%3C/g%3E%3C/svg%3E"); --orn-c: var(--gold); --orn-o: .11; }
+:root[data-theme="light"] { --orn-c: #0a6cd6; --orn-o: .06; }
+.orn { position: relative; isolation: isolate; }
+.orn::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--orn-c); opacity: var(--orn-o);
+  -webkit-mask: var(--orn) 0 0 / 56px 56px repeat; mask: var(--orn) 0 0 / 56px 56px repeat;
+  -webkit-mask-image: var(--orn), linear-gradient(115deg, transparent 30%, #000 75%); mask-image: var(--orn), linear-gradient(115deg, transparent 30%, #000 75%);
+  -webkit-mask-composite: source-in; mask-composite: intersect; }
+
+/* разделы каталога: цветные значки */
+.kind { gap: 11px; box-shadow: var(--shadow2); }
+.kind span { width: 40px; height: 40px; flex: none; border-radius: 12px; display: grid; place-items: center; font-size: 20px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--k) 34%, transparent), color-mix(in srgb, var(--k) 12%, transparent)); }
+.kind:nth-child(1) { --k: #14d3ee; } .kind:nth-child(2) { --k: #8b5cf6; } .kind:nth-child(3) { --k: #22c55e; }
+.kind:nth-child(4) { --k: #ec4899; } .kind:nth-child(5) { --k: #f59e0b; } .kind:nth-child(6) { --k: #64748b; }
+
+/* как работает сделка и преимущества */
+.steps li, .feat { box-shadow: var(--shadow2); }
+.steps li span { background: var(--brand-g); box-shadow: 0 6px 14px rgba(10, 108, 214, .3); }
+.feat span { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; font-size: 24px;
+  background: linear-gradient(135deg, rgba(255, 201, 60, .28), rgba(255, 201, 60, .08)); }
+
+/* призыв продавать — фирменная плашка */
+.sell-cta { background: linear-gradient(135deg, #0a6cd6 0%, #14b8e6 100%); border: 0; color: #fff; box-shadow: 0 14px 34px rgba(10, 108, 214, .3); --orn-c: #fff; --orn-o: .14; }
+.sell-cta p { color: rgba(255, 255, 255, .88); }
+.sell-cta .btn.primary { background: #fff; color: #0a6cd6; box-shadow: 0 6px 18px rgba(0, 0, 0, .15); }
+.sell-cta .btn.ghost { color: #fff; border-color: rgba(255, 255, 255, .55); }
+
+/* цифры сервиса */
+.home-stats b { background: var(--brand-g); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.home-stats div { box-shadow: var(--shadow2); }
+
+/* карточки лотов: логотип игры парит над цветом игры */
+.lot-cover img.gicon.cover-emoji { box-shadow: 0 10px 24px rgba(0, 0, 0, .28); }
+.game-tile { box-shadow: var(--shadow2); }
+.game-tile img.gicon.gt-emoji { box-shadow: 0 4px 12px rgba(0, 0, 0, .2); }

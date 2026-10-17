@@ -19,7 +19,7 @@ Views.home = async (view, ctx) => {
   const games = App.meta.games;
   const fee = App.cfg('fee_pct');
   view.innerHTML = html`
-    <section class="hero">
+    <section class="hero orn">
       <div class="hero-text">
         <div class="hero-kicker">🇰🇿 ${t('Маркетплейс Казахстана')}</div>
         <h1>${t('Донат, игровые ценности и подписки —')} <span class="grad">${t('через гаранта')}</span></h1>
@@ -66,7 +66,7 @@ Views.home = async (view, ctx) => {
       <div class="feat"><span>🇰🇿</span><b>${t('Тенге и қазақша')}</b><p>${t('Цены в ₸, интерфейс на русском и казахском.')}</p></div>
     </section>
 
-    <section class="sell-cta">
+    <section class="sell-cta orn">
       <div><h2>${t('Продавайте на Sauda')}</h2><p>${t('Комиссия {fee}% — только с успешной сделки. Автовыдача, поднятие лотов, вывод на Kaspi.', { fee })}</p></div>
       <div class="cta-btns"><a class="btn primary big" href="#/sell">${t('Выставить лот')}</a><a class="btn ghost big" href="#/pro">👑 Sauda Pro</a></div>
     </section>

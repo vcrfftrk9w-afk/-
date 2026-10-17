@@ -260,6 +260,7 @@ async function register(p, login, name) {
   assert.ok((await S.locator('.notif').count()) >= 3);
   await go(B, '#/lot/' + manualId);
   await B.click('[data-act=fav]');
+  await B.waitForSelector('[data-act=fav][aria-pressed=true]');
   await go(B, '#/favs');
   await B.waitForSelector('.lot-card');
   await go(B, '#/settings');

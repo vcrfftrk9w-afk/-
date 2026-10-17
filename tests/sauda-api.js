@@ -327,6 +327,19 @@ const step = (name) => { passed++; console.log('  ✓', name); };
   assert.strictEqual(+(await sql(`select balance from sauda.users where login = 'sauda'`))[0].balance, pfBefore, 'сервис не ушёл в минус');
   step('уровни: комиссия ниже, кешбэк покупателю, новый уровень, кешбэк не больше комиссии');
 
+  // ── вещи с доставкой: автоподтверждение через 14 дней; подбор пароля не закрывает вход владельцу с другого адреса
+  const gsec = (await sql(`select sections->0->>'id' s from sauda.games where id = 'phones'`))[0].s;
+  const gLot = (await ok('sauda_lot_save', { p_token: LS, p: { game: 'phones', section: gsec, title: 'iPhone 13 б/у ' + tag, price: 5000, qty: 1, deliver_mins: 1440, city: 'Алматы' } })).id;
+  const gOrd = (await ok('sauda_buy', { p_token: LB, p_lot: gLot, p_qty: 1 })).order;
+  await ok('sauda_order_act', { p_token: LS, p_id: gOrd, p_action: 'deliver', p_text: 'Казпочта, трек RR123456789KZ' });
+  const gDays = (await sql(`select extract(epoch from complete_at - delivered_at) / 86400 d from sauda.orders where id = $1`, [gOrd]))[0].d;
+  assert.ok(+gDays >= 13.9, 'вещь подтверждается сама не раньше чем через 14 дней: ' + gDays);
+  for (let i = 0; i < 10; i++) await no('sauda_login', { p_login: 'lvs_' + tag, p_password: 'wrong' + i }, 'bad_login');
+  await no('sauda_login', { p_login: 'lvs_' + tag, p_password: 'secret1' }, 'locked');
+  await sql(`update sauda.login_fails set ip = '203.0.113.9' where login = $1`, ['lvs_' + tag]);   // подбирали с чужого адреса
+  await ok('sauda_login', { p_login: 'lvs_' + tag, p_password: 'secret1' });
+  step('вещи: автоподтверждение через 14 дней; подбор пароля закрывает вход только подбирающему');
+
   // ── под поддержку не замаскироваться, вывод можно отменить, пока его не взяли в работу
   const BB = (await ok('sauda_login', { p_login: 'buyer_' + tag, p_password: 'secret2' })).token; // после разблокировки — новый вход
   await no('sauda_register', { p_login: 'fake_' + tag, p_password: 'secret9', p_name: 'Поддержка Sauda' }, 'name_reserved');

@@ -181,7 +181,7 @@ const App = (() => {
       }
       if (opts.auth && !app.me) await refresh();
       if (opts.staff && !isStaff()) { view.innerHTML = C.empty('🔒', t('Нет доступа')).s; return true; }
-      if (opts.guest && Api.token && app.me) { location.replace(ctx.query.next || '#/me'); return true; }
+      if (opts.guest && Api.token && app.me) { location.replace(safeNext(ctx.query.next)); return true; }
       return false;
     };
     Router.after = () => activeTab();

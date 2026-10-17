@@ -318,6 +318,9 @@ const UI = (() => {
   return { toast, fail, bind, modal, ask, prompt, busy, copy };
 })();
 
+/* куда вернуться после входа: только свой адрес #/… — чужая ссылка (javascript:, другой сайт) ведёт в профиль */
+const safeNext = (v) => (typeof v === 'string' && /^#\/[^\s]*$/.test(v) ? v : '#/me');
+
 /* ---- адреса страниц: #/lot/123?x=1 */
 const Router = (() => {
   const routes = [];

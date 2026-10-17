@@ -8,7 +8,7 @@
 /* ───────────── вход и регистрация ───────────── */
 Views.auth = async (view, ctx) => {
   const reg = ctx.query.mode === 'reg';
-  const next = ctx.next || ctx.query.next || '#/me';
+  const next = safeNext(ctx.next || ctx.query.next);
   view.innerHTML = html`<div class="auth-page"><div class="card auth-card">
     <div class="auth-logo">${raw(App.logo(44))}<b>Sauda</b></div>
     <div class="tabs center-tabs"><button class="tab ${reg ? '' : 'on'}" data-act="tab" data-m="login">${t('Вход')}</button><button class="tab ${reg ? 'on' : ''}" data-act="tab" data-m="reg">${t('Регистрация')}</button></div>

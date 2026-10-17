@@ -198,7 +198,7 @@ Views.order = async (view, ctx) => {
     <div class="order-page">
       <div class="order-main">
         <div class="card order-card">
-          <a class="oc-lot" href="#/lot/${o.lot_id}"><span class="or-ico big" style="--c:${g.color}">${o.thumb ? html`<img src="${o.thumb}" alt="">` : g.emoji}</span>
+          <a class="oc-lot" href="#/lot/${o.lot_id}"><span class="or-ico big" style="--c:${g.color}">${o.thumb ? html`<img src="${o.thumb}" alt="">` : C.gicon(g)}</span>
             <span><b>${o.title}</b><span class="muted small">${g.name} · ${C.section(o.game, o.section)}</span></span></a>
           <dl class="sum-list">
             <div><dt>${t('Цена')}</dt><dd>${Fmt.money(o.unit_price)} × ${o.qty}</dd></div>

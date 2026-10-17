@@ -66,7 +66,7 @@ const C = {
   /* значок игры размером в 1em: где раньше стоял эмодзи, теперь логотип того же размера */
   gicon(g, cls) {
     const id = ICON_ALIAS[g.id] || g.id;
-    const src = (window.SAUDA_ICONS && window.SAUDA_ICONS[id]) || (GAME_ICONS.has(id) ? 'img/games/' + id + '.webp' : '');
+    const src = g.logo || (window.SAUDA_ICONS && window.SAUDA_ICONS[id]) || (GAME_ICONS.has(id) ? 'img/games/' + id + '.webp' : '');
     return src ? html`<img class="gicon ${cls || ''}" src="${src}" alt="" loading="lazy" decoding="async">`
       : html`<span class="${cls || ''}" aria-hidden="true">${g.emoji}</span>`;
   },

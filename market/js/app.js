@@ -10,7 +10,14 @@ const App = (() => {
   let started = false;
   let lastNotifs = null, lastUnread = null;
 
-  const logo = (s) => `<svg width="${s}" height="${s}" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg${s}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#00c2e0"/><stop offset="1" stop-color="#0077b6"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#lg${s})"/><circle cx="32" cy="32" r="17" fill="none" stroke="#ffc93c" stroke-width="4"/><path d="M15 32h34M32 15v34M20 20c8 6 16 6 24 0M20 44c8-6 16-6 24 0" fill="none" stroke="#ffc93c" stroke-width="3.2" stroke-linecap="round"/></svg>`;
+  /* знак Sauda: буква S на бирюзовом, золотое солнце — как на флаге Казахстана */
+  const logo = (s) => `<svg width="${s}" height="${s}" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg${s}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14d3ee"/><stop offset="1" stop-color="#0a6cd6"/></linearGradient></defs><rect width="64" height="64" rx="18" fill="url(#lg${s})"/><path d="M42.5 22.5c-2.2-3.4-6-5.5-10.7-5.5-6.2 0-10.8 3.6-10.8 8.6 0 11.4 22.5 6.6 22.5 17.6 0 5-4.8 8.8-11.4 8.8-5 0-9.2-2.2-11.6-6" fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round"/><circle cx="49.5" cy="14.5" r="5" fill="#ffc93c"/></svg>`;
+  const SV = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+  const ICO = {
+    chat: raw(`<svg ${SV}><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z"/></svg>`),
+    bell: raw(`<svg ${SV}><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>`),
+    orders: raw(`<svg ${SV}><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>`),
+  };
 
   /* ---- каталог игр и настройки сервиса: из кэша сразу, свежие — фоном */
   function setMeta(m) {
@@ -82,9 +89,9 @@ const App = (() => {
     document.getElementById('top-right').innerHTML = html`
       <button class="icon-btn hide-m" data-act="lang" aria-label="${t('Язык')}">${I18n.lang === 'kz' ? 'ҚАЗ' : 'РУС'}</button>
       ${me ? html`
-        <a class="icon-btn hide-m" href="#/chats" aria-label="${t('Сообщения')}">💬${badge(n.unread)}</a>
-        <a class="icon-btn" href="#/notifs" aria-label="${t('Уведомления')}">🔔${badge(n.notifs)}</a>
-        <a class="icon-btn hide-m" href="#/orders" aria-label="${t('Заказы')}">🧾${badge(n.active_buy + n.active_sell)}</a>
+        <a class="icon-btn hide-m" href="#/chats" aria-label="${t('Сообщения')}">${ICO.chat}${badge(n.unread)}</a>
+        <a class="icon-btn" href="#/notifs" aria-label="${t('Уведомления')}">${ICO.bell}${badge(n.notifs)}</a>
+        <a class="icon-btn hide-m" href="#/orders" aria-label="${t('Заказы')}">${ICO.orders}${badge(n.active_buy + n.active_sell)}</a>
         <a class="balance-pill" href="#/wallet" aria-label="${t('Баланс')}">${Fmt.money(me.balance)}</a>
         <a class="me-btn hide-m" href="#/me" aria-label="${t('Профиль')}">${C.avatar(me, 34)}</a>`
       : html`<a class="btn primary" href="#/login">${t('Войти')}</a>`}`.s;

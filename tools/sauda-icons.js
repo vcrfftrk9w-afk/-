@@ -21,8 +21,8 @@ const ICONS = [
   const b = await chromium.launch(exe ? { executablePath: exe } : {});
   for (const ic of ICONS) {
     const p = await b.newPage({ viewport: { width: ic.size, height: ic.size } });
-    const inner = ic.round ? svg : svg.replace('rx="16"', 'rx="0"');
-    await p.setContent(`<body style="margin:0;background:${ic.pad ? '#0077b6' : 'transparent'}"><div style="width:${ic.size}px;height:${ic.size}px;display:grid;place-items:center">
+    const inner = ic.round ? svg : svg.replace('rx="18"', 'rx="0"');
+    await p.setContent(`<body style="margin:0;background:${ic.pad ? '#0a6cd6' : 'transparent'}"><div style="width:${ic.size}px;height:${ic.size}px;display:grid;place-items:center">
       <div style="width:${ic.size * (1 - ic.pad * 2)}px;height:${ic.size * (1 - ic.pad * 2)}px">${inner.replace('<svg ', '<svg width="100%" height="100%" ')}</div></div></body>`);
     fs.mkdirSync(path.dirname(path.join(DIR, ic.file)), { recursive: true });
     await p.screenshot({ path: path.join(DIR, ic.file), omitBackground: true });

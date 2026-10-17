@@ -251,7 +251,7 @@ Views.order = async (view, ctx) => {
       const text = await new Promise((res) => {
         const m = UI.modal({
           title: t('Заказ выполнен'),
-          body: html`<form class="stack" data-submit="ok"><p class="muted">${t('Если нужно передать данные (код, логин и пароль, ссылку) — впишите их. Покупатель увидит их в заказе и в чате.')}</p>
+          body: html`<form class="stack" data-submit="ok"><p class="muted">${C.game(o.game).kind === 'goods' ? t('Напишите, как отправили вещь: Казпочта, CDEK или курьер и трек-номер, либо где и когда забрать. Без отметки покупателя заказ закроется сам только через 14 дней.') : t('Если нужно передать данные (код, логин и пароль, ссылку) — впишите их. Покупатель увидит их в заказе и в чате.')}</p>
             <textarea name="v" rows="4" maxlength="3000" placeholder="${t('Необязательно')}"></textarea>
             <div class="modal-actions"><button type="button" class="btn ghost" data-act="close">${t('Отмена')}</button><button class="btn primary">${t('Отметить выполненным')}</button></div></form>`,
           on: { ok: (f, fd) => { res(String(fd.get('v') || '')); m.close(true); } },

@@ -671,3 +671,25 @@ a.kpi:hover { border-color: var(--brand); text-decoration: none; }
 /* светлая тема: статусы и суммы темнее, чтобы читались на белом */
 :root[data-theme="light"] { --ok: #15803d; --warn: #b45309; --danger: #dc2626; --info: #0369a1; }
 .cb-order > b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* уровни Sauda */
+.lvl-badge { display: inline-flex; align-items: center; gap: 1px; margin-left: 4px; padding: 0 5px; border-radius: 6px; font-size: 11px; font-weight: 800; line-height: 17px; vertical-align: middle; background: var(--card2); border: 1px solid var(--line); color: var(--text); white-space: nowrap; }
+.lvl-badge.lvl-3 { border-color: rgba(56, 189, 248, .5); }
+.lvl-badge.lvl-4 { border-color: rgba(168, 85, 247, .55); background: rgba(168, 85, 247, .12); }
+.lvl-badge.lvl-5 { border-color: rgba(251, 191, 36, .6); background: rgba(251, 191, 36, .14); }
+.level-card { display: flex; flex-direction: column; gap: 10px; color: var(--text); margin-top: 12px; }
+.level-card:hover { text-decoration: none; border-color: var(--brand); }
+.lv-top { display: flex; align-items: center; gap: 12px; }
+.lv-ico { font-size: 30px; line-height: 1; }
+.lv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lv-bar { height: 8px; border-radius: 99px; background: var(--card2); overflow: hidden; }
+.lv-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--brand), var(--brand2)); }
+.lv-perks { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13.5px; }
+#cb-line { margin: 6px 0 0; color: var(--plus); }
+
+/* логотипы игр: размером с эмодзи, который они заменили (1em от шрифта контейнера) */
+img.gicon { display: inline-block; width: 1em; height: 1em; border-radius: 22%; object-fit: cover; vertical-align: -0.16em; background: var(--card2); }
+img.gicon.cover-emoji, img.gicon.gh-emoji, img.gicon.gt-emoji { width: 1em; height: 1em; }
+img.gicon.cover-emoji { border-radius: 20%; }
+.or-ico img.gicon { width: 100%; height: 100%; border-radius: 0; vertical-align: top; }
+.confirm-lot img.gicon.cover-emoji { width: 64px; height: 64px; font-size: 64px; }

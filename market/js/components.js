@@ -33,13 +33,43 @@ const TX = {
   referral: ['Реферальный бонус', '🤝'], referral_out: ['Реферальный бонус (расход)', '🤝'], fee: ['Комиссия сервиса', '🧾'],
   admin: ['Корректировка администратором', '🛡️'], admin_out: ['Корректировка (расход)', '🛡️'],
   test_reset: ['Тестовые деньги обнулены при запуске', '🧪'],
+  cashback: ['Кешбэк за уровень', '🎁'], cashback_out: ['Кешбэк покупателю', '🎁'],
+};
+
+/* уровни Sauda: опыт за сделки (1 очко за 100 ₸) → продавцу ниже комиссия, покупателю кешбэк; пороги и бонусы — настройка levels */
+const LEVELS = [['Новичок', '🌱'], ['Игрок', '🎮'], ['Профи', '⚡'], ['Мастер', '💎'], ['Легенда', '👑']];
+const Level = {
+  list: () => (App.meta && App.meta.config.levels) || [{ xp: 0, fee_off: 0, cashback: 0 }],
+  name: (n) => t((LEVELS[n - 1] || LEVELS[0])[0]),
+  icon: (n) => (LEVELS[n - 1] || LEVELS[0])[1],
+  pct: (x) => String(+x).replace('.', ','),
+  /* уровень, следующий порог и сколько пройдено до него, % */
+  progress(xp) {
+    const L = Level.list();
+    let i = 0;
+    while (i + 1 < L.length && L[i + 1].xp <= xp) i++;
+    const next = L[i + 1];
+    return { level: i + 1, next, pct: next ? Math.min(100, Math.round(((xp - L[i].xp) / (next.xp - L[i].xp)) * 100)) : 100 };
+  },
 };
 const PAY_METHODS = { kaspi: ['Kaspi.kz', '🔴'], halyk: ['Halyk Bank', '🟢'], card: ['Visa / Mastercard', '💳'], freedom: ['Freedom Pay', '🟣'], apple: ['Apple Pay', ''], google: ['Google Pay', '🅖'] };
 const WD_STATUS = { pending: ['В очереди', 'warn'], processing: ['Переводим', 'info'], done: ['Отправлено', 'ok'], rejected: ['Отклонено', 'danger'], canceled: ['Отменено', 'muted'] };
 const TOPUP_STATUS = { pending: ['Ждёт оплаты', 'warn'], claimed: ['Проверяем перевод', 'info'], paid: ['Зачислено', 'ok'], failed: ['Не подтверждено', 'danger'], canceled: ['Отменено', 'muted'] };
 const OUT_METHODS = { kaspi: ['Kaspi Gold', '🔴', 'phone'], halyk: ['Halyk (по номеру)', '🟢', 'phone'], freedom: ['Freedom (по номеру)', '🟣', 'phone'], card: ['Банковская карта', '💳', 'card'] };
 
+/* официальные логотипы игр и сервисов (img/games/<id>.webp) — только чтобы сразу было видно, к какой игре лот;
+   у разделов без бренда (услуги, вещи, «нейросети») остаётся эмодзи. Логотипы принадлежат правообладателям. */
+const GAME_ICONS = new Set(['apex', 'apple', 'arenabreakout', 'blackrussia', 'brawlstars', 'clashroyale', 'coc', 'codm', 'discord', 'eafc', 'fortnite', 'freefire', 'genshin', 'hayday', 'hsr', 'lol', 'minecraft', 'mlbb', 'netflix', 'psn', 'pubgm', 'roblox', 'spotify', 'standoff2', 'stumble', 'tanksblitz', 'telegram', 'valorant', 'xbox', 'youtube']);
+const ICON_ALIAS = { youtubech: 'youtube' };
+
 const C = {
+  /* значок игры размером в 1em: где раньше стоял эмодзи, теперь логотип того же размера */
+  gicon(g, cls) {
+    const id = ICON_ALIAS[g.id] || g.id;
+    const src = (window.SAUDA_ICONS && window.SAUDA_ICONS[id]) || (GAME_ICONS.has(id) ? 'img/games/' + id + '.webp' : '');
+    return src ? html`<img class="gicon ${cls || ''}" src="${src}" alt="" loading="lazy" decoding="async">`
+      : html`<span class="${cls || ''}" aria-hidden="true">${g.emoji}</span>`;
+  },
   game: (id) => (App.meta && App.meta.byId[id]) || { id, name: id, emoji: '🎮', color: '#00afca', sections: [], counts: {} },
   section(gameId, secId) {
     const s = C.game(gameId).sections.find((x) => x.id === secId);
@@ -58,7 +88,7 @@ const C = {
 
   badges(u) {
     if (!u) return '';
-    return html`${u.verified ? html`<span class="vbadge" title="${t('Проверенный продавец')}">✔</span>` : ''}${u.pro ? html`<span class="pro-badge">PRO</span>` : ''}${u.staff ? html`<span class="staff-badge">${t('Sauda')}</span>` : ''}${u.demo ? html`<span class="demo-badge">${t('демо')}</span>` : ''}`;
+    return html`${u.verified ? html`<span class="vbadge" title="${t('Проверенный продавец')}">✔</span>` : ''}${u.level >= 2 ? html`<span class="lvl-badge lvl-${u.level}" title="${t('Уровень {n} · {name}', { n: u.level, name: Level.name(u.level) })}">${Level.icon(u.level)}${u.level}</span>` : ''}${u.pro ? html`<span class="pro-badge">PRO</span>` : ''}${u.staff ? html`<span class="staff-badge">${t('Sauda')}</span>` : ''}${u.demo ? html`<span class="demo-badge">${t('демо')}</span>` : ''}`;
   },
 
   stars(r, big) {
@@ -88,7 +118,7 @@ const C = {
   cover(l, g) {
     g = g || C.game(l.game);
     if (l.thumb) return html`<img class="cover-img" src="${l.thumb}" alt="" loading="lazy">`;
-    return html`<span class="cover-emoji" aria-hidden="true">${g.emoji}</span><span class="cover-sec">${C.section(l.game, l.section)}</span>`;
+    return html`${C.gicon(g, 'cover-emoji')}<span class="cover-sec">${C.section(l.game, l.section)}</span>`;
   },
 
   lotTags(l) {
@@ -112,7 +142,7 @@ const C = {
         <div class="cover-badges">${l.auto ? html`<span class="cb cb-auto" title="${t('Автовыдача')}">⚡</span>` : ''}${l.period_days ? html`<span class="cb cb-sub" title="${t('Подписка')}">🔁</span>` : ''}${d ? html`<span class="cb cb-sale">−${d}%</span>` : ''}${l.demo ? html`<span class="cb cb-demo">${t('демо')}</span>` : ''}</div>
       </div>
       <div class="lot-body">
-        <div class="lot-game">${g.emoji} ${g.name} · ${C.section(l.game, l.section)}</div>
+        <div class="lot-game">${C.gicon(g)} ${g.name} · ${C.section(l.game, l.section)}</div>
         <div class="lot-title">${l.title}</div>
         <div class="lot-price"><b>${Fmt.money(l.price)}</b>${d ? html`<s>${Fmt.money(l.old_price)}</s>` : ''}${l.status && l.status !== 'active' ? html`<span class="tag tag-off">${t(LOT_STATUS[l.status] || l.status)}</span>` : ''}</div>
         <div class="lot-seller">${C.sellerMini(l.seller)}</div>
@@ -140,7 +170,7 @@ const C = {
   },
 
   gameTile(g, n) {
-    return html`<a class="game-tile" href="#/g/${g.id}" style="--c:${g.color}"><span class="gt-emoji" aria-hidden="true">${g.emoji}</span><span class="gt-name">${g.name}</span>${n !== undefined ? html`<span class="gt-count">${Fmt.num(n)}</span>` : ''}</a>`;
+    return html`<a class="game-tile" href="#/g/${g.id}" style="--c:${g.color}">${C.gicon(g, 'gt-emoji')}<span class="gt-name">${g.name}</span>${n !== undefined ? html`<span class="gt-count">${Fmt.num(n)}</span>` : ''}</a>`;
   },
 
   status(s) {
@@ -152,7 +182,7 @@ const C = {
     const g = C.game(o.game);
     const other = o.role === 'buyer' ? o.seller : o.buyer;
     return html`<a class="order-row" href="#/order/${o.id}">
-      <span class="or-ico" style="--c:${g.color}">${g.emoji}</span>
+      <span class="or-ico" style="--c:${g.color}">${C.gicon(g)}</span>
       <span class="or-main"><span class="or-title">${o.title}${o.qty > 1 ? html` <span class="muted">× ${o.qty}</span>` : ''}</span>
         <span class="or-sub muted">#${o.id} · ${Fmt.dt(o.created_at)} · ${o.role === 'buyer' ? t('продавец') : t('покупатель')} ${other ? other.name : ''}</span></span>
       <span class="or-side"><b class="${o.role === 'seller' && o.status === 'completed' ? 'plus' : ''}">${Fmt.money(o.amount)}</b>${C.status(o.status)}</span>
@@ -162,7 +192,7 @@ const C = {
   review(r) {
     return html`<div class="review">
       <div class="review-head">${C.avatar(r.buyer, 32)}<div><b>${r.buyer ? r.buyer.name : ''}</b> ${C.stars(r.stars)}
-        <div class="muted small">${C.game(r.game).emoji} ${C.game(r.game).name}${r.title ? ' · ' + r.title : ''} · ${Fmt.ago(r.created_at)}</div></div></div>
+        <div class="muted small">${C.gicon(C.game(r.game))} ${C.game(r.game).name}${r.title ? ' · ' + r.title : ''} · ${Fmt.ago(r.created_at)}</div></div></div>
       ${r.text ? html`<p class="review-text">${r.text}</p>` : ''}
       ${r.reply ? html`<div class="review-reply"><b>${t('Ответ продавца')}:</b> ${r.reply}</div>` : ''}
     </div>`;
@@ -210,6 +240,7 @@ const C = {
     ['amount', 'net'].forEach((k) => { if (d[k] !== undefined) d[k] = Fmt.money(d[k]); });
     const by = { buyer: t('покупатель'), auto: t('автоматически'), admin: t('администратор'), seller: t('продавец'), system: t('запуск сервиса') };
     if (d.by) d.by = by[d.by] || d.by;
+    if (d.level) d.lname = Level.name(d.level);
     const map = {
       order_new: ['🛒', 'Новый заказ #{id}: «{title}» на {amount}'],
       order_delivered: ['📦', 'Заказ #{id} выполнен — проверьте и подтвердите получение'],
@@ -232,6 +263,8 @@ const C = {
       lot_blocked: ['🚫', 'Лот #{id} заблокирован модератором: {reason}'],
       lot_unblocked: ['✅', 'Лот #{id} снова можно включить'],
       balance_admin: ['🛡️', 'Баланс изменён администратором: {amount}'],
+      level_up: ['🆙', 'Новый уровень {level} — «{lname}»! Комиссия с продаж ниже, кешбэк с покупок больше.'],
+      cashback: ['🎁', 'Кешбэк {amount} за заказ #{id} — уже на балансе'],
       topup_new: ['💳', 'Проверьте перевод {amount} с кодом {code} от {login}'],
       topup_done: ['💳', 'Пополнение зачислено: {amount}'],
       topup_failed: ['❌', 'Перевод на {amount} не найден: {note}'],

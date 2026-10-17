@@ -63,6 +63,7 @@ Views.me = async (view) => {
         ${me.pro ? html`<div class="pro-line">👑 ${t('Sauda Pro до {d}', { d: Fmt.date(me.pro_until) })}</div>` : ''}</div>
       <a class="me-balance" href="#/wallet"><span class="muted small">${t('Баланс')}</span><b>${Fmt.money(me.balance)}</b><span class="link">${t('Пополнить / вывести')} →</span></a>
     </div>
+    ${Views.levelCard(me)}
     <div class="menu-grid">
       <div class="menu card"><h3>${t('Покупки')}</h3>
         ${item('#/orders?tab=buy', '🛒', t('Мои покупки'), n.active_buy)}
@@ -364,7 +365,7 @@ Views.sell = async (view, ctx) => {
     thumb: lot ? lot.thumb : '',
     attrs: lot ? Object.entries(lot.attrs || {}) : [],
   };
-  const fee = +(App.me && App.me.pro ? App.cfg('pro_fee_pct') : App.cfg('fee_pct'));
+  const fee = +(App.me && App.me.fee_pct !== undefined ? App.me.fee_pct : App.me && App.me.pro ? App.cfg('pro_fee_pct') : App.cfg('fee_pct'));
   const games = App.meta.games;
   const v = (k, d) => (lot && lot[k] !== null && lot[k] !== undefined ? lot[k] : d);
 
@@ -548,7 +549,7 @@ Views.myLots = async (view, ctx) => {
       const [gid, sid] = k.split('/');
       const g = C.game(gid);
       const wait = raiseAt[k] && new Date(raiseAt[k]) > new Date();
-      return html`<section class="card my-group"><div class="block-head"><h3><a href="#/g/${gid}/${sid}">${g.emoji} ${g.name} · ${C.section(gid, sid)}</a></h3>
+      return html`<section class="card my-group"><div class="block-head"><h3><a href="#/g/${gid}/${sid}">${C.gicon(g)} ${g.name} · ${C.section(gid, sid)}</a></h3>
         <button class="btn small ${wait ? 'ghost' : ''}" data-act="raise" data-g="${gid}" data-s="${sid}" ${wait ? 'disabled' : ''}>⬆️ ${wait ? t('Поднять через {t}', { t: Fmt.left(raiseAt[k]) }) : t('Поднять')}</button></div>
         ${groups[k].map((l) => html`<div class="my-lot">
           <a class="ml-main" href="#/lot/${l.id}"><b>${l.title}</b><span class="muted small">${Fmt.money(l.price)} · ${l.qty === null ? '∞' : t('{n} шт.', { n: l.qty })} · 👁 ${l.views} · ${t('продано {n}', { n: l.sold })}${l.auto ? ' · ⚡' : ''}</span></a>
@@ -691,6 +692,18 @@ Views.stats = async (view, ctx) => {
 };
 
 /* ───────────── помощь и правила ───────────── */
+/* карточка уровня: прогресс до следующего и что он даёт */
+Views.levelCard = (me) => {
+  const pg = Level.progress(+me.xp || 0);
+  return html`<a class="card level-card" href="#/help?s=levels">
+    <div class="lv-top"><span class="lv-ico" aria-hidden="true">${Level.icon(pg.level)}</span>
+      <span class="lv-main"><b>${t('Уровень {n} · {name}', { n: pg.level, name: Level.name(pg.level) })}</b>
+        <span class="muted small">${pg.next ? t('До «{name}» — сделки ещё на {s}', { name: Level.name(pg.level + 1), s: Fmt.money((pg.next.xp - (+me.xp || 0)) * 100) }) : t('Максимальный уровень!')}</span></span>
+      <span class="mi-arrow">›</span></div>
+    <div class="lv-bar" role="progressbar" aria-valuenow="${pg.pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pg.pct}%"></i></div>
+    <div class="lv-perks"><span>💰 ${t('Комиссия с продаж: {p}%', { p: Level.pct(me.fee_pct) })}</span><span>🎁 ${t('Кешбэк с покупок: {p}%', { p: Level.pct(me.cashback_pct || 0) })}</span></div></a>`;
+};
+
 Views.help = async (view, ctx) => {
   const c = App.meta.config;
   const qa = [
@@ -699,6 +712,7 @@ Views.help = async (view, ctx) => {
     ['auto', 'Что такое автовыдача?', 'Продавец заранее загружает коды, ключи или данные аккаунтов. После оплаты одна строка сразу выдаётся вам — в заказе и в чате, в любое время суток.'],
     ['dispute', 'Что делать, если товар не пришёл или не работает?', 'Не подтверждайте заказ. Напишите продавцу в чат заказа. Если не договорились — нажмите «Открыть спор»: деньги останутся замороженными, администратор изучит переписку и вернёт деньги или переведёт продавцу. Если продавец не выполнил заказ в срок, заказ можно отменить самому.'],
     ['fee', 'Сколько стоит?', 'Покупателю — бесплатно, он платит цену лота. Продавец платит комиссию {fee}% только с успешной сделки (с Sauda Pro — {pro}%). Вывод — {w}%, минимум {min}.'],
+    ['levels', 'Что такое уровни Sauda?', 'Каждая завершённая сделка даёт опыт и покупателю, и продавцу: 1 очко за каждые 100 ₸. Уровни: 🌱 Новичок → 🎮 Игрок (сделки на 10 000 ₸) → ⚡ Профи (50 000 ₸) → 💎 Мастер (200 000 ₸) → 👑 Легенда (1 000 000 ₸). С каждым уровнем комиссия продавца ниже на 0,5 % (до −2 %, но не ниже, чем с Pro), а покупатель получает кешбэк на баланс: от 0,5 % до 2 % с каждой покупки. Уровень виден рядом с именем — по нему покупатели узнают опытных продавцов.'],
     ['withdraw', 'Как вывести деньги?', 'Кошелёк → «Вывести»: на Kaspi Gold, Halyk, Freedom по номеру телефона или на карту. Заявки обрабатываются в течение 24 часов.'],
     ['subs', 'Как работает автопродление подписок?', 'При покупке лота-подписки отметьте «Продлевать автоматически». Когда срок подойдёт, Sauda сама купит продление с вашего баланса — как обычный заказ через гаранта. Отключить можно в разделе «Подписки».'],
     ['safe', 'Как не попасться мошенникам?', 'Никогда не платите мимо Sauda (переводом на карту, в Telegram и т.п.) — тогда гарант не защитит. Не подтверждайте заказ, пока не проверили товар. Не передавайте никому пароль от Sauda. Поддержка Sauda пишет только из чата «Sauda · Поддержка».'],
@@ -712,6 +726,7 @@ Views.help = async (view, ctx) => {
     'Оскорбления, спам и угрозы в чатах запрещены.',
     'За нарушения лоты блокируются, аккаунт может быть заблокирован, а спорные деньги возвращены пострадавшей стороне.',
     'Продавец сам отвечает за уплату налогов со своего дохода по законодательству РК.',
+    'Названия и логотипы игр и сервисов принадлежат их правообладателям и показаны только для того, чтобы было понятно, к какой игре относится лот. Sauda не связан с правообладателями.',
   ];
   const vars = { h: c.complete_hours, ha: c.complete_hours_auto, fee: c.fee_pct, pro: c.pro_fee_pct, w: c.withdraw_fee_pct, min: Fmt.money(c.min_withdraw) };
   view.innerHTML = html`<div class="page-head"><h1>❓ ${t('Помощь')}</h1></div>

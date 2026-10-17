@@ -28,7 +28,7 @@ Views.home = async (view, ctx) => {
           <input name="q" type="search" placeholder="${t('Например: UC PUBG, голда Standoff 2, Spotify')}" aria-label="${t('Поиск')}" autocomplete="off">
           <button class="btn primary">${t('Найти')}</button>
         </form>
-        <div class="quick">${QUICK.map(([g, s, label]) => html`<a class="chip" href="#/g/${g}/${s}">${C.game(g).emoji} ${t(label)}</a>`)}</div>
+        <div class="quick">${QUICK.map(([g, s, label]) => html`<a class="chip" href="#/g/${g}/${s}">${C.gicon(C.game(g))} ${t(label)}</a>`)}</div>
       </div>
       <div class="hero-art" aria-hidden="true">
         <div class="ha-card ha-1"><span>⚡</span><b>${t('Автовыдача')}</b><small>${t('код приходит сразу')}</small></div>
@@ -121,7 +121,7 @@ Views.game = async (view, ctx) => {
   const sorts = [['top', 'Сначала онлайн и Pro'], ['cheap', 'Сначала дешёвые'], ['expensive', 'Сначала дорогие'], ['rating', 'По рейтингу продавца'], ['popular', 'Популярные'], ['new', 'Новые']];
   view.innerHTML = html`
     <div class="game-hero" style="--c:${g.color}">
-      <span class="gh-emoji" aria-hidden="true">${g.emoji}</span>
+      ${C.gicon(g, 'gh-emoji')}
       <div><div class="crumbs"><a href="#/catalog?kind=${g.kind}">${kindName(g.kind)}</a></div><h1>${g.name}</h1>
         <div class="muted">${tp(total(g), 'предложение|предложения|предложений')}</div></div>
       <a class="btn primary gh-sell" href="#/sell?game=${g.id}&section=${sec}">+ ${t('Продать')}</a>
@@ -209,7 +209,7 @@ Views.lot = async (view, ctx) => {
     <div class="lot-page">
       <div class="lot-main lot-top">
         <div class="gallery ${images.length ? '' : 'no-img'}" style="--c:${g.color}">
-          ${images.length ? html`<img id="gal-main" src="${images[0]}" alt="${l.title}">` : html`<span class="cover-emoji big" aria-hidden="true">${g.emoji}</span><span class="cover-sec">${C.section(l.game, l.section)}</span>`}
+          ${images.length ? html`<img id="gal-main" src="${images[0]}" alt="${l.title}">` : html`${C.gicon(g, 'cover-emoji big')}<span class="cover-sec">${C.section(l.game, l.section)}</span>`}
           ${images.length > 1 ? html`<div class="thumbs">${images.map((im, i) => html`<button class="thumb ${i ? '' : 'on'}" data-act="pic" data-i="${i}" aria-label="${t('Фото {n}', { n: i + 1 })}"><img src="${im}" alt=""></button>`)}</div>` : ''}
         </div>
         <h1 class="lot-h1">${l.title}</h1>
@@ -238,6 +238,7 @@ Views.lot = async (view, ctx) => {
               ${l.needs_id ? html`<label class="field"><span>${l.id_label || t('Данные для заказа')}</span><input name="data" required maxlength="500" placeholder="${l.id_label || t('ID, почта или ник')}" autocomplete="off"></label>` : ''}
               ${l.period_days ? html`<label class="check"><input type="checkbox" name="renew" ${j.sub && j.sub.active ? 'checked' : ''}> 🔁 ${t('Продлевать автоматически каждые {d}', { d: tp(l.period_days, 'день|дня|дней') })}</label>` : ''}
               <button class="btn primary big wide" id="buy-btn">${t('Купить за {s}', { s: Fmt.money(l.price) })}</button>
+              <p class="muted small center" id="cb-line" hidden></p>
             </form>` : ''}
           ${j.mine ? html`<div class="stack">
               <a class="btn primary wide" href="#/sell/${l.id}">✏️ ${t('Редактировать')}</a>
@@ -271,8 +272,13 @@ Views.lot = async (view, ctx) => {
     if (!form) return;
     const n = Math.max(1, Math.min(maxQty, parseInt(form.qty.value, 10) || 1));
     view.querySelector('#buy-btn').textContent = t('Купить за {s}', { s: Fmt.money(l.price * n) });
+    // кешбэк по уровню покупателя (точная сумма — после подтверждения, не больше комиссии сервиса)
+    const cb = App.me ? Math.floor((l.price * n * (+App.me.cashback_pct || 0)) / 100) : 0;
+    const line = view.querySelector('#cb-line');
+    if (line) { line.hidden = !cb; line.textContent = cb ? t('🎁 Кешбэк до {s} за ваш уровень', { s: Fmt.money(cb) }) : ''; }
   };
   const step = (k) => { form.qty.value = Math.max(1, Math.min(maxQty, (parseInt(form.qty.value, 10) || 1) + k)); recalc(); };
+  recalc();
   let fav = j.fav;
   UI.bind(view, {
     pic: (b) => { view.querySelector('#gal-main').src = images[+b.dataset.i]; view.querySelectorAll('.thumb').forEach((x) => x.classList.toggle('on', x === b)); },
@@ -385,7 +391,7 @@ Views.user = async (view, ctx) => {
     </div>
     <div class="tabs"><a class="tab ${tab === 'lots' ? 'on' : ''}" href="#/u/${u.login}">${t('Лоты')}<span class="cnt">${j.lots.length}</span></a><a class="tab ${tab === 'reviews' ? 'on' : ''}" href="#/u/${u.login}?tab=reviews">${t('Отзывы')}<span class="cnt">${u.reviews}</span></a></div>
     <div id="utab">${tab === 'lots'
-      ? (j.lots.length ? Object.keys(groups).map((k) => { const [gid, sid] = k.split('/'); const g = C.game(gid); return html`<section class="block"><h3><a href="#/g/${gid}/${sid}">${g.emoji} ${g.name} · ${C.section(gid, sid)}</a></h3>${C.lots(groups[k], window.innerWidth > 800 ? 'rows' : 'grid')}</section>`; }) : C.empty('🕊️', t('Активных лотов нет')))
+      ? (j.lots.length ? Object.keys(groups).map((k) => { const [gid, sid] = k.split('/'); const g = C.game(gid); return html`<section class="block"><h3><a href="#/g/${gid}/${sid}">${C.gicon(g)} ${g.name} · ${C.section(gid, sid)}</a></h3>${C.lots(groups[k], window.innerWidth > 800 ? 'rows' : 'grid')}</section>`; }) : C.empty('🕊️', t('Активных лотов нет')))
       : html`<div id="rev-list">${j.reviews.length ? j.reviews.map(C.review) : html`<p class="muted">${t('Отзывов пока нет.')}</p>`}</div>${u.reviews > j.reviews.length ? html`<div class="center"><button class="btn ghost" data-act="more">${t('Показать ещё')}</button></div>` : ''}`}</div>`.s;
   let offset = j.reviews.length;
   UI.bind(view, {

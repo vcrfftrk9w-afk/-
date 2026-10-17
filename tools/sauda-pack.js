@@ -28,6 +28,11 @@ function single() {
   swap('href="icons/icon.svg"', 'href="' + uri('icons/icon.svg', 'image/svg+xml') + '"');
   swap('href="icons/apple-touch-icon.png"', 'href="' + uri('icons/apple-touch-icon.png', 'image/png') + '"');
   swap('<link rel="stylesheet" href="css/sauda.css">', '<style>\n' + read('css/sauda.css') + '\n</style>');
+  // логотипы игр — тоже внутри: C.gicon() берёт их из window.SAUDA_ICONS
+  const dir = path.join(M, 'img', 'games');
+  const icons = fs.existsSync(dir) ? Object.fromEntries(fs.readdirSync(dir).filter((f) => f.endsWith('.webp')).sort()
+    .map((f) => [f.slice(0, -5), uri('img/games/' + f, 'image/webp')])) : {};
+  swap('<script src="js/config.js"></script>', '<script>window.SAUDA_ICONS = ' + JSON.stringify(icons) + ';</script>\n  <script src="js/config.js"></script>');
   let n = 0;
   h = h.replace(/<script src="(js\/[a-z0-9-]+\.js)"><\/script>/g, (m, f) => {
     n++;

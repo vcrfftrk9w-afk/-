@@ -296,6 +296,37 @@ const step = (name) => { passed++; console.log('  ✓', name); };
   assert.strictEqual(roleCheck[0].m, false);
   step('схема sauda и внутренние функции недоступны снаружи');
 
+  // ── уровни: опыт за сделки, у продавца ниже комиссия, у покупателя кешбэк — и сервис не уходит в минус
+  const LS = (await ok('sauda_register', { p_login: 'lvs_' + tag, p_password: 'secret1', p_name: 'Уровневый' })).token;
+  const LB = (await ok('sauda_register', { p_login: 'lvb_' + tag, p_password: 'secret1' })).token;
+  await sql(`update sauda.users set xp = 100 where login = $1`, ['lvs_' + tag]);   // уровень 2: комиссия 6,5 %
+  await sql(`update sauda.users set xp = 495 where login = $1`, ['lvb_' + tag]);   // уровень 2: кешбэк 0,5 %, после сделки — 3
+  await ok('sauda_topup', { p_token: LB, p_amount: 30000, p_method: 'kaspi' });
+  const lvLot = (await ok('sauda_lot_save', { p_token: LS, p: { game: 'steam', section: 'keys', title: 'Ключ уровня ' + tag, price: 10000, auto: true, items_add: ['L-1', 'L-2'] } })).id;
+  assert.strictEqual((await ok('sauda_lot', { p_token: '', p_id: lvLot })).lot.seller.level, 2, 'уровень продавца виден покупателям');
+  const lvOrd = (await ok('sauda_buy', { p_token: LB, p_lot: lvLot, p_qty: 1 })).order;
+  await ok('sauda_order_act', { p_token: LB, p_id: lvOrd, p_action: 'confirm' });
+  const lvS = (await ok('sauda_me', { p_token: LS })).user, lvB = (await ok('sauda_me', { p_token: LB })).user;
+  assert.strictEqual(lvS.balance, 10000 - 650, 'комиссия 6,5 % на втором уровне');
+  assert.strictEqual(lvB.balance, 30000 - 10000 + 50, 'кешбэк 0,5 %');
+  assert.strictEqual(lvB.xp, 595);
+  assert.strictEqual(lvB.level, 3);
+  assert.strictEqual(+lvB.cashback_pct, 1);
+  assert.strictEqual(+lvS.fee_pct, 6.5);
+  const lvN = await ok('sauda_notifs', { p_token: LB });
+  assert.ok(lvN.items.some((x) => x.kind === 'level_up' && x.data.level === 3), 'уведомление о новом уровне');
+  assert.ok(lvN.items.some((x) => x.kind === 'cashback' && x.data.amount === 50), 'уведомление о кешбэке');
+  // Pro-продавец (3 %), покупатель «Легенда» (2 %), у обоих пригласившие: кешбэк урезается до остатка комиссии
+  await sql(`update sauda.users set pro_until = now() + interval '1 day', ref_by = (select id from sauda.users where login = $2) where login = $1`, ['lvs_' + tag, 'third_' + tag]);
+  await sql(`update sauda.users set xp = 10000, ref_by = (select id from sauda.users where login = $2) where login = $1`, ['lvb_' + tag, 'third_' + tag]);
+  const pfBefore = +(await sql(`select balance from sauda.users where login = 'sauda'`))[0].balance;
+  const lvOrd2 = (await ok('sauda_buy', { p_token: LB, p_lot: lvLot, p_qty: 1 })).order;
+  await ok('sauda_order_act', { p_token: LB, p_id: lvOrd2, p_action: 'confirm' });
+  const cb2 = (await sql(`select amount from sauda.tx where kind = 'cashback' and ref = $1`, [lvOrd2]))[0].amount;
+  assert.strictEqual(+cb2, 300 - 60 - 60, 'кешбэк не больше остатка комиссии');
+  assert.strictEqual(+(await sql(`select balance from sauda.users where login = 'sauda'`))[0].balance, pfBefore, 'сервис не ушёл в минус');
+  step('уровни: комиссия ниже, кешбэк покупателю, новый уровень, кешбэк не больше комиссии');
+
   // ── под поддержку не замаскироваться, вывод можно отменить, пока его не взяли в работу
   const BB = (await ok('sauda_login', { p_login: 'buyer_' + tag, p_password: 'secret2' })).token; // после разблокировки — новый вход
   await no('sauda_register', { p_login: 'fake_' + tag, p_password: 'secret9', p_name: 'Поддержка Sauda' }, 'name_reserved');

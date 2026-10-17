@@ -7,7 +7,7 @@
 
 const ADMIN_TABS = [
   ['stats', '📈', 'Обзор', false], ['disputes', '⚖️', 'Споры', false], ['support', '🛟', 'Поддержка', false],
-  ['withdrawals', '🏦', 'Выводы', true], ['orders', '🧾', 'Заказы', false], ['users', '👥', 'Люди', false],
+  ['topups', '💳', 'Пополнения', true], ['withdrawals', '🏦', 'Выводы', true], ['orders', '🧾', 'Заказы', false], ['users', '👥', 'Люди', false],
   ['lots', '📦', 'Лоты', false], ['reports', '🚩', 'Жалобы', false], ['promos', '🎁', 'Промокоды', true], ['config', '⚙️', 'Настройки', true],
 ];
 
@@ -26,7 +26,7 @@ Views.admin = async (view, ctx) => {
   // счётчики во вкладках
   const s = await adm('stats');
   if (s.ok && ctx.alive()) {
-    [['disputes', s.data.disputes], ['withdrawals', s.data.withdrawals], ['reports', s.data.reports], ['support', s.data.support]].forEach(([k, n]) => {
+    [['disputes', s.data.disputes], ['topups', s.data.topups], ['withdrawals', s.data.withdrawals], ['reports', s.data.reports], ['support', s.data.support]].forEach(([k, n]) => {
       const el = view.querySelector('#ac-' + k);
       if (el && n) { el.hidden = false; el.textContent = n; }
     });
@@ -41,12 +41,13 @@ const Admin = {
     const d = r.data;
     const kpi = (v, l, href) => html`<${href ? 'a' : 'div'} class="card kpi" ${href ? raw(`href="${href}"`) : ''}><b>${v}</b><span>${l}</span></${href ? 'a' : 'div'}>`;
     box.innerHTML = html`
-      ${d.test_mode ? html`<div class="note warn">🧪 ${t('Тестовый режим включён: пополнение бесплатное, демо-лоты видны. Выключите в «Настройках», когда подключите оплату.')}</div>` : ''}
+      ${d.test_mode ? html`<div class="note warn">🧪 ${t('Тестовый режим включён: пополнение бесплатное, демо-лоты видны. Когда будете готовы принимать настоящие деньги — укажите реквизиты Kaspi и запустите сервис в «Настройках».')}</div>`
+        : html`<div class="note">💰 ${t('Работаем с настоящими деньгами с {d}.', { d: d.live_since ? Fmt.date(d.live_since) : '—' })}</div>`}
       <div class="kpis">
         ${kpi(Fmt.num(d.users), t('пользователей (+{n} за сутки)', { n: d.users_today }))}${kpi(Fmt.num(d.online), t('онлайн сейчас'))}${kpi(Fmt.num(d.lots), t('активных лотов'))}
         ${kpi(Fmt.num(d.orders), t('заказов (+{n} за сутки)', { n: d.orders_today }))}${kpi(Fmt.money(d.gmv), t('оборот (завершённые)'))}${kpi(Fmt.money(d.gmv_30), t('оборот за 30 дней'))}
         ${kpi(Fmt.money(d.fees), t('комиссия заработана'))}${kpi(Fmt.money(d.pro_income), t('доход от Pro ({n} чел.)', { n: d.pro_users }))}${kpi(Fmt.money(d.platform_balance), t('счёт сервиса'))}
-        ${kpi(Fmt.money(d.user_balances), t('на балансах людей'))}${kpi(Fmt.money(d.escrow), t('заморожено в заказах'))}
+        ${kpi(Fmt.money(d.user_balances), t('на балансах людей'))}${kpi(Fmt.money(d.topups_in || 0), t('пришло пополнений'))}${kpi(d.topups || 0, t('пополнений ждут проверки'), '#/admin/topups')}${kpi(Fmt.money(d.escrow), t('заморожено в заказах'))}
         ${kpi(d.disputes, t('открытых споров'), '#/admin/disputes')}${kpi(t('{n} на {s}', { n: d.withdrawals, s: Fmt.money(d.withdrawals_sum) }), t('выводов ждут'), '#/admin/withdrawals')}
         ${kpi(d.reports, t('жалоб'), '#/admin/reports')}${kpi(d.support, t('непрочитанных в поддержке'), '#/admin/support')}
       </div>
@@ -73,22 +74,61 @@ const Admin = {
     await load(ctx.query.q || '', ctx.query.status || '');
   },
 
+  async topups(box, ctx) {
+    const status = ctx.query.status || 'pending';
+    const r = await adm('topups', { status, q: ctx.query.q || '' });
+    if (!ctx.alive()) return;
+    if (!r.ok) { box.innerHTML = C.empty('📡', errText(r.error)).s; return; }
+    const st = (x) => TOPUP_STATUS[x.status === 'pending' && x.claimed_at ? 'claimed' : x.status] || [x.status, 'muted'];
+    box.innerHTML = html`<div class="note small">${t('Человек переводит деньги на ваш Kaspi с кодом заявки в сообщении. Найдите перевод в Kaspi по коду и сумме, затем нажмите «Зачислить». Не пришло — «Отклонить».')}</div>
+      <div class="chips">${[['pending', 'Ждут'], ['paid', 'Зачислены'], ['failed', 'Отклонены'], ['canceled', 'Отменены'], ['all', 'Все']].map(([k, l]) => html`<a class="chip ${status === k ? 'on' : ''}" href="#/admin/topups?status=${k}">${t(l)}</a>`)}</div>
+      <form class="filters" data-submit="find"><input name="q" type="search" placeholder="${t('Код заявки, например SD123')}" value="${ctx.query.q || ''}"><button class="btn">${t('Найти')}</button></form>
+      ${r.data.length ? html`<div class="card list">${r.data.map((x) => html`<div class="adm-row">
+        <span class="tx-main"><b>${Fmt.money(x.amount)} · <span class="mono">${x.code}</span></b>
+          <span class="muted small"><a href="#/u/${x.user.login}">${x.user.name} @${x.user.login}</a> · ${t('создана {d}', { d: Fmt.dt(x.created_at) })}${x.claimed_at ? ' · ' + t('«Я оплатил» {d}', { d: Fmt.dt(x.claimed_at) }) : ''}${x.note && x.status !== 'paid' ? ' · ' + x.note : ''}</span></span>
+        ${x.status === 'pending' ? html`<span class="row-btns">${x.claimed_at ? '' : html`<span class="status status-warn">${t('ещё не оплачено')}</span>`}<button class="btn primary small" data-act="paid" data-id="${x.id}" data-sum="${x.amount}">✔ ${t('Зачислить')}</button><button class="btn ghost small" data-act="fail" data-id="${x.id}">✕ ${t('Отклонить')}</button></span>`
+          : html`<span class="status status-${st(x)[1]}">${t(st(x)[0])}</span>`}
+      </div>`)}</div>` : C.empty('💳', t('Заявок нет'))}`.s;
+    UI.bind(box, {
+      find: (f, fd) => Router.nav('#/admin/topups?status=all&q=' + encodeURIComponent(String(fd.get('q') || '').trim())),
+      paid: async (b) => {
+        const v = await UI.prompt(t('Сколько пришло на Kaspi, ₸'), { value: b.dataset.sum, text: t('Зачислим ровно столько, сколько пришло. Проверьте код в сообщении перевода.'), yes: t('Зачислить') });
+        if (!v) return;
+        const amount = Fmt.amount(v);
+        if (!amount) return UI.fail({ error: 'bad_amount' });
+        const x = await adm('topup_set', { id: +b.dataset.id, status: 'paid', amount });
+        if (x.ok) { UI.toast(t('Зачислено {s}', { s: Fmt.money(amount) })); Router.go(); } else UI.fail(x);
+      },
+      fail: async (b) => {
+        const note = await UI.prompt(t('Причина'), { placeholder: t('Например: перевод не найден'), yes: t('Отклонить'), danger: true });
+        if (!note) return;
+        const x = await adm('topup_set', { id: +b.dataset.id, status: 'failed', note });
+        if (x.ok) Router.go(); else UI.fail(x);
+      },
+    });
+  },
+
   async withdrawals(box, ctx) {
     const status = ctx.query.status || 'pending';
     const r = await adm('withdrawals', { status });
     if (!ctx.alive()) return;
     if (!r.ok) { box.innerHTML = C.empty('📡', errText(r.error)).s; return; }
-    box.innerHTML = html`<div class="chips">${[['pending', 'Ждут'], ['done', 'Отправлены'], ['rejected', 'Отклонены'], ['all', 'Все']].map(([k, l]) => html`<a class="chip ${status === k ? 'on' : ''}" href="#/admin/withdrawals?status=${k}">${t(l)}</a>`)}</div>
+    box.innerHTML = html`<div class="chips">${[['pending', 'Ждут'], ['done', 'Отправлены'], ['rejected', 'Отклонены'], ['canceled', 'Отменены'], ['all', 'Все']].map(([k, l]) => html`<a class="chip ${status === k ? 'on' : ''}" href="#/admin/withdrawals?status=${k}">${t(l)}</a>`)}</div>
       ${r.data.length ? html`<div class="card list">${r.data.map((w) => html`<div class="adm-row">
         <span class="tx-main"><b>${Fmt.money(w.amount - w.fee)}</b> <span class="muted">(${t('списано {a}, комиссия {f}', { a: Fmt.money(w.amount), f: Fmt.money(w.fee) })})</span>
           <span>${(OUT_METHODS[w.method] || [w.method, ''])[1]} ${t((OUT_METHODS[w.method] || [w.method])[0])}: <code class="mono">${w.details}</code> <button class="link" data-act="copy" data-v="${w.details}">${t('копировать')}</button></span>
           <span class="muted small"><a href="#/u/${w.user.login}">${w.user.name} @${w.user.login}</a> · ${Fmt.dt(w.created_at)}${w.test ? ' · 🧪 ' + t('тест') : ''}${w.note ? ' · ' + w.note : ''}</span></span>
-        ${w.status === 'pending' ? html`<span class="row-btns"><button class="btn primary small" data-act="done" data-id="${w.id}">✔ ${t('Отправил')}</button><button class="btn ghost small" data-act="reject" data-id="${w.id}">✕ ${t('Отклонить')}</button></span>` : html`<span class="status status-${w.status === 'done' ? 'ok' : 'danger'}">${w.status === 'done' ? t('Отправлено') : t('Отклонено')}</span>`}
+        ${['pending', 'processing'].includes(w.status) ? html`<span class="row-btns">${w.status === 'processing' ? html`<span class="status status-info">${t('Переводим')}</span>` : ''}<button class="btn primary small" data-act="done" data-id="${w.id}" data-sum="${w.amount - w.fee}" data-to="${w.details}">✔ ${w.status === 'pending' ? t('Перевести') : t('Отправил')}</button><button class="btn ghost small" data-act="reject" data-id="${w.id}">✕ ${t('Отклонить')}</button></span>`
+          : html`<span class="status status-${(WD_STATUS[w.status] || ['', 'muted'])[1]}">${t((WD_STATUS[w.status] || [w.status])[0])}</span>`}
       </div>`)}</div>` : C.empty('🏦', t('Заявок нет'))}`.s;
     UI.bind(box, {
       copy: (b) => UI.copy(b.dataset.v),
       done: async (b) => {
-        if (!(await UI.ask(t('Вы перевели деньги на эти реквизиты?'), { yes: t('Да, отправил') }))) return;
+        // сначала заявка «в работе» — человек уже не отменит её, пока вы переводите
+        const y = await adm('withdraw_set', { id: +b.dataset.id, status: 'processing' });
+        if (!y.ok && y.error !== 'bad_status') return UI.fail(y);
+        if (y.ok) b.closest('.adm-row').querySelector('.row-btns').insertAdjacentHTML('afterbegin', html`<span class="status status-info">${t('Переводим')}</span>`.s);
+        if (!(await UI.ask(t('Переведите {s} на {to}, затем подтвердите.', { s: Fmt.money(+b.dataset.sum), to: b.dataset.to }), { yes: t('Да, отправил') }))) return;
         const x = await adm('withdraw_set', { id: +b.dataset.id, status: 'done' });
         if (x.ok) Router.go(); else UI.fail(x);
       },
@@ -134,7 +174,9 @@ const Admin = {
         const v = await UI.prompt(t('Изменить баланс'), { text: t('Сумма в тенге: положительная — начислить, отрицательная — списать. Деньги берутся со счёта сервиса.'), placeholder: '-500 / 1000', yes: t('Применить') });
         if (!v) return;
         const note = await UI.prompt(t('Комментарий'), { placeholder: t('За что') }) || '';
-        const x = await adm('balance', { id: b.dataset.id, amount: parseInt(v, 10), note });
+        const amount = Fmt.amount(v, true);
+        if (!amount) return UI.fail({ error: 'bad_amount' });
+        const x = await adm('balance', { id: b.dataset.id, amount, note });
         if (x.ok) { UI.toast(t('Готово')); load(box.querySelector('[name=q]').value); } else UI.fail(x);
       },
     });
@@ -184,7 +226,9 @@ const Admin = {
       ${r.data.length ? html`<div class="card list">${r.data.map((p) => html`<div class="adm-row"><span class="tx-main"><b class="mono">${p.code}</b><span class="muted small">${Fmt.money(p.amount)} · ${t('использован {u}, осталось {l}', { u: p.used, l: p.uses_left })}${p.expires_at ? ' · ' + t('до {d}', { d: Fmt.date(p.expires_at) }) : ''}</span></span></div>`)}</div>` : C.empty('🎁', t('Промокодов пока нет'))}`.s;
     UI.bind(box, {
       add: async (f, fd) => {
-        const x = await adm('promo_create', { code: fd.get('code'), amount: parseInt(fd.get('amount'), 10), uses: parseInt(fd.get('uses'), 10) || 1, days: parseInt(fd.get('days'), 10) || 0 });
+        const amount = Fmt.amount(fd.get('amount'));
+        if (!amount) return UI.fail({ error: 'bad_amount' });
+        const x = await adm('promo_create', { code: fd.get('code'), amount, uses: parseInt(fd.get('uses'), 10) || 1, days: parseInt(fd.get('days'), 10) || 0 });
         if (x.ok) { UI.toast(t('Промокод создан')); Router.go(); } else UI.fail(x);
       },
     });
@@ -217,24 +261,52 @@ const Admin = {
       ['max_topup', 'Максимальное пополнение, ₸'], ['raise_min', 'Поднятие раз в, минут'], ['raise_min_pro', 'Поднятие с Pro раз в, минут'],
       ['ref_pct', 'Реферальная доля комиссии, %'], ['max_lots', 'Лотов на продавца'], ['max_lots_pro', 'Лотов на Pro-продавца'],
     ];
+    const pay = [
+      ['pay_kaspi_phone', 'Номер Kaspi Gold для пополнений', '+7 7XX XXX XX XX'], ['pay_kaspi_name', 'Имя получателя в Kaspi', 'Айдос К.'],
+      ['pay_card', 'Номер карты (необязательно)', '4400 …'], ['pay_link', 'Ссылка оплаты Kaspi Pay / QR (необязательно)', 'https://pay.kaspi.kz/…'],
+      ['pay_note', 'Подсказка для покупателей (необязательно)', ''],
+    ];
     box.innerHTML = html`<form class="card stack" data-submit="save">
-      <label class="check big-check"><input type="checkbox" name="test_mode" ${c.test_mode ? 'checked' : ''}> 🧪 ${t('Тестовый режим (бесплатное пополнение, демо-лоты)')}</label>
+      <h2>💰 ${t('Приём денег')}</h2>
+      <p class="muted small">${t('Люди переводят деньги на эти реквизиты с кодом заявки, вы сверяете перевод во вкладке «Пополнения» и зачисляете. Выплаты — во вкладке «Выводы».')}</p>
+      <div class="grid2">${pay.map(([k, l, ph]) => html`<label class="field"><span>${t(l)}</span><input name="${k}" value="${c[k] || ''}" placeholder="${ph}" maxlength="300"></label>`)}</div>
+      ${c.test_mode ? html`<div class="note warn stack">
+          <b>🧪 ${t('Сейчас тестовый режим: пополнение бесплатное, демо-лоты видны.')}</b>
+          <span>${t('Запуск с настоящими деньгами — один раз и навсегда: все тестовые балансы обнулятся, открытые тестовые заказы и заявки закроются, демо-лоты пропадут. Вернуть тестовый режим будет нельзя.')}</span>
+          <button type="button" class="btn danger" data-act="live">🚀 ${t('Запустить с настоящими деньгами')}</button></div>`
+        : html`<div class="note">✅ ${t('Сервис работает с настоящими деньгами с {d}.', { d: c.live_since ? Fmt.date(c.live_since) : '—' })}</div>`}
+      <h2>⚙️ ${t('Правила')}</h2>
       <div class="grid2">${fields.map(([k, l]) => html`<label class="field"><span>${t(l)}</span><input name="${k}" inputmode="decimal" value="${c[k]}"></label>`)}</div>
       <div class="grid2">${['1', '3', '12'].map((m) => html`<label class="field"><span>${t('Pro на {m} мес., ₸', { m })}</span><input name="pro_${m}" inputmode="numeric" value="${(c.pro_prices || {})[m] || ''}"></label>`)}</div>
       <button class="btn primary">${t('Сохранить')}</button></form>`.s;
+    const save = async (fd) => {
+      const jobs = [];
+      pay.forEach(([k]) => { const v = String(fd.get(k) || '').trim(); if (v !== (c[k] || '')) jobs.push([k, v]); });
+      fields.forEach(([k]) => { const v = parseFloat(String(fd.get(k)).replace(/\s/g, '').replace(',', '.')); if (Number.isFinite(v) && v !== +c[k]) jobs.push([k, v]); });
+      const pp = {};
+      ['1', '3', '12'].forEach((m) => { const v = Fmt.amount(fd.get('pro_' + m)); if (v > 0) pp[m] = v; });
+      if (JSON.stringify(pp) !== JSON.stringify(c.pro_prices || {})) jobs.push(['pro_prices', pp]);
+      for (const [k, v] of jobs) {
+        const x = await adm('config_set', { k, v });
+        if (!x.ok) { UI.fail(x); return false; }
+        c[k] = v; // следующее сохранение сравнивает с тем, что уже записано
+      }
+      await App.loadMeta(true);
+      return true;
+    };
     UI.bind(box, {
-      save: async (f, fd) => {
-        const jobs = [['test_mode', !!fd.get('test_mode')]];
-        fields.forEach(([k]) => { const v = parseFloat(String(fd.get(k)).replace(',', '.')); if (Number.isFinite(v) && v !== +c[k]) jobs.push([k, v]); });
-        const pp = {};
-        ['1', '3', '12'].forEach((m) => { const v = parseInt(fd.get('pro_' + m), 10); if (v > 0) pp[m] = v; });
-        jobs.push(['pro_prices', pp]);
-        for (const [k, v] of jobs) {
-          const x = await adm('config_set', { k, v });
-          if (!x.ok) return UI.fail(x);
-        }
+      save: async (f, fd) => { if (await save(fd)) UI.toast(t('Настройки сохранены')); },
+      live: async () => {
+        const f = box.querySelector('form');
+        if (!(await save(new FormData(f)))) return;
+        if (!c.pay_kaspi_phone && !c.pay_card && !c.pay_link) return UI.fail({ error: 'pay_not_set' });
+        if (!(await UI.ask(t('Запустить Sauda с настоящими деньгами? Тестовые балансы всех людей обнулятся, это нельзя отменить.'), { yes: t('Запустить'), danger: true }))) return;
+        const x = await adm('config_set', { k: 'test_mode', v: false });
+        if (!x.ok) return UI.fail(x);
         await App.loadMeta(true);
-        UI.toast(t('Настройки сохранены'));
+        await App.refresh(true);
+        UI.toast(t('Готово! Sauda работает с настоящими деньгами.'));
+        Router.go();
       },
     });
   },

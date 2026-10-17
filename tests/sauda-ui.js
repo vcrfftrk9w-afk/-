@@ -196,7 +196,7 @@ async function register(p, login, name) {
   // администратор — третий человек: свой спор решать нельзя
   const A = await person(browser, { width: 1280, height: 860 }, errors, 'admin');
   global.pages.admin = A;
-  await register(A, 'adm_' + tag, 'Админ');
+  await register(A, 'adm_' + tag, 'Арман');
   const code = (await db.query(`select v #>> '{}' c from sauda.config where k = 'admin_code'`)).rows[0].c;
   await go(A, '#/settings');
   await A.click('details summary');
@@ -282,6 +282,35 @@ async function register(p, login, name) {
   await go(B, '#/me');
   assert.strictEqual(await B.locator('.me-head img[src=x]').count(), 0, 'HTML в имени показывается текстом');
   ok('имя с HTML-кодом показывается как текст');
+
+  // ── запуск с настоящими деньгами: реквизиты Kaspi → запуск → заявка с кодом → «Я оплатил» → администратор зачисляет
+  await go(A, '#/admin/config');
+  await A.fill('[name=pay_kaspi_phone]', '+7 701 000 00 00');
+  await A.fill('[name=pay_kaspi_name]', 'Арман К.');
+  await A.click('[data-act=live]');
+  await A.click('.modal [data-act=yes]');
+  await A.waitForSelector('text=Сервис работает с настоящими деньгами');
+  await go(B, '#/wallet');
+  await B.click('[data-act=topup]');
+  await B.fill('.modal [name=amount]', '7 500');
+  await B.click('.modal .btn.primary');
+  await B.waitForSelector('.modal [data-act=claim]');
+  const payCode = await B.locator('.modal .pay-row b.mono').nth(1).innerText();
+  assert.ok(/^SD[0-9]+$/.test(payCode), 'код заявки: ' + payCode);
+  if (process.env.SHOTS) await B.screenshot({ path: process.env.SHOTS + '/live-topup.png' });
+  await B.click('.modal [data-act=claim]');
+  await go(A, '#/admin/topups');
+  await A.waitForSelector('[data-act=paid]');
+  if (process.env.SHOTS) await A.screenshot({ path: process.env.SHOTS + '/admin-topups.png' });
+  await A.click('[data-act=paid]');
+  assert.strictEqual(await A.inputValue('.modal [name=v]'), '7500');
+  await A.click('.modal .btn.primary');
+  await A.waitForSelector('text=Заявок нет');
+  await go(B, '#/wallet');
+  await B.waitForSelector('.bal');
+  assert.ok((await text(B, '.bal')).includes('7 500'), 'зачислено на баланс');
+  if (process.env.SHOTS) await B.screenshot({ path: process.env.SHOTS + '/live-wallet.png', fullPage: true });
+  ok('запуск с настоящими деньгами: реквизиты Kaspi, заявка с кодом, «Я оплатил», администратор зачислил');
 
   assert.deepStrictEqual(errors, [], 'ошибки в консоли');
   console.log(`\nSauda UI: ${n} сценариев прошло, ошибок в консоли нет`);

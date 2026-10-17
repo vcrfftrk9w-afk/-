@@ -1,14 +1,17 @@
 name: Sauda APK
 
-# Собирает Android-приложение маркетплейса Sauda (папка market/ внутри WebView).
-# Готовый APK — во вложении «sauda-apk» у запуска (Actions → Sauda APK → последний запуск → Artifacts).
+# Собирает Android-приложение маркетплейса Sauda (папка market/ внутри WebView) и пакет исходников
+# (tools/sauda-pack.js: sauda-source.zip и сайт одним файлом sauda.html).
+# Любая ветка — вложения у запуска (Actions → Sauda APK → Artifacts).
+# Ветка main — ещё и выпуск «sauda-latest» с постоянными ссылками:
+#   https://github.com/<владелец>/<репозиторий>/releases/download/sauda-latest/sauda-source.zip (sauda.html, sauda.apk)
 on:
   push:
-    paths: ['market/**', 'android-sauda/**', '.github/workflows/sauda-apk.yml']
+    paths: ['market/**', 'android-sauda/**', 'supabase/migrations/*_sauda_*.sql', 'tools/sauda-*', 'tests/sauda-*', '.github/workflows/sauda-apk.yml']
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: sauda-apk-${{ github.ref }}
@@ -45,3 +48,24 @@ jobs:
           name: sauda-apk
           path: sauda.apk
           retention-days: 30
+
+      - name: Собрать пакет исходников
+        run: node tools/sauda-pack.js
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sauda-source
+          path: |
+            dist/sauda/sauda-source.zip
+            dist/sauda/sauda.html
+          retention-days: 30
+
+      - name: Выложить в Releases → sauda-latest
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete sauda-latest --yes --cleanup-tag || true
+          gh release create sauda-latest dist/sauda/sauda-source.zip dist/sauda/sauda.html sauda.apk \
+            --target "$GITHUB_SHA" --latest=false --title "Sauda — последняя версия" \
+            --notes "Собрано из ${GITHUB_SHA::7}. sauda-source.zip — все исходники и инструкция для другого ИИ (README.md, PROMPT-for-AI.txt); sauda.html — сайт одним файлом, открывается двойным щелчком; sauda.apk — Android-приложение."

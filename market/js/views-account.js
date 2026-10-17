@@ -164,27 +164,72 @@ Views.settings = async (view) => {
 
 /* ───────────── кошелёк ───────────── */
 const Wallet = {
+  pay: () => {
+    const c = (App.meta && App.meta.config) || {};
+    return { phone: c.pay_kaspi_phone || '', name: c.pay_kaspi_name || '', card: c.pay_card || '', link: c.pay_link || '', note: c.pay_note || '' };
+  },
   topup(amount, after) {
     const test = App.testMode();
+    const pay = Wallet.pay();
+    if (!test && !pay.phone && !pay.card && !pay.link) { UI.toast(errText('payments_soon'), 'err'); return; }
     const m = UI.modal({
       title: t('Пополнение баланса'),
       body: html`<form class="stack" data-submit="go">
-        ${test ? html`<div class="note warn">🧪 ${t('Тестовый режим: деньги ненастоящие и зачисляются сразу. Настоящие платежи появятся после подключения платёжного шлюза.')}</div>` : ''}
-        <label class="field"><span>${t('Сумма, ₸')}</span><input name="amount" inputmode="numeric" required value="${amount || ''}" placeholder="5 000"></label>
+        ${test ? html`<div class="note warn">🧪 ${t('Тестовый режим: деньги ненастоящие и зачисляются сразу. Настоящие платежи появятся после подключения платёжного шлюза.')}</div>`
+          : html`<div class="note">🔴 ${t('Пополнение переводом на Kaspi: вы переводите сумму с кодом заявки, мы проверяем поступление и зачисляем деньги — обычно в течение 30 минут.')}</div>`}
+        <label class="field"><span>${t('Сумма, ₸')}</span><input name="amount" inputmode="decimal" required value="${amount || ''}" placeholder="5 000"></label>
         <div class="chips">${[1000, 5000, 10000, 20000, 50000].map((v) => html`<button type="button" class="chip" data-act="preset" data-v="${v}">${Fmt.money(v)}</button>`)}</div>
-        <div class="pay-methods" role="radiogroup" aria-label="${t('Способ оплаты')}">${Object.entries(PAY_METHODS).map(([k, [name, ico]], i) => html`<label class="pm"><input type="radio" name="method" value="${k}" ${i ? '' : 'checked'}><span>${ico} ${name}</span></label>`)}</div>
-        <button class="btn primary big wide">${t('Пополнить')}</button></form>`,
+        ${test ? html`<div class="pay-methods" role="radiogroup" aria-label="${t('Способ оплаты')}">${Object.entries(PAY_METHODS).map(([k, [name, ico]], i) => html`<label class="pm"><input type="radio" name="method" value="${k}" ${i ? '' : 'checked'}><span>${ico} ${name}</span></label>`)}</div>` : ''}
+        <button class="btn primary big wide">${test ? t('Пополнить') : t('Получить реквизиты')}</button></form>`,
       on: {
         preset: (b) => { m.q('[name=amount]').value = b.dataset.v; },
         go: (f, fd) => UI.busy(f.querySelector('.btn.primary'), async () => {
-          const sum = parseInt(String(fd.get('amount')).replace(/\D/g, ''), 10);
-          const r = await Api.auth('sauda_topup', { p_amount: sum, p_method: fd.get('method') });
+          const sum = Fmt.amount(fd.get('amount'));
+          if (!sum) return UI.fail({ error: 'bad_amount' });
+          const r = await Api.auth('sauda_topup', { p_amount: sum, p_method: fd.get('method') || (pay.link && !pay.phone ? 'link' : 'kaspi') });
           if (!r.ok) return UI.fail(r);
           m.close(true);
+          if (r.pending) { Wallet.payInfo(r.topup, r.pay, after); return; }
           await App.refresh(true);
           UI.toast(t('Баланс пополнен на {s}', { s: Fmt.money(sum) }));
           if (after) after(); else if (location.hash.startsWith('#/wallet')) Router.go();
         }),
+      },
+    });
+  },
+  /* реквизиты и код заявки: человек переводит деньги и жмёт «Я оплатил», администратор сверяет поступление */
+  payInfo(tp, pay, after) {
+    pay = pay || Wallet.pay();
+    const row = (label, value, mono) => html`<div class="pay-row"><span class="muted small">${label}</span><b class="${mono ? 'mono' : ''}">${value}</b><button type="button" class="btn small ghost" data-act="copy" data-v="${value}">${t('Копировать')}</button></div>`;
+    const m = UI.modal({
+      title: t('Заявка {code}', { code: tp.code }),
+      body: html`<div class="stack">
+        <p class="pay-sum">${t('Переведите ровно')} <b>${Fmt.money(tp.amount)}</b></p>
+        ${pay.phone ? row(t('Kaspi Gold по номеру') + (pay.name ? ' · ' + pay.name : ''), pay.phone, true) : ''}
+        ${pay.card ? row(t('Или на карту'), pay.card, true) : ''}
+        ${row(t('Сообщение получателю (обязательно)'), tp.code, true)}
+        ${pay.link ? html`<a class="btn primary wide" href="${pay.link}" target="_blank" rel="noopener noreferrer">🔴 ${t('Оплатить по ссылке')}</a>` : ''}
+        ${pay.note ? html`<p class="muted small">${pay.note}</p>` : ''}
+        <p class="muted small">${t('Без кода в сообщении мы не поймём, чей это перевод. Неоплаченная заявка отменится сама через 2 дня.')}</p>
+        ${tp.claimed_at ? html`<div class="note">⏳ ${t('Вы отметили оплату. Проверяем поступление — обычно до 30 минут.')}</div>`
+          : html`<button type="button" class="btn primary big wide" data-act="claim">✅ ${t('Я оплатил')}</button>`}
+        <button type="button" class="btn ghost wide" data-act="cancel">${t('Отменить заявку')}</button></div>`,
+      on: {
+        copy: (b) => UI.copy(b.dataset.v),
+        claim: (b) => UI.busy(b, async () => {
+          const r = await Api.auth('sauda_topup_act', { p_id: tp.id, p_action: 'claim' });
+          if (!r.ok) return UI.fail(r);
+          m.close(true);
+          UI.toast(t('Спасибо! Проверяем перевод и зачислим деньги.'));
+          if (after) after(); else if (location.hash.startsWith('#/wallet')) Router.go();
+        }),
+        cancel: async (b) => {
+          if (!(await UI.ask(t('Отменить заявку на пополнение? Если вы уже перевели деньги — не отменяйте, а нажмите «Я оплатил».'), { yes: t('Отменить заявку'), danger: true }))) return;
+          const r = await Api.auth('sauda_topup_act', { p_id: tp.id, p_action: 'cancel' });
+          if (!r.ok) return UI.fail(r);
+          m.close(true);
+          if (location.hash.startsWith('#/wallet')) Router.go();
+        },
       },
     });
   },
@@ -197,10 +242,10 @@ const Wallet = {
         ${App.testMode() ? html`<div class="note warn">🧪 ${t('Тестовый режим: заявка создаётся, но настоящие деньги не отправляются.')}</div>` : ''}
         <div class="pay-methods" role="radiogroup" aria-label="${t('Куда вывести')}">${Object.entries(OUT_METHODS).map(([k, [name, ico]], i) => html`<label class="pm"><input type="radio" name="method" value="${k}" ${i ? '' : 'checked'} data-change="method"><span>${ico} ${t(name)}</span></label>`)}</div>
         <label class="field"><span id="det-l">${t('Номер телефона Kaspi')}</span><input name="details" required inputmode="tel" placeholder="+7 7XX XXX XX XX" autocomplete="off"></label>
-        <label class="field"><span>${t('Сумма, ₸ (на балансе {s})', { s: Fmt.money(App.me.balance) })}</span><input name="amount" inputmode="numeric" required data-input="calc" placeholder="${Fmt.num(min)}"></label>
+        <label class="field"><span>${t('Сумма, ₸ (на балансе {s})', { s: Fmt.money(App.me.balance) })}</span><input name="amount" inputmode="decimal" required data-input="calc" placeholder="${Fmt.num(min)}"></label>
         <p class="muted small" id="calc">${t('Минимум {m}. Комиссия {p}%.', { m: Fmt.money(min), p: pct })}</p>
         <button class="btn primary big wide">${t('Создать заявку')}</button>
-        <p class="muted small">${t('Заявки обрабатываются вручную в течение 24 часов.')}</p></form>`,
+        <p class="muted small">${t('Заявки обрабатываются вручную в течение 24 часов. Пока заявку не взяли в работу, её можно отменить.')}</p></form>`,
       on: {
         method: (el) => {
           const card = OUT_METHODS[el.value][2] === 'card';
@@ -210,12 +255,15 @@ const Wallet = {
           inp.inputMode = card ? 'numeric' : 'tel';
         },
         calc: (el) => {
-          const a = parseInt(el.value.replace(/\D/g, ''), 10) || 0;
+          const a = Fmt.amount(el.value) || 0;
           const fee = Math.ceil((a * pct) / 100);
           m.q('#calc').textContent = a ? t('Комиссия {f}, придёт {g}.', { f: Fmt.money(fee), g: Fmt.money(Math.max(0, a - fee)) }) : t('Минимум {m}. Комиссия {p}%.', { m: Fmt.money(min), p: pct });
         },
         go: (f, fd) => UI.busy(f.querySelector('.btn.primary'), async () => {
-          const r = await Api.auth('sauda_withdraw', { p_amount: parseInt(String(fd.get('amount')).replace(/\D/g, ''), 10) || 0, p_method: fd.get('method'), p_details: fd.get('details') });
+          const sum = Fmt.amount(fd.get('amount'));
+          if (!sum) return UI.fail({ error: 'bad_amount' });
+          if (sum > App.me.balance) return UI.fail({ error: 'no_money' });
+          const r = await Api.auth('sauda_withdraw', { p_amount: sum, p_method: fd.get('method'), p_details: fd.get('details') });
           if (!r.ok) return UI.fail(r);
           m.close(true);
           await App.refresh(true);
@@ -239,9 +287,11 @@ Views.wallet = async (view, ctx) => {
       <span class="tx-main"><b>${t(k[0])}</b><span class="muted small">${x.note ? x.note + ' · ' : ''}${Fmt.dt(x.created_at)}</span></span>
       <span class="tx-sum ${x.amount > 0 ? 'plus' : 'minus'}">${x.amount > 0 ? '+' : '−'}${Fmt.money(Math.abs(x.amount))}</span></${link ? 'a' : 'div'}>`;
   };
-  const wst = { pending: ['В обработке', 'warn'], done: ['Отправлено', 'ok'], rejected: ['Отклонено', 'danger'] };
+  const tst = (x) => TOPUP_STATUS[x.status === 'pending' && x.claimed_at ? 'claimed' : x.status] || [x.status, 'muted'];
+  const wst = (w) => WD_STATUS[w.status] || [w.status, 'muted'];
   view.innerHTML = html`<div class="page-head"><h1>${t('Кошелёк')}</h1></div>
-    ${r.test_mode ? html`<div class="note warn">🧪 ${t('Сейчас работает тестовый режим: пополнение бесплатное и ненастоящее. Можно спокойно попробовать покупку и продажу.')}</div>` : ''}
+    ${r.test_mode ? html`<div class="note warn">🧪 ${t('Сейчас работает тестовый режим: пополнение бесплатное и ненастоящее. Можно спокойно попробовать покупку и продажу.')}</div>`
+      : html`<div class="note">🔒 ${t('Деньги за покупку хранятся у Sauda, пока вы не подтвердите получение. Пополнение — переводом на Kaspi, вывод — на Kaspi или карту в течение 24 часов.')}</div>`}
     <div class="wallet-top">
       <div class="card balance-card"><span class="muted">${t('Доступно')}</span><b class="bal">${Fmt.money(r.balance)}</b>
         <div class="row-btns"><button class="btn primary" data-act="topup">💳 ${t('Пополнить')}</button><button class="btn" data-act="withdraw">🏦 ${t('Вывести')}</button></div></div>
@@ -253,15 +303,29 @@ Views.wallet = async (view, ctx) => {
       </div>
     </div>
     <form class="card promo" data-submit="promo"><span>🎁 ${t('Промокод')}</span><input name="code" maxlength="24" placeholder="${t('Введите промокод')}" autocapitalize="characters" required><button class="btn">${t('Применить')}</button></form>
+    ${(r.topups || []).length ? html`<section class="block"><h2>${t('Пополнения')}</h2><div class="card list">${r.topups.map((x) => html`<div class="tx-row"><span class="tx-ico">💳</span>
+      <span class="tx-main"><b>${t('Заявка {code}', { code: x.code })}</b><span class="muted small">${Fmt.dt(x.created_at)}${x.status === 'failed' && x.note ? ' · ' + x.note : ''}</span></span>
+      <span class="tx-sum">${Fmt.money(x.amount)} <span class="status status-${tst(x)[1]}">${t(tst(x)[0])}</span>
+        ${x.status === 'pending' ? html`<button class="btn small ${x.claimed_at ? 'ghost' : 'primary'}" data-act="paytp" data-id="${x.id}">${x.claimed_at ? t('Реквизиты') : t('Оплатить')}</button>` : ''}</span></div>`)}</div></section>` : ''}
     ${r.withdrawals.length ? html`<section class="block"><h2>${t('Заявки на вывод')}</h2><div class="card list">${r.withdrawals.map((w) => html`<div class="tx-row"><span class="tx-ico">${(OUT_METHODS[w.method] || ['', '🏦'])[1]}</span>
-      <span class="tx-main"><b>${t((OUT_METHODS[w.method] || [w.method])[0])} ${w.details}</b><span class="muted small">${Fmt.dt(w.created_at)}${w.note ? ' · ' + w.note : ''}${w.test ? ' · ' + t('тест') : ''}</span></span>
-      <span class="tx-sum">${Fmt.money(w.amount - w.fee)} <span class="status status-${wst[w.status][1]}">${t(wst[w.status][0])}</span></span></div>`)}</div></section>` : ''}
+      <span class="tx-main"><b>${t((OUT_METHODS[w.method] || [w.method])[0])} ${w.details}</b><span class="muted small">${Fmt.dt(w.created_at)}${w.note && w.note !== 'test' ? ' · ' + w.note : ''}${w.test ? ' · ' + t('тест') : ''}</span></span>
+      <span class="tx-sum">${Fmt.money(w.amount - w.fee)} <span class="status status-${wst(w)[1]}">${t(wst(w)[0])}</span>
+        ${w.status === 'pending' ? html`<button class="btn small ghost" data-act="wdcancel" data-id="${w.id}">${t('Отменить')}</button>` : ''}</span></div>`)}</div></section>` : ''}
     <section class="block"><h2>${t('История операций')}</h2><div class="card list" id="tx">${r.tx.length ? r.tx.map(txRow) : html`<p class="muted pad">${t('Операций пока нет.')}</p>`}</div>
       <div class="center"><button class="btn ghost" data-act="more" ${r.tx.length < 50 ? 'hidden' : ''}>${t('Показать ещё')}</button></div></section>`.s;
   let lastId = r.tx.length ? r.tx[r.tx.length - 1].id : null;
   UI.bind(view, {
     topup: () => Wallet.topup(),
     withdraw: () => Wallet.withdraw(),
+    paytp: (b) => Wallet.payInfo(r.topups.find((x) => x.id === +b.dataset.id), r.pay),
+    wdcancel: async (b) => {
+      if (!(await UI.ask(t('Отменить заявку на вывод? Деньги вернутся на баланс.'), { yes: t('Отменить заявку') }))) return;
+      const x = await Api.auth('sauda_withdraw_cancel', { p_id: +b.dataset.id });
+      if (!x.ok) return UI.fail(x);
+      await App.refresh(true);
+      UI.toast(t('Заявка отменена, деньги на балансе'));
+      Router.go();
+    },
     promo: async (f, fd) => {
       const x = await Api.auth('sauda_promo', { p_code: fd.get('code') });
       if (!x.ok) return UI.fail(x);
@@ -356,7 +420,7 @@ Views.sell = async (view, ctx) => {
     </div>`.s;
 
   const form = view.querySelector('#sf');
-  const num = (x) => { const n = parseInt(String(x || '').replace(/\D/g, ''), 10); return Number.isFinite(n) ? n : null; };
+  const num = (x) => Fmt.amount(x);
   function secs() {
     const g = App.meta.byId[st.game];
     const box = view.querySelector('#secs');

@@ -142,11 +142,12 @@ Views.game = async (view, ctx) => {
     <div id="results">${C.skeleton(8, mode)}</div>
     <div class="center"><button class="btn ghost" id="more" hidden data-act="more">${t('Показать ещё')}</button></div>`.s;
 
-  let offset = 0, items = [];
+  let offset = 0, items = [], seq = 0;
   async function load(reset) {
+    const my = ++seq; // ответ на устаревший запрос (двойное «Показать ещё») не дописывает список
     if (reset) { offset = 0; items = []; }
     const j = await Api.call('sauda_lots', { p: Object.assign({}, f, { limit: 40, offset }) });
-    if (!ctx.alive()) return;
+    if (!ctx.alive() || my !== seq) return;
     if (!j.ok) { view.querySelector('#results').innerHTML = C.empty('📡', errText(j.error)).s; return; }
     items = items.concat(j.items);
     offset = items.length;
@@ -157,7 +158,7 @@ Views.game = async (view, ctx) => {
     apply: (form) => {
       const fd = new FormData(form);
       const p = new URLSearchParams();
-      ['q', 'min', 'max', 'sort', 'city'].forEach((k) => { const v = String(fd.get(k) || '').trim(); if (v && !(k === 'sort' && v === 'top')) p.set(k, k === 'min' || k === 'max' ? v.replace(/\D/g, '') : v); });
+      ['q', 'min', 'max', 'sort', 'city'].forEach((k) => { const v = String(fd.get(k) || '').trim(); if (v && !(k === 'sort' && v === 'top')) p.set(k, k === 'min' || k === 'max' ? String(Fmt.amount(v) || '') : v); });
       if (fd.get('auto')) p.set('auto', '1');
       if (fd.get('online')) p.set('online', '1');
       const qs = p.toString();

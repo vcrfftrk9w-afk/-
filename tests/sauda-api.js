@@ -296,20 +296,82 @@ const step = (name) => { passed++; console.log('  ✓', name); };
   assert.strictEqual(roleCheck[0].m, false);
   step('схема sauda и внутренние функции недоступны снаружи');
 
+  // ── под поддержку не замаскироваться, вывод можно отменить, пока его не взяли в работу
+  const BB = (await ok('sauda_login', { p_login: 'buyer_' + tag, p_password: 'secret2' })).token; // после разблокировки — новый вход
+  await no('sauda_register', { p_login: 'fake_' + tag, p_password: 'secret9', p_name: 'Поддержка Sauda' }, 'name_reserved');
+  await no('sauda_register', { p_login: 'fake_' + tag, p_password: 'secret9', p_name: 'Sаuda Support' }, 'name_reserved');
+  await no('sauda_register', { p_login: 'sauda_help', p_password: 'secret9' }, 'login_taken');
+  await no('sauda_profile_save', { p_token: BB, p: { name: 'Админ' } }, 'name_reserved');
+  await ok('sauda_profile_save', { p_token: BB, p: { name: 'Saudager KZ' } });
+  await ok('sauda_topup', { p_token: BB, p_amount: 5000, p_method: 'kaspi' });
+  let balB = (await ok('sauda_me', { p_token: BB })).user.balance;
+  const wd1 = await ok('sauda_withdraw', { p_token: BB, p_amount: 1000, p_method: 'kaspi', p_details: '8 701 123 45 67' });
+  assert.strictEqual(wd1.balance, balB - 1000);
+  assert.strictEqual((await ok('sauda_withdraw_cancel', { p_token: BB, p_id: wd1.id })).balance, balB, 'отмена вернула деньги');
+  await no('sauda_withdraw_cancel', { p_token: BB, p_id: wd1.id }, 'bad_status');
+  const wd2 = await ok('sauda_withdraw', { p_token: BB, p_amount: 1000, p_method: 'kaspi', p_details: '87011234567' });
+  await no('sauda_withdraw_cancel', { p_token: S, p_id: wd2.id }, 'not_found');
+  await ok('sauda_admin', { p_token: C, p_action: 'withdraw_set', p: { id: wd2.id, status: 'processing' } });
+  await no('sauda_withdraw_cancel', { p_token: BB, p_id: wd2.id }, 'bad_status');
+  const inWork = (await ok('sauda_admin', { p_token: C, p_action: 'withdrawals', p: {} })).data;
+  assert.ok(inWork.some((x) => x.id === wd2.id && x.status === 'processing'), 'взятая в работу заявка видна в очереди');
+  step('имя «как у поддержки» запрещено, вывод отменяется до начала перевода');
+
+  // ── запуск с настоящими деньгами: тестовое закрывается, пополнение — заявкой с кодом, зачисляет администратор
+  const liveLot = (await sql(`select id from sauda.lots where is_demo and status = 'active' and not auto order by id limit 1`))[0].id;
+  const openOrder = (await ok('sauda_buy', { p_token: BB, p_lot: liveLot, p_qty: 1, p_data: 'id12345' })).order;
+  await ok('sauda_admin', { p_token: C, p_action: 'promo_create', p: { code: 'LIVE' + tag, amount: 300, uses: 5 } });
+  await no('sauda_admin', { p_token: C, p_action: 'config_set', p: { k: 'test_mode', v: false } }, 'pay_not_set');
+  await no('sauda_admin', { p_token: C, p_action: 'config_set', p: { k: 'pay_link', v: 'http://evil' } }, 'bad_input');
+  await ok('sauda_admin', { p_token: C, p_action: 'config_set', p: { k: 'pay_kaspi_phone', v: '+7 701 000 00 00' } });
+  await ok('sauda_admin', { p_token: C, p_action: 'config_set', p: { k: 'pay_kaspi_name', v: 'Тест Т.' } });
+  await ok('sauda_admin', { p_token: C, p_action: 'config_set', p: { k: 'test_mode', v: false } });
+  assert.strictEqual((await ok('sauda_meta', {})).config.test_mode, false);
+  assert.strictEqual((await sql(`select count(*)::int n from sauda.users where balance <> 0`))[0].n, 0, 'тестовые деньги обнулены');
+  assert.strictEqual((await sql(`select status from sauda.orders where id = $1`, [openOrder]))[0].status, 'refunded');
+  assert.strictEqual((await sql(`select status from sauda.withdrawals where id = $1`, [wd2.id]))[0].status, 'rejected');
+  await no('sauda_admin', { p_token: C, p_action: 'config_set', p: { k: 'test_mode', v: true } }, 'live_locked');
+  await no('sauda_buy', { p_token: BB, p_lot: liveLot, p_qty: 1, p_data: 'id12345' }, 'lot_unavailable');
+  await no('sauda_promo', { p_token: S, p_code: 'LIVE' + tag }, 'bad_promo');
+
+  const tp = await ok('sauda_topup', { p_token: BB, p_amount: 7000, p_method: 'kaspi' });
+  assert.ok(tp.pending && tp.topup.code === 'SD' + tp.topup.id && tp.pay.phone === '+7 701 000 00 00');
+  assert.strictEqual((await ok('sauda_me', { p_token: BB })).user.balance, 0, 'до проверки деньги не зачислены');
+  await no('sauda_topup_act', { p_token: S, p_id: tp.topup.id, p_action: 'claim' }, 'not_found');
+  await ok('sauda_topup_act', { p_token: BB, p_id: tp.topup.id, p_action: 'claim' });
+  const queue = (await ok('sauda_admin', { p_token: C, p_action: 'topups', p: {} })).data;
+  assert.ok(queue.some((x) => x.id === tp.topup.id && x.claimed_at), 'заявка у администратора');
+  await ok('sauda_admin', { p_token: C, p_action: 'topup_set', p: { id: tp.topup.id, status: 'paid', amount: 6500, note: 'kaspi 123' } });
+  await no('sauda_admin', { p_token: C, p_action: 'topup_set', p: { id: tp.topup.id, status: 'paid' } }, 'bad_status');
+  assert.strictEqual((await ok('sauda_me', { p_token: BB })).user.balance, 6500, 'зачислено, сколько пришло');
+  const tp2 = await ok('sauda_topup', { p_token: BB, p_amount: 2000, p_method: 'kaspi' });
+  await ok('sauda_topup_act', { p_token: BB, p_id: tp2.topup.id, p_action: 'cancel' });
+  await no('sauda_admin', { p_token: C, p_action: 'topup_set', p: { id: tp2.topup.id, status: 'paid' } }, 'bad_status');
+  const tp3 = await ok('sauda_topup', { p_token: BB, p_amount: 3000, p_method: 'kaspi' });
+  await ok('sauda_admin', { p_token: C, p_action: 'topup_set', p: { id: tp3.topup.id, status: 'failed', note: 'не пришло' } });
+  const wlt = await ok('sauda_wallet', { p_token: BB });
+  assert.strictEqual(wlt.balance, 6500);
+  assert.ok(wlt.topups.some((x) => x.id === tp3.topup.id && x.status === 'failed'));
+  await ok('sauda_withdraw', { p_token: BB, p_amount: 2000, p_method: 'kaspi', p_details: '87011234567' });
+  step('запуск с настоящими деньгами: тестовое обнулено, пополнение по коду, зачисляет администратор');
+
   // ── деньги сходятся: баланс каждого = сумма его журнала; всё положенное лежит на балансах, в заказах и в ожидающих выводах
   const drift = (await sql(`select count(*)::int n from sauda.users u where balance <> (select coalesce(sum(amount),0) from sauda.tx where user_id = u.id)`))[0].n;
   assert.strictEqual(drift, 0, 'баланс = журнал');
   const m = (await sql(`select
       (select coalesce(sum(balance),0) from sauda.users)::bigint bal,
       (select coalesce(sum(amount),0) from sauda.orders where status in ('paid','delivered','dispute'))::bigint esc,
-      (select coalesce(sum(amount),0) from sauda.withdrawals where status = 'pending')::bigint pend,
+      (select coalesce(sum(amount),0) from sauda.withdrawals where status in ('pending','processing'))::bigint pend,
+      (select coalesce(sum(amount),0) from sauda.tx where kind = 'test_reset')::bigint reset,
       (select coalesce(sum(amount),0) from sauda.topups where status = 'paid')::bigint top,
       (select coalesce(sum(amount - fee),0) from sauda.withdrawals where status = 'done')::bigint paid,
       (select count(*) from sauda.tx t join sauda.users u on u.id = t.user_id where t.balance_after < 0 and u.role <> 'bot')::int neg`))[0];
-  assert.strictEqual(+m.bal + +m.esc + +m.pend, +m.top - +m.paid, 'деньги сходятся');
+  assert.strictEqual(+m.bal + +m.esc + +m.pend, +m.top - +m.paid + +m.reset, 'деньги сходятся');
   assert.strictEqual(m.neg, 0, 'ни у кого не было минуса');
   step('деньги сходятся до тенге, минусов нет');
 
+  // база снова в тестовом режиме — для проверки в браузере
+  await sql(`update sauda.config set v = 'true' where k = 'test_mode'`);
   console.log(`\nSauda API: ${passed} проверок прошло`);
   await db.end();
 })().catch(async (e) => { console.error('ПРОВАЛ:', e.stack || e); await db.end(); process.exit(1); });

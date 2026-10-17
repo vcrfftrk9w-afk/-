@@ -32,8 +32,11 @@ const TX = {
   promo: ['Промокод', '🎁'], promo_out: ['Промокод (расход)', '🎁'], pro: ['Sauda Pro', '👑'], pro_in: ['Оплата Pro', '👑'],
   referral: ['Реферальный бонус', '🤝'], referral_out: ['Реферальный бонус (расход)', '🤝'], fee: ['Комиссия сервиса', '🧾'],
   admin: ['Корректировка администратором', '🛡️'], admin_out: ['Корректировка (расход)', '🛡️'],
+  test_reset: ['Тестовые деньги обнулены при запуске', '🧪'],
 };
 const PAY_METHODS = { kaspi: ['Kaspi.kz', '🔴'], halyk: ['Halyk Bank', '🟢'], card: ['Visa / Mastercard', '💳'], freedom: ['Freedom Pay', '🟣'], apple: ['Apple Pay', ''], google: ['Google Pay', '🅖'] };
+const WD_STATUS = { pending: ['В очереди', 'warn'], processing: ['Переводим', 'info'], done: ['Отправлено', 'ok'], rejected: ['Отклонено', 'danger'], canceled: ['Отменено', 'muted'] };
+const TOPUP_STATUS = { pending: ['Ждёт оплаты', 'warn'], claimed: ['Проверяем перевод', 'info'], paid: ['Зачислено', 'ok'], failed: ['Не подтверждено', 'danger'], canceled: ['Отменено', 'muted'] };
 const OUT_METHODS = { kaspi: ['Kaspi Gold', '🔴', 'phone'], halyk: ['Halyk (по номеру)', '🟢', 'phone'], freedom: ['Freedom (по номеру)', '🟣', 'phone'], card: ['Банковская карта', '💳', 'card'] };
 
 const C = {
@@ -192,6 +195,7 @@ const C = {
       case 'order_refunded':
         if (d.by === 'seller') return t('↩️ Продавец вернул деньги за заказ #{id}: {amount}.', n);
         if (d.by === 'buyer') return t('↩️ Покупатель отменил просроченный заказ #{id}, деньги вернулись.', n);
+        if (d.by === 'system') return t('🧪 Тестовый заказ #{id} закрыт при запуске Sauda с настоящими деньгами.', n);
         return t('⚖️ Арбитраж: деньги за заказ #{id} возвращены покупателю.', n);
       case 'dispute_open': return t('⚠️ По заказу #{id} открыт спор: «{reason}». Администратор разберётся, деньги заморожены.', n);
       case 'dispute_closed': return t('🤝 Спор по заказу #{id} закрыт, сделка продолжается.', n);
@@ -204,7 +208,7 @@ const C = {
   notifText(n) {
     const d = Object.assign({}, n.data || {});
     ['amount', 'net'].forEach((k) => { if (d[k] !== undefined) d[k] = Fmt.money(d[k]); });
-    const by = { buyer: t('покупатель'), auto: t('автоматически'), admin: t('администратор'), seller: t('продавец') };
+    const by = { buyer: t('покупатель'), auto: t('автоматически'), admin: t('администратор'), seller: t('продавец'), system: t('запуск сервиса') };
     if (d.by) d.by = by[d.by] || d.by;
     const map = {
       order_new: ['🛒', 'Новый заказ #{id}: «{title}» на {amount}'],
@@ -228,6 +232,9 @@ const C = {
       lot_blocked: ['🚫', 'Лот #{id} заблокирован модератором: {reason}'],
       lot_unblocked: ['✅', 'Лот #{id} снова можно включить'],
       balance_admin: ['🛡️', 'Баланс изменён администратором: {amount}'],
+      topup_new: ['💳', 'Проверьте перевод {amount} с кодом {code} от {login}'],
+      topup_done: ['💳', 'Пополнение зачислено: {amount}'],
+      topup_failed: ['❌', 'Перевод на {amount} не найден: {note}'],
     };
     const m = map[n.kind] || ['🔔', n.kind];
     let text = t(m[1], d);

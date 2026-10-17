@@ -32,7 +32,7 @@ const App = (() => {
   }
 
   /* ---- кто вошёл и счётчики */
-  let refreshing = null, langChanged = false;
+  let refreshing = null, rerender = false;
   async function refresh(force) {
     if (refreshing && !force) return refreshing;
     refreshing = (async () => {
@@ -41,15 +41,16 @@ const App = (() => {
       if (j.ok) {
         app.me = j.user;
         app.counters = { unread: j.unread, notifs: j.notifs, active_buy: j.active_buy, active_sell: j.active_sell };
-        if (app.meta) app.meta.config.test_mode = j.test_mode;
-        if (j.user.lang && j.user.lang !== I18n.lang && !Store.get('sauda_lang', null)) { I18n.set(j.user.lang, false); langChanged = true; }
+        // сервис запустили с настоящими деньгами, пока страница была открыта, — свежие настройки и реквизиты
+        if (app.meta && app.meta.config.test_mode !== j.test_mode) { await loadMeta(true).catch(() => {}); app.meta.config.test_mode = j.test_mode; if (started) rerender = true; }
+        if (j.user.lang && j.user.lang !== I18n.lang && !Store.get('sauda_lang', null)) { I18n.set(j.user.lang, false); rerender = true; }
         ping(j);
       } else if (j.error === 'no_session' || j.error === 'banned') {
         app.me = null; app.counters = {};
         if (j.error === 'banned') { Api.setToken(''); UI.toast(errText('banned'), 'err'); }
       }
       header();
-      if (langChanged && started) { langChanged = false; Router.go(); }
+      if (rerender && started) { rerender = false; Router.go(); }
     })();
     try { await refreshing; } finally { refreshing = null; }
   }
@@ -208,11 +209,12 @@ const App = (() => {
     header();
     await refresh();
     started = true;
-    langChanged = false;
+    rerender = false;
     Router.go();
     loadMeta();
     Api.on(() => { app.me = null; header(); });
-    setInterval(() => { if (!document.hidden) refresh(); }, 20000);
+    // со включёнными уведомлениями проверяем и в фоне — иначе уведомление браузера некому показать
+    setInterval(() => { if (!document.hidden || notifyOn()) refresh(); }, 20000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
     if ('serviceWorker' in navigator && location.protocol !== 'file:' && !Cfg.local) navigator.serviceWorker.register('sw.js').catch(() => {});
   }

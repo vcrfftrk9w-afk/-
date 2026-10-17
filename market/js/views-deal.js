@@ -6,6 +6,7 @@
 
 /* ---- переписка: один компонент для чата, заказа и поддержки (режим support — от имени сервиса) */
 const ChatBox = {
+  drafts: {},
   mount(box, opts) {
     const support = opts.mode === 'support';
     let last = 0, first = null, stopped = false, timer = null, peer = null, sending = false;
@@ -28,6 +29,10 @@ const ChatBox = {
       </form>`.s;
     const list = box.querySelector('#cb-list');
     const ta = box.querySelector('textarea');
+    // недописанное сообщение переживает перерисовку страницы заказа (новый статус, системное сообщение)
+    const dk = (support ? 's:' : '') + opts.peerId;
+    ta.value = ChatBox.drafts[dk] || '';
+    ta.addEventListener('input', () => { if (ta.value) ChatBox.drafts[dk] = ta.value; else delete ChatBox.drafts[dk]; });
     const nearBottom = () => list.scrollHeight - list.scrollTop - list.clientHeight < 120;
     const toBottom = () => { list.scrollTop = list.scrollHeight; };
     let lastDay = '';
@@ -102,7 +107,8 @@ const ChatBox = {
         if (!body) return;
         ta.value = '';
         ta.style.height = '';
-        if (!(await doSend(body, 'text'))) ta.value = body;
+        delete ChatBox.drafts[dk];
+        if (!(await doSend(body, 'text'))) { ta.value = body; ChatBox.drafts[dk] = body; }
       },
       grow: () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'; },
       photo: async (inp) => {

@@ -339,7 +339,7 @@ input[type=checkbox], input[type=radio] { width: 18px; height: 18px; accent-colo
 .sum-list .total dd { font-weight: 900; }
 
 /* ───── профиль продавца ───── */
-.profile-head { display: grid; grid-template-columns: auto 1fr 230px; gap: 20px; align-items: start; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 22px; }
+.profile-head { display: grid; grid-template-columns: auto minmax(0, 1fr) 230px; gap: 20px; align-items: start; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 22px; }
 .ph-main h1 { font-size: 26px; }
 .bio { margin-top: 10px; }
 .ph-btns { display: flex; gap: 8px; margin-top: 14px; }
@@ -593,13 +593,13 @@ a.kpi:hover { border-color: var(--brand); text-decoration: none; }
   .hero h1 { font-size: 27px; }
   .hero-art { display: none; }
   .how .steps, .features { grid-template-columns: 1fr 1fr; }
-  .lot-page { grid-template-columns: 1fr; grid-template-areas: "top" "side" "bottom"; row-gap: 16px; }
-  .order-page, .sell-page { grid-template-columns: 1fr; }
+  .lot-page { grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "side" "bottom"; row-gap: 16px; }
+  .order-page, .sell-page { grid-template-columns: minmax(0, 1fr); }
   .filters > input[type=search] { flex-basis: 100%; }
   .lot-side, .sell-side { position: static; }
   .sell-side { order: -1; display: none; }
   .order-chat { position: static; height: 70vh; }
-  .profile-head { grid-template-columns: auto 1fr; }
+  .profile-head { grid-template-columns: auto minmax(0, 1fr); }
   .ph-rating { grid-column: 1 / -1; }
   .wallet-top, .settings, .menu-grid { grid-template-columns: 1fr; }
   .chat-main { height: calc(100vh - var(--top) - 32px); height: calc(100dvh - var(--top) - 32px); border-radius: 0; border-left: 0; border-right: 0; margin: -16px -16px 0; }
@@ -636,6 +636,8 @@ a.kpi:hover { border-color: var(--brand); text-decoration: none; }
   .price-range input { width: 100%; }
   .view-toggle { display: none; }
   .profile-head { padding: 16px; gap: 14px; }
+  .chat-main { margin: -12px -12px 0; height: calc(100vh - var(--top) - 24px); height: calc(100dvh - var(--top) - 24px); }
+  .compare th, .compare td { padding: 8px 6px; font-size: 13px; }
   .game-hero { padding: 16px; }
   .gh-emoji { font-size: 42px; }
   .order-row { padding: 10px 12px; gap: 10px; }
@@ -650,3 +652,22 @@ a.kpi:hover { border-color: var(--brand); text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* реквизиты для пополнения переводом */
+.pay-sum { font-size: 15px; margin: 0; }
+.pay-sum b { font-size: 24px; margin-left: 4px; }
+.pay-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r2); background: var(--card2); }
+.pay-row .muted { grid-column: 1 / -1; }
+.pay-row b { font-size: 17px; overflow-wrap: anywhere; }
+.tx-sum .btn.small { margin-left: 6px; }
+
+/* длинные слова без пробелов (названия, ники, ID покупателя, ссылки) переносятся, а не растягивают страницу вбок */
+.lot-page, .order-page, .profile-head, .tx-main, .adm-row, .note { overflow-wrap: anywhere; }
+.btn, .chip, .tab, .status, time { overflow-wrap: normal; }
+.ci-top { min-width: 0; }
+.ci-top > b, .ci-top > .muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compare { overflow-x: auto; }
+
+/* светлая тема: статусы и суммы темнее, чтобы читались на белом */
+:root[data-theme="light"] { --ok: #15803d; --warn: #b45309; --danger: #dc2626; --info: #0369a1; }
+.cb-order > b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }

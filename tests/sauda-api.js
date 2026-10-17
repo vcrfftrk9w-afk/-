@@ -340,6 +340,27 @@ const step = (name) => { passed++; console.log('  ✓', name); };
   await ok('sauda_login', { p_login: 'lvs_' + tag, p_password: 'secret1' });
   step('вещи: автоподтверждение через 14 дней; подбор пароля закрывает вход только подбирающему');
 
+  // ── администратор сам добавляет игру с логотипом и меняет логотип; продавцы сразу могут в ней продавать
+  const png = 'data:image/png;base64,' + Buffer.from('fakepng').toString('base64');
+  await no('sauda_admin_game', { p_token: LS, p_action: 'save', p: { id: 'newgame' + tag, name: 'X', kind: 'mobile', sections: 'other' } }, 'forbidden');
+  await no('sauda_admin_game', { p_token: C, p_action: 'save', p: { id: 'Bad Id', name: 'X', kind: 'mobile', sections: 'other' } }, 'bad_game_id');
+  await no('sauda_admin_game', { p_token: C, p_action: 'save', p: { id: 'ng' + tag, name: 'X', kind: 'mobile', sections: 'nope' } }, 'bad_section');
+  await ok('sauda_admin_game', { p_token: C, p_action: 'save', p: { id: 'ng' + tag, name: 'Новая игра', kind: 'mobile', emoji: '🐼', color: '#123456', popular: true, sections: 'currency:Кристаллы:Кристалдар|accounts', logo: png } });
+  let ng = (await ok('sauda_meta', {})).games.find((x) => x.id === 'ng' + tag);
+  assert.ok(ng && ng.logo === png && ng.sections[0].ru === 'Кристаллы' && ng.sections[1].ru === 'Аккаунты', 'игра в каталоге с логотипом и разделами');
+  await no('sauda_admin_game', { p_token: C, p_action: 'save', p: { id: 'ng' + tag, logo: 'javascript:alert(1)' } }, 'bad_image');
+  await ok('sauda_admin_game', { p_token: C, p_action: 'save', p: { id: 'ng' + tag, logo: '' } });
+  ng = (await ok('sauda_meta', {})).games.find((x) => x.id === 'ng' + tag);
+  assert.strictEqual(ng.logo, '', 'логотип убран');
+  assert.strictEqual(ng.name, 'Новая игра', 'остальное не тронуто');
+  await ok('sauda_lot_save', { p_token: LS, p: { game: 'ng' + tag, section: 'currency', title: '1000 кристаллов', price: 500, qty: 5, deliver_mins: 60 } });
+  await no('sauda_admin_game', { p_token: C, p_action: 'save', p: { id: 'ng' + tag, sections: 'accounts' } }, 'section_in_use');
+  await no('sauda_admin_game', { p_token: C, p_action: 'delete', p: { id: 'ng' + tag } }, 'game_in_use');
+  await ok('sauda_admin_game', { p_token: C, p_action: 'save', p: { id: 'freefire', logo: png } });
+  assert.strictEqual((await ok('sauda_meta', {})).games.find((x) => x.id === 'freefire').logo, png, 'логотип существующей игры заменён');
+  await ok('sauda_admin_game', { p_token: C, p_action: 'save', p: { id: 'freefire', logo: '' } });
+  step('администратор добавляет игру с логотипом и разделами, меняет логотип; права и проверки');
+
   // ── под поддержку не замаскироваться, вывод можно отменить, пока его не взяли в работу
   const BB = (await ok('sauda_login', { p_login: 'buyer_' + tag, p_password: 'secret2' })).token; // после разблокировки — новый вход
   await no('sauda_register', { p_login: 'fake_' + tag, p_password: 'secret9', p_name: 'Поддержка Sauda' }, 'name_reserved');

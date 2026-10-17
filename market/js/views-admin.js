@@ -8,8 +8,13 @@
 const ADMIN_TABS = [
   ['stats', '📈', 'Обзор', false], ['disputes', '⚖️', 'Споры', false], ['support', '🛟', 'Поддержка', false],
   ['topups', '💳', 'Пополнения', true], ['withdrawals', '🏦', 'Выводы', true], ['orders', '🧾', 'Заказы', false], ['users', '👥', 'Люди', false],
-  ['lots', '📦', 'Лоты', false], ['reports', '🚩', 'Жалобы', false], ['promos', '🎁', 'Промокоды', true], ['config', '⚙️', 'Настройки', true],
+  ['lots', '📦', 'Лоты', false], ['reports', '🚩', 'Жалобы', false], ['promos', '🎁', 'Промокоды', true], ['games', '🎮', 'Игры', true], ['config', '⚙️', 'Настройки', true],
 ];
+
+/* стандартные разделы игры (как в sauda.secs): можно включать и выключать, названия по умолчанию */
+const SECTION_STD = { accounts: 'Аккаунты', currency: 'Валюта', donate: 'Донат по ID', items: 'Предметы и скины', boost: 'Буст и прокачка',
+  keys: 'Ключи и гифты', topup: 'Пополнение кошелька', subs: 'Подписки', services: 'Услуги', coaching: 'Обучение', goods: 'Товары', other: 'Прочее' };
+const admGame = (action, p) => Api.auth('sauda_admin_game', { p_action: action, p: p || {} });
 
 const adm = (action, p) => Api.auth('sauda_admin', { p_action: action, p: p || {} });
 
@@ -248,6 +253,78 @@ const Admin = {
         <span class="ci-main"><span class="ci-top"><b>${c.peer.name}</b> <span class="muted">@${c.peer.login}</span><time>${Fmt.dt(c.last_at)}</time></span>
         <span class="ci-last">${c.last_mine ? html`<span class="muted">${t('Поддержка')}: </span>` : ''}${c.last_kind === 'image' ? '📷' : c.last_text}</span></span>${c.unread ? html`<span class="badge">${c.unread}</span>` : ''}</a>`)}</div>`
       : C.empty('🛟', t('Обращений пока нет'))).s;
+  },
+
+  async games(box, ctx) {
+    const r = await admGame('list');
+    if (!ctx.alive()) return;
+    if (!r.ok) { box.innerHTML = C.empty('📡', errText(r.error)).s; return; }
+    box.innerHTML = html`<div class="row-btns"><button class="btn primary" data-act="add">＋ ${t('Добавить игру')}</button></div>
+      ${KINDS.map((k) => {
+        const list = r.items.filter((g) => g.kind === k.id);
+        return list.length ? html`<section class="block"><h3>${k.icon} ${t(k.ru)}</h3><div class="card list">${list.map((g) => html`<div class="adm-row">
+          <span class="tx-main"><span>${C.gicon(g)} <b>${g.name}</b> <span class="muted">${g.id}</span>${g.popular ? ' ⭐' : ''}</span>
+            <span class="muted small">${t('лотов: {n}', { n: g.lots })} · ${g.sections.map((x) => x.ru).join(', ')}</span></span>
+          <button class="btn small" data-act="edit" data-id="${g.id}">✏️ ${t('Изменить')}</button></div>`)}</div></section>` : '';
+      })}`.s;
+    UI.bind(box, { add: () => Admin.gameForm(null), edit: (b) => Admin.gameForm(r.items.find((g) => g.id === b.dataset.id)) });
+  },
+
+  /* добавить игру или изменить её: название, вид, разделы, эмодзи, цвет, логотип (сжимается в браузере до 128×128) */
+  gameForm(g) {
+    const isNew = !g;
+    g = g || { id: '', name: '', kind: 'mobile', emoji: '🎮', color: '#00afca', sort: 500, popular: false, sections: [], logo: '', lots: 0 };
+    let logo = g.logo, logoChanged = false;
+    const preview = () => C.gicon(Object.assign({}, g, { logo })).s;
+    const m = UI.modal({
+      title: isNew ? t('Новая игра') : t('Изменить: {name}', { name: g.name }),
+      body: html`<form class="stack" data-submit="save">
+        <div class="logo-edit"><span class="logo-prev" id="lp">${raw(preview())}</span>
+          <span class="stack"><label class="btn small">${t('Загрузить логотип')}<input type="file" accept="image/*" data-change="logo" hidden></label>
+          <button type="button" class="btn small ghost" data-act="nologo">${t('Убрать свой логотип')}</button></span></div>
+        <p class="muted small">${t('Квадратная картинка, лучше официальная иконка игры. Сайт сам уменьшит её до 128×128.')}</p>
+        <label class="field"><span>${t('Название')}</span><input name="name" required maxlength="40" value="${g.name}"></label>
+        <label class="field"><span>${t('Код игры (латиница, цифры, _)')}</span><input name="id" required pattern="[a-z0-9_]{2,24}" value="${g.id}" ${isNew ? '' : 'readonly'} placeholder="freefire"></label>
+        <label class="field"><span>${t('Раздел каталога')}</span><select name="kind">${KINDS.map((k) => html`<option value="${k.id}" ${g.kind === k.id ? 'selected' : ''}>${k.icon} ${t(k.ru)}</option>`)}</select></label>
+        <div class="grid2"><label class="field"><span>${t('Эмодзи (если нет логотипа)')}</span><input name="emoji" maxlength="8" value="${g.emoji}"></label>
+          <label class="field"><span>${t('Цвет')}</span><input name="color" type="color" value="${g.color}"></label></div>
+        <div class="grid2"><label class="field"><span>${t('Порядок (меньше — выше)')}</span><input name="sort" type="number" value="${g.sort}"></label>
+          <label class="check"><input type="checkbox" name="popular" ${g.popular ? 'checked' : ''}> ⭐ ${t('Популярная — на главной')}</label></div>
+        <fieldset class="field"><legend>${t('Что можно продавать')}</legend><div class="chips">${Object.entries(SECTION_STD).map(([id, ru]) => {
+          const cur = g.sections.find((x) => x.id === id);
+          return html`<label class="chip"><input type="checkbox" name="sec" value="${id}" ${cur ? 'checked' : ''}> ${cur ? cur.ru : t(ru)}</label>`;
+        })}</div></fieldset>
+        <button class="btn primary big wide">${t('Сохранить')}</button>
+        ${!isNew && !g.lots ? html`<button type="button" class="btn ghost danger-text wide" data-act="del">${t('Удалить игру')}</button>` : ''}</form>`,
+      on: {
+        logo: async (inp) => {
+          const file = inp.files && inp.files[0];
+          inp.value = '';
+          if (!file) return;
+          try { logo = await Img.fit(file, 128, 30000, true); logoChanged = true; m.q('#lp').innerHTML = preview(); } catch (e) { UI.fail({ error: 'bad_image' }); }
+        },
+        nologo: () => { logo = ''; logoChanged = true; m.q('#lp').innerHTML = preview(); },
+        del: async () => {
+          if (!(await UI.ask(t('Удалить игру «{name}»? В ней нет лотов.', { name: g.name }), { yes: t('Удалить'), danger: true }))) return;
+          const x = await admGame('delete', { id: g.id });
+          if (!x.ok) return UI.fail(x);
+          m.close(true); await App.loadMeta(true); Router.go();
+        },
+        save: (f, fd) => UI.busy(f.querySelector('.btn.primary'), async () => {
+          const secs = fd.getAll('sec').map((id) => { const cur = g.sections.find((x) => x.id === id); return cur ? `${id}:${cur.ru}:${cur.kz}` : id; });
+          if (!secs.length) return UI.fail({ error: 'bad_section' });
+          const p = { id: String(fd.get('id')).trim().toLowerCase(), name: String(fd.get('name')).trim(), kind: fd.get('kind'), emoji: String(fd.get('emoji')).trim(),
+            color: fd.get('color'), sort: parseInt(fd.get('sort'), 10) || 500, popular: !!fd.get('popular'), sections: secs.join('|') };
+          if (logoChanged) p.logo = logo;
+          const x = await admGame('save', p);
+          if (!x.ok) return UI.fail(x);
+          m.close(true);
+          await App.loadMeta(true);
+          UI.toast(t('Игра сохранена'));
+          Router.go();
+        }),
+      },
+    });
   },
 
   async config(box, ctx) {

@@ -314,6 +314,24 @@ async function register(p, login, name) {
   if (process.env.SHOTS) await B.screenshot({ path: process.env.SHOTS + '/live-wallet.png', fullPage: true });
   ok('запуск с настоящими деньгами: реквизиты Kaspi, заявка с кодом, «Я оплатил», администратор зачислил');
 
+  // ── администратор добавляет игру с логотипом через форму — она сразу в каталоге
+  await go(A, '#/admin/games');
+  await A.click('[data-act=add]');
+  await A.fill('.modal [name=name]', 'Panda Battle');
+  await A.fill('.modal [name=id]', 'panda' + tag);
+  await A.check('.modal [name=sec][value=currency]');
+  await A.setInputFiles('.modal input[type=file]', { name: 'logo.png', mimeType: 'image/png', buffer: PNG });
+  await A.waitForSelector('.modal #lp img.gicon');
+  if (process.env.SHOTS) await A.screenshot({ path: process.env.SHOTS + '/admin-game.png' });
+  await A.click('.modal .btn.primary');
+  await A.waitForSelector(`[data-act=edit][data-id=panda${tag}]`);
+  await B.evaluate(() => localStorage.removeItem('sauda_meta')); // каталог у людей обновляется раз в минуту — здесь сразу
+  await B.goto(BASE + '#/g/panda' + tag);
+  await B.reload();
+  await B.waitForSelector('img.gicon.gh-emoji');
+  assert.ok((await B.getAttribute('img.gicon.gh-emoji', 'src')).startsWith('data:image/'), 'логотип из базы на странице игры');
+  ok('администратор добавил игру с логотипом — она в каталоге');
+
   assert.deepStrictEqual(errors, [], 'ошибки в консоли');
   console.log(`\nSauda UI: ${n} сценариев прошло, ошибок в консоли нет`);
   await browser.close();

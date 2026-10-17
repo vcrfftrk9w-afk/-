@@ -2,3 +2,6 @@ android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+android-sauda/.gradle/
+android-sauda/build/
+android-sauda/app/build/

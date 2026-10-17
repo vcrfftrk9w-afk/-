@@ -38,7 +38,9 @@ async function register(p, login, name) {
 }
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  // свой Chromium — из CHROMIUM_PATH или песочницы; иначе тот, что поставил npx playwright install chromium
+  const exe = process.env.CHROMIUM_PATH || (require('fs').existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
+  const browser = await chromium.launch(exe ? { executablePath: exe } : {});
   const errors = [];
   const S = await person(browser, { width: 1366, height: 900 }, errors, 'seller');
   const B = await person(browser, { width: 390, height: 844 }, errors, 'buyer');

@@ -16,7 +16,9 @@ const ICONS = [
 ];
 
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  // свой Chromium — из CHROMIUM_PATH или песочницы; иначе тот, что поставил npx playwright install chromium
+  const exe = process.env.CHROMIUM_PATH || (require('fs').existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
+  const b = await chromium.launch(exe ? { executablePath: exe } : {});
   for (const ic of ICONS) {
     const p = await b.newPage({ viewport: { width: ic.size, height: ic.size } });
     const inner = ic.round ? svg : svg.replace('rx="16"', 'rx="0"');

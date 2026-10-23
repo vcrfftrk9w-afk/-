@@ -343,7 +343,7 @@ const Buy = {
       on: {
         topup: () => { m.close(); Wallet.topup(Math.max(lack, 100), () => Buy.confirm(l, qty, data, renew)); },
         pay: (b) => UI.busy(b, async () => {
-          const r = await Api.auth('sauda_buy', { p_lot: l.id, p_qty: qty, p_data: data, p_renew: renew });
+          const r = await Api.auth('sauda_buy', { p_lot: l.id, p_qty: qty, p_data: data, p_renew: renew, p_price: l.price });
           if (!r.ok) return UI.fail(r);
           m.close(true);
           if (App.me) App.me.balance = r.balance;

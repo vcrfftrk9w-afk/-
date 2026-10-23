@@ -42,7 +42,9 @@ const ChatBox = {
       const sep = day !== lastDay ? html`<div class="cb-day">${Fmt.date(m.created_at)}</div>` : '';
       lastDay = day;
       if (m.kind === 'system') {
-        return html`${sep}<div class="msg-sys" data-id="${m.id}">${C.sysText(m.body)}${m.order_id ? html` <a href="#/order/${m.order_id}">${t('Открыть заказ')} →</a>` : ''}<time>${Fmt.time(m.created_at)}</time></div>`;
+        // на странице заказа сообщения о других заказах с этим же человеком — бледные, чтобы не спутать данные
+        const other = opts.orderId && m.order_id && m.order_id !== opts.orderId;
+        return html`${sep}<div class="msg-sys ${other ? 'other' : ''}" data-id="${m.id}">${C.sysText(m.body, support ? undefined : !!m.mine)}${m.order_id ? html` <a href="#/order/${m.order_id}">${t('Открыть заказ')} →</a>` : ''}<time>${Fmt.time(m.created_at)}</time></div>`;
       }
       return html`${sep}<div class="msg ${m.mine ? 'mine' : ''}" data-id="${m.id}"><div class="bubble">${m.kind === 'image'
         ? html`<button class="msg-img" data-act="zoom" aria-label="${t('Открыть фото')}"><img src="${m.body}" alt="" loading="lazy"></button>`
@@ -203,7 +205,7 @@ Views.order = async (view, ctx) => {
           <dl class="sum-list">
             <div><dt>${t('Цена')}</dt><dd>${Fmt.money(o.unit_price)} × ${o.qty}</dd></div>
             <div class="total"><dt>${t('Сумма')}</dt><dd>${Fmt.money(o.amount)}</dd></div>
-            ${o.buyer_data ? html`<div><dt>${t('Данные покупателя')}</dt><dd class="mono">${o.buyer_data} <button class="link" data-act="copy" data-v="${o.buyer_data}">${t('копировать')}</button></dd></div>` : ''}
+            ${o.buyer_data ? html`<div><dt>${o.id_label || t('Данные покупателя')}</dt><dd class="mono">${o.buyer_data} <button class="link" data-act="copy" data-v="${o.buyer_data}">${t('копировать')}</button></dd></div>` : ''}
             <div><dt>${t('Продавец')}</dt><dd><a href="#/u/${o.seller.login}">${o.seller.name}</a></dd></div>
             <div><dt>${t('Покупатель')}</dt><dd><a href="#/u/${o.buyer.login}">${o.buyer.name}</a></dd></div>
             ${o.sub_id ? html`<div><dt>${t('Подписка')}</dt><dd><a href="#/subs">🔁 ${t('автопродление')}</a></dd></div>` : ''}
@@ -221,11 +223,13 @@ Views.order = async (view, ctx) => {
         </div>` : ''}
 
         <div class="order-actions">
-          ${buyer && ['paid', 'delivered'].includes(o.status) ? html`<button class="btn primary big" data-act="confirm">✅ ${t('Подтвердить получение')}</button>` : ''}
+          ${buyer && o.status === 'delivered' ? html`<button class="btn primary big" data-act="confirm">✅ ${t('Подтвердить получение')}</button>` : ''}
+          ${buyer && o.status === 'paid' ? html`<button class="btn primary big" data-act="chat">💬 ${t('Написать продавцу')}</button>` : ''}
           ${seller && o.status === 'paid' ? html`<button class="btn primary big" data-act="deliver">📦 ${t('Выполнено')}</button>` : ''}
           ${buyer && overdue ? html`<button class="btn" data-act="cancel">↩️ ${t('Отменить и вернуть деньги')}</button>` : ''}
           ${seller && open ? html`<button class="btn ghost" data-act="refund">↩️ ${t('Вернуть деньги покупателю')}</button>` : ''}
           ${(buyer || seller) && ['paid', 'delivered'].includes(o.status) ? html`<button class="btn ghost danger-text" data-act="dispute">⚠️ ${t('Открыть спор')}</button>` : ''}
+          ${buyer && o.status === 'paid' ? html`<button class="link small muted" data-act="confirm">${t('Товар уже у меня — подтвердить получение')}</button>` : ''}
           ${o.status === 'dispute' && o.dispute_by && App.me && o.dispute_by === App.me.id ? html`<button class="btn ghost" data-act="undispute">🤝 ${t('Закрыть спор')}</button>` : ''}
         </div>
 
@@ -246,7 +250,14 @@ Views.order = async (view, ctx) => {
   });
   UI.bind(view, {
     copy: (b) => UI.copy(b.dataset.v),
-    confirm: async () => { if (await UI.ask(t('Подтверждаете, что получили товар и всё работает? После этого деньги уйдут продавцу, отменить будет нельзя.'), { yes: t('Да, всё получил') })) act('confirm'); },
+    confirm: async () => {
+      // до отметки «выполнено» — отдельное предупреждение: так часто просят мошенники («подтверди, потом пришлю»)
+      const q = o.status === 'paid'
+        ? t('Продавец ещё не отметил заказ выполненным. Подтверждайте, только если товар уже у вас и всё работает: деньги сразу уйдут продавцу, вернуть их будет нельзя.')
+        : t('Подтверждаете, что получили товар и всё работает? После этого деньги уйдут продавцу, отменить будет нельзя.');
+      if (await UI.ask(q, { yes: t('Да, всё получил'), danger: o.status === 'paid' })) act('confirm');
+    },
+    chat: () => { const ta = view.querySelector('#order-chat textarea'); if (ta) { ta.scrollIntoView({ block: 'center' }); ta.focus(); } },
     deliver: async () => {
       const text = await new Promise((res) => {
         const m = UI.modal({
@@ -299,7 +310,7 @@ Views.order = async (view, ctx) => {
   });
 
   if (buyer || seller) {
-    ctx.onLeave(ChatBox.mount(view.querySelector('#order-chat'), { peerId: other.id, hideOrders: true, onSystem: () => Router.go() }));
+    ctx.onLeave(ChatBox.mount(view.querySelector('#order-chat'), { peerId: other.id, orderId: o.id, hideOrders: true, onSystem: () => Router.go() }));
   } else if (staff) {
     const c = await Api.auth('sauda_admin', { p_action: 'chat_between', p: { a: o.buyer.id, b: o.seller.id } });
     const box = view.querySelector('#adm-chat');
@@ -328,11 +339,11 @@ const Order = {
 const Chats = {
   item(c, activeId) {
     const p = c.peer;
-    const last = c.last_kind === 'system' ? C.sysText(c.last_text) : c.last_kind === 'image' ? '📷 ' + t('Фото') : c.last_text;
+    const last = c.last_kind === 'system' ? C.sysText(c.last_text, !!c.last_mine) : c.last_kind === 'image' ? '📷 ' + t('Фото') : c.last_text;
     return html`<a class="chat-item ${c.unread ? 'unread' : ''} ${activeId === p.id ? 'on' : ''}" href="#/chat/${p.id}">
       ${C.avatar(p, 46)}${p.online ? html`<span class="online-dot abs"></span>` : ''}
       <span class="ci-main"><span class="ci-top"><b>${p.name}</b>${C.badges(p)}<time>${Fmt.dt(c.last_at)}</time></span>
-        <span class="ci-last">${c.last_mine ? html`<span class="muted">${t('Вы')}: </span>` : ''}${last}</span></span>
+        <span class="ci-last">${c.last_mine && c.last_kind !== 'system' ? html`<span class="muted">${t('Вы')}: </span>` : ''}${last}</span></span>
       ${c.unread ? html`<span class="badge">${c.unread}</span>` : ''}</a>`;
   },
   async fill(el, activeId) {

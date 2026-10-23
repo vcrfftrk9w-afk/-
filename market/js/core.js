@@ -94,7 +94,7 @@ const Fmt = {
     let m = Math.max(0, Math.round((new Date(d) - Date.now()) / 60000));
     const days = Math.floor(m / 1440); m -= days * 1440;
     const h = Math.floor(m / 60); m -= h * 60;
-    if (days) return t('{d} д {h} ч', { d: days, h });
+    if (days) return h ? t('{d} д {h} ч', { d: days, h }) : t('{d} д', { d: days });
     if (h) return t('{h} ч {m} мин', { h, m });
     return t('{m} мин', { m });
   },
@@ -202,6 +202,9 @@ const ERRORS = {
   empty: 'Пустое сообщение.',
   bad_code: 'Неверный код.',
   bad_action: 'Неизвестное действие.',
+  bad_recovery: 'Неверный логин или код восстановления.',
+  game_exists: 'Игра с таким кодом уже есть. Чтобы изменить её — нажмите «Изменить» в списке.',
+  promo_exists: 'Такой промокод уже есть.',
   bad_game_id: 'Код игры: 2–24 символа, латинские строчные буквы, цифры и _.',
   section_in_use: 'В этом разделе есть лоты — его нельзя убрать.',
   game_in_use: 'В этой игре есть лоты или заказы — её нельзя удалить.',

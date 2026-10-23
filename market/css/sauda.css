@@ -776,3 +776,31 @@ fieldset.field legend { font-size: 13px; color: var(--muted); margin-bottom: 6px
 .lot-cover img.gicon.cover-emoji { box-shadow: 0 10px 24px rgba(0, 0, 0, .28); }
 .game-tile { box-shadow: var(--shadow2); }
 .game-tile img.gicon.gt-emoji { box-shadow: 0 4px 12px rgba(0, 0, 0, .2); }
+
+/* ───── удобство: панель покупки на телефоне, шапка чата, тестовая полоса, значки ───── */
+.buy-bar { display: none; }
+@media (max-width: 900px) {
+  .buy-bar { position: fixed; left: 0; right: 0; bottom: calc(var(--tabbar) + env(safe-area-inset-bottom)); z-index: 35; display: flex; align-items: center;
+    justify-content: space-between; gap: 12px; padding: 10px 16px; background: color-mix(in srgb, var(--card) 94%, transparent);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgba(15, 27, 48, .1);
+    transition: transform .2s, opacity .2s; }
+  .buy-bar b { font-size: 20px; }
+  .buy-bar .btn { min-width: 150px; height: 44px; }
+  .buy-bar.hide { transform: translateY(110%); opacity: 0; pointer-events: none; }
+  .gallery.no-img { aspect-ratio: auto; height: 132px; }
+  .gallery.no-img .cover-emoji.big { font-size: 64px; }
+  body.on-home .top-search { display: none; }
+}
+body.in-chat .testbar { display: none; }
+.cb-peer > span { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.cb-name { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.cb-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-sys.other { opacity: .5; font-size: 12px; }
+.testbar { display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; overflow: hidden; }
+.testbar[hidden] { display: none; }
+.testbar > span { overflow: hidden; text-overflow: ellipsis; }
+.tb-x { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 13px; padding: 4px 6px; opacity: .7; }
+.cb-auto { background: rgba(17, 24, 39, .82); color: #ffc93c; }
+.vbadge { font-family: Arial, Helvetica, sans-serif; }
+.nowrap { white-space: nowrap; }
+.ha-3 { left: 4%; bottom: -8px; }

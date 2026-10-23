@@ -90,7 +90,7 @@ const App = (() => {
     const me = app.me, n = app.counters;
     const badge = (x) => (x ? html`<span class="badge">${x > 99 ? '99+' : x}</span>` : '');
     document.getElementById('top-right').innerHTML = html`
-      <button class="icon-btn hide-m" data-act="lang" aria-label="${t('Язык')}">${I18n.lang === 'kz' ? 'ҚАЗ' : 'РУС'}</button>
+      <button class="icon-btn ${me ? 'hide-m' : ''}" data-act="lang" aria-label="${t('Язык')}">${I18n.lang === 'kz' ? 'ҚАЗ' : 'РУС'}</button>
       ${me ? html`
         <a class="icon-btn hide-m" href="#/chats" aria-label="${t('Сообщения')}">${ICO.chat}${badge(n.unread)}</a>
         <a class="icon-btn" href="#/notifs" aria-label="${t('Уведомления')}">${ICO.bell}${badge(n.notifs)}</a>
@@ -101,8 +101,13 @@ const App = (() => {
     document.getElementById('tab-chats-b').innerHTML = html`${badge(n.unread)}`.s;
     document.getElementById('tab-me-b').innerHTML = html`${badge((n.notifs || 0) + (n.active_sell || 0))}`.s;
     const bar = document.getElementById('testbar');
-    bar.hidden = !(app.meta && app.meta.config.test_mode);
-    bar.innerHTML = html`🧪 ${t('Тестовый режим: деньги ненастоящие, можно пробовать покупки и продажи.')} <a href="#/help?s=test">${t('Подробнее')}</a>`.s;
+    // тестовый режим — одна строка; можно скрыть до следующего запуска браузера
+    let hidden = false;
+    try { hidden = sessionStorage.getItem('sauda_testbar') === '0'; } catch (e) { /* нет хранилища */ }
+    bar.hidden = !(app.meta && app.meta.config.test_mode) || hidden;
+    bar.innerHTML = html`<span>🧪 ${t('Тестовый режим: деньги ненастоящие.')} <a href="#/help?s=test">${t('Подробнее')}</a></span><button class="tb-x" data-act="hidebar" aria-label="${t('Скрыть')}">✕</button>`.s;
+    const x = bar.querySelector('[data-act=hidebar]');
+    x.onclick = () => { try { sessionStorage.setItem('sauda_testbar', '0'); } catch (e) { /* нет хранилища */ } bar.hidden = true; };
     document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll('[data-i18n-label]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nLabel)); });
     const s = document.querySelector('#top-search input');
@@ -134,8 +139,9 @@ const App = (() => {
     Router.go();
   }
 
-  function needAuth() {
-    location.hash = '#/login?next=' + encodeURIComponent(location.hash || '#/');
+  function needAuth(o) {
+    o = o || {};
+    location.hash = '#/login?' + (o.reg ? 'mode=reg&' : '') + (o.why ? 'why=' + o.why + '&' : '') + 'next=' + encodeURIComponent(location.hash || '#/');
   }
   /* после выхода на этом устройстве не остаётся ничего от прошлого человека: черновики сообщений, счётчик во вкладке */
   function forget() {

@@ -88,7 +88,7 @@ const C = {
 
   badges(u) {
     if (!u) return '';
-    return html`${u.verified ? html`<span class="vbadge" title="${t('Проверенный продавец')}">✔</span>` : ''}${u.level >= 2 ? html`<span class="lvl-badge lvl-${u.level}" title="${t('Уровень {n} · {name}', { n: u.level, name: Level.name(u.level) })}">${Level.icon(u.level)}${u.level}</span>` : ''}${u.pro ? html`<span class="pro-badge">PRO</span>` : ''}${u.staff ? html`<span class="staff-badge">${t('Sauda')}</span>` : ''}${u.demo ? html`<span class="demo-badge">${t('демо')}</span>` : ''}`;
+    return html`${u.verified ? html`<span class="vbadge" title="${t('Проверенный продавец')}">✓</span>` : ''}${u.level >= 2 ? html`<span class="lvl-badge lvl-${u.level}" title="${t('Уровень {n} · {name}', { n: u.level, name: Level.name(u.level) })}">${Level.icon(u.level)}${u.level}</span>` : ''}${u.pro ? html`<span class="pro-badge">PRO</span>` : ''}${u.staff ? html`<span class="staff-badge">${t('Sauda')}</span>` : ''}${u.demo ? html`<span class="demo-badge">${t('демо')}</span>` : ''}`;
   },
 
   stars(r, big) {
@@ -108,7 +108,7 @@ const C = {
 
   /* компактно для карточки: аватар, имя, Pro, онлайн, звезда */
   sellerMini(u) {
-    return html`<span class="seller-line">${C.avatar(u, 20)}<span class="seller-name">${u.name}</span>${u.verified ? html`<span class="vbadge" title="${t('Проверенный продавец')}">✔</span>` : ''}${u.pro ? html`<span class="pro-badge">PRO</span>` : ''}${C.online(u)}${u.reviews ? html`<span class="rating mini"><b>★ ${(+u.rating).toFixed(1)}</b> <span class="muted">(${Fmt.num(u.reviews)})</span></span>` : ''}</span>`;
+    return html`<span class="seller-line">${C.avatar(u, 20)}<span class="seller-name">${u.name}</span>${u.verified ? html`<span class="vbadge" title="${t('Проверенный продавец')}">✓</span>` : ''}${u.pro ? html`<span class="pro-badge">PRO</span>` : ''}${C.online(u)}${u.reviews ? html`<span class="rating mini"><b>★ ${(+u.rating).toFixed(1)}</b> <span class="muted">(${Fmt.num(u.reviews)})</span></span>` : ''}</span>`;
   },
 
   sellerLine(u) {

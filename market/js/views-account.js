@@ -5,12 +5,58 @@
    статистика продавца, помощь и правила.
    ========================================================= */
 
+/* ───────────── код восстановления: выдаётся при регистрации, по нему задают новый пароль ───────────── */
+const Recovery = {
+  /* показать код и дождаться, пока человек его сохранит */
+  show(code, first) {
+    return new Promise((res) => {
+      const m = UI.modal({
+        title: t('Код восстановления'),
+        body: html`<div class="stack">
+          <p>${first ? t('Сохраните этот код — он нужен, если забудете пароль. Без него восстановить аккаунт с балансом сможет только администратор.') : t('Новый код. Старый больше не действует.')}</p>
+          <div class="pay-row"><span class="muted small">${t('Код восстановления')}</span><b class="mono">${code}</b><button type="button" class="btn small ghost" data-act="copy">${t('Копировать')}</button></div>
+          <p class="muted small">${t('Сделайте скриншот или запишите. Никому его не отправляйте — даже «поддержке» в Telegram.')}</p>
+          <button type="button" class="btn primary big wide" data-act="ok">${t('Я сохранил код')}</button></div>`,
+        on: { copy: () => UI.copy(code), ok: () => m.close(true) },
+        onClose: () => res(),
+      });
+    });
+  },
+  /* забыли пароль: логин + код → новый пароль */
+  form(next) {
+    const contact = (App.meta && App.meta.config.support_contact) || '';
+    const m = UI.modal({
+      title: t('Восстановление пароля'),
+      body: html`<form class="stack" data-submit="go">
+        <label class="field"><span>${t('Логин')}</span><input name="login" required maxlength="24" autocapitalize="off" spellcheck="false"></label>
+        <label class="field"><span>${t('Код восстановления')}</span><input name="code" required maxlength="20" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX"></label>
+        <label class="field"><span>${t('Новый пароль')}</span><input name="pass" type="password" required minlength="6" maxlength="72" autocomplete="new-password"></label>
+        <div class="auth-err" id="rc-err" role="alert"></div>
+        <button class="btn primary big wide">${t('Сменить пароль')}</button>
+        <p class="muted small">${t('Нет кода? Напишите администратору — он проверит, что аккаунт ваш, и выдаст временный пароль.')}${contact ? ' ' + t('Связь: {c}', { c: contact }) : ''}</p></form>`,
+      on: {
+        go: (f, fd) => UI.busy(f.querySelector('.btn.primary'), async () => {
+          const r = await Api.call('sauda_recover', { p_login: fd.get('login'), p_code: fd.get('code'), p_new: fd.get('pass'), p_device: 'web' });
+          if (!r.ok) { m.q('#rc-err').textContent = errText(r.error); return; }
+          m.close(true);
+          Api.setToken(r.token);
+          await App.refresh(true);
+          await Recovery.show(r.recovery, false);
+          UI.toast(t('Пароль изменён'));
+          location.replace(next || '#/me');
+        }),
+      },
+    });
+  },
+};
+
 /* ───────────── вход и регистрация ───────────── */
 Views.auth = async (view, ctx) => {
   const reg = ctx.query.mode === 'reg';
   const next = safeNext(ctx.next || ctx.query.next);
   view.innerHTML = html`<div class="auth-page"><div class="card auth-card">
     <div class="auth-logo">${raw(App.logo(44))}<b>Sauda</b></div>
+    ${ctx.query.why === 'buy' ? html`<div class="note">🛒 ${t('Чтобы купить, войдите или создайте аккаунт — это полминуты. Потом вернём вас к покупке.')}</div>` : ''}
     <div class="tabs center-tabs"><button class="tab ${reg ? '' : 'on'}" data-act="tab" data-m="login">${t('Вход')}</button><button class="tab ${reg ? 'on' : ''}" data-act="tab" data-m="reg">${t('Регистрация')}</button></div>
     <form class="stack" data-submit="go" id="auth-form">
       <label class="field"><span>${t('Логин')}</span><input name="login" required maxlength="24" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${t('например, aidos_kz')}"></label>
@@ -22,6 +68,7 @@ Views.auth = async (view, ctx) => {
       ${Store.get('sauda_ref', '') ? html`<p class="muted small center">🤝 ${t('Вы пришли по приглашению')}</p>` : ''}
     </form>
     <p class="muted small center">${t('Почта и телефон не нужны. Запомните логин и пароль — по ним вход с любого устройства.')}</p>
+    <p class="center"><button class="link" data-act="forgot">🔑 ${t('Забыли пароль?')}</button></p>
   </div></div>`.s;
   let mode = reg ? 'reg' : 'login';
   const form = view.querySelector('#auth-form');
@@ -44,9 +91,11 @@ Views.auth = async (view, ctx) => {
       Api.setToken(r.token);
       Store.del('sauda_ref');
       await App.refresh(true);
+      if (r.recovery) await Recovery.show(r.recovery, true); // новый аккаунт — сначала сохранить код восстановления
       UI.toast(mode === 'reg' ? t('Добро пожаловать в Sauda!') : t('С возвращением!'));
       if (location.hash === next) Router.go(); else location.replace(next); // «Назад» не возвращает на страницу входа
     }),
+    forgot: () => Recovery.form(next),
   });
 };
 
@@ -103,7 +152,7 @@ Views.support = async (view, ctx) => {
 };
 
 /* ───────────── настройки ───────────── */
-Views.settings = async (view) => {
+Views.settings = async (view, ctx) => {
   const me = App.me;
   let avatar = me.avatar || '';
   view.innerHTML = html`<div class="page-head"><h1>${t('Настройки')}</h1></div>
@@ -128,10 +177,13 @@ Views.settings = async (view) => {
         <button class="btn">${t('Сменить пароль')}</button>
         <p class="muted small">${t('После смены пароля другие устройства выйдут из аккаунта.')}</p>
       </form>
-      <details class="card"><summary>${t('Для администратора')}</summary>
-        <form class="stack" data-submit="claim"><p class="muted small">${t('Код администратора хранится в базе (sauda.config, admin_code).')}</p>
-          <input name="code" autocomplete="off" placeholder="${t('Код')}" required><button class="btn">${t('Получить права')}</button></form>
-      </details>
+      <form class="card stack" data-submit="recovery"><h2>🔑 ${t('Код восстановления')}</h2>
+        <p class="muted small">${me.has_recovery ? t('Код уже выдан. Если потеряли его — получите новый, старый перестанет действовать.') : t('У вас ещё нет кода восстановления. Получите его — без него забытый пароль восстановит только администратор.')}</p>
+        <label class="field"><span>${t('Текущий пароль')}</span><input type="password" name="pw" required autocomplete="current-password"></label>
+        <button class="btn ${me.has_recovery ? '' : 'primary'}">${me.has_recovery ? t('Получить новый код') : t('Получить код')}</button>
+      </form>
+      ${'admin' in ctx.query ? html`<form class="card stack" data-submit="claim"><h2>${t('Для администратора')}</h2>
+          <input name="code" autocomplete="off" placeholder="${t('Код')}" required><button class="btn">${t('Получить права')}</button></form>` : ''}
     </div>`.s;
   UI.bind(view, {
     ava: async (inp) => {
@@ -154,6 +206,14 @@ Views.settings = async (view) => {
       if (!r.ok) return UI.fail(r);
       f.reset();
       UI.toast(t('Пароль изменён'));
+    },
+    recovery: async (f, fd) => {
+      const r = await Api.auth('sauda_recovery_new', { p_password: fd.get('pw') });
+      if (!r.ok) return UI.fail(r);
+      f.reset();
+      await App.refresh(true);
+      await Recovery.show(r.recovery, false);
+      Router.go();
     },
     claim: async (f, fd) => {
       const r = await Api.auth('sauda_admin_claim', { p_code: String(fd.get('code') || '').trim() });
@@ -223,8 +283,9 @@ const Wallet = {
           const r = await Api.auth('sauda_topup_act', { p_id: tp.id, p_action: 'claim' });
           if (!r.ok) return UI.fail(r);
           m.close(true);
-          UI.toast(t('Спасибо! Проверяем перевод и зачислим деньги.'));
-          if (after) after(); else if (location.hash.startsWith('#/wallet')) Router.go();
+          // деньги ещё не зачислены — окно покупки не открываем снова (иначе человек заплатит второй раз)
+          UI.toast(t('Спасибо! Проверяем перевод — обычно до 30 минут. Пришлём уведомление, когда деньги будут на балансе.'));
+          if (location.hash.startsWith('#/wallet')) Router.go();
         }),
         cancel: async (b) => {
           if (!(await UI.ask(t('Отменить заявку на пополнение? Если вы уже перевели деньги — не отменяйте, а нажмите «Я оплатил».'), { yes: t('Отменить заявку'), danger: true }))) return;
@@ -287,14 +348,13 @@ Views.wallet = async (view, ctx) => {
     const k = TX[x.kind] || [x.kind, '•'];
     const link = ['purchase', 'sale', 'refund'].includes(x.kind) && x.ref ? '#/order/' + x.ref : '';
     return html`<${link ? 'a' : 'div'} class="tx-row" ${link ? raw(`href="${link}"`) : ''}><span class="tx-ico">${k[1]}</span>
-      <span class="tx-main"><b>${t(k[0])}</b><span class="muted small">${x.note ? x.note + ' · ' : ''}${Fmt.dt(x.created_at)}</span></span>
+      <span class="tx-main"><b>${t(k[0])}</b><span class="muted small">${txNote(x) ? txNote(x) + ' · ' : ''}${Fmt.dt(x.created_at)}</span></span>
       <span class="tx-sum ${x.amount > 0 ? 'plus' : 'minus'}">${x.amount > 0 ? '+' : '−'}${Fmt.money(Math.abs(x.amount))}</span></${link ? 'a' : 'div'}>`;
   };
   const tst = (x) => TOPUP_STATUS[x.status === 'pending' && x.claimed_at ? 'claimed' : x.status] || [x.status, 'muted'];
   const wst = (w) => WD_STATUS[w.status] || [w.status, 'muted'];
   view.innerHTML = html`<div class="page-head"><h1>${t('Кошелёк')}</h1></div>
-    ${r.test_mode ? html`<div class="note warn">🧪 ${t('Сейчас работает тестовый режим: пополнение бесплатное и ненастоящее. Можно спокойно попробовать покупку и продажу.')}</div>`
-      : html`<div class="note">🔒 ${t('Деньги за покупку хранятся у Sauda, пока вы не подтвердите получение. Пополнение — переводом на Kaspi, вывод — на Kaspi или карту в течение 24 часов.')}</div>`}
+    ${r.test_mode ? '' : html`<div class="note">🔒 ${t('Деньги за покупку хранятся у Sauda, пока вы не подтвердите получение. Пополнение — переводом на Kaspi, вывод — на Kaspi или карту в течение 24 часов.')}</div>`}
     <div class="wallet-top">
       <div class="card balance-card"><span class="muted">${t('Доступно')}</span><b class="bal">${Fmt.money(r.balance)}</b>
         <div class="row-btns"><button class="btn primary" data-act="topup">💳 ${t('Пополнить')}</button><button class="btn" data-act="withdraw">🏦 ${t('Вывести')}</button></div></div>
@@ -579,11 +639,19 @@ Views.myLots = async (view, ctx) => {
 };
 
 /* ───────────── избранное, уведомления, подписки ───────────── */
+/* пометка операции: код способа оплаты — понятным названием, «3 мес.» — на языке сайта */
+const txNote = (x) => {
+  if (!x.note) return '';
+  if (['topup', 'withdraw'].includes(x.kind)) return (PAY_METHODS[x.note] || OUT_METHODS[x.note] || [x.note])[0];
+  if (x.kind === 'pro' && /^[0-9]+ мес\.$/.test(x.note)) return t('{m} мес.', { m: parseInt(x.note, 10) });
+  return x.note;
+};
+
 Views.favs = async (view, ctx) => {
   view.innerHTML = html`<div class="page-head"><h1>❤️ ${t('Избранное')}</h1></div><div id="l">${C.skeleton(4)}</div>`.s;
   const r = await Api.auth('sauda_favs');
   if (!ctx.alive()) return;
-  view.querySelector('#l').innerHTML = (!r.ok ? C.empty('📡', errText(r.error)) : C.lots(r.items) || C.empty('🤍', t('Здесь будут лоты, которые вы отметили сердечком'))).s;
+  view.querySelector('#l').innerHTML = (!r.ok ? C.empty('📡', errText(r.error)) : C.lots(r.items) || C.empty('🤍', t('Здесь будут лоты, которые вы отметили сердечком'), html`<a class="btn primary" href="#/catalog">${t('В каталог')}</a>`)).s;
 };
 
 Views.notifs = async (view, ctx) => {

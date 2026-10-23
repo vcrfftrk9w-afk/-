@@ -53,7 +53,7 @@ const ChatBox = {
     function head(p) {
       const h = box.querySelector('#cb-head');
       if (!h) return;
-      h.innerHTML = html`${opts.back ? html`<a class="icon-btn" href="${opts.back}" aria-label="${t('Назад')}">←</a>` : ''}<a class="cb-peer" href="#/u/${p.login}">${C.avatar(p, 38)}<span><b>${p.name}</b> ${C.badges(p)}<span class="muted small">${p.online ? html`<span class="online-dot"></span> ${t('В сети')}` : t('Был(а) {t}', { t: Fmt.ago(p.last_seen) })}</span></span></a>`.s;
+      h.innerHTML = html`${opts.back ? html`<a class="icon-btn" href="${opts.back}" aria-label="${t('Назад')}">←</a>` : ''}<a class="cb-peer" href="#/u/${p.login}">${C.avatar(p, 38)}<span><span class="cb-name"><b>${p.name}</b>${C.badges(p)}</span><span class="muted small">${p.online ? html`<span class="online-dot"></span> ${t('В сети')}` : t('Был(а) {t}', { t: Fmt.ago(p.last_seen) })}</span></span></a>`.s;
     }
     function orders(list2) {
       const el = box.querySelector('#cb-orders');

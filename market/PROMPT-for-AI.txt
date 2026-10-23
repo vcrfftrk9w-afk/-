@@ -4,7 +4,7 @@
 
 Как устроено:
 - Сайт — папка market/: чистые HTML/CSS/JS без сборки и без фреймворков. Скрипты подключены в market/index.html по порядку. Работающий сайт: https://vcrfftrk9w-afk.github.io/-/market/
-- Сервер — PostgreSQL в Supabase: закрытая схема sauda и функции public.sauda_*, которые сайт вызывает через POST /rest/v1/rpc/sauda_*. Весь SQL — supabase/migrations/*_sauda_*.sql, файлы 0100–0900 уже применены к базе.
+- Сервер — PostgreSQL в Supabase: закрытая схема sauda и функции public.sauda_*, которые сайт вызывает через POST /rest/v1/rpc/sauda_*. Весь SQL — supabase/migrations/*_sauda_*.sql, файлы 0100–1100 уже применены к базе.
 - sauda.html — тот же сайт одним файлом (собирается командой node tools/sauda-pack.js). Править нужно файлы в market/, а не sauda.html.
 
 Обязательные правила:

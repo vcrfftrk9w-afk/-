@@ -112,6 +112,7 @@ Views.me = async (view) => {
         ${me.pro ? html`<div class="pro-line">👑 ${t('Sauda Pro до {d}', { d: Fmt.date(me.pro_until) })}</div>` : ''}</div>
       <a class="me-balance" href="#/wallet"><span class="muted small">${t('Баланс')}</span><b>${Fmt.money(me.balance)}</b><span class="link">${t('Пополнить / вывести')} →</span></a>
     </div>
+    ${n.active_sell ? html`<a class="card note warn urgent" href="#/orders?tab=sell">⏱ <b>${tp(n.active_sell, 'заказ ждёт|заказа ждут|заказов ждут')}</b> ${t('выполнения или решения спора')} →</a>` : ''}
     ${Views.levelCard(me)}
     <div class="menu-grid">
       <div class="menu card"><h3>${t('Покупки')}</h3>
@@ -450,7 +451,8 @@ Views.sell = async (view, ctx) => {
             <label class="field"><span>${t('Старая цена (для скидки)')}</span><input name="old_price" inputmode="numeric" value="${v('old_price', '')}" data-input="preview" placeholder="${t('необязательно')}"></label>
           </div>
           <p class="muted small" id="net"></p>
-          <div class="seg" role="radiogroup" aria-label="${t('Способ выдачи')}">
+          <div class="note small goods-only" hidden>📦 ${t('Вещь с доставкой: договоритесь с покупателем в чате, отправьте и отметьте «Выполнено» с трек-номером. Деньги придут, когда покупатель подтвердит получение, или сами через 14 дней.')}</div>
+          <div class="seg digital-only" role="radiogroup" aria-label="${t('Способ выдачи')}">
             <label><input type="radio" name="auto" value="0" ${v('auto', false) ? '' : 'checked'} data-change="mode"> ✋ ${t('Выдаю сам')}</label>
             <label><input type="radio" name="auto" value="1" ${v('auto', false) ? 'checked' : ''} data-change="mode"> ⚡ ${t('Автовыдача')}</label>
           </div>
@@ -461,13 +463,13 @@ Views.sell = async (view, ctx) => {
             </div>
           </div>
           <div id="auto" class="stack">
-            <label class="field"><span>${t('Товары — по одному на строку')} <small class="muted" id="it-c"></small></span><textarea name="items" rows="5" class="mono" placeholder="${t('КОД-1234-5678\nlogin:password\nhttps://ссылка-на-подарок')}" data-input="items"></textarea></label>
+            <label class="field"><span>${t('Товары — по одному на строку')} <small class="muted" id="it-c"></small></span><textarea name="items" rows="5" class="mono" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" placeholder="${t('КОД-1234-5678\nlogin:password\nhttps://ссылка-на-подарок')}" data-input="items"></textarea></label>
             ${editId && lot.auto ? html`<p class="muted small">${t('Сейчас в наличии: {n}. Новые строки добавятся к ним.', { n: lot.qty || 0 })} <button type="button" class="link" data-act="manage">${t('Посмотреть и удалить')}</button></p>` : ''}
             <p class="muted small">${t('Покупатель получит товар сразу после оплаты, даже ночью. Каждая строка продаётся один раз.')}</p>
           </div>
-          <label class="check"><input type="checkbox" name="needs_id" ${v('needs_id', false) ? 'checked' : ''} data-change="needs"> 🆔 ${t('Покупатель указывает данные (ID игрока, почту, ник)')}</label>
+          <label class="check"><input type="checkbox" name="needs_id" ${v('needs_id', false) ? 'checked' : ''} data-change="needs"> 🆔 <span class="digital-only">${t('Покупатель указывает данные (ID игрока, почту, ник)')}</span><span class="goods-only" hidden>${t('Спросить у покупателя адрес доставки и телефон')}</span></label>
           <label class="field" id="idl" hidden><span>${t('Что указать покупателю')}</span><input name="id_label" maxlength="40" value="${v('id_label', '')}" placeholder="${t('Например: Player ID PUBG Mobile')}"></label>
-          <label class="check"><input type="checkbox" name="is_sub" ${v('period_days', null) ? 'checked' : ''} data-change="sub"> 🔁 ${t('Это подписка — покупатель может включить автопродление')}</label>
+          <label class="check digital-only"><input type="checkbox" name="is_sub" ${v('period_days', null) ? 'checked' : ''} data-change="sub"> 🔁 ${t('Это подписка — покупатель может включить автопродление')}</label>
           <label class="field" id="per" hidden><span>${t('Срок подписки')}</span><select name="period_days">${PERIODS.map((d) => html`<option value="${d}" ${v('period_days', 30) === d ? 'selected' : ''}>${tp(d, 'день|дня|дней')}</option>`)}</select></label>
           <label class="field" id="city" hidden><span>${t('Город (для вещей)')}</span><select name="city"><option value="">${t('Вся страна / доставка')}</option>${CITIES.map((c) => html`<option ${v('city', '') === c ? 'selected' : ''}>${c}</option>`)}</select></label>
         </div>
@@ -490,7 +492,19 @@ Views.sell = async (view, ctx) => {
     if (!g) { box.innerHTML = html`<span class="muted small">${t('Сначала выберите игру')}</span>`.s; return; }
     if (!g.sections.some((s) => s.id === st.section)) st.section = g.sections[0].id;
     box.innerHTML = g.sections.map((s) => html`<button type="button" role="radio" aria-checked="${s.id === st.section}" class="chip ${s.id === st.section ? 'on' : ''}" data-act="sec" data-s="${s.id}">${I18n.lang === 'kz' ? s.kz : s.ru}</button>`.s).join('');
-    view.querySelector('#city').hidden = g.kind !== 'goods';
+    // вещи с доставкой: без автовыдачи и подписок, с пояснением про 14 дней
+    const goods = g.kind === 'goods';
+    view.querySelector('#city').hidden = !goods;
+    view.querySelectorAll('.goods-only').forEach((x) => { x.hidden = !goods; });
+    view.querySelectorAll('.digital-only').forEach((x) => { x.hidden = goods; });
+    if (goods) {
+      const manual = view.querySelector('input[name=auto][value="0"]');
+      if (manual && !manual.checked) { manual.checked = true; mode(); }
+      const sub = view.querySelector('[name=is_sub]');
+      if (sub && sub.checked) { sub.checked = false; view.querySelector('#per').hidden = true; }
+      const idl = view.querySelector('[name=id_label]');
+      if (idl && !idl.value) idl.value = t('Адрес доставки и телефон');
+    }
   }
   function attrsUi() {
     view.querySelector('#attrs').innerHTML = st.attrs.map(([k, val], i) => html`<div class="attr-row"><input data-i="${i}" data-k="k" maxlength="30" value="${k}" placeholder="${t('Название')}" data-input="attr"><input data-i="${i}" data-k="v" maxlength="60" value="${val}" placeholder="${t('Значение')}" data-input="attr"><button type="button" class="icon-btn" data-act="delAttr" data-i="${i}" aria-label="${t('Удалить')}">✕</button></div>`.s).join('');
@@ -627,7 +641,7 @@ Views.myLots = async (view, ctx) => {
   UI.bind(view, {
     raise: (b) => UI.busy(b, async () => {
       const x = await Api.auth('sauda_raise', { p_game: b.dataset.g, p_section: b.dataset.s });
-      if (x.ok) { UI.toast(t('Подняли {n} лот(ов)', { n: x.raised })); Router.go(); } else if (x.error === 'raise_wait') UI.toast(t('Поднять снова можно через {t}', { t: Fmt.left(x.next_at) }), 'info'); else UI.fail(x);
+      if (x.ok) { UI.toast(t('Подняли: {n}', { n: tp(x.raised, 'лот|лота|лотов') })); Router.go(); } else if (x.error === 'raise_wait') UI.toast(t('Поднять снова можно через {t}', { t: Fmt.left(x.next_at) }), 'info'); else UI.fail(x);
     }),
     set: (b) => UI.busy(b, async () => { const x = await Api.auth('sauda_lot_set', { p_id: +b.dataset.id, p_status: b.dataset.s }); if (x.ok) Router.go(); else UI.fail(x); }),
     del: async (b) => {

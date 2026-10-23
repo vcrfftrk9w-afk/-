@@ -184,7 +184,10 @@ const C = {
     return html`<a class="order-row" href="#/order/${o.id}">
       <span class="or-ico" style="--c:${g.color}">${C.gicon(g)}</span>
       <span class="or-main"><span class="or-title">${o.title}${o.qty > 1 ? html` <span class="muted">× ${o.qty}</span>` : ''}</span>
-        <span class="or-sub muted">#${o.id} · ${Fmt.dt(o.created_at)} · ${o.role === 'buyer' ? t('продавец') : t('покупатель')} ${other ? other.name : ''}</span></span>
+        <span class="or-sub muted">#${o.id} · ${Fmt.dt(o.created_at)} · ${o.role === 'buyer' ? t('продавец') : t('покупатель')} ${other ? other.name : ''}</span>
+        ${o.role === 'seller' && o.status === 'paid' ? (new Date(o.deliver_by) > new Date()
+          ? html`<span class="or-due">⏱ ${t('выполнить: осталось {l}', { l: Fmt.left(o.deliver_by) })}</span>`
+          : html`<span class="or-due late">⚠️ ${t('срок вышел — покупатель может отменить')}</span>`) : ''}</span>
       <span class="or-side"><b class="${o.role === 'seller' && o.status === 'completed' ? 'plus' : ''}">${Fmt.money(o.amount)}</b>${C.status(o.status)}</span>
     </a>`;
   },
@@ -270,6 +273,7 @@ const C = {
       support_msg: ['💬', 'Сообщение в поддержку от {login}: {text}'],
       support_reply: ['💬', 'Поддержка ответила вам'],
       report_new: ['🚩', 'Новая жалоба'],
+      lot_soldout: ['📦', 'Лот «{title}» распродан — добавьте товар, чтобы продажи продолжились'],
       lot_blocked: ['🚫', 'Лот #{id} заблокирован модератором: {reason}'],
       lot_unblocked: ['✅', 'Лот #{id} снова можно включить'],
       balance_admin: ['🛡️', 'Баланс изменён администратором: {amount}'],

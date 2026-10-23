@@ -293,7 +293,8 @@ async function register(p, login, name) {
   await A.fill('[name=pay_kaspi_phone]', '+7 701 000 00 00');
   await A.fill('[name=pay_kaspi_name]', 'Арман К.');
   await A.click('[data-act=live]');
-  await A.click('.modal [data-act=yes]');
+  await A.fill('.modal [name=v]', 'запуск');   // необратимо — подтверждается словом
+  await A.click('.modal .btn.danger');
   await A.waitForSelector('text=Сервис работает с настоящими деньгами');
   await go(B, '#/wallet');
   await B.click('[data-act=topup]');

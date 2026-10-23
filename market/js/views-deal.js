@@ -249,6 +249,7 @@ Views.order = async (view, ctx) => {
         ${staff && open ? html`<div class="card admin-box"><h2>⚖️ ${t('Арбитраж')}</h2>
           <textarea id="adm-note" rows="2" maxlength="200" placeholder="${t('Комментарий к решению (увидят обе стороны)')}"></textarea>
           <div class="row-btns"><button class="btn" data-act="resolve" data-w="buyer">↩️ ${t('Вернуть покупателю')}</button><button class="btn primary" data-act="resolve" data-w="seller">💰 ${t('Перевести продавцу')}</button></div>
+          <div class="row-btns"><a class="btn small ghost" href="#/admin/support/${o.buyer.id}">💬 ${t('Написать покупателю')}</a><a class="btn small ghost" href="#/admin/support/${o.seller.id}">💬 ${t('Написать продавцу')}</a><a class="btn small ghost" href="#/admin/disputes">${t('Все споры')} →</a></div>
           <div id="adm-chat" class="adm-chat"></div></div>` : ''}
 
         ${o.status === 'completed' && (buyer || rev) ? html`<div class="card" id="review-box">${Order.reviewBox(o, rev, buyer, seller)}</div>` : ''}
@@ -276,7 +277,7 @@ Views.order = async (view, ctx) => {
         const m = UI.modal({
           title: t('Заказ выполнен'),
           body: html`<form class="stack" data-submit="ok"><p class="muted">${C.game(o.game).kind === 'goods' ? t('Напишите, как отправили вещь: Казпочта, CDEK или курьер и трек-номер, либо где и когда забрать. Без отметки покупателя заказ закроется сам только через 14 дней.') : t('Если нужно передать данные (код, логин и пароль, ссылку) — впишите их. Покупатель увидит их в заказе и в чате.')}</p>
-            <textarea name="v" rows="4" maxlength="3000" placeholder="${t('Необязательно')}"></textarea>
+            <textarea name="v" rows="4" maxlength="3000" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${t('Необязательно')}"></textarea>
             <div class="modal-actions"><button type="button" class="btn ghost" data-act="close">${t('Отмена')}</button><button class="btn primary">${t('Отметить выполненным')}</button></div></form>`,
           on: { ok: (f, fd) => { res(String(fd.get('v') || '')); m.close(true); } },
           onClose: (v) => { if (!v) res(null); },
@@ -293,11 +294,14 @@ Views.order = async (view, ctx) => {
     undispute: () => act('undispute'),
     resolve: async (b) => {
       const w = b.dataset.w;
-      if (!(await UI.ask(w === 'buyer' ? t('Вернуть деньги покупателю?') : t('Перевести деньги продавцу?')))) return;
+      // в подтверждении — сумма, номер заказа и кому именно
+      if (!(await UI.ask(w === 'buyer'
+        ? t('Вернуть {s} покупателю {who} по заказу #{id}?', { s: Fmt.money(o.amount), who: o.buyer.name, id: o.id })
+        : t('Перевести {s} продавцу {who} по заказу #{id}?', { s: Fmt.money(o.amount), who: o.seller.name, id: o.id }), { yes: t('Да, решить так') }))) return;
       const x = await Api.auth('sauda_admin', { p_action: 'resolve', p: { id: o.id, winner: w, note: (view.querySelector('#adm-note').value || '').trim() } });
       if (!x.ok) return UI.fail(x);
       UI.toast(t('Решение принято'));
-      Router.go();
+      Router.nav('#/admin/disputes'); // сразу к следующему спору
     },
     star: (b) => {
       const n = +b.dataset.n;

@@ -639,6 +639,21 @@ exception
   when data_exception or integrity_constraint_violation then return sauda.fail('bad_input');
 end $$;
 
+create or replace function public.sauda_meta()
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare tm boolean := sauda.test_mode();
+begin
+  return jsonb_build_object('ok', true,
+    'games', (select coalesce(jsonb_agg(jsonb_build_object(
+        'id', g.id, 'name', g.name, 'kind', g.kind, 'emoji', g.emoji, 'color', g.color, 'popular', g.popular, 'sections', g.sections,
+        'logo', g.logo, 'aliases', g.aliases,
+        'counts', coalesce((select jsonb_object_agg(x.section, x.n) from (
+            select l.section, count(*) n from sauda.lots l
+            where l.game = g.id and l.status = 'active' and (tm or not l.is_demo) group by l.section) x), '{}'::jsonb))
+      order by g.sort, g.name), '[]'::jsonb) from sauda.games g),
+    'config', (select jsonb_object_agg(k, v) from sauda.config where k <> 'admin_code'));
+end $$;
+
 -- права: наружу — только public.sauda_*, внутренние функции схемы sauda закрыты
 do $$
 declare f record;

@@ -57,7 +57,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .top-in { max-width: 1200px; margin: 0 auto; height: var(--top); padding: 0 16px; display: flex; align-items: center; gap: 14px; }
 .logo { display: flex; align-items: center; gap: 9px; color: var(--text); font-size: 21px; letter-spacing: -.02em; flex: none; }
 .logo:hover { text-decoration: none; }
-.logo svg { display: block; }
+.logo-mark { display: block; flex: none; filter: drop-shadow(0 2px 6px rgba(10, 99, 232, .35)); }
+.wordmark span { background: linear-gradient(180deg, #38c8ff, #0a63e8); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .top-nav { display: flex; gap: 4px; }
 .top-nav a { color: var(--muted); padding: 8px 12px; border-radius: 10px; font-weight: 600; }
 .top-nav a:hover, .top-nav a.on { color: var(--text); background: var(--card); text-decoration: none; }

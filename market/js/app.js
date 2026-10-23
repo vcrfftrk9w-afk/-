@@ -11,7 +11,8 @@ const App = (() => {
   let lastNotifs = null, lastUnread = null;
 
   /* знак Sauda: буква S на бирюзовом, золотое солнце — как на флаге Казахстана */
-  const logo = (s) => `<svg width="${s}" height="${s}" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg${s}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14d3ee"/><stop offset="1" stop-color="#0a6cd6"/></linearGradient></defs><rect width="64" height="64" rx="18" fill="url(#lg${s})"/><path d="M42.5 22.5c-2.2-3.4-6-5.5-10.7-5.5-6.2 0-10.8 3.6-10.8 8.6 0 11.4 22.5 6.6 22.5 17.6 0 5-4.8 8.8-11.4 8.8-5 0-9.2-2.2-11.6-6" fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round"/><circle cx="49.5" cy="14.5" r="5" fill="#ffc93c"/></svg>`;
+  const logo = (s) => `<img class="logo-mark" src="${window.SAUDA_LOGO}" width="${s}" height="${s}" alt="">`;
+  const WORD = '<b class="wordmark"><span>S</span>auda</b>';
   const SV = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
   const ICO = {
     chat: raw(`<svg ${SV}><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z"/></svg>`),
@@ -218,7 +219,7 @@ const App = (() => {
     I18n.set(I18n.lang, false);
     const ref = new URLSearchParams(location.search).get('ref');
     if (ref) { Store.set('sauda_ref', ref.slice(0, 16)); history.replaceState(null, '', location.pathname + location.hash); }
-    document.getElementById('logo').innerHTML = logo(34) + '<b>Sauda</b>';
+    document.getElementById('logo').innerHTML = logo(38) + WORD;
     UI.bind(document.querySelector('.top'), {
       lang: () => setLang(I18n.lang === 'kz' ? 'ru' : 'kz'),
       search: (f, fd) => { const q = String(fd.get('q') || '').trim(); if (q) { Router.nav('#/search?q=' + encodeURIComponent(q)); f.reset(); } },
@@ -246,7 +247,7 @@ const App = (() => {
   }
 
   return {
-    boot, refresh, loadMeta, needAuth, logout, seen, logo, isStaff, theme, setTheme, setLang, notifyOn, setNotify,
+    boot, refresh, loadMeta, needAuth, logout, seen, logo, WORD, isStaff, theme, setTheme, setLang, notifyOn, setNotify,
     cfg: (k) => (app.meta ? app.meta.config[k] : undefined),
     testMode: () => !!(app.meta && app.meta.config.test_mode),
     get me() { return app.me; },

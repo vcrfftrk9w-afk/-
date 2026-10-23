@@ -100,7 +100,8 @@ CloudPayments / Halyk ePay) и ИП/ТОО: Edge Function создаёт пла�
 - **Приложение** — чистые HTML/CSS/JS без сборки, как и основное: `index.html`, `css/sauda.css`,
   `js/core.js` (безопасная вёрстка — всё, что подставлено в шаблон, экранируется; язык; запросы; окна; адреса),
   `js/components.js`, экраны `js/views-*.js`, оболочка `js/app.js`, казахский словарь `js/i18n-kz.js`,
-  `sw.js` (работает без сети), `manifest.json`, иконки — `node tools/sauda-icons.js`.
+  `sw.js` (работает без сети), `manifest.json`. Логотип: знак для шапки — `js/logo.js`, значок и иконки — `icons/icon.svg`
+  (PNG для сайта и APK из него рисует `node tools/sauda-icons.js`).
 - **База** — Supabase, отдельная закрытая схема `sauda` (`supabase/migrations/2026101700*_sauda_*.sql`).
   Приложение вызывает только функции `public.sauda_*` с публичным ключом (как основное приложение — `ldm_*`).
   Деньги — целые тенге; баланс меняет только `sauda.money()`, каждое движение — строка журнала `sauda.tx`.

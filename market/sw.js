@@ -1,7 +1,7 @@
 /* Sauda: приложение открывается и без сети (последняя версия файлов), данные — всегда с сервера. */
-const CACHE = 'sauda-v1';
+const CACHE = 'sauda-v2';
 const ASSETS = ['./', './index.html', './manifest.json', './css/sauda.css', './icons/icon.svg', './icons/icon-192.png',
-  './js/config.js', './js/core.js', './js/i18n-kz.js', './js/components.js', './js/views-shop.js', './js/views-deal.js',
+  './js/config.js', './js/logo.js', './js/core.js', './js/i18n-kz.js', './js/components.js', './js/views-shop.js', './js/views-deal.js',
   './js/views-account.js', './js/views-admin.js', './js/app.js'];
 
 self.addEventListener('install', (e) => {

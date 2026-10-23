@@ -4,6 +4,9 @@
    и отзывом, список чатов, переписка (опрос каждые 3 секунды).
    ========================================================= */
 
+// быстрые ответы в чате поддержки: id вопроса из FAQ (views-account.js), значок, короткая подпись
+const FAQ_CHIPS = [['dispute', '📦', 'Товар не пришёл'], ['buy', '💳', 'Как купить'], ['withdraw', '🏦', 'Как вывести'], ['escrow', '🛡️', 'Гарант'], ['safe', '🚫', 'Мошенники']];
+
 /* ---- переписка: один компонент для чата, заказа и поддержки (режим support — от имени сервиса) */
 const ChatBox = {
   drafts: {},
@@ -53,7 +56,14 @@ const ChatBox = {
     function head(p) {
       const h = box.querySelector('#cb-head');
       if (!h) return;
-      h.innerHTML = html`${opts.back ? html`<a class="icon-btn" href="${opts.back}" aria-label="${t('Назад')}">←</a>` : ''}<a class="cb-peer" href="#/u/${p.login}">${C.avatar(p, 38)}<span><span class="cb-name"><b>${p.name}</b>${C.badges(p)}</span><span class="muted small">${p.online ? html`<span class="online-dot"></span> ${t('В сети')}` : t('Был(а) {t}', { t: Fmt.ago(p.last_seen) })}</span></span></a>`.s;
+      const official = p.login === 'sauda';
+      const status = official ? t('Официальная поддержка Sauda') : p.online ? html`<span class="online-dot"></span> ${t('В сети')}` : t('Был(а) {t}', { t: Fmt.ago(p.last_seen) });
+      h.innerHTML = html`${opts.back ? html`<a class="icon-btn" href="${opts.back}" aria-label="${t('Назад')}">←</a>` : ''}<a class="cb-peer" href="${official ? '#/help' : '#/u/' + p.login}">${C.avatar(p, 38)}<span class="cb-info"><span class="cb-name"><b>${p.name}</b>${C.badges(p)}</span><span class="muted small">${status}</span></span></a>`.s;
+    }
+    // чат с поддержкой: готовые ответы на частые вопросы — сразу, в любое время
+    function faq(p) {
+      if (support || p.login !== 'sauda' || box.querySelector('.cb-faq')) return;
+      box.querySelector('.cb-form').insertAdjacentHTML('beforebegin', html`<div class="cb-faq" role="group" aria-label="${t('Быстрые ответы')}">${FAQ_CHIPS.map(([id, ic, label]) => html`<button type="button" class="chip" data-act="faq" data-q="${id}">${ic} ${t(label)}</button>`)}</div>`.s);
     }
     function orders(list2) {
       const el = box.querySelector('#cb-orders');
@@ -66,6 +76,7 @@ const ChatBox = {
       loaded = true;
       peer = r.peer;
       head(peer);
+      faq(peer);
       orders(r.orders);
       lastDay = '';
       list.innerHTML = r.messages.length
@@ -120,6 +131,14 @@ const ChatBox = {
         inp.value = '';
         if (!file) return;
         try { await doSend(await Img.fit(file, 1280, 440000), 'image'); } catch (e) { UI.toast(t('Картинка не подошла — попробуйте другую.'), 'err'); }
+      },
+      faq: (b) => {
+        const q = FAQ.find((x) => x[0] === b.dataset.q);
+        if (!q) return;
+        const empty = list.querySelector('.cb-empty');
+        if (empty) empty.remove();
+        list.insertAdjacentHTML('beforeend', html`<div class="faq-ans"><b>${t(q[1])}</b>${t(q[2], faqVars())}<small>${t('Не помогло? Напишите вопрос ниже — ответим здесь же.')}</small></div>`.s);
+        toBottom();
       },
       zoom: (b) => UI.modal({ title: t('Фото'), wide: true, body: html`<img class="zoom-img" src="${b.querySelector('img').src}" alt="">` }),
       older: async (b) => {
@@ -383,6 +402,14 @@ Views.chats = async (view, ctx) => {
 };
 
 Views.chat = async (view, ctx) => {
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(ctx.params.uid)) { // ссылка вида #/chat/логин — найдём человека по логину
+    view.innerHTML = C.skeleton(3, 'rows').s;
+    const pf = await Api.call('sauda_user', { p_token: '', p_login: ctx.params.uid });
+    if (!ctx.alive()) return;
+    if (pf.ok) location.replace('#/chat/' + pf.user.id);
+    else view.innerHTML = C.empty('💬', errText(pf.error)).s;
+    return;
+  }
   const wide = window.innerWidth > 900;
   view.innerHTML = html`<div class="chat-page ${wide ? 'split' : ''}">${wide ? html`<div class="chat-list side" id="cl"></div>` : ''}<div class="chat-main card" id="cm"></div></div>`.s;
   const stop = ChatBox.mount(view.querySelector('#cm'), { peerId: ctx.params.uid, back: wide ? null : '#/chats' });

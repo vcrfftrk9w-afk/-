@@ -79,6 +79,8 @@ const C = {
   avatar(u, size) {
     size = size || 36;
     const name = (u && (u.name || u.login)) || '?';
+    // официальная поддержка — со знаком Sauda, чтобы её не спутать с мошенником под похожим именем
+    if (u && u.login === 'sauda') return html`<span class="ava ava-sauda" style="width:${size}px;height:${size}px"><img src="${window.SAUDA_LOGO}" alt=""></span>`;
     if (u && u.avatar) return html`<img class="ava" src="${u.avatar}" alt="" width="${size}" height="${size}" style="width:${size}px;height:${size}px" loading="lazy">`;
     let h = 0;
     for (const ch of (u && u.login) || name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -170,7 +172,7 @@ const C = {
   },
 
   gameTile(g, n) {
-    return html`<a class="game-tile" href="#/g/${g.id}" style="--c:${g.color}">${C.gicon(g, 'gt-emoji')}<span class="gt-name">${g.name}</span>${n !== undefined ? html`<span class="gt-count">${Fmt.num(n)}</span>` : ''}</a>`;
+    return html`<a class="game-tile" href="#/g/${g.id}" style="--c:${g.color}">${C.gicon(g, 'gt-emoji')}<span class="gt-name">${g.name}</span>${n ? html`<span class="gt-count">${Fmt.num(n)}</span>` : ''}</a>`;
   },
 
   status(s) {

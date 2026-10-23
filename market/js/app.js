@@ -11,7 +11,7 @@ const App = (() => {
   let lastNotifs = null, lastUnread = null;
 
   /* знак Sauda: буква S на бирюзовом, золотое солнце — как на флаге Казахстана */
-  const logo = (s) => `<img class="logo-mark" src="${window.SAUDA_LOGO}" width="${s}" height="${s}" alt="">`;
+  const logo = (s) => `<img class="logo-mark" src="${window.SAUDA_LOGO}" height="${s}" alt="">`; // ширина — по картинке
   const WORD = '<b class="wordmark"><span>S</span>auda</b>';
   const SV = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
   const ICO = {
@@ -219,7 +219,7 @@ const App = (() => {
     I18n.set(I18n.lang, false);
     const ref = new URLSearchParams(location.search).get('ref');
     if (ref) { Store.set('sauda_ref', ref.slice(0, 16)); history.replaceState(null, '', location.pathname + location.hash); }
-    document.getElementById('logo').innerHTML = logo(38) + WORD;
+    document.getElementById('logo').innerHTML = logo(40) + WORD;
     UI.bind(document.querySelector('.top'), {
       lang: () => setLang(I18n.lang === 'kz' ? 'ru' : 'kz'),
       search: (f, fd) => { const q = String(fd.get('q') || '').trim(); if (q) { Router.nav('#/search?q=' + encodeURIComponent(q)); f.reset(); } },

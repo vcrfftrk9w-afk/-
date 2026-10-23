@@ -206,6 +206,11 @@ const ERRORS = {
   section_in_use: 'В этом разделе есть лоты — его нельзя убрать.',
   game_in_use: 'В этой игре есть лоты или заказы — её нельзя удалить.',
 };
+/* адрес страницы сайта для ссылок наружу: в приложении Android и в sauda.html своего адреса в интернете нет */
+const siteUrl = (hash) => {
+  const own = /^https?:$/.test(location.protocol) && location.host !== 'appassets.androidplatform.net';
+  return (own ? location.origin + location.pathname.replace(/index\.html$/, '') : (typeof Cfg !== 'undefined' && Cfg.site) || 'https://vcrfftrk9w-afk.github.io/-/market/') + (hash || '');
+};
 const errText = (e) => t(ERRORS[e] || 'Что-то пошло не так ({e}).', { e });
 
 /* ---- окна, всплывашки, обработчики */
@@ -263,7 +268,8 @@ const UI = (() => {
       document.removeEventListener('keydown', onKey);
       if (opts.onClose) opts.onClose(v);
     };
-    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    // Esc закрывает только верхнее окно (подтверждение поверх окна — не оба сразу)
+    const onKey = (e) => { if (e.key === 'Escape' && wrap === [...document.querySelectorAll('.modal-wrap:not(.out)')].pop()) close(); };
     document.addEventListener('keydown', onKey);
     wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
     const handlers = Object.assign({ close: () => close() }, opts.on || {});
@@ -349,7 +355,9 @@ const Router = (() => {
     routes.push({ re, keys, view, opts: opts || {} });
   }
   function parse() {
-    const h = decodeURI(location.hash.slice(1)) || '/';
+    let h = location.hash.slice(1);
+    try { h = decodeURI(h); } catch (e) { /* «%» без кода в ссылке — оставляем как есть */ }
+    h = h || '/';
     const i = h.indexOf('?');
     const path = i < 0 ? h : h.slice(0, i);
     const query = {};
@@ -371,7 +379,11 @@ const Router = (() => {
     const view = old.cloneNode(false);
     old.replaceWith(view);
     const ctx = { params, query, path, view, alive: () => my === seq, onLeave: (f) => { if (my === seq) cleanup = f; } };
-    if (Router.before) { const stop = await Router.before(hit.opts, ctx); if (stop) { if (Router.after) Router.after(ctx); return; } }
+    if (Router.before) {
+      const stop = await Router.before(hit.opts, ctx);
+      if (!ctx.alive()) return; // пока проверяли вход, человек ушёл на другую страницу
+      if (stop) { if (Router.after) Router.after(ctx); return; }
+    }
     if (!hit.opts.keepScroll) window.scrollTo(0, 0);
     try {
       await hit.view(view, ctx);

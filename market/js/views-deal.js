@@ -9,7 +9,7 @@ const ChatBox = {
   drafts: {},
   mount(box, opts) {
     const support = opts.mode === 'support';
-    let last = 0, first = null, stopped = false, timer = null, peer = null, sending = false;
+    let last = 0, first = null, stopped = false, timer = null, peer = null, sending = false, loaded = false, loadingOlder = false;
     const get = (after, before) => (support
       ? Api.auth('sauda_admin', { p_action: 'support_chat', p: { user: opts.peerId, after } }).then((r) => (r.ok ? r.data : r))
       : Api.auth('sauda_chat', { p_peer: opts.peerId, p_after: after || 0, p_before: before || null }));
@@ -63,6 +63,7 @@ const ChatBox = {
       const r = await get(0);
       if (stopped) return;
       if (!r.ok) { list.innerHTML = C.empty('💬', errText(r.error)).s; return; }
+      loaded = true;
       peer = r.peer;
       head(peer);
       orders(r.orders);
@@ -76,6 +77,7 @@ const ChatBox = {
     }
     async function poll() {
       if (stopped || document.hidden || !Api.token) return;
+      if (!loaded) { await load(); return; } // первая загрузка не удалась — пробуем заново целиком
       const r = await get(last);
       if (stopped || !r.ok) return;
       if (r.peer) { peer = r.peer; head(peer); }
@@ -89,7 +91,7 @@ const ChatBox = {
       last = fresh[fresh.length - 1].id;
       if (!first) first = fresh[0].id;
       if (stick) toBottom();
-      if (fresh.some((m) => m.kind === 'system') && opts.onSystem) opts.onSystem();
+      if (fresh.some((m) => m.kind === 'system') && opts.onSystem) opts.onSystem(fresh);
       App.refresh();
     }
     async function doSend(body, kind) {
@@ -121,15 +123,26 @@ const ChatBox = {
       },
       zoom: (b) => UI.modal({ title: t('Фото'), wide: true, body: html`<img class="zoom-img" src="${b.querySelector('img').src}" alt="">` }),
       older: async (b) => {
-        const r = await get(0, first);
-        if (!r.ok) return UI.fail(r);
-        const h0 = list.scrollHeight;
-        lastDay = '';
-        const blk = r.messages.map((m) => msgHtml(m).s).join('');
-        b.parentElement.remove();
+        if (loadingOlder) return; // двойное нажатие не дублирует сообщения
+        loadingOlder = true;
+        try {
+          const r = await get(0, first);
+          if (!r.ok) return UI.fail(r);
+          const h0 = list.scrollHeight;
+          const keepDay = lastDay;
+          lastDay = '';
+          const blk = r.messages.map((m) => msgHtml(m).s).join('');
+          const blockDay = lastDay;
+          lastDay = keepDay;
+          // если старый блок кончается тем же днём, с которого начинался список, — второй заголовок дня лишний
+          const firstSep = list.querySelector('.cb-day');
+          if (firstSep && blockDay && r.messages.length && new Date(r.messages[r.messages.length - 1].created_at).toDateString() === blockDay
+              && firstSep.textContent === Fmt.date(r.messages[r.messages.length - 1].created_at)) firstSep.remove();
+          b.parentElement.remove();
         list.insertAdjacentHTML('afterbegin', (r.messages.length >= 60 ? html`<div class="center"><button class="btn ghost small" data-act="older">${t('Показать раньше')}</button></div>`.s : '') + blk);
-        if (r.messages.length) first = r.messages[0].id;
-        list.scrollTop = list.scrollHeight - h0;
+          if (r.messages.length) first = r.messages[0].id;
+          list.scrollTop = list.scrollHeight - h0;
+        } finally { loadingOlder = false; }
       },
     });
     ta.addEventListener('keydown', (e) => {
@@ -245,7 +258,7 @@ Views.order = async (view, ctx) => {
 
   const act = (action, text) => Api.auth('sauda_order_act', { p_id: o.id, p_action: action, p_text: text || '' }).then((x) => {
     if (!x.ok) { UI.fail(x); return; }
-    App.refresh();
+    App.refresh(true);
     Router.go();
   });
   UI.bind(view, {
@@ -310,7 +323,9 @@ Views.order = async (view, ctx) => {
   });
 
   if (buyer || seller) {
-    ctx.onLeave(ChatBox.mount(view.querySelector('#order-chat'), { peerId: other.id, orderId: o.id, hideOrders: true, onSystem: () => Router.go() }));
+    ctx.onLeave(ChatBox.mount(view.querySelector('#order-chat'), { peerId: other.id, orderId: o.id, hideOrders: true,
+      // страница перерисовывается только из-за событий ЭТОГО заказа — иначе стёрся бы набираемый отзыв
+      onSystem: (msgs) => { if (msgs.some((m) => m.kind === 'system' && m.order_id === o.id)) Router.go(); } }));
   } else if (staff) {
     const c = await Api.auth('sauda_admin', { p_action: 'chat_between', p: { a: o.buyer.id, b: o.seller.id } });
     const box = view.querySelector('#adm-chat');
@@ -358,6 +373,7 @@ Views.chats = async (view, ctx) => {
   view.innerHTML = html`<div class="page-head"><h1>${t('Сообщения')}</h1></div><div class="chat-list" id="cl">${C.skeleton(5, 'rows')}</div>`.s;
   const el = view.querySelector('#cl');
   await Chats.fill(el);
+  if (!ctx.alive()) return; // ушли со страницы, пока грузилось, — опрос не запускаем
   const timer = setInterval(() => { if (!document.hidden) Chats.fill(el); }, 8000);
   ctx.onLeave(() => clearInterval(timer));
 };

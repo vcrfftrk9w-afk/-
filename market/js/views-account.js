@@ -45,7 +45,7 @@ Views.auth = async (view, ctx) => {
       Store.del('sauda_ref');
       await App.refresh(true);
       UI.toast(mode === 'reg' ? t('Добро пожаловать в Sauda!') : t('С возвращением!'));
-      if (location.hash === next) Router.go(); else location.hash = next;
+      if (location.hash === next) Router.go(); else location.replace(next); // «Назад» не возвращает на страницу входа
     }),
   });
 };
@@ -94,10 +94,12 @@ Views.me = async (view) => {
   UI.bind(view, { logout: async () => { if (await UI.ask(t('Выйти из аккаунта на этом устройстве?'), { yes: t('Выйти') })) App.logout(); } });
 };
 
-Views.support = async () => {
+Views.support = async (view, ctx) => {
+  view.innerHTML = C.skeleton(3, 'rows').s;
   const pf = await Api.call('sauda_user', { p_token: '', p_login: 'sauda' });
+  if (!ctx.alive()) return; // ушли со страницы — не уводим человека в чат через секунду
   if (pf.ok) location.replace('#/chat/' + pf.user.id);
-  else UI.fail(pf);
+  else view.innerHTML = C.empty('📡', errText(pf.error)).s;
 };
 
 /* ───────────── настройки ───────────── */
@@ -635,7 +637,7 @@ Views.pro = async (view) => {
       if (!Api.token) return App.needAuth();
       const months = b.dataset.m;
       const price = prices[months];
-      if (App.me.balance < price) { UI.toast(t('Не хватает {s} на балансе', { s: Fmt.money(price - App.me.balance) }), 'err'); return Wallet.topup(price - App.me.balance); }
+      if (App.me.balance < price) { UI.toast(t('Не хватает {s} на балансе', { s: Fmt.money(price - App.me.balance) }), 'err'); return Wallet.topup(Math.max(price - App.me.balance, 100)); }
       if (!(await UI.ask(t('Подключить Sauda Pro на {m} мес. за {s}?', { m: months, s: Fmt.money(price) }), { yes: t('Подключить') }))) return;
       const r = await Api.auth('sauda_pro', { p_months: +months });
       if (!r.ok) return UI.fail(r);
@@ -651,7 +653,7 @@ Views.ref = async (view, ctx) => {
   const r = await Api.auth('sauda_ref');
   if (!ctx.alive()) return;
   if (!r.ok) { view.innerHTML = C.empty('📡', errText(r.error)).s; return; }
-  const link = location.origin + location.pathname + '?ref=' + r.code;
+  const link = siteUrl('?ref=' + r.code);
   view.innerHTML = html`<div class="page-head"><h1>🤝 ${t('Пригласить друзей')}</h1></div>
     <div class="card stack ref-card"><p>${t('Друзья регистрируются по вашей ссылке — вы получаете {p}% комиссии Sauda с каждой их сделки. Навсегда.', { p: r.pct })}</p>
       <div class="copy-line"><input readonly value="${link}" aria-label="${t('Ваша ссылка')}"><button class="btn primary" data-act="copy">${t('Копировать')}</button></div>
@@ -734,5 +736,5 @@ Views.help = async (view, ctx) => {
     <div class="faq">${qa.map(([id, q, a]) => html`<details class="card" id="q-${id}" ${ctx.query.s === id ? 'open' : ''}><summary>${t(q)}</summary><p>${t(a, vars)}</p></details>`)}</div>
     <section class="block" id="rules"><h2>📜 ${t('Правила Sauda')}</h2><ol class="card rules">${rules.map((x) => html`<li>${t(x)}</li>`)}</ol></section>
     <div class="center"><a class="btn primary" href="#/support">🛟 ${t('Написать в поддержку')}</a></div>`.s;
-  if (ctx.query.s) { const el = view.querySelector('#q-' + ctx.query.s) || view.querySelector('#' + ctx.query.s); if (el) el.scrollIntoView(); }
+  if (ctx.query.s) { const el = document.getElementById('q-' + ctx.query.s) || document.getElementById(ctx.query.s); if (el) el.scrollIntoView(); }
 };

@@ -248,7 +248,7 @@ Views.lot = async (view, ctx) => {
             </div>` : ''}
           ${!canBuy && !j.mine ? html`<div class="note">${t('Лот сейчас не продаётся.')}</div>` : ''}
           <div class="buy-actions">
-            <button class="btn ghost ${j.fav ? 'on' : ''}" data-act="fav" aria-pressed="${j.fav ? 'true' : 'false'}">${j.fav ? '❤️' : '🤍'} ${t('В избранное')}</button>
+            <button class="btn ghost ${j.fav ? 'on' : ''}" data-act="fav" aria-pressed="${j.fav ? 'true' : 'false'}">${j.fav ? '❤️' : '🤍'} ${j.fav ? t('В избранном') : t('В избранное')}</button>
             <button class="btn ghost" data-act="share">🔗 ${t('Поделиться')}</button>
           </div>
         </div>
@@ -288,17 +288,19 @@ Views.lot = async (view, ctx) => {
       const qty = Math.max(1, Math.min(maxQty, parseInt(fd.get('qty'), 10) || 1));
       Buy.confirm(l, qty, String(fd.get('data') || '').trim(), !!fd.get('renew'));
     },
-    fav: async (b) => {
+    fav: (b) => {
       if (!Api.token) return App.needAuth();
-      const r = await Api.auth('sauda_fav', { p_lot: l.id, p_on: !fav });
-      if (!r.ok) return UI.fail(r);
-      fav = !fav;
-      b.innerHTML = html`${fav ? '❤️' : '🤍'} ${t('В избранное')}`.s;
-      b.setAttribute('aria-pressed', fav ? 'true' : 'false');
-      UI.toast(fav ? t('Добавлено в избранное') : t('Убрано из избранного'));
+      return UI.busy(b, async () => { // двойное нажатие не путает состояние
+        const r = await Api.auth('sauda_fav', { p_lot: l.id, p_on: !fav });
+        if (!r.ok) return UI.fail(r);
+        fav = !fav;
+        b.innerHTML = html`${fav ? '❤️' : '🤍'} ${fav ? t('В избранном') : t('В избранное')}`.s;
+        b.setAttribute('aria-pressed', fav ? 'true' : 'false');
+        UI.toast(fav ? t('Добавлено в избранное') : t('Убрано из избранного'));
+      });
     },
     share: () => {
-      const url = location.href;
+      const url = siteUrl('#/lot/' + l.id);
       if (navigator.share) navigator.share({ title: l.title, url }).catch(() => {});
       else UI.copy(url);
     },
@@ -347,7 +349,7 @@ const Buy = {
           if (!r.ok) return UI.fail(r);
           m.close(true);
           if (App.me) App.me.balance = r.balance;
-          App.refresh();
+          App.refresh(true);
           UI.toast(t('Оплачено! Заказ #{id}', { id: r.order }));
           Router.nav('#/order/' + r.order);
         }),

@@ -198,15 +198,17 @@ const Admin = {
         <a class="tx-main" href="#/lot/${l.id}"><b>${l.title}</b><span class="muted small">#${l.id} · ${C.game(l.game).name} · ${Fmt.money(l.price)} · ${l.seller.name} · ${t(LOT_STATUS[l.status])}</span></a>
         ${l.status === 'blocked' ? html`<button class="btn small" data-act="unblock" data-id="${l.id}">${t('Разблокировать')}</button>` : html`<button class="btn small ghost danger-text" data-act="block" data-id="${l.id}">🚫 ${t('Заблокировать')}</button>`}</div>`)}</div>` : C.empty('🤷', t('Ничего не найдено'))).s;
     };
+    // после блокировки список остаётся с тем же поиском и фильтром
+    const reload = () => load(box.querySelector('[name=q]').value.trim(), box.querySelector('[name=status]').value);
     UI.bind(box, {
       find: (f, fd) => load(String(fd.get('q') || ''), String(fd.get('status') || '')),
       block: async (b) => {
         const reason = await UI.prompt(t('Причина блокировки лота'), { yes: t('Заблокировать'), danger: true });
         if (!reason) return;
         const x = await adm('lot_block', { id: +b.dataset.id, blocked: true, reason });
-        if (x.ok) load('', ''); else UI.fail(x);
+        if (x.ok) reload(); else UI.fail(x);
       },
-      unblock: async (b) => { const x = await adm('lot_block', { id: +b.dataset.id, blocked: false }); if (x.ok) load('', ''); else UI.fail(x); },
+      unblock: async (b) => { const x = await adm('lot_block', { id: +b.dataset.id, blocked: false }); if (x.ok) reload(); else UI.fail(x); },
     });
     await load('', '');
   },

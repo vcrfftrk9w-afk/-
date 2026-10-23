@@ -71,7 +71,8 @@ const tp = I18n.tp;
 const Fmt = {
   num: (n) => new Intl.NumberFormat('ru-RU').format(Math.round(+n || 0)),
   money: (n) => Fmt.num(n) + ' ₸',
-  loc: () => (I18n.lang === 'kz' ? 'kk-KZ' : 'ru-RU'),
+  // если браузер не знает казахских дат, лучше русские, чем английские
+  loc: () => (I18n.lang === 'kz' && Intl.DateTimeFormat.supportedLocalesOf(['kk-KZ']).length ? 'kk-KZ' : 'ru-RU'),
   date: (d) => new Date(d).toLocaleDateString(Fmt.loc(), { day: 'numeric', month: 'long', year: 'numeric' }),
   short: (d) => new Date(d).toLocaleDateString(Fmt.loc(), { day: 'numeric', month: 'short' }),
   time: (d) => new Date(d).toLocaleTimeString(Fmt.loc(), { hour: '2-digit', minute: '2-digit' }),

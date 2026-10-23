@@ -55,7 +55,7 @@ Views.auth = async (view, ctx) => {
   const reg = ctx.query.mode === 'reg';
   const next = safeNext(ctx.next || ctx.query.next);
   view.innerHTML = html`<div class="auth-page"><div class="card auth-card">
-    <div class="auth-logo">${raw(App.logo(44))}<b>Sauda</b></div>
+    <div class="auth-logo">${raw(App.logo(52) + App.WORD)}</div>
     ${ctx.query.why === 'buy' ? html`<div class="note">🛒 ${t('Чтобы купить, войдите или создайте аккаунт — это полминуты. Потом вернём вас к покупке.')}</div>` : ''}
     <div class="tabs center-tabs"><button class="tab ${reg ? '' : 'on'}" data-act="tab" data-m="login">${t('Вход')}</button><button class="tab ${reg ? 'on' : ''}" data-act="tab" data-m="reg">${t('Регистрация')}</button></div>
     <form class="stack" data-submit="go" id="auth-form">

@@ -34,6 +34,10 @@ async function register(p, login, name) {
   await p.fill('[name=password]', 'secret123');
   await p.check('[name=agree]');
   await p.click('#auth-btn');
+  // новый аккаунт: сначала окно с кодом восстановления
+  await p.waitForSelector('.modal [data-act=ok]');
+  assert.ok(/^[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$/.test(await p.locator('.modal b.mono').innerText()), 'код восстановления показан');
+  await p.click('.modal [data-act=ok]');
   await p.waitForSelector('.me-head');
 }
 
@@ -200,8 +204,7 @@ async function register(p, login, name) {
   global.pages.admin = A;
   await register(A, 'adm_' + tag, 'Арман');
   const code = (await db.query(`select v #>> '{}' c from sauda.config where k = 'admin_code'`)).rows[0].c;
-  await go(A, '#/settings');
-  await A.click('details summary');
+  await go(A, '#/settings?admin=1');
   await A.fill('[name=code]', code);
   await A.click('[data-submit=claim] .btn');
   await A.waitForSelector('.kpis');
@@ -290,7 +293,8 @@ async function register(p, login, name) {
   await A.fill('[name=pay_kaspi_phone]', '+7 701 000 00 00');
   await A.fill('[name=pay_kaspi_name]', 'Арман К.');
   await A.click('[data-act=live]');
-  await A.click('.modal [data-act=yes]');
+  await A.fill('.modal [name=v]', 'запуск');   // необратимо — подтверждается словом
+  await A.click('.modal .btn.danger');
   await A.waitForSelector('text=Сервис работает с настоящими деньгами');
   await go(B, '#/wallet');
   await B.click('[data-act=topup]');

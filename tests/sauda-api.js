@@ -154,7 +154,10 @@ const step = (name) => { passed++; console.log('  ✓', name); };
   assert.ok(disputes.some((d) => d.id === o4));
   const between = (await ok('sauda_admin', { p_token: C, p_action: 'chat_between', p: { a: meB.user.id, b: meS.user.id } })).data;
   assert.ok(between.messages.length > 3);
-  await ok('sauda_admin_claim', { p_token: S, p_code: code });
+  await no('sauda_admin_claim', { p_token: S, p_code: code }, 'bad_code');   // код одноразовый — после входа меняется
+  const code2 = (await sql(`select v #>> '{}' c from sauda.config where k = 'admin_code'`))[0].c;
+  assert.notStrictEqual(code2, code);
+  await ok('sauda_admin_claim', { p_token: S, p_code: code2 });
   await no('sauda_admin', { p_token: S, p_action: 'resolve', p: { id: o4, winner: 'seller' } }, 'forbidden');
   await ok('sauda_admin', { p_token: C, p_action: 'resolve', p: { id: o4, winner: 'buyer', note: 'Не выполнено' } });
   ord = (await ok('sauda_order', { p_token: B, p_id: o4 })).order;
@@ -338,6 +341,11 @@ const step = (name) => { passed++; console.log('  ✓', name); };
   await no('sauda_login', { p_login: 'lvs_' + tag, p_password: 'secret1' }, 'locked');
   await sql(`update sauda.login_fails set ip = '203.0.113.9' where login = $1`, ['lvs_' + tag]);   // подбирали с чужого адреса
   await ok('sauda_login', { p_login: 'lvs_' + tag, p_password: 'secret1' });
+  for (let i = 0; i < 10; i++) await rpc('sauda_login', { p_login: 'lvb_' + tag, p_password: 'wrong' + i });
+  await no('sauda_login', { p_login: 'lvb_' + tag, p_password: 'secret1' }, 'locked');
+  await sql(`update sauda.login_fails set until = now() - interval '1 second' where login = $1`, ['lvb_' + tag]);   // блокировка кончилась
+  await no('sauda_login', { p_login: 'lvb_' + tag, p_password: 'typo' }, 'bad_login');
+  await ok('sauda_login', { p_login: 'lvb_' + tag, p_password: 'secret1' });   // одна опечатка после блокировки не закрывает вход снова
   step('вещи: автоподтверждение через 14 дней; подбор пароля закрывает вход только подбирающему');
 
   // ── администратор сам добавляет игру с логотипом и меняет логотип; продавцы сразу могут в ней продавать
@@ -360,6 +368,60 @@ const step = (name) => { passed++; console.log('  ✓', name); };
   assert.strictEqual((await ok('sauda_meta', {})).games.find((x) => x.id === 'freefire').logo, png, 'логотип существующей игры заменён');
   await ok('sauda_admin_game', { p_token: C, p_action: 'save', p: { id: 'freefire', logo: '' } });
   step('администратор добавляет игру с логотипом и разделами, меняет логотип; права и проверки');
+
+  // ── цена при покупке, модератор и блокировка, настройки, пустые значения
+  const pcLot = (await ok('sauda_lot_save', { p_token: LS, p: { game: 'steam', section: 'keys', title: 'Ключ цены ' + tag, price: 1000, qty: 5, deliver_mins: 60 } })).id;
+  await ok('sauda_topup', { p_token: LB, p_amount: 20000, p_method: 'kaspi' });
+  const lbBefore = (await ok('sauda_me', { p_token: LB })).user.balance;
+  await ok('sauda_lot_save', { p_token: LS, p: { id: pcLot, game: 'steam', section: 'keys', title: 'Ключ цены ' + tag, price: 9000, qty: 5, deliver_mins: 60 } });
+  await no('sauda_buy', { p_token: LB, p_lot: pcLot, p_qty: 1, p_price: 1000 }, 'price_changed');
+  assert.strictEqual((await ok('sauda_me', { p_token: LB })).user.balance, lbBefore, 'при смене цены ничего не списано');
+  const MD = (await ok('sauda_register', { p_login: 'mdr_' + tag, p_password: 'secret1' })).token;
+  const mdId = (await ok('sauda_me', { p_token: MD })).user.id;
+  await ok('sauda_admin', { p_token: C, p_action: 'user_set', p: { id: mdId, role: 'moder' } });
+  await ok('sauda_topup', { p_token: MD, p_amount: 20000, p_method: 'kaspi' });
+  const mdOrd = (await ok('sauda_buy', { p_token: MD, p_lot: pcLot, p_qty: 1, p_price: 9000 })).order;
+  await ok('sauda_order_act', { p_token: LS, p_id: mdOrd, p_action: 'deliver', p_text: 'KEY' });
+  const lsId = (await ok('sauda_me', { p_token: LS })).user.id;
+  await ok('sauda_admin', { p_token: MD, p_action: 'user_set', p: { id: lsId, banned: true, ban_reason: 'тест' } });
+  await ok('sauda_admin', { p_token: C, p_action: 'user_set', p: { id: lsId, banned: false } });
+  assert.strictEqual((await sql(`select status from sauda.orders where id = $1`, [mdOrd]))[0].status, 'delivered', 'модератор блокировкой не вернул себе деньги');
+  await ok('sauda_admin', { p_token: C, p_action: 'user_set', p: { id: mdId, role: 'user' } });
+  const LS2 = (await ok('sauda_login', { p_login: 'lvs_' + tag, p_password: 'secret1' })).token;   // после блокировки — новый вход
+  await no('sauda_admin', { p_token: C, p_action: 'config_set', p: { k: 'pro_prices', v: { 1: -50000 } } }, 'bad_input');
+  await no('sauda_admin', { p_token: C, p_action: 'config_set', p: { k: 'pro_prices', v: { 1: 'abc' } } }, 'bad_input');
+  await no('sauda_admin', { p_token: C, p_action: 'config_set', p: { k: 'ref_pct', v: 80 } }, 'bad_input');
+  await no('sauda_topup', { p_token: LB, p_amount: 1000, p_method: null }, 'bad_input');
+  await no('sauda_lot_set', { p_token: LS2, p_id: pcLot, p_status: null });
+  await no('sauda_admin_game', { p_token: C, p_action: 'save', p: { id: 'nul' + tag, name: null, kind: 'mobile', sections: 'other' } });
+  step('цена при покупке проверяется, модератор не возвращает себе деньги блокировкой, настройки и пустые значения');
+
+  // ── поиск по словам и словоформам, восстановление пароля, редактор игр не перезаписывает чужую игру
+  for (const q of ['UC PUBG', 'пабг', 'алмазы', 'фри фаер', 'стандофф голда', 'робуксы', 'телеграм звёзды']) {
+    assert.ok((await ok('sauda_lots', { p: { q } })).total > 0, 'поиск находит: ' + q);
+  }
+  assert.strictEqual((await ok('sauda_lots', { p: { q: 'несуществующийтовар' } })).total, 0);
+  const rc = await ok('sauda_register', { p_login: 'rcv_' + tag, p_password: 'secret1' });
+  assert.ok(/^[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$/.test(rc.recovery), 'код восстановления выдан');
+  assert.strictEqual((await ok('sauda_me', { p_token: rc.token })).user.has_recovery, true);
+  await no('sauda_recover', { p_login: 'rcv_' + tag, p_code: 'AAAA-BBBB-CCCC', p_new: 'newpass1' }, 'bad_recovery');
+  const rcd = await ok('sauda_recover', { p_login: 'rcv_' + tag, p_code: rc.recovery.toLowerCase().replace(/-/g, ' '), p_new: 'newpass1' });
+  assert.notStrictEqual(rcd.recovery, rc.recovery, 'старый код больше не действует');
+  await no('sauda_me', { p_token: rc.token }, 'no_session');
+  await ok('sauda_login', { p_login: 'rcv_' + tag, p_password: 'newpass1' });
+  await no('sauda_recover', { p_login: 'rcv_' + tag, p_code: rc.recovery, p_new: 'again12' }, 'bad_recovery');
+  await no('sauda_recovery_new', { p_token: rcd.token, p_password: 'wrong' }, 'bad_password_old');
+  assert.ok((await ok('sauda_recovery_new', { p_token: rcd.token, p_password: 'newpass1' })).recovery);
+  const rcId = (await ok('sauda_me', { p_token: rcd.token })).user.id;
+  await no('sauda_admin_pass', { p_token: LB, p_user: rcId }, 'forbidden');
+  const tmp = await ok('sauda_admin_pass', { p_token: C, p_user: rcId });
+  await no('sauda_me', { p_token: rcd.token }, 'no_session');
+  await ok('sauda_login', { p_login: 'rcv_' + tag, p_password: tmp.password });
+  await no('sauda_admin_game', { p_token: C, p_action: 'save', p: { id: 'freefire', create: true, name: 'Чужая', kind: 'mobile', sections: 'other' } }, 'game_exists');
+  assert.strictEqual((await ok('sauda_meta', {})).games.find((x) => x.id === 'freefire').name, 'Free Fire', 'существующая игра не перезаписана');
+  await ok('sauda_admin_game', { p_token: C, p_action: 'save', p: { id: 'ng' + tag, sections: 'currency||accounts|' } });
+  assert.ok((await ok('sauda_meta', {})).games.find((x) => x.id === 'ng' + tag).sections.every((x) => x.id), 'пустые разделы не сохраняются');
+  step('поиск по словам и словоформам, восстановление пароля по коду и от администратора, редактор игр не перезаписывает игру');
 
   // ── под поддержку не замаскироваться, вывод можно отменить, пока его не взяли в работу
   const BB = (await ok('sauda_login', { p_login: 'buyer_' + tag, p_password: 'secret2' })).token; // после разблокировки — новый вход
@@ -393,6 +455,8 @@ const step = (name) => { passed++; console.log('  ✓', name); };
   await ok('sauda_admin', { p_token: C, p_action: 'config_set', p: { k: 'test_mode', v: false } });
   assert.strictEqual((await ok('sauda_meta', {})).config.test_mode, false);
   assert.strictEqual((await sql(`select count(*)::int n from sauda.users where balance <> 0`))[0].n, 0, 'тестовые деньги обнулены');
+  assert.strictEqual((await sql(`select count(*)::int n from sauda.users where xp <> 0 or sales <> 0 or reviews <> 0`))[0].n, 0, 'тестовые уровни и рейтинг обнулены');
+  assert.strictEqual((await sql(`select count(*)::int n from sauda.reviews`))[0].n, 0, 'тестовые отзывы удалены');
   assert.strictEqual((await sql(`select status from sauda.orders where id = $1`, [openOrder]))[0].status, 'refunded');
   assert.strictEqual((await sql(`select status from sauda.withdrawals where id = $1`, [wd2.id]))[0].status, 'rejected');
   await no('sauda_admin', { p_token: C, p_action: 'config_set', p: { k: 'test_mode', v: true } }, 'live_locked');

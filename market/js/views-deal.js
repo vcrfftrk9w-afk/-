@@ -9,7 +9,7 @@ const ChatBox = {
   drafts: {},
   mount(box, opts) {
     const support = opts.mode === 'support';
-    let last = 0, first = null, stopped = false, timer = null, peer = null, sending = false;
+    let last = 0, first = null, stopped = false, timer = null, peer = null, sending = false, loaded = false, loadingOlder = false;
     const get = (after, before) => (support
       ? Api.auth('sauda_admin', { p_action: 'support_chat', p: { user: opts.peerId, after } }).then((r) => (r.ok ? r.data : r))
       : Api.auth('sauda_chat', { p_peer: opts.peerId, p_after: after || 0, p_before: before || null }));
@@ -42,7 +42,9 @@ const ChatBox = {
       const sep = day !== lastDay ? html`<div class="cb-day">${Fmt.date(m.created_at)}</div>` : '';
       lastDay = day;
       if (m.kind === 'system') {
-        return html`${sep}<div class="msg-sys" data-id="${m.id}">${C.sysText(m.body)}${m.order_id ? html` <a href="#/order/${m.order_id}">${t('Открыть заказ')} →</a>` : ''}<time>${Fmt.time(m.created_at)}</time></div>`;
+        // на странице заказа сообщения о других заказах с этим же человеком — бледные, чтобы не спутать данные
+        const other = opts.orderId && m.order_id && m.order_id !== opts.orderId;
+        return html`${sep}<div class="msg-sys ${other ? 'other' : ''}" data-id="${m.id}">${C.sysText(m.body, support ? undefined : !!m.mine)}${m.order_id ? html` <a href="#/order/${m.order_id}">${t('Открыть заказ')} →</a>` : ''}<time>${Fmt.time(m.created_at)}</time></div>`;
       }
       return html`${sep}<div class="msg ${m.mine ? 'mine' : ''}" data-id="${m.id}"><div class="bubble">${m.kind === 'image'
         ? html`<button class="msg-img" data-act="zoom" aria-label="${t('Открыть фото')}"><img src="${m.body}" alt="" loading="lazy"></button>`
@@ -51,7 +53,7 @@ const ChatBox = {
     function head(p) {
       const h = box.querySelector('#cb-head');
       if (!h) return;
-      h.innerHTML = html`${opts.back ? html`<a class="icon-btn" href="${opts.back}" aria-label="${t('Назад')}">←</a>` : ''}<a class="cb-peer" href="#/u/${p.login}">${C.avatar(p, 38)}<span><b>${p.name}</b> ${C.badges(p)}<span class="muted small">${p.online ? html`<span class="online-dot"></span> ${t('В сети')}` : t('Был(а) {t}', { t: Fmt.ago(p.last_seen) })}</span></span></a>`.s;
+      h.innerHTML = html`${opts.back ? html`<a class="icon-btn" href="${opts.back}" aria-label="${t('Назад')}">←</a>` : ''}<a class="cb-peer" href="#/u/${p.login}">${C.avatar(p, 38)}<span><span class="cb-name"><b>${p.name}</b>${C.badges(p)}</span><span class="muted small">${p.online ? html`<span class="online-dot"></span> ${t('В сети')}` : t('Был(а) {t}', { t: Fmt.ago(p.last_seen) })}</span></span></a>`.s;
     }
     function orders(list2) {
       const el = box.querySelector('#cb-orders');
@@ -61,6 +63,7 @@ const ChatBox = {
       const r = await get(0);
       if (stopped) return;
       if (!r.ok) { list.innerHTML = C.empty('💬', errText(r.error)).s; return; }
+      loaded = true;
       peer = r.peer;
       head(peer);
       orders(r.orders);
@@ -74,6 +77,7 @@ const ChatBox = {
     }
     async function poll() {
       if (stopped || document.hidden || !Api.token) return;
+      if (!loaded) { await load(); return; } // первая загрузка не удалась — пробуем заново целиком
       const r = await get(last);
       if (stopped || !r.ok) return;
       if (r.peer) { peer = r.peer; head(peer); }
@@ -87,7 +91,7 @@ const ChatBox = {
       last = fresh[fresh.length - 1].id;
       if (!first) first = fresh[0].id;
       if (stick) toBottom();
-      if (fresh.some((m) => m.kind === 'system') && opts.onSystem) opts.onSystem();
+      if (fresh.some((m) => m.kind === 'system') && opts.onSystem) opts.onSystem(fresh);
       App.refresh();
     }
     async function doSend(body, kind) {
@@ -119,15 +123,26 @@ const ChatBox = {
       },
       zoom: (b) => UI.modal({ title: t('Фото'), wide: true, body: html`<img class="zoom-img" src="${b.querySelector('img').src}" alt="">` }),
       older: async (b) => {
-        const r = await get(0, first);
-        if (!r.ok) return UI.fail(r);
-        const h0 = list.scrollHeight;
-        lastDay = '';
-        const blk = r.messages.map((m) => msgHtml(m).s).join('');
-        b.parentElement.remove();
+        if (loadingOlder) return; // двойное нажатие не дублирует сообщения
+        loadingOlder = true;
+        try {
+          const r = await get(0, first);
+          if (!r.ok) return UI.fail(r);
+          const h0 = list.scrollHeight;
+          const keepDay = lastDay;
+          lastDay = '';
+          const blk = r.messages.map((m) => msgHtml(m).s).join('');
+          const blockDay = lastDay;
+          lastDay = keepDay;
+          // если старый блок кончается тем же днём, с которого начинался список, — второй заголовок дня лишний
+          const firstSep = list.querySelector('.cb-day');
+          if (firstSep && blockDay && r.messages.length && new Date(r.messages[r.messages.length - 1].created_at).toDateString() === blockDay
+              && firstSep.textContent === Fmt.date(r.messages[r.messages.length - 1].created_at)) firstSep.remove();
+          b.parentElement.remove();
         list.insertAdjacentHTML('afterbegin', (r.messages.length >= 60 ? html`<div class="center"><button class="btn ghost small" data-act="older">${t('Показать раньше')}</button></div>`.s : '') + blk);
-        if (r.messages.length) first = r.messages[0].id;
-        list.scrollTop = list.scrollHeight - h0;
+          if (r.messages.length) first = r.messages[0].id;
+          list.scrollTop = list.scrollHeight - h0;
+        } finally { loadingOlder = false; }
       },
     });
     ta.addEventListener('keydown', (e) => {
@@ -203,7 +218,7 @@ Views.order = async (view, ctx) => {
           <dl class="sum-list">
             <div><dt>${t('Цена')}</dt><dd>${Fmt.money(o.unit_price)} × ${o.qty}</dd></div>
             <div class="total"><dt>${t('Сумма')}</dt><dd>${Fmt.money(o.amount)}</dd></div>
-            ${o.buyer_data ? html`<div><dt>${t('Данные покупателя')}</dt><dd class="mono">${o.buyer_data} <button class="link" data-act="copy" data-v="${o.buyer_data}">${t('копировать')}</button></dd></div>` : ''}
+            ${o.buyer_data ? html`<div><dt>${o.id_label || t('Данные покупателя')}</dt><dd class="mono">${o.buyer_data} <button class="link" data-act="copy" data-v="${o.buyer_data}">${t('копировать')}</button></dd></div>` : ''}
             <div><dt>${t('Продавец')}</dt><dd><a href="#/u/${o.seller.login}">${o.seller.name}</a></dd></div>
             <div><dt>${t('Покупатель')}</dt><dd><a href="#/u/${o.buyer.login}">${o.buyer.name}</a></dd></div>
             ${o.sub_id ? html`<div><dt>${t('Подписка')}</dt><dd><a href="#/subs">🔁 ${t('автопродление')}</a></dd></div>` : ''}
@@ -221,17 +236,20 @@ Views.order = async (view, ctx) => {
         </div>` : ''}
 
         <div class="order-actions">
-          ${buyer && ['paid', 'delivered'].includes(o.status) ? html`<button class="btn primary big" data-act="confirm">✅ ${t('Подтвердить получение')}</button>` : ''}
+          ${buyer && o.status === 'delivered' ? html`<button class="btn primary big" data-act="confirm">✅ ${t('Подтвердить получение')}</button>` : ''}
+          ${buyer && o.status === 'paid' ? html`<button class="btn primary big" data-act="chat">💬 ${t('Написать продавцу')}</button>` : ''}
           ${seller && o.status === 'paid' ? html`<button class="btn primary big" data-act="deliver">📦 ${t('Выполнено')}</button>` : ''}
           ${buyer && overdue ? html`<button class="btn" data-act="cancel">↩️ ${t('Отменить и вернуть деньги')}</button>` : ''}
           ${seller && open ? html`<button class="btn ghost" data-act="refund">↩️ ${t('Вернуть деньги покупателю')}</button>` : ''}
           ${(buyer || seller) && ['paid', 'delivered'].includes(o.status) ? html`<button class="btn ghost danger-text" data-act="dispute">⚠️ ${t('Открыть спор')}</button>` : ''}
+          ${buyer && o.status === 'paid' ? html`<button class="link small muted" data-act="confirm">${t('Товар уже у меня — подтвердить получение')}</button>` : ''}
           ${o.status === 'dispute' && o.dispute_by && App.me && o.dispute_by === App.me.id ? html`<button class="btn ghost" data-act="undispute">🤝 ${t('Закрыть спор')}</button>` : ''}
         </div>
 
         ${staff && open ? html`<div class="card admin-box"><h2>⚖️ ${t('Арбитраж')}</h2>
           <textarea id="adm-note" rows="2" maxlength="200" placeholder="${t('Комментарий к решению (увидят обе стороны)')}"></textarea>
           <div class="row-btns"><button class="btn" data-act="resolve" data-w="buyer">↩️ ${t('Вернуть покупателю')}</button><button class="btn primary" data-act="resolve" data-w="seller">💰 ${t('Перевести продавцу')}</button></div>
+          <div class="row-btns"><a class="btn small ghost" href="#/admin/support/${o.buyer.id}">💬 ${t('Написать покупателю')}</a><a class="btn small ghost" href="#/admin/support/${o.seller.id}">💬 ${t('Написать продавцу')}</a><a class="btn small ghost" href="#/admin/disputes">${t('Все споры')} →</a></div>
           <div id="adm-chat" class="adm-chat"></div></div>` : ''}
 
         ${o.status === 'completed' && (buyer || rev) ? html`<div class="card" id="review-box">${Order.reviewBox(o, rev, buyer, seller)}</div>` : ''}
@@ -241,18 +259,25 @@ Views.order = async (view, ctx) => {
 
   const act = (action, text) => Api.auth('sauda_order_act', { p_id: o.id, p_action: action, p_text: text || '' }).then((x) => {
     if (!x.ok) { UI.fail(x); return; }
-    App.refresh();
+    App.refresh(true);
     Router.go();
   });
   UI.bind(view, {
     copy: (b) => UI.copy(b.dataset.v),
-    confirm: async () => { if (await UI.ask(t('Подтверждаете, что получили товар и всё работает? После этого деньги уйдут продавцу, отменить будет нельзя.'), { yes: t('Да, всё получил') })) act('confirm'); },
+    confirm: async () => {
+      // до отметки «выполнено» — отдельное предупреждение: так часто просят мошенники («подтверди, потом пришлю»)
+      const q = o.status === 'paid'
+        ? t('Продавец ещё не отметил заказ выполненным. Подтверждайте, только если товар уже у вас и всё работает: деньги сразу уйдут продавцу, вернуть их будет нельзя.')
+        : t('Подтверждаете, что получили товар и всё работает? После этого деньги уйдут продавцу, отменить будет нельзя.');
+      if (await UI.ask(q, { yes: t('Да, всё получил'), danger: o.status === 'paid' })) act('confirm');
+    },
+    chat: () => { const ta = view.querySelector('#order-chat textarea'); if (ta) { ta.scrollIntoView({ block: 'center' }); ta.focus(); } },
     deliver: async () => {
       const text = await new Promise((res) => {
         const m = UI.modal({
           title: t('Заказ выполнен'),
           body: html`<form class="stack" data-submit="ok"><p class="muted">${C.game(o.game).kind === 'goods' ? t('Напишите, как отправили вещь: Казпочта, CDEK или курьер и трек-номер, либо где и когда забрать. Без отметки покупателя заказ закроется сам только через 14 дней.') : t('Если нужно передать данные (код, логин и пароль, ссылку) — впишите их. Покупатель увидит их в заказе и в чате.')}</p>
-            <textarea name="v" rows="4" maxlength="3000" placeholder="${t('Необязательно')}"></textarea>
+            <textarea name="v" rows="4" maxlength="3000" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${t('Необязательно')}"></textarea>
             <div class="modal-actions"><button type="button" class="btn ghost" data-act="close">${t('Отмена')}</button><button class="btn primary">${t('Отметить выполненным')}</button></div></form>`,
           on: { ok: (f, fd) => { res(String(fd.get('v') || '')); m.close(true); } },
           onClose: (v) => { if (!v) res(null); },
@@ -269,11 +294,14 @@ Views.order = async (view, ctx) => {
     undispute: () => act('undispute'),
     resolve: async (b) => {
       const w = b.dataset.w;
-      if (!(await UI.ask(w === 'buyer' ? t('Вернуть деньги покупателю?') : t('Перевести деньги продавцу?')))) return;
+      // в подтверждении — сумма, номер заказа и кому именно
+      if (!(await UI.ask(w === 'buyer'
+        ? t('Вернуть {s} покупателю {who} по заказу #{id}?', { s: Fmt.money(o.amount), who: o.buyer.name, id: o.id })
+        : t('Перевести {s} продавцу {who} по заказу #{id}?', { s: Fmt.money(o.amount), who: o.seller.name, id: o.id }), { yes: t('Да, решить так') }))) return;
       const x = await Api.auth('sauda_admin', { p_action: 'resolve', p: { id: o.id, winner: w, note: (view.querySelector('#adm-note').value || '').trim() } });
       if (!x.ok) return UI.fail(x);
       UI.toast(t('Решение принято'));
-      Router.go();
+      Router.nav('#/admin/disputes'); // сразу к следующему спору
     },
     star: (b) => {
       const n = +b.dataset.n;
@@ -299,7 +327,9 @@ Views.order = async (view, ctx) => {
   });
 
   if (buyer || seller) {
-    ctx.onLeave(ChatBox.mount(view.querySelector('#order-chat'), { peerId: other.id, hideOrders: true, onSystem: () => Router.go() }));
+    ctx.onLeave(ChatBox.mount(view.querySelector('#order-chat'), { peerId: other.id, orderId: o.id, hideOrders: true,
+      // страница перерисовывается только из-за событий ЭТОГО заказа — иначе стёрся бы набираемый отзыв
+      onSystem: (msgs) => { if (msgs.some((m) => m.kind === 'system' && m.order_id === o.id)) Router.go(); } }));
   } else if (staff) {
     const c = await Api.auth('sauda_admin', { p_action: 'chat_between', p: { a: o.buyer.id, b: o.seller.id } });
     const box = view.querySelector('#adm-chat');
@@ -328,11 +358,11 @@ const Order = {
 const Chats = {
   item(c, activeId) {
     const p = c.peer;
-    const last = c.last_kind === 'system' ? C.sysText(c.last_text) : c.last_kind === 'image' ? '📷 ' + t('Фото') : c.last_text;
+    const last = c.last_kind === 'system' ? C.sysText(c.last_text, !!c.last_mine) : c.last_kind === 'image' ? '📷 ' + t('Фото') : c.last_text;
     return html`<a class="chat-item ${c.unread ? 'unread' : ''} ${activeId === p.id ? 'on' : ''}" href="#/chat/${p.id}">
       ${C.avatar(p, 46)}${p.online ? html`<span class="online-dot abs"></span>` : ''}
       <span class="ci-main"><span class="ci-top"><b>${p.name}</b>${C.badges(p)}<time>${Fmt.dt(c.last_at)}</time></span>
-        <span class="ci-last">${c.last_mine ? html`<span class="muted">${t('Вы')}: </span>` : ''}${last}</span></span>
+        <span class="ci-last">${c.last_mine && c.last_kind !== 'system' ? html`<span class="muted">${t('Вы')}: </span>` : ''}${last}</span></span>
       ${c.unread ? html`<span class="badge">${c.unread}</span>` : ''}</a>`;
   },
   async fill(el, activeId) {
@@ -347,6 +377,7 @@ Views.chats = async (view, ctx) => {
   view.innerHTML = html`<div class="page-head"><h1>${t('Сообщения')}</h1></div><div class="chat-list" id="cl">${C.skeleton(5, 'rows')}</div>`.s;
   const el = view.querySelector('#cl');
   await Chats.fill(el);
+  if (!ctx.alive()) return; // ушли со страницы, пока грузилось, — опрос не запускаем
   const timer = setInterval(() => { if (!document.hidden) Chats.fill(el); }, 8000);
   ctx.onLeave(() => clearInterval(timer));
 };

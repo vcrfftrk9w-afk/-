@@ -16,6 +16,9 @@ const QUICK = [
 const total = (g) => Object.values(g.counts || {}).reduce((a, b) => a + b, 0);
 
 Views.home = async (view, ctx) => {
+  // на главной своё большое поле поиска — второе в шапке на телефоне лишнее
+  document.body.classList.add('on-home');
+  ctx.onLeave(() => document.body.classList.remove('on-home'));
   const games = App.meta.games;
   const fee = App.cfg('fee_pct');
   view.innerHTML = html`
@@ -25,7 +28,7 @@ Views.home = async (view, ctx) => {
         <h1>${t('Донат, игровые ценности и подписки —')} <span class="grad">${t('через гаранта')}</span></h1>
         <p class="hero-sub">${t('Продавец получает деньги только после того, как вы получили товар. Оплата в тенге, вывод на Kaspi, споры решает арбитраж.')}</p>
         <form class="hero-search" data-submit="search" role="search">
-          <input name="q" type="search" placeholder="${t('Например: UC PUBG, голда Standoff 2, Spotify')}" aria-label="${t('Поиск')}" autocomplete="off">
+          <input name="q" type="search" placeholder="${t('UC PUBG, голда, Spotify…')}" aria-label="${t('Поиск')}" autocomplete="off">
           <button class="btn primary">${t('Найти')}</button>
         </form>
         <div class="quick">${QUICK.map(([g, s, label]) => html`<a class="chip" href="#/g/${g}/${s}">${C.gicon(C.game(g))} ${t(label)}</a>`)}</div>
@@ -84,12 +87,12 @@ Views.home = async (view, ctx) => {
     view.querySelector('#reviews-block').hidden = false;
     view.querySelector('#home-reviews').innerHTML = j.reviews.map((r) => C.review(r).s).join('');
   }
+  // цифры сервиса показываем, только когда они уже что-то говорят: «0 сделок» не добавляет доверия
   const s = j.stats;
+  const stat = (n, min, label) => (n >= min ? html`<div><b>${Fmt.num(n)}</b><span>${label}</span></div>` : '');
   view.querySelector('#home-stats').innerHTML = html`
-    <div><b>${Fmt.num(s.lots)}</b><span>${tp(s.lots, 'предложение|предложения|предложений', true)}</span></div>
-    <div><b>${Fmt.num(s.deals)}</b><span>${tp(s.deals, 'сделка|сделки|сделок', true)}</span></div>
-    <div><b>${Fmt.num(s.users)}</b><span>${tp(s.users, 'пользователь|пользователя|пользователей', true)}</span></div>
-    <div><b>${Fmt.num(s.online)}</b><span>${t('сейчас онлайн')}</span></div>`.s;
+    ${stat(s.lots, 20, tp(s.lots, 'предложение|предложения|предложений', true))}${stat(s.deals, 50, tp(s.deals, 'сделка|сделки|сделок', true))}
+    ${stat(s.users, 50, tp(s.users, 'пользователь|пользователя|пользователей', true))}${stat(s.online, 5, t('сейчас онлайн'))}`.s;
 };
 
 Views.catalog = async (view, ctx) => {
@@ -143,6 +146,11 @@ Views.game = async (view, ctx) => {
     <div class="center"><button class="btn ghost" id="more" hidden data-act="more">${t('Показать ещё')}</button></div>`.s;
 
   let offset = 0, items = [], seq = 0;
+  // фильтры ничего не оставили — это не «раздел пуст»: предлагаем сбросить фильтры
+  const filtered = () => !!(f.q || f.min || f.max || f.auto || f.online || f.city);
+  const emptyState = () => (filtered()
+    ? C.empty('🔎', t('Ничего не найдено по фильтрам'), html`<a class="btn primary" href="#/g/${g.id}/${sec}">${t('Сбросить фильтры')}</a>`)
+    : C.empty('🕊️', t('В этом разделе пока нет предложений'), html`<a class="btn primary" href="#/sell?game=${g.id}&section=${sec}">${t('Продать первым')}</a>`));
   async function load(reset) {
     const my = ++seq; // ответ на устаревший запрос (двойное «Показать ещё») не дописывает список
     if (reset) { offset = 0; items = []; }
@@ -151,7 +159,7 @@ Views.game = async (view, ctx) => {
     if (!j.ok) { view.querySelector('#results').innerHTML = C.empty('📡', errText(j.error)).s; return; }
     items = items.concat(j.items);
     offset = items.length;
-    view.querySelector('#results').innerHTML = (C.lots(items, Store.get('sauda_view', mode)) || C.empty('🕊️', t('В этом разделе пока нет предложений'), html`<a class="btn primary" href="#/sell?game=${g.id}&section=${sec}">${t('Продать первым')}</a>`)).s;
+    view.querySelector('#results').innerHTML = (C.lots(items, Store.get('sauda_view', mode)) || emptyState()).s;
     view.querySelector('#more').hidden = items.length >= j.total;
   }
   UI.bind(view, {
@@ -169,7 +177,7 @@ Views.game = async (view, ctx) => {
     mode: (b) => {
       Store.set('sauda_view', b.dataset.mode);
       view.querySelectorAll('[data-act=mode]').forEach((x) => x.classList.toggle('on', x === b));
-      view.querySelector('#results').innerHTML = (C.lots(items, b.dataset.mode) || C.empty('🕊️', t('В этом разделе пока нет предложений'))).s;
+      view.querySelector('#results').innerHTML = (C.lots(items, b.dataset.mode) || emptyState()).s;
     },
     more: (b) => UI.busy(b, () => load(false)),
   });
@@ -179,7 +187,12 @@ Views.game = async (view, ctx) => {
 Views.search = async (view, ctx) => {
   const q = (ctx.query.q || '').trim();
   const ql = q.toLowerCase();
-  const games = q ? App.meta.games.filter((g) => g.name.toLowerCase().includes(ql) || g.id.includes(ql)) : [];
+  // игры — по названию, коду и другим названиям («пабг», «стандофф»)
+  const words = ql.replace(/ё/g, '\u0435').split(/[^0-9a-zа-яәіңғүұқөһ]+/i).filter(Boolean);
+  const games = words.length ? App.meta.games.filter((g) => {
+    const hay = (g.name + ' ' + g.id + ' ' + (g.aliases || '')).toLowerCase().replace(/ё/g, '\u0435');
+    return words.some((w) => w.length > 2 && hay.includes(w.length > 4 ? w.slice(0, -1) : w));
+  }) : [];
   view.innerHTML = html`<div class="page-head"><h1>${q ? t('Поиск: «{q}»', { q }) : t('Поиск')}</h1></div>
     <form class="hero-search slim" data-submit="search" role="search"><input name="q" type="search" value="${q}" placeholder="${t('Что ищете?')}" aria-label="${t('Поиск')}" autofocus><button class="btn primary">${t('Найти')}</button></form>
     ${games.length ? html`<section class="block"><h2>${t('Игры и сервисы')}</h2><div class="game-grid">${games.map((g) => C.gameTile(g, total(g)))}</div></section>` : ''}
@@ -188,7 +201,10 @@ Views.search = async (view, ctx) => {
   if (!q) return;
   const j = await Api.call('sauda_lots', { p: { q, limit: 60 } });
   if (!ctx.alive()) return;
-  view.querySelector('#res').innerHTML = (!j.ok ? C.empty('📡', errText(j.error)) : C.lots(j.items) || C.empty('🤷', t('Ничего не нашлось. Попробуйте другое слово.'))).s;
+  // пустой результат — не тупик: популярные разделы и каталог
+  view.querySelector('#res').innerHTML = (!j.ok ? C.empty('📡', errText(j.error)) : C.lots(j.items) || C.empty('🤷', t('Ничего не нашлось. Попробуйте другое слово или выберите раздел:'),
+    html`<div class="quick">${QUICK.map(([gid, sid, label]) => html`<a class="chip" href="#/g/${gid}/${sid}">${C.gicon(C.game(gid))} ${t(label)}</a>`)}</div>
+      <a class="btn primary" href="#/catalog">${t('Весь каталог')}</a>`)).s;
 };
 
 /* ───────────── лот ───────────── */
@@ -218,7 +234,7 @@ Views.lot = async (view, ctx) => {
         ${l.descr ? html`<div class="descr">${richText(l.descr)}</div>` : ''}
       </div>
       <div class="lot-main lot-bottom">
-        <div class="lot-meta muted small">${t('Лот #{id}', { id: l.id })} · ${t('{n} просмотров', { n: Fmt.num(l.views) })} · ${t('продано {n}', { n: Fmt.num(l.sold) })} · ${t('обновлён {d}', { d: Fmt.ago(l.updated_at) })}
+        <div class="lot-meta muted small">${t('Лот #{id}', { id: l.id })} · ${tp(l.views, 'просмотр|просмотра|просмотров')} · ${t('продано {n}', { n: Fmt.num(l.sold) })} · ${t('обновлён {d}', { d: Fmt.ago(l.updated_at) })}
           ${!j.mine ? html` · <a href="#" data-act="report">🚩 ${t('Пожаловаться')}</a>` : ''}</div>
 
         <section class="block"><div class="block-head"><h2>${t('Отзывы о продавце')}</h2>${s.reviews ? html`<a class="more" href="#/u/${s.login}?tab=reviews">${t('Все {n}', { n: s.reviews })} →</a>` : ''}</div>
@@ -248,7 +264,7 @@ Views.lot = async (view, ctx) => {
             </div>` : ''}
           ${!canBuy && !j.mine ? html`<div class="note">${t('Лот сейчас не продаётся.')}</div>` : ''}
           <div class="buy-actions">
-            <button class="btn ghost ${j.fav ? 'on' : ''}" data-act="fav" aria-pressed="${j.fav ? 'true' : 'false'}">${j.fav ? '❤️' : '🤍'} ${t('В избранное')}</button>
+            <button class="btn ghost ${j.fav ? 'on' : ''}" data-act="fav" aria-pressed="${j.fav ? 'true' : 'false'}">${j.fav ? '❤️' : '🤍'} ${j.fav ? t('В избранном') : t('В избранное')}</button>
             <button class="btn ghost" data-act="share">🔗 ${t('Поделиться')}</button>
           </div>
         </div>
@@ -279,26 +295,59 @@ Views.lot = async (view, ctx) => {
   };
   const step = (k) => { form.qty.value = Math.max(1, Math.min(maxQty, (parseInt(form.qty.value, 10) || 1) + k)); recalc(); };
   recalc();
+  // на телефоне кнопка покупки всегда под рукой: панель внизу, пока сама карточка покупки не на экране
+  if (canBuy && form) {
+    view.insertAdjacentHTML('beforeend', html`<div class="buy-bar" id="buy-bar"><b>${Fmt.money(l.price)}</b><button class="btn primary" data-act="tobuy">${t('Купить')}</button></div>`.s);
+    const bar = view.querySelector('#buy-bar');
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((es) => { bar.classList.toggle('hide', es.some((e) => e.isIntersecting)); });
+      io.observe(view.querySelector('#buy-btn'));
+      ctx.onLeave(() => io.disconnect());
+    }
+  }
+  // вернулись после входа — продолжаем покупку с тем же количеством и ID
+  let pending = null;
+  try { pending = JSON.parse(sessionStorage.getItem('sauda_pending_buy') || 'null'); } catch (e) { /* нет хранилища */ }
+  if (pending && pending.lot === l.id && Api.token && form) {
+    sessionStorage.removeItem('sauda_pending_buy');
+    if (form.qty) form.qty.value = pending.qty;
+    if (form.data) form.data.value = pending.data;
+    if (form.renew) form.renew.checked = pending.renew;
+    recalc();
+    Buy.confirm(l, Math.min(maxQty, pending.qty || 1), pending.data || '', !!pending.renew);
+  }
   let fav = j.fav;
   UI.bind(view, {
     pic: (b) => { view.querySelector('#gal-main').src = images[+b.dataset.i]; view.querySelectorAll('.thumb').forEach((x) => x.classList.toggle('on', x === b)); },
     qminus: () => step(-1), qplus: () => step(1), recalc,
-    buy: async (f, fd) => {
-      if (!Api.token) return App.needAuth();
-      const qty = Math.max(1, Math.min(maxQty, parseInt(fd.get('qty'), 10) || 1));
-      Buy.confirm(l, qty, String(fd.get('data') || '').trim(), !!fd.get('renew'));
+    tobuy: () => {
+      // нужно ввести ID — показываем поле, иначе сразу к оплате
+      if (form.data && !form.data.value.trim()) { form.data.scrollIntoView({ block: 'center' }); form.data.focus(); return; }
+      form.requestSubmit();
     },
-    fav: async (b) => {
+    buy: async (f, fd) => {
+      const qty = Math.max(1, Math.min(maxQty, parseInt(fd.get('qty'), 10) || 1));
+      const data = String(fd.get('data') || '').trim(), renew = !!fd.get('renew');
+      if (!Api.token) {
+        // гость: запоминаем покупку и ведём на регистрацию — после входа окно покупки откроется само
+        try { sessionStorage.setItem('sauda_pending_buy', JSON.stringify({ lot: l.id, qty, data, renew })); } catch (e) { /* приватный режим */ }
+        return App.needAuth({ reg: true, why: 'buy' });
+      }
+      Buy.confirm(l, qty, data, renew);
+    },
+    fav: (b) => {
       if (!Api.token) return App.needAuth();
-      const r = await Api.auth('sauda_fav', { p_lot: l.id, p_on: !fav });
-      if (!r.ok) return UI.fail(r);
-      fav = !fav;
-      b.innerHTML = html`${fav ? '❤️' : '🤍'} ${t('В избранное')}`.s;
-      b.setAttribute('aria-pressed', fav ? 'true' : 'false');
-      UI.toast(fav ? t('Добавлено в избранное') : t('Убрано из избранного'));
+      return UI.busy(b, async () => { // двойное нажатие не путает состояние
+        const r = await Api.auth('sauda_fav', { p_lot: l.id, p_on: !fav });
+        if (!r.ok) return UI.fail(r);
+        fav = !fav;
+        b.innerHTML = html`${fav ? '❤️' : '🤍'} ${fav ? t('В избранном') : t('В избранное')}`.s;
+        b.setAttribute('aria-pressed', fav ? 'true' : 'false');
+        UI.toast(fav ? t('Добавлено в избранное') : t('Убрано из избранного'));
+      });
     },
     share: () => {
-      const url = location.href;
+      const url = siteUrl('#/lot/' + l.id);
       if (navigator.share) navigator.share({ title: l.title, url }).catch(() => {});
       else UI.copy(url);
     },
@@ -343,11 +392,11 @@ const Buy = {
       on: {
         topup: () => { m.close(); Wallet.topup(Math.max(lack, 100), () => Buy.confirm(l, qty, data, renew)); },
         pay: (b) => UI.busy(b, async () => {
-          const r = await Api.auth('sauda_buy', { p_lot: l.id, p_qty: qty, p_data: data, p_renew: renew });
+          const r = await Api.auth('sauda_buy', { p_lot: l.id, p_qty: qty, p_data: data, p_renew: renew, p_price: l.price });
           if (!r.ok) return UI.fail(r);
           m.close(true);
           if (App.me) App.me.balance = r.balance;
-          App.refresh();
+          App.refresh(true);
           UI.toast(t('Оплачено! Заказ #{id}', { id: r.order }));
           Router.nav('#/order/' + r.order);
         }),
@@ -380,14 +429,14 @@ Views.user = async (view, ctx) => {
       <div class="ph-rating">
         <div class="big-rating">${u.reviews ? (+u.rating).toFixed(1) : '—'}</div>${C.stars(u.rating, true)}
         <div class="muted small">${tp(u.reviews, 'отзыв|отзыва|отзывов')}</div>
-        <div class="dist">${dist.map((x) => html`<div><span>${x.s}★</span><i style="--w:${(x.n / maxN) * 100}%"></i><span>${x.n}</span></div>`)}</div>
+        ${u.reviews ? html`<div class="dist">${dist.map((x) => html`<div><span>${x.s}★</span><i style="--w:${(x.n / maxN) * 100}%"></i><span>${x.n}</span></div>`)}</div>` : ''}
       </div>
     </div>
     <div class="stat-row">
       <div><b>${Fmt.num(u.sales)}</b><span>${tp(u.sales, 'продажа|продажи|продаж', true)}</span></div>
       <div><b>${Fmt.num(u.purchases)}</b><span>${tp(u.purchases, 'покупка|покупки|покупок', true)}</span></div>
       <div><b>${Fmt.num(j.lots.length)}</b><span>${tp(j.lots.length, 'лот|лота|лотов', true)}</span></div>
-      <div><b>${Fmt.date(u.since)}</b><span>${t('на Sauda с')}</span></div>
+      <div><b class="nowrap">${Fmt.short(u.since)} ${new Date(u.since).getFullYear()}</b><span>${t('на Sauda с')}</span></div>
     </div>
     <div class="tabs"><a class="tab ${tab === 'lots' ? 'on' : ''}" href="#/u/${u.login}">${t('Лоты')}<span class="cnt">${j.lots.length}</span></a><a class="tab ${tab === 'reviews' ? 'on' : ''}" href="#/u/${u.login}?tab=reviews">${t('Отзывы')}<span class="cnt">${u.reviews}</span></a></div>
     <div id="utab">${tab === 'lots'

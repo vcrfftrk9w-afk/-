@@ -59,7 +59,7 @@ const OUT_METHODS = { kaspi: ['Kaspi Gold', '🔴', 'phone'], halyk: ['Halyk (п
 
 /* официальные логотипы игр и сервисов (img/games/<id>.webp) — только чтобы сразу было видно, к какой игре лот;
    у разделов без бренда (услуги, вещи, «нейросети») остаётся эмодзи. Логотипы принадлежат правообладателям. */
-const GAME_ICONS = new Set(['apex', 'apple', 'arenabreakout', 'blackrussia', 'brawlstars', 'clashroyale', 'coc', 'codm', 'discord', 'eafc', 'fortnite', 'freefire', 'genshin', 'hayday', 'hsr', 'lol', 'minecraft', 'mlbb', 'netflix', 'psn', 'pubgm', 'roblox', 'spotify', 'standoff2', 'stumble', 'tanksblitz', 'telegram', 'valorant', 'xbox', 'youtube']);
+const GAME_ICONS = new Set(['apex', 'apple', 'arenabreakout', 'blackrussia', 'brawlstars', 'clashroyale', 'coc', 'codm', 'cs2', 'discord', 'dota2', 'duolingo', 'eafc', 'fortnite', 'freefire', 'genshin', 'gta5rp', 'hayday', 'hsr', 'instagram', 'kinopoisk', 'lol', 'minecraft', 'mlbb', 'netflix', 'psn', 'pubgm', 'roblox', 'rust', 'spotify', 'standoff2', 'steam', 'stumble', 'tanksblitz', 'tarkov', 'telegram', 'tiktok', 'twitch', 'valorant', 'warface', 'wot', 'wow', 'xbox', 'yandex', 'youtube']);
 const ICON_ALIAS = { youtubech: 'youtube' };
 
 const C = {
@@ -88,7 +88,7 @@ const C = {
 
   badges(u) {
     if (!u) return '';
-    return html`${u.verified ? html`<span class="vbadge" title="${t('Проверенный продавец')}">✔</span>` : ''}${u.level >= 2 ? html`<span class="lvl-badge lvl-${u.level}" title="${t('Уровень {n} · {name}', { n: u.level, name: Level.name(u.level) })}">${Level.icon(u.level)}${u.level}</span>` : ''}${u.pro ? html`<span class="pro-badge">PRO</span>` : ''}${u.staff ? html`<span class="staff-badge">${t('Sauda')}</span>` : ''}${u.demo ? html`<span class="demo-badge">${t('демо')}</span>` : ''}`;
+    return html`${u.verified ? html`<span class="vbadge" title="${t('Проверенный продавец')}">✓</span>` : ''}${u.level >= 2 ? html`<span class="lvl-badge lvl-${u.level}" title="${t('Уровень {n} · {name}', { n: u.level, name: Level.name(u.level) })}">${Level.icon(u.level)}${u.level}</span>` : ''}${u.pro ? html`<span class="pro-badge">PRO</span>` : ''}${u.staff ? html`<span class="staff-badge">${t('Sauda')}</span>` : ''}${u.demo ? html`<span class="demo-badge">${t('демо')}</span>` : ''}`;
   },
 
   stars(r, big) {
@@ -108,7 +108,7 @@ const C = {
 
   /* компактно для карточки: аватар, имя, Pro, онлайн, звезда */
   sellerMini(u) {
-    return html`<span class="seller-line">${C.avatar(u, 20)}<span class="seller-name">${u.name}</span>${u.verified ? html`<span class="vbadge" title="${t('Проверенный продавец')}">✔</span>` : ''}${u.pro ? html`<span class="pro-badge">PRO</span>` : ''}${C.online(u)}${u.reviews ? html`<span class="rating mini"><b>★ ${(+u.rating).toFixed(1)}</b> <span class="muted">(${Fmt.num(u.reviews)})</span></span>` : ''}</span>`;
+    return html`<span class="seller-line">${C.avatar(u, 20)}<span class="seller-name">${u.name}</span>${u.verified ? html`<span class="vbadge" title="${t('Проверенный продавец')}">✓</span>` : ''}${u.pro ? html`<span class="pro-badge">PRO</span>` : ''}${C.online(u)}${u.reviews ? html`<span class="rating mini"><b>★ ${(+u.rating).toFixed(1)}</b> <span class="muted">(${Fmt.num(u.reviews)})</span></span>` : ''}</span>`;
   },
 
   sellerLine(u) {
@@ -184,7 +184,10 @@ const C = {
     return html`<a class="order-row" href="#/order/${o.id}">
       <span class="or-ico" style="--c:${g.color}">${C.gicon(g)}</span>
       <span class="or-main"><span class="or-title">${o.title}${o.qty > 1 ? html` <span class="muted">× ${o.qty}</span>` : ''}</span>
-        <span class="or-sub muted">#${o.id} · ${Fmt.dt(o.created_at)} · ${o.role === 'buyer' ? t('продавец') : t('покупатель')} ${other ? other.name : ''}</span></span>
+        <span class="or-sub muted">#${o.id} · ${Fmt.dt(o.created_at)} · ${o.role === 'buyer' ? t('продавец') : t('покупатель')} ${other ? other.name : ''}</span>
+        ${o.role === 'seller' && o.status === 'paid' ? (new Date(o.deliver_by) > new Date()
+          ? html`<span class="or-due">⏱ ${t('выполнить: осталось {l}', { l: Fmt.left(o.deliver_by) })}</span>`
+          : html`<span class="or-due late">⚠️ ${t('срок вышел — покупатель может отменить')}</span>`) : ''}</span>
       <span class="or-side"><b class="${o.role === 'seller' && o.status === 'completed' ? 'plus' : ''}">${Fmt.money(o.amount)}</b>${C.status(o.status)}</span>
     </a>`;
   },
@@ -213,14 +216,24 @@ const C = {
     const n = { id: d.id, title: d.title, qty: d.qty, amount: d.amount !== undefined ? Fmt.money(d.amount) : '', net: d.net !== undefined ? Fmt.money(d.net) : '', reason: d.reason, note: d.note };
     switch (d.k) {
       case 'welcome': return t('Добро пожаловать в Sauda! Это чат поддержки — пишите сюда, если со сделкой что-то не так. Деньги продавцу уходят только после того, как вы подтвердите получение.');
+      // me: true — сообщение «от меня» (я покупатель для order_paid, продавец для order_delivered…), false — от собеседника,
+      // undefined — смотрит администратор: тогда текст в третьем лице
       case 'order_paid': return t('🛒 Заказ #{id} оплачен: «{title}» × {qty} — {amount}.', n)
         + (d.data ? ' ' + t('Данные покупателя: {data}.', { data: d.data }) : '')
-        + (d.auto ? ' ' + t('Товар выдан автоматически.') : ' ' + t('Продавец, выполните заказ и нажмите «Выполнено».'))
+        + (d.auto ? ' ' + t('Товар выдан автоматически.')
+          : me === true ? ' ' + t('Продавец выполнит заказ и отметит это здесь.')
+          : me === false ? ' ' + t('Выполните заказ и нажмите «Выполнено».')
+          : ' ' + t('Продавец, выполните заказ и нажмите «Выполнено».'))
         + (d.renew ? ' ' + t('Автопродление подписки.') : '');
-      case 'order_delivered': return t('📦 Заказ #{id} выполнен продавцом. Покупатель, проверьте и подтвердите получение.', n);
+      case 'order_delivered':
+        if (me === true) return t('📦 Вы отметили заказ #{id} выполненным. Ждём подтверждения покупателя.', n);
+        if (me === false) return t('📦 Продавец выполнил заказ #{id}. Проверьте товар и подтвердите получение.', n);
+        return t('📦 Заказ #{id} выполнен продавцом. Покупатель, проверьте и подтвердите получение.', n);
       case 'order_completed':
-        if (d.by === 'auto') return t('✅ Заказ #{id} подтверждён автоматически по сроку. Продавцу начислено {net}.', n);
+        if (d.by === 'auto') return me === undefined ? t('✅ Заказ #{id} подтверждён автоматически по сроку. Продавцу начислено {net}.', n) : t('✅ Заказ #{id} подтверждён автоматически по сроку.', n);
         if (d.by === 'admin') return t('⚖️ Арбитраж: заказ #{id} закрыт в пользу продавца.', n);
+        if (me === true) return t('✅ Вы подтвердили получение по заказу #{id}. Спасибо!', n);
+        if (me === false) return t('✅ Покупатель подтвердил заказ #{id}. Вам начислено {net}.', n);
         return t('✅ Покупатель подтвердил заказ #{id}. Продавцу начислено {net}.', n);
       case 'order_refunded':
         if (d.by === 'seller') return t('↩️ Продавец вернул деньги за заказ #{id}: {amount}.', n);
@@ -260,6 +273,7 @@ const C = {
       support_msg: ['💬', 'Сообщение в поддержку от {login}: {text}'],
       support_reply: ['💬', 'Поддержка ответила вам'],
       report_new: ['🚩', 'Новая жалоба'],
+      lot_soldout: ['📦', 'Лот «{title}» распродан — добавьте товар, чтобы продажи продолжились'],
       lot_blocked: ['🚫', 'Лот #{id} заблокирован модератором: {reason}'],
       lot_unblocked: ['✅', 'Лот #{id} снова можно включить'],
       balance_admin: ['🛡️', 'Баланс изменён администратором: {amount}'],

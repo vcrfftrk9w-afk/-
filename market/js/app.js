@@ -39,12 +39,14 @@ const App = (() => {
   }
 
   /* ---- кто вошёл и счётчики */
-  let refreshing = null, rerender = false;
+  let refreshing = null, rerender = false, rseq = 0;
   async function refresh(force) {
     if (refreshing && !force) return refreshing;
     refreshing = (async () => {
-      if (!Api.token) { app.me = null; app.counters = {}; header(); return; }
+      const my = ++rseq;
+      if (!Api.token) { app.me = null; app.counters = {}; forget(); header(); return; }
       const j = await Api.auth('sauda_me');
+      if (my !== rseq) return; // пришёл ответ на старый запрос — более свежий уже в пути
       if (j.ok) {
         app.me = j.user;
         app.counters = { unread: j.unread, notifs: j.notifs, active_buy: j.active_buy, active_sell: j.active_sell };
@@ -74,7 +76,8 @@ const App = (() => {
   }
   const notifyOn = () => Store.get('sauda_notify', false);
   async function setNotify(on) {
-    if (on && 'Notification' in window && Notification.permission !== 'granted') {
+    if (on && !('Notification' in window)) { UI.toast(t('На этом устройстве уведомления браузера недоступны'), 'err'); on = false; }
+    if (on && Notification.permission !== 'granted') {
       const p = await Notification.requestPermission().catch(() => 'denied');
       if (p !== 'granted') { UI.toast(t('Браузер не разрешил уведомления'), 'err'); on = false; }
     }
@@ -87,7 +90,7 @@ const App = (() => {
     const me = app.me, n = app.counters;
     const badge = (x) => (x ? html`<span class="badge">${x > 99 ? '99+' : x}</span>` : '');
     document.getElementById('top-right').innerHTML = html`
-      <button class="icon-btn hide-m" data-act="lang" aria-label="${t('Язык')}">${I18n.lang === 'kz' ? 'ҚАЗ' : 'РУС'}</button>
+      <button class="icon-btn ${me ? 'hide-m' : ''}" data-act="lang" aria-label="${t('Язык')}">${I18n.lang === 'kz' ? 'ҚАЗ' : 'РУС'}</button>
       ${me ? html`
         <a class="icon-btn hide-m" href="#/chats" aria-label="${t('Сообщения')}">${ICO.chat}${badge(n.unread)}</a>
         <a class="icon-btn" href="#/notifs" aria-label="${t('Уведомления')}">${ICO.bell}${badge(n.notifs)}</a>
@@ -98,9 +101,15 @@ const App = (() => {
     document.getElementById('tab-chats-b').innerHTML = html`${badge(n.unread)}`.s;
     document.getElementById('tab-me-b').innerHTML = html`${badge((n.notifs || 0) + (n.active_sell || 0))}`.s;
     const bar = document.getElementById('testbar');
-    bar.hidden = !(app.meta && app.meta.config.test_mode);
-    bar.innerHTML = html`🧪 ${t('Тестовый режим: деньги ненастоящие, можно пробовать покупки и продажи.')} <a href="#/help?s=test">${t('Подробнее')}</a>`.s;
+    // тестовый режим — одна строка; можно скрыть до следующего запуска браузера
+    let hidden = false;
+    try { hidden = sessionStorage.getItem('sauda_testbar') === '0'; } catch (e) { /* нет хранилища */ }
+    bar.hidden = !(app.meta && app.meta.config.test_mode) || hidden;
+    bar.innerHTML = html`<span>🧪 ${t('Тестовый режим: деньги ненастоящие.')} <a href="#/help?s=test">${t('Подробнее')}</a></span><button class="tb-x" data-act="hidebar" aria-label="${t('Скрыть')}">✕</button>`.s;
+    const x = bar.querySelector('[data-act=hidebar]');
+    x.onclick = () => { try { sessionStorage.setItem('sauda_testbar', '0'); } catch (e) { /* нет хранилища */ } bar.hidden = true; };
     document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-label]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nLabel)); });
     const s = document.querySelector('#top-search input');
     if (s) s.placeholder = t('Игра, валюта, подписка…');
   }
@@ -130,13 +139,21 @@ const App = (() => {
     Router.go();
   }
 
-  function needAuth() {
-    location.hash = '#/login?next=' + encodeURIComponent(location.hash || '#/');
+  function needAuth(o) {
+    o = o || {};
+    location.hash = '#/login?' + (o.reg ? 'mode=reg&' : '') + (o.why ? 'why=' + o.why + '&' : '') + 'next=' + encodeURIComponent(location.hash || '#/');
+  }
+  /* после выхода на этом устройстве не остаётся ничего от прошлого человека: черновики сообщений, счётчик во вкладке */
+  function forget() {
+    if (typeof ChatBox !== 'undefined') ChatBox.drafts = {};
+    lastUnread = null; lastNotifs = null;
+    document.title = 'Sauda';
   }
   async function logout() {
     await Api.auth('sauda_logout');
     Api.setToken('');
     app.me = null; app.counters = {};
+    forget();
     header();
     location.hash = '#/';
   }
@@ -219,7 +236,9 @@ const App = (() => {
     rerender = false;
     Router.go();
     loadMeta();
-    Api.on(() => { app.me = null; header(); });
+    Api.on(() => { app.me = null; forget(); header(); });
+    // «К содержимому» для клавиатуры: фокус на страницу, а не переход по адресу #view (роутер увёл бы на главную)
+    document.querySelector('.skip').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('view').focus(); });
     // со включёнными уведомлениями проверяем и в фоне — иначе уведомление браузера некому показать
     setInterval(() => { if (!document.hidden || notifyOn()) refresh(); }, 20000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });

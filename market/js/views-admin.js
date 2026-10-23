@@ -16,6 +16,7 @@ const SECTION_STD = { accounts: 'Аккаунты', currency: 'Валюта', do
   keys: 'Ключи и гифты', topup: 'Пополнение кошелька', subs: 'Подписки', services: 'Услуги', coaching: 'Обучение', goods: 'Товары', other: 'Прочее' };
 const admGame = (action, p) => Api.auth('sauda_admin_game', { p_action: action, p: p || {} });
 
+const ROLES = { user: 'Пользователь', moder: 'Модератор', admin: 'Администратор' };
 const adm = (action, p) => Api.auth('sauda_admin', { p_action: action, p: p || {} });
 
 Views.admin = async (view, ctx) => {
@@ -25,6 +26,9 @@ Views.admin = async (view, ctx) => {
     <div class="tabs scroll-x">${ADMIN_TABS.filter((x) => isAdmin || !x[3]).map(([id, i, l]) => html`<a class="tab ${tab === id ? 'on' : ''}" href="#/admin/${id}">${i} ${t(l)}<span class="cnt" id="ac-${id}" hidden></span></a>`)}</div>
     <div id="adm">${C.skeleton(3, 'rows')}</div>`.s;
   const box = view.querySelector('#adm');
+  // на телефоне вкладок больше, чем влезает: текущую прокручиваем в видимую часть
+  const on = view.querySelector('.tabs .tab.on');
+  if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
   const fn = Admin[tab];
   if (!fn) { box.innerHTML = C.empty('🤷', t('Нет такого раздела')).s; return; }
   await fn(box, ctx, isAdmin);
@@ -45,7 +49,13 @@ const Admin = {
     if (!r.ok) { box.innerHTML = C.empty('📡', errText(r.error)).s; return; }
     const d = r.data;
     const kpi = (v, l, href) => html`<${href ? 'a' : 'div'} class="card kpi" ${href ? raw(`href="${href}"`) : ''}><b>${v}</b><span>${l}</span></${href ? 'a' : 'div'}>`;
+    // сначала то, что ждёт действий администратора
+    const todo = [[d.disputes, '⚖️', t('споров ждут решения'), '#/admin/disputes'], [d.topups || 0, '💳', t('пополнений проверить'), '#/admin/topups'],
+      [d.withdrawals, '🏦', t('выводов отправить'), '#/admin/withdrawals'], [d.support, '🛟', t('сообщений в поддержке'), '#/admin/support'],
+      [d.reports, '🚩', t('жалоб'), '#/admin/reports']].filter((x) => x[0] > 0);
     box.innerHTML = html`
+      ${todo.length ? html`<div class="card todo"><h2>${t('Требует действий')}</h2><div class="todo-list">${todo.map(([n, i, l, href]) => html`<a class="todo-item" href="${href}"><span>${i}</span><b>${n}</b><small>${l}</small></a>`)}</div></div>`
+        : html`<div class="note">✅ ${t('Срочных дел нет: споров, пополнений и выводов не ждёт.')}</div>`}
       ${d.test_mode ? html`<div class="note warn">🧪 ${t('Тестовый режим включён: пополнение бесплатное, демо-лоты видны. Когда будете готовы принимать настоящие деньги — укажите реквизиты Kaspi и запустите сервис в «Настройках».')}</div>`
         : html`<div class="note">💰 ${t('Работаем с настоящими деньгами с {d}.', { d: d.live_since ? Fmt.date(d.live_since) : '—' })}</div>`}
       <div class="kpis">
@@ -123,17 +133,28 @@ const Admin = {
         <span class="tx-main"><b>${Fmt.money(w.amount - w.fee)}</b> <span class="muted">(${t('списано {a}, комиссия {f}', { a: Fmt.money(w.amount), f: Fmt.money(w.fee) })})</span>
           <span>${(OUT_METHODS[w.method] || [w.method, ''])[1]} ${t((OUT_METHODS[w.method] || [w.method])[0])}: <code class="mono">${w.details}</code> <button class="link" data-act="copy" data-v="${w.details}">${t('копировать')}</button></span>
           <span class="muted small"><a href="#/u/${w.user.login}">${w.user.name} @${w.user.login}</a> · ${Fmt.dt(w.created_at)}${w.test ? ' · 🧪 ' + t('тест') : ''}${w.note ? ' · ' + w.note : ''}</span></span>
-        ${['pending', 'processing'].includes(w.status) ? html`<span class="row-btns">${w.status === 'processing' ? html`<span class="status status-info">${t('Переводим')}</span>` : ''}<button class="btn primary small" data-act="done" data-id="${w.id}" data-sum="${w.amount - w.fee}" data-to="${w.details}">✔ ${w.status === 'pending' ? t('Перевести') : t('Отправил')}</button><button class="btn ghost small" data-act="reject" data-id="${w.id}">✕ ${t('Отклонить')}</button></span>`
+        ${['pending', 'processing'].includes(w.status) ? html`<span class="row-btns">${w.status === 'processing' ? html`<span class="status status-info">${t('Переводим')}</span>` : ''}<button class="btn primary small" data-act="done" data-id="${w.id}" data-sum="${w.amount - w.fee}" data-to="${w.details}" data-test="${w.test ? 1 : 0}" data-st="${w.status}">✔ ${w.status === 'pending' ? t('Перевести') : t('Отправил')}</button><button class="btn ghost small" data-act="reject" data-id="${w.id}">✕ ${t('Отклонить')}</button></span>`
           : html`<span class="status status-${(WD_STATUS[w.status] || ['', 'muted'])[1]}">${t((WD_STATUS[w.status] || [w.status])[0])}</span>`}
       </div>`)}</div>` : C.empty('🏦', t('Заявок нет'))}`.s;
     UI.bind(box, {
       copy: (b) => UI.copy(b.dataset.v),
       done: async (b) => {
-        // сначала заявка «в работе» — человек уже не отменит её, пока вы переводите
-        const y = await adm('withdraw_set', { id: +b.dataset.id, status: 'processing' });
-        if (!y.ok && y.error !== 'bad_status') return UI.fail(y);
-        if (y.ok) b.closest('.adm-row').querySelector('.row-btns').insertAdjacentHTML('afterbegin', html`<span class="status status-info">${t('Переводим')}</span>`.s);
-        if (!(await UI.ask(t('Переведите {s} на {to}, затем подтвердите.', { s: Fmt.money(+b.dataset.sum), to: b.dataset.to }), { yes: t('Да, отправил') }))) return;
+        // тестовая заявка: деньги ненастоящие — переводить ничего не нужно
+        if (b.dataset.test === '1') {
+          if (!(await UI.ask(t('Это тестовая заявка — настоящие деньги переводить не нужно. Отметить её выполненной?'), { yes: t('Отметить') }))) return;
+          const x = await adm('withdraw_set', { id: +b.dataset.id, status: 'done' });
+          if (x.ok) Router.go(); else UI.fail(x);
+          return;
+        }
+        // 1) берём в работу — с этой минуты человек не отменит заявку; 2) переводим; 3) подтверждаем
+        if (b.dataset.st === 'pending') {
+          if (!(await UI.ask(t('Начинаете перевод {s} на {to}? Человек больше не сможет отменить заявку.', { s: Fmt.money(+b.dataset.sum), to: b.dataset.to }), { yes: t('Начинаю перевод') }))) return;
+          const y = await adm('withdraw_set', { id: +b.dataset.id, status: 'processing' });
+          if (!y.ok) return UI.fail(y);
+          b.dataset.st = 'processing';
+          b.closest('.adm-row').querySelector('.row-btns').insertAdjacentHTML('afterbegin', html`<span class="status status-info">${t('Переводим')}</span>`.s);
+        }
+        if (!(await UI.ask(t('Перевели {s} на {to}?', { s: Fmt.money(+b.dataset.sum), to: b.dataset.to }), { yes: t('Да, отправил') }))) return;
         const x = await adm('withdraw_set', { id: +b.dataset.id, status: 'done' });
         if (x.ok) Router.go(); else UI.fail(x);
       },
@@ -152,28 +173,48 @@ const Admin = {
       const r = await adm('users', { q });
       if (!ctx.alive()) return;
       if (!r.ok) { box.querySelector('#ul').innerHTML = C.empty('📡', errText(r.error)).s; return; }
+      users = r.data;
+      const meId = App.me && App.me.id;
       box.querySelector('#ul').innerHTML = (r.data.length ? html`<div class="card list">${r.data.map((u) => html`<div class="adm-row">
         <a class="tx-main" href="#/u/${u.login}"><span>${C.avatar(u, 28)} <b>${u.name}</b> @${u.login} ${C.badges(u)} ${u.role !== 'user' ? html`<span class="tag">${u.role}</span>` : ''} ${u.banned ? html`<span class="tag tag-off">${t('заблокирован')}</span>` : ''}</span>
           <span class="muted small">${t('баланс {b}', { b: Fmt.money(u.balance) })} · ${tp(u.sales, 'продажа|продажи|продаж')} · ${tp(u.purchases, 'покупка|покупки|покупок')} · ${t('с {d}', { d: Fmt.date(u.since) })}</span></a>
-        <span class="row-btns">
+        ${u.id === meId ? html`<span class="muted small">${t('это вы')}</span>` : html`<span class="row-btns">
           <button class="btn small ghost" data-act="ban" data-id="${u.id}" data-on="${u.banned ? '0' : '1'}">${u.banned ? t('Разблокировать') : t('Заблокировать')}</button>
           <button class="btn small ghost" data-act="verify" data-id="${u.id}" data-on="${u.verified ? '0' : '1'}">${u.verified ? t('Снять ✔') : t('Проверен ✔')}</button>
           ${isAdmin ? html`<button class="btn small ghost" data-act="balance" data-id="${u.id}">₸</button>
-            <select data-change="role" data-id="${u.id}" aria-label="${t('Роль')}">${['user', 'moder', 'admin'].map((r2) => html`<option ${u.role === r2 ? 'selected' : ''}>${r2}</option>`)}</select>
-            <button class="btn small ghost" data-act="pro" data-id="${u.id}">👑+30</button>` : ''}
-        </span></div>`)}</div>` : C.empty('🤷', t('Никого не нашли'))).s;
+            <select data-change="role" data-id="${u.id}" aria-label="${t('Роль')}">${Object.entries(ROLES).map(([r2, l2]) => html`<option value="${r2}" ${u.role === r2 ? 'selected' : ''}>${t(l2)}</option>`)}</select>
+            <button class="btn small ghost" data-act="pro" data-id="${u.id}">👑+30</button>
+            <button class="btn small ghost" data-act="pass" data-id="${u.id}">🔑 ${t('Новый пароль')}</button>` : ''}
+        </span>`}</div>`)}</div>` : C.empty('🤷', t('Никого не нашли'))).s;
     };
+    let users = [];
+    const who = (id) => { const u = users.find((x) => x.id === id) || {}; return `${u.name} (@${u.login})`; };
     const set = async (p) => { const x = await adm('user_set', p); if (x.ok) { UI.toast(t('Готово')); load(box.querySelector('[name=q]').value); } else UI.fail(x); };
     UI.bind(box, {
       find: (f, fd) => load(String(fd.get('q') || '')),
       ban: async (b) => {
+        // в подтверждении — кто именно и что произойдёт: выход со всех устройств, лоты на паузу, возвраты по открытым заказам
         if (b.dataset.on === '1') {
-          const reason = await UI.prompt(t('Причина блокировки'), { yes: t('Заблокировать'), danger: true });
+          const reason = await UI.prompt(t('Заблокировать {who}?', { who: who(b.dataset.id) }), {
+            text: t('Человек выйдет со всех устройств, его лоты встанут на паузу. Деньги по его незакрытым продажам вернутся покупателям (если блокирует администратор).'),
+            placeholder: t('Причина блокировки'), yes: t('Заблокировать'), danger: true });
           if (reason) set({ id: b.dataset.id, banned: true, ban_reason: reason });
-        } else set({ id: b.dataset.id, banned: false });
+        } else if (await UI.ask(t('Разблокировать {who}?', { who: who(b.dataset.id) }), { yes: t('Разблокировать') })) set({ id: b.dataset.id, banned: false });
       },
       verify: (b) => set({ id: b.dataset.id, verified: b.dataset.on === '1' }),
-      role: (el) => set({ id: el.dataset.id, role: el.value }),
+      role: async (el) => {
+        const u = users.find((x) => x.id === el.dataset.id) || {};
+        if (!(await UI.ask(t('Сделать {who} — «{role}»?', { who: who(el.dataset.id), role: t(ROLES[el.value]) }), { yes: t('Да, изменить'), danger: el.value === 'admin' }))) { el.value = u.role; return; }
+        set({ id: el.dataset.id, role: el.value });
+      },
+      pass: async (b) => {
+        if (!(await UI.ask(t('Выдать {who} временный пароль? Сначала убедитесь, что пишет хозяин аккаунта. Все его входы закроются.', { who: who(b.dataset.id) }), { yes: t('Выдать пароль'), danger: true }))) return;
+        const x = await Api.auth('sauda_admin_pass', { p_user: b.dataset.id });
+        if (!x.ok) return UI.fail(x);
+        UI.modal({ title: t('Временный пароль'), body: html`<div class="stack"><p>${t('Передайте его владельцу @{login} и попросите сразу сменить пароль в настройках и получить новый код восстановления.', { login: x.login })}</p>
+          <div class="pay-row"><span class="muted small">${t('Пароль')}</span><b class="mono">${x.password}</b><button type="button" class="btn small ghost" data-act="copy">${t('Копировать')}</button></div></div>`,
+          on: { copy: () => UI.copy(x.password) } });
+      },
       pro: (b) => set({ id: b.dataset.id, pro_days: 30 }),
       balance: async (b) => {
         const v = await UI.prompt(t('Изменить баланс'), { text: t('Сумма в тенге: положительная — начислить, отрицательная — списать. Деньги берутся со счёта сервиса.'), placeholder: '-500 / 1000', yes: t('Применить') });
@@ -181,6 +222,7 @@ const Admin = {
         const note = await UI.prompt(t('Комментарий'), { placeholder: t('За что') }) || '';
         const amount = Fmt.amount(v, true);
         if (!amount) return UI.fail({ error: 'bad_amount' });
+        if (!(await UI.ask(amount > 0 ? t('Начислить {s} на баланс {who}?', { s: Fmt.money(amount), who: who(b.dataset.id) }) : t('Списать {s} с баланса {who}?', { s: Fmt.money(-amount), who: who(b.dataset.id) }), { yes: t('Подтвердить') }))) return;
         const x = await adm('balance', { id: b.dataset.id, amount, note });
         if (x.ok) { UI.toast(t('Готово')); load(box.querySelector('[name=q]').value); } else UI.fail(x);
       },
@@ -198,15 +240,17 @@ const Admin = {
         <a class="tx-main" href="#/lot/${l.id}"><b>${l.title}</b><span class="muted small">#${l.id} · ${C.game(l.game).name} · ${Fmt.money(l.price)} · ${l.seller.name} · ${t(LOT_STATUS[l.status])}</span></a>
         ${l.status === 'blocked' ? html`<button class="btn small" data-act="unblock" data-id="${l.id}">${t('Разблокировать')}</button>` : html`<button class="btn small ghost danger-text" data-act="block" data-id="${l.id}">🚫 ${t('Заблокировать')}</button>`}</div>`)}</div>` : C.empty('🤷', t('Ничего не найдено'))).s;
     };
+    // после блокировки список остаётся с тем же поиском и фильтром
+    const reload = () => load(box.querySelector('[name=q]').value.trim(), box.querySelector('[name=status]').value);
     UI.bind(box, {
       find: (f, fd) => load(String(fd.get('q') || ''), String(fd.get('status') || '')),
       block: async (b) => {
         const reason = await UI.prompt(t('Причина блокировки лота'), { yes: t('Заблокировать'), danger: true });
         if (!reason) return;
         const x = await adm('lot_block', { id: +b.dataset.id, blocked: true, reason });
-        if (x.ok) load('', ''); else UI.fail(x);
+        if (x.ok) reload(); else UI.fail(x);
       },
-      unblock: async (b) => { const x = await adm('lot_block', { id: +b.dataset.id, blocked: false }); if (x.ok) load('', ''); else UI.fail(x); },
+      unblock: async (b) => { const x = await adm('lot_block', { id: +b.dataset.id, blocked: false }); if (x.ok) reload(); else UI.fail(x); },
     });
     await load('', '');
   },
@@ -227,7 +271,7 @@ const Admin = {
     const r = await adm('promos');
     if (!ctx.alive()) return;
     if (!r.ok) { box.innerHTML = C.empty('📡', errText(r.error)).s; return; }
-    box.innerHTML = html`<form class="card filters" data-submit="add"><input name="code" required pattern="[A-Za-z0-9_-]{3,24}" placeholder="${t('КОД')}" autocapitalize="characters"><input name="amount" inputmode="numeric" required placeholder="${t('Сумма, ₸')}"><input name="uses" inputmode="numeric" placeholder="${t('Сколько раз (1)')}"><input name="days" inputmode="numeric" placeholder="${t('Дней действует (∞)')}"><button class="btn primary">${t('Создать')}</button></form>
+    box.innerHTML = html`<form class="card filters" data-submit="add"><input name="code" required pattern="[A-Za-z0-9_\\-]{3,24}" placeholder="${t('КОД')}" autocapitalize="characters"><input name="amount" inputmode="numeric" required placeholder="${t('Сумма, ₸')}"><input name="uses" inputmode="numeric" placeholder="${t('Сколько раз (1)')}"><input name="days" inputmode="numeric" placeholder="${t('Дней действует (∞)')}"><button class="btn primary">${t('Создать')}</button></form>
       ${r.data.length ? html`<div class="card list">${r.data.map((p) => html`<div class="adm-row"><span class="tx-main"><b class="mono">${p.code}</b><span class="muted small">${Fmt.money(p.amount)} · ${t('использован {u}, осталось {l}', { u: p.used, l: p.uses_left })}${p.expires_at ? ' · ' + t('до {d}', { d: Fmt.date(p.expires_at) }) : ''}</span></span></div>`)}</div>` : C.empty('🎁', t('Промокодов пока нет'))}`.s;
     UI.bind(box, {
       add: async (f, fd) => {
@@ -281,10 +325,11 @@ const Admin = {
       body: html`<form class="stack" data-submit="save">
         <div class="logo-edit"><span class="logo-prev" id="lp">${raw(preview())}</span>
           <span class="stack"><label class="btn small">${t('Загрузить логотип')}<input type="file" accept="image/*" data-change="logo" hidden></label>
-          <button type="button" class="btn small ghost" data-act="nologo">${t('Убрать свой логотип')}</button></span></div>
+          ${isNew ? '' : html`<button type="button" class="btn small ghost" data-act="nologo">${t('Убрать свой логотип')}</button>`}</span></div>
         <p class="muted small">${t('Квадратная картинка, лучше официальная иконка игры. Сайт сам уменьшит её до 128×128.')}</p>
         <label class="field"><span>${t('Название')}</span><input name="name" required maxlength="40" value="${g.name}"></label>
-        <label class="field"><span>${t('Код игры (латиница, цифры, _)')}</span><input name="id" required pattern="[a-z0-9_]{2,24}" value="${g.id}" ${isNew ? '' : 'readonly'} placeholder="freefire"></label>
+        <label class="field"><span>${t('Код игры (латиница, цифры, _)')}</span><input name="id" required pattern="[a-z0-9_]{2,24}" value="${g.id}" ${isNew ? '' : 'readonly'} placeholder="pandabattle" autocapitalize="off" spellcheck="false"></label>
+        <label class="field"><span>${t('Другие названия для поиска (через пробел)')}</span><input name="aliases" maxlength="300" value="${g.aliases || ''}" placeholder="${t('например: пабг пубг юси')}"></label>
         <label class="field"><span>${t('Раздел каталога')}</span><select name="kind">${KINDS.map((k) => html`<option value="${k.id}" ${g.kind === k.id ? 'selected' : ''}>${k.icon} ${t(k.ru)}</option>`)}</select></label>
         <div class="grid2"><label class="field"><span>${t('Эмодзи (если нет логотипа)')}</span><input name="emoji" maxlength="8" value="${g.emoji}"></label>
           <label class="field"><span>${t('Цвет')}</span><input name="color" type="color" value="${g.color}"></label></div>
@@ -314,7 +359,9 @@ const Admin = {
           const secs = fd.getAll('sec').map((id) => { const cur = g.sections.find((x) => x.id === id); return cur ? `${id}:${cur.ru}:${cur.kz}` : id; });
           if (!secs.length) return UI.fail({ error: 'bad_section' });
           const p = { id: String(fd.get('id')).trim().toLowerCase(), name: String(fd.get('name')).trim(), kind: fd.get('kind'), emoji: String(fd.get('emoji')).trim(),
-            color: fd.get('color'), sort: parseInt(fd.get('sort'), 10) || 500, popular: !!fd.get('popular'), sections: secs.join('|') };
+            color: fd.get('color'), sort: parseInt(fd.get('sort'), 10) || 500, popular: !!fd.get('popular'), sections: secs.join('|'),
+            aliases: String(fd.get('aliases') || '').trim() };
+          if (isNew) p.create = true; // новая игра не перезапишет существующую с тем же кодом
           if (logoChanged) p.logo = logo;
           const x = await admGame('save', p);
           if (!x.ok) return UI.fail(x);
@@ -334,7 +381,7 @@ const Admin = {
     const c = r.data;
     const fields = [
       ['fee_pct', 'Комиссия с продажи, %'], ['pro_fee_pct', 'Комиссия для Pro, %'], ['complete_hours', 'Автоподтверждение, часов'],
-      ['complete_hours_auto', 'Автоподтверждение при автовыдаче, часов'], ['min_withdraw', 'Минимальный вывод, ₸'], ['withdraw_fee_pct', 'Комиссия вывода, %'],
+      ['complete_hours_auto', 'Автоподтверждение при автовыдаче, часов'], ['complete_hours_goods', 'Автоподтверждение для вещей с доставкой, часов'], ['min_withdraw', 'Минимальный вывод, ₸'], ['withdraw_fee_pct', 'Комиссия вывода, %'],
       ['max_topup', 'Максимальное пополнение, ₸'], ['raise_min', 'Поднятие раз в, минут'], ['raise_min_pro', 'Поднятие с Pro раз в, минут'],
       ['ref_pct', 'Реферальная доля комиссии, %'], ['max_lots', 'Лотов на продавца'], ['max_lots_pro', 'Лотов на Pro-продавца'],
     ];
@@ -342,30 +389,45 @@ const Admin = {
       ['pay_kaspi_phone', 'Номер Kaspi Gold для пополнений', '+7 7XX XXX XX XX'], ['pay_kaspi_name', 'Имя получателя в Kaspi', 'Айдос К.'],
       ['pay_card', 'Номер карты (необязательно)', '4400 …'], ['pay_link', 'Ссылка оплаты Kaspi Pay / QR (необязательно)', 'https://pay.kaspi.kz/…'],
       ['pay_note', 'Подсказка для покупателей (необязательно)', ''],
+      ['support_contact', 'Контакт для тех, кто не может войти (Telegram, WhatsApp)', '@sauda_support'],
     ];
     box.innerHTML = html`<form class="card stack" data-submit="save">
       <h2>💰 ${t('Приём денег')}</h2>
       <p class="muted small">${t('Люди переводят деньги на эти реквизиты с кодом заявки, вы сверяете перевод во вкладке «Пополнения» и зачисляете. Выплаты — во вкладке «Выводы».')}</p>
       <div class="grid2">${pay.map(([k, l, ph]) => html`<label class="field"><span>${t(l)}</span><input name="${k}" value="${c[k] || ''}" placeholder="${ph}" maxlength="300"></label>`)}</div>
-      ${c.test_mode ? html`<div class="note warn stack">
-          <b>🧪 ${t('Сейчас тестовый режим: пополнение бесплатное, демо-лоты видны.')}</b>
-          <span>${t('Запуск с настоящими деньгами — один раз и навсегда: все тестовые балансы обнулятся, открытые тестовые заказы и заявки закроются, демо-лоты пропадут. Вернуть тестовый режим будет нельзя.')}</span>
-          <button type="button" class="btn danger" data-act="live">🚀 ${t('Запустить с настоящими деньгами')}</button></div>`
-        : html`<div class="note">✅ ${t('Сервис работает с настоящими деньгами с {d}.', { d: c.live_since ? Fmt.date(c.live_since) : '—' })}</div>`}
       <h2>⚙️ ${t('Правила')}</h2>
       <div class="grid2">${fields.map(([k, l]) => html`<label class="field"><span>${t(l)}</span><input name="${k}" inputmode="decimal" value="${c[k]}"></label>`)}</div>
       <div class="grid2">${['1', '3', '12'].map((m) => html`<label class="field"><span>${t('Pro на {m} мес., ₸', { m })}</span><input name="pro_${m}" inputmode="numeric" value="${(c.pro_prices || {})[m] || ''}"></label>`)}</div>
-      <button class="btn primary">${t('Сохранить')}</button></form>`.s;
+      <button class="btn primary">${t('Сохранить')}</button></form>
+      ${c.test_mode ? html`<div class="card note warn stack launch-card">
+          <b>🧪 ${t('Сейчас тестовый режим: пополнение бесплатное, демо-лоты видны.')}</b>
+          <span>${t('Запуск с настоящими деньгами — один раз и навсегда: все тестовые балансы обнулятся, открытые тестовые заказы и заявки закроются, демо-лоты пропадут. Вернуть тестовый режим будет нельзя.')}</span>
+          <button type="button" class="btn danger" data-act="live">🚀 ${t('Запустить с настоящими деньгами')}</button></div>`
+        : html`<div class="card note">✅ ${t('Сервис работает с настоящими деньгами с {d}.', { d: c.live_since ? Fmt.date(c.live_since) : '—' })}</div>`}`.s;
+    const label = (k) => t((fields.find((x) => x[0] === k) || pay.find((x) => x[0] === k) || [k, k])[1]);
+    const mark = (k) => {
+      box.querySelectorAll('[aria-invalid]').forEach((x) => x.removeAttribute('aria-invalid'));
+      const el = box.querySelector(`[name="${k}"]`);
+      if (el) { el.setAttribute('aria-invalid', 'true'); el.scrollIntoView({ block: 'center' }); el.focus(); }
+    };
     const save = async (fd) => {
       const jobs = [];
       pay.forEach(([k]) => { const v = String(fd.get(k) || '').trim(); if (v !== (c[k] || '')) jobs.push([k, v]); });
-      fields.forEach(([k]) => { const v = parseFloat(String(fd.get(k)).replace(/\s/g, '').replace(',', '.')); if (Number.isFinite(v) && v !== +c[k]) jobs.push([k, v]); });
+      // числа: пустое или не число — сразу показываем, какое поле не так (раньше пропускалось молча)
+      for (const [k] of fields) {
+        const raw = String(fd.get(k) || '').replace(/\s/g, '').replace(',', '.');
+        const v = parseFloat(raw);
+        if (!/^[0-9]+([.][0-9]+)?$/.test(raw)) {
+          mark(k); UI.toast(t('Проверьте поле «{f}»: нужно число.', { f: label(k) }), 'err'); return false;
+        }
+        if (v !== +c[k]) jobs.push([k, v]);
+      }
       const pp = {};
       ['1', '3', '12'].forEach((m) => { const v = Fmt.amount(fd.get('pro_' + m)); if (v > 0) pp[m] = v; });
       if (JSON.stringify(pp) !== JSON.stringify(c.pro_prices || {})) jobs.push(['pro_prices', pp]);
       for (const [k, v] of jobs) {
         const x = await adm('config_set', { k, v });
-        if (!x.ok) { UI.fail(x); return false; }
+        if (!x.ok) { mark(k); UI.toast(t('Поле «{f}»: {e}', { f: k.startsWith('pro_') ? 'Sauda Pro' : label(k), e: errText(x.error) }), 'err'); return false; }
         c[k] = v; // следующее сохранение сравнивает с тем, что уже записано
       }
       await App.loadMeta(true);
@@ -377,7 +439,10 @@ const Admin = {
         const f = box.querySelector('form');
         if (!(await save(new FormData(f)))) return;
         if (!c.pay_kaspi_phone && !c.pay_card && !c.pay_link) return UI.fail({ error: 'pay_not_set' });
-        if (!(await UI.ask(t('Запустить Sauda с настоящими деньгами? Тестовые балансы всех людей обнулятся, это нельзя отменить.'), { yes: t('Запустить'), danger: true }))) return;
+        // необратимо — подтверждение словом, а не одним нажатием
+        const word = await UI.prompt(t('Запустить Sauda с настоящими деньгами?'), { text: t('Тестовые балансы всех людей обнулятся, это нельзя отменить. Чтобы подтвердить, напишите слово ЗАПУСК.'), placeholder: t('ЗАПУСК'), yes: t('Запустить'), danger: true });
+        if (!word) return;
+        if (word.trim().toUpperCase() !== t('ЗАПУСК').toUpperCase() && word.trim().toUpperCase() !== 'ЗАПУСК') return UI.toast(t('Слово не совпало — запуск отменён.'), 'err');
         const x = await adm('config_set', { k: 'test_mode', v: false });
         if (!x.ok) return UI.fail(x);
         await App.loadMeta(true);

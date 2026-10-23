@@ -5,12 +5,58 @@
    статистика продавца, помощь и правила.
    ========================================================= */
 
+/* ───────────── код восстановления: выдаётся при регистрации, по нему задают новый пароль ───────────── */
+const Recovery = {
+  /* показать код и дождаться, пока человек его сохранит */
+  show(code, first) {
+    return new Promise((res) => {
+      const m = UI.modal({
+        title: t('Код восстановления'),
+        body: html`<div class="stack">
+          <p>${first ? t('Сохраните этот код — он нужен, если забудете пароль. Без него восстановить аккаунт с балансом сможет только администратор.') : t('Новый код. Старый больше не действует.')}</p>
+          <div class="pay-row"><span class="muted small">${t('Код восстановления')}</span><b class="mono">${code}</b><button type="button" class="btn small ghost" data-act="copy">${t('Копировать')}</button></div>
+          <p class="muted small">${t('Сделайте скриншот или запишите. Никому его не отправляйте — даже «поддержке» в Telegram.')}</p>
+          <button type="button" class="btn primary big wide" data-act="ok">${t('Я сохранил код')}</button></div>`,
+        on: { copy: () => UI.copy(code), ok: () => m.close(true) },
+        onClose: () => res(),
+      });
+    });
+  },
+  /* забыли пароль: логин + код → новый пароль */
+  form(next) {
+    const contact = (App.meta && App.meta.config.support_contact) || '';
+    const m = UI.modal({
+      title: t('Восстановление пароля'),
+      body: html`<form class="stack" data-submit="go">
+        <label class="field"><span>${t('Логин')}</span><input name="login" required maxlength="24" autocapitalize="off" spellcheck="false"></label>
+        <label class="field"><span>${t('Код восстановления')}</span><input name="code" required maxlength="20" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX"></label>
+        <label class="field"><span>${t('Новый пароль')}</span><input name="pass" type="password" required minlength="6" maxlength="72" autocomplete="new-password"></label>
+        <div class="auth-err" id="rc-err" role="alert"></div>
+        <button class="btn primary big wide">${t('Сменить пароль')}</button>
+        <p class="muted small">${t('Нет кода? Напишите администратору — он проверит, что аккаунт ваш, и выдаст временный пароль.')}${contact ? ' ' + t('Связь: {c}', { c: contact }) : ''}</p></form>`,
+      on: {
+        go: (f, fd) => UI.busy(f.querySelector('.btn.primary'), async () => {
+          const r = await Api.call('sauda_recover', { p_login: fd.get('login'), p_code: fd.get('code'), p_new: fd.get('pass'), p_device: 'web' });
+          if (!r.ok) { m.q('#rc-err').textContent = errText(r.error); return; }
+          m.close(true);
+          Api.setToken(r.token);
+          await App.refresh(true);
+          await Recovery.show(r.recovery, false);
+          UI.toast(t('Пароль изменён'));
+          location.replace(next || '#/me');
+        }),
+      },
+    });
+  },
+};
+
 /* ───────────── вход и регистрация ───────────── */
 Views.auth = async (view, ctx) => {
   const reg = ctx.query.mode === 'reg';
   const next = safeNext(ctx.next || ctx.query.next);
   view.innerHTML = html`<div class="auth-page"><div class="card auth-card">
     <div class="auth-logo">${raw(App.logo(44))}<b>Sauda</b></div>
+    ${ctx.query.why === 'buy' ? html`<div class="note">🛒 ${t('Чтобы купить, войдите или создайте аккаунт — это полминуты. Потом вернём вас к покупке.')}</div>` : ''}
     <div class="tabs center-tabs"><button class="tab ${reg ? '' : 'on'}" data-act="tab" data-m="login">${t('Вход')}</button><button class="tab ${reg ? 'on' : ''}" data-act="tab" data-m="reg">${t('Регистрация')}</button></div>
     <form class="stack" data-submit="go" id="auth-form">
       <label class="field"><span>${t('Логин')}</span><input name="login" required maxlength="24" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${t('например, aidos_kz')}"></label>
@@ -22,6 +68,7 @@ Views.auth = async (view, ctx) => {
       ${Store.get('sauda_ref', '') ? html`<p class="muted small center">🤝 ${t('Вы пришли по приглашению')}</p>` : ''}
     </form>
     <p class="muted small center">${t('Почта и телефон не нужны. Запомните логин и пароль — по ним вход с любого устройства.')}</p>
+    <p class="center"><button class="link" data-act="forgot">🔑 ${t('Забыли пароль?')}</button></p>
   </div></div>`.s;
   let mode = reg ? 'reg' : 'login';
   const form = view.querySelector('#auth-form');
@@ -44,9 +91,11 @@ Views.auth = async (view, ctx) => {
       Api.setToken(r.token);
       Store.del('sauda_ref');
       await App.refresh(true);
+      if (r.recovery) await Recovery.show(r.recovery, true); // новый аккаунт — сначала сохранить код восстановления
       UI.toast(mode === 'reg' ? t('Добро пожаловать в Sauda!') : t('С возвращением!'));
-      if (location.hash === next) Router.go(); else location.hash = next;
+      if (location.hash === next) Router.go(); else location.replace(next); // «Назад» не возвращает на страницу входа
     }),
+    forgot: () => Recovery.form(next),
   });
 };
 
@@ -63,6 +112,7 @@ Views.me = async (view) => {
         ${me.pro ? html`<div class="pro-line">👑 ${t('Sauda Pro до {d}', { d: Fmt.date(me.pro_until) })}</div>` : ''}</div>
       <a class="me-balance" href="#/wallet"><span class="muted small">${t('Баланс')}</span><b>${Fmt.money(me.balance)}</b><span class="link">${t('Пополнить / вывести')} →</span></a>
     </div>
+    ${n.active_sell ? html`<a class="card note warn urgent" href="#/orders?tab=sell">⏱ <b>${tp(n.active_sell, 'заказ ждёт|заказа ждут|заказов ждут')}</b> ${t('выполнения или решения спора')} →</a>` : ''}
     ${Views.levelCard(me)}
     <div class="menu-grid">
       <div class="menu card"><h3>${t('Покупки')}</h3>
@@ -94,14 +144,16 @@ Views.me = async (view) => {
   UI.bind(view, { logout: async () => { if (await UI.ask(t('Выйти из аккаунта на этом устройстве?'), { yes: t('Выйти') })) App.logout(); } });
 };
 
-Views.support = async () => {
+Views.support = async (view, ctx) => {
+  view.innerHTML = C.skeleton(3, 'rows').s;
   const pf = await Api.call('sauda_user', { p_token: '', p_login: 'sauda' });
+  if (!ctx.alive()) return; // ушли со страницы — не уводим человека в чат через секунду
   if (pf.ok) location.replace('#/chat/' + pf.user.id);
-  else UI.fail(pf);
+  else view.innerHTML = C.empty('📡', errText(pf.error)).s;
 };
 
 /* ───────────── настройки ───────────── */
-Views.settings = async (view) => {
+Views.settings = async (view, ctx) => {
   const me = App.me;
   let avatar = me.avatar || '';
   view.innerHTML = html`<div class="page-head"><h1>${t('Настройки')}</h1></div>
@@ -126,10 +178,13 @@ Views.settings = async (view) => {
         <button class="btn">${t('Сменить пароль')}</button>
         <p class="muted small">${t('После смены пароля другие устройства выйдут из аккаунта.')}</p>
       </form>
-      <details class="card"><summary>${t('Для администратора')}</summary>
-        <form class="stack" data-submit="claim"><p class="muted small">${t('Код администратора хранится в базе (sauda.config, admin_code).')}</p>
-          <input name="code" autocomplete="off" placeholder="${t('Код')}" required><button class="btn">${t('Получить права')}</button></form>
-      </details>
+      <form class="card stack" data-submit="recovery"><h2>🔑 ${t('Код восстановления')}</h2>
+        <p class="muted small">${me.has_recovery ? t('Код уже выдан. Если потеряли его — получите новый, старый перестанет действовать.') : t('У вас ещё нет кода восстановления. Получите его — без него забытый пароль восстановит только администратор.')}</p>
+        <label class="field"><span>${t('Текущий пароль')}</span><input type="password" name="pw" required autocomplete="current-password"></label>
+        <button class="btn ${me.has_recovery ? '' : 'primary'}">${me.has_recovery ? t('Получить новый код') : t('Получить код')}</button>
+      </form>
+      ${'admin' in ctx.query ? html`<form class="card stack" data-submit="claim"><h2>${t('Для администратора')}</h2>
+          <input name="code" autocomplete="off" placeholder="${t('Код')}" required><button class="btn">${t('Получить права')}</button></form>` : ''}
     </div>`.s;
   UI.bind(view, {
     ava: async (inp) => {
@@ -152,6 +207,14 @@ Views.settings = async (view) => {
       if (!r.ok) return UI.fail(r);
       f.reset();
       UI.toast(t('Пароль изменён'));
+    },
+    recovery: async (f, fd) => {
+      const r = await Api.auth('sauda_recovery_new', { p_password: fd.get('pw') });
+      if (!r.ok) return UI.fail(r);
+      f.reset();
+      await App.refresh(true);
+      await Recovery.show(r.recovery, false);
+      Router.go();
     },
     claim: async (f, fd) => {
       const r = await Api.auth('sauda_admin_claim', { p_code: String(fd.get('code') || '').trim() });
@@ -221,8 +284,9 @@ const Wallet = {
           const r = await Api.auth('sauda_topup_act', { p_id: tp.id, p_action: 'claim' });
           if (!r.ok) return UI.fail(r);
           m.close(true);
-          UI.toast(t('Спасибо! Проверяем перевод и зачислим деньги.'));
-          if (after) after(); else if (location.hash.startsWith('#/wallet')) Router.go();
+          // деньги ещё не зачислены — окно покупки не открываем снова (иначе человек заплатит второй раз)
+          UI.toast(t('Спасибо! Проверяем перевод — обычно до 30 минут. Пришлём уведомление, когда деньги будут на балансе.'));
+          if (location.hash.startsWith('#/wallet')) Router.go();
         }),
         cancel: async (b) => {
           if (!(await UI.ask(t('Отменить заявку на пополнение? Если вы уже перевели деньги — не отменяйте, а нажмите «Я оплатил».'), { yes: t('Отменить заявку'), danger: true }))) return;
@@ -285,14 +349,13 @@ Views.wallet = async (view, ctx) => {
     const k = TX[x.kind] || [x.kind, '•'];
     const link = ['purchase', 'sale', 'refund'].includes(x.kind) && x.ref ? '#/order/' + x.ref : '';
     return html`<${link ? 'a' : 'div'} class="tx-row" ${link ? raw(`href="${link}"`) : ''}><span class="tx-ico">${k[1]}</span>
-      <span class="tx-main"><b>${t(k[0])}</b><span class="muted small">${x.note ? x.note + ' · ' : ''}${Fmt.dt(x.created_at)}</span></span>
+      <span class="tx-main"><b>${t(k[0])}</b><span class="muted small">${txNote(x) ? txNote(x) + ' · ' : ''}${Fmt.dt(x.created_at)}</span></span>
       <span class="tx-sum ${x.amount > 0 ? 'plus' : 'minus'}">${x.amount > 0 ? '+' : '−'}${Fmt.money(Math.abs(x.amount))}</span></${link ? 'a' : 'div'}>`;
   };
   const tst = (x) => TOPUP_STATUS[x.status === 'pending' && x.claimed_at ? 'claimed' : x.status] || [x.status, 'muted'];
   const wst = (w) => WD_STATUS[w.status] || [w.status, 'muted'];
   view.innerHTML = html`<div class="page-head"><h1>${t('Кошелёк')}</h1></div>
-    ${r.test_mode ? html`<div class="note warn">🧪 ${t('Сейчас работает тестовый режим: пополнение бесплатное и ненастоящее. Можно спокойно попробовать покупку и продажу.')}</div>`
-      : html`<div class="note">🔒 ${t('Деньги за покупку хранятся у Sauda, пока вы не подтвердите получение. Пополнение — переводом на Kaspi, вывод — на Kaspi или карту в течение 24 часов.')}</div>`}
+    ${r.test_mode ? '' : html`<div class="note">🔒 ${t('Деньги за покупку хранятся у Sauda, пока вы не подтвердите получение. Пополнение — переводом на Kaspi, вывод — на Kaspi или карту в течение 24 часов.')}</div>`}
     <div class="wallet-top">
       <div class="card balance-card"><span class="muted">${t('Доступно')}</span><b class="bal">${Fmt.money(r.balance)}</b>
         <div class="row-btns"><button class="btn primary" data-act="topup">💳 ${t('Пополнить')}</button><button class="btn" data-act="withdraw">🏦 ${t('Вывести')}</button></div></div>
@@ -388,7 +451,8 @@ Views.sell = async (view, ctx) => {
             <label class="field"><span>${t('Старая цена (для скидки)')}</span><input name="old_price" inputmode="numeric" value="${v('old_price', '')}" data-input="preview" placeholder="${t('необязательно')}"></label>
           </div>
           <p class="muted small" id="net"></p>
-          <div class="seg" role="radiogroup" aria-label="${t('Способ выдачи')}">
+          <div class="note small goods-only" hidden>📦 ${t('Вещь с доставкой: договоритесь с покупателем в чате, отправьте и отметьте «Выполнено» с трек-номером. Деньги придут, когда покупатель подтвердит получение, или сами через 14 дней.')}</div>
+          <div class="seg digital-only" role="radiogroup" aria-label="${t('Способ выдачи')}">
             <label><input type="radio" name="auto" value="0" ${v('auto', false) ? '' : 'checked'} data-change="mode"> ✋ ${t('Выдаю сам')}</label>
             <label><input type="radio" name="auto" value="1" ${v('auto', false) ? 'checked' : ''} data-change="mode"> ⚡ ${t('Автовыдача')}</label>
           </div>
@@ -399,13 +463,13 @@ Views.sell = async (view, ctx) => {
             </div>
           </div>
           <div id="auto" class="stack">
-            <label class="field"><span>${t('Товары — по одному на строку')} <small class="muted" id="it-c"></small></span><textarea name="items" rows="5" class="mono" placeholder="${t('КОД-1234-5678\nlogin:password\nhttps://ссылка-на-подарок')}" data-input="items"></textarea></label>
+            <label class="field"><span>${t('Товары — по одному на строку')} <small class="muted" id="it-c"></small></span><textarea name="items" rows="5" class="mono" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" placeholder="${t('КОД-1234-5678\nlogin:password\nhttps://ссылка-на-подарок')}" data-input="items"></textarea></label>
             ${editId && lot.auto ? html`<p class="muted small">${t('Сейчас в наличии: {n}. Новые строки добавятся к ним.', { n: lot.qty || 0 })} <button type="button" class="link" data-act="manage">${t('Посмотреть и удалить')}</button></p>` : ''}
             <p class="muted small">${t('Покупатель получит товар сразу после оплаты, даже ночью. Каждая строка продаётся один раз.')}</p>
           </div>
-          <label class="check"><input type="checkbox" name="needs_id" ${v('needs_id', false) ? 'checked' : ''} data-change="needs"> 🆔 ${t('Покупатель указывает данные (ID игрока, почту, ник)')}</label>
+          <label class="check"><input type="checkbox" name="needs_id" ${v('needs_id', false) ? 'checked' : ''} data-change="needs"> 🆔 <span class="digital-only">${t('Покупатель указывает данные (ID игрока, почту, ник)')}</span><span class="goods-only" hidden>${t('Спросить у покупателя адрес доставки и телефон')}</span></label>
           <label class="field" id="idl" hidden><span>${t('Что указать покупателю')}</span><input name="id_label" maxlength="40" value="${v('id_label', '')}" placeholder="${t('Например: Player ID PUBG Mobile')}"></label>
-          <label class="check"><input type="checkbox" name="is_sub" ${v('period_days', null) ? 'checked' : ''} data-change="sub"> 🔁 ${t('Это подписка — покупатель может включить автопродление')}</label>
+          <label class="check digital-only"><input type="checkbox" name="is_sub" ${v('period_days', null) ? 'checked' : ''} data-change="sub"> 🔁 ${t('Это подписка — покупатель может включить автопродление')}</label>
           <label class="field" id="per" hidden><span>${t('Срок подписки')}</span><select name="period_days">${PERIODS.map((d) => html`<option value="${d}" ${v('period_days', 30) === d ? 'selected' : ''}>${tp(d, 'день|дня|дней')}</option>`)}</select></label>
           <label class="field" id="city" hidden><span>${t('Город (для вещей)')}</span><select name="city"><option value="">${t('Вся страна / доставка')}</option>${CITIES.map((c) => html`<option ${v('city', '') === c ? 'selected' : ''}>${c}</option>`)}</select></label>
         </div>
@@ -428,7 +492,19 @@ Views.sell = async (view, ctx) => {
     if (!g) { box.innerHTML = html`<span class="muted small">${t('Сначала выберите игру')}</span>`.s; return; }
     if (!g.sections.some((s) => s.id === st.section)) st.section = g.sections[0].id;
     box.innerHTML = g.sections.map((s) => html`<button type="button" role="radio" aria-checked="${s.id === st.section}" class="chip ${s.id === st.section ? 'on' : ''}" data-act="sec" data-s="${s.id}">${I18n.lang === 'kz' ? s.kz : s.ru}</button>`.s).join('');
-    view.querySelector('#city').hidden = g.kind !== 'goods';
+    // вещи с доставкой: без автовыдачи и подписок, с пояснением про 14 дней
+    const goods = g.kind === 'goods';
+    view.querySelector('#city').hidden = !goods;
+    view.querySelectorAll('.goods-only').forEach((x) => { x.hidden = !goods; });
+    view.querySelectorAll('.digital-only').forEach((x) => { x.hidden = goods; });
+    if (goods) {
+      const manual = view.querySelector('input[name=auto][value="0"]');
+      if (manual && !manual.checked) { manual.checked = true; mode(); }
+      const sub = view.querySelector('[name=is_sub]');
+      if (sub && sub.checked) { sub.checked = false; view.querySelector('#per').hidden = true; }
+      const idl = view.querySelector('[name=id_label]');
+      if (idl && !idl.value) idl.value = t('Адрес доставки и телефон');
+    }
   }
   function attrsUi() {
     view.querySelector('#attrs').innerHTML = st.attrs.map(([k, val], i) => html`<div class="attr-row"><input data-i="${i}" data-k="k" maxlength="30" value="${k}" placeholder="${t('Название')}" data-input="attr"><input data-i="${i}" data-k="v" maxlength="60" value="${val}" placeholder="${t('Значение')}" data-input="attr"><button type="button" class="icon-btn" data-act="delAttr" data-i="${i}" aria-label="${t('Удалить')}">✕</button></div>`.s).join('');
@@ -565,7 +641,7 @@ Views.myLots = async (view, ctx) => {
   UI.bind(view, {
     raise: (b) => UI.busy(b, async () => {
       const x = await Api.auth('sauda_raise', { p_game: b.dataset.g, p_section: b.dataset.s });
-      if (x.ok) { UI.toast(t('Подняли {n} лот(ов)', { n: x.raised })); Router.go(); } else if (x.error === 'raise_wait') UI.toast(t('Поднять снова можно через {t}', { t: Fmt.left(x.next_at) }), 'info'); else UI.fail(x);
+      if (x.ok) { UI.toast(t('Подняли: {n}', { n: tp(x.raised, 'лот|лота|лотов') })); Router.go(); } else if (x.error === 'raise_wait') UI.toast(t('Поднять снова можно через {t}', { t: Fmt.left(x.next_at) }), 'info'); else UI.fail(x);
     }),
     set: (b) => UI.busy(b, async () => { const x = await Api.auth('sauda_lot_set', { p_id: +b.dataset.id, p_status: b.dataset.s }); if (x.ok) Router.go(); else UI.fail(x); }),
     del: async (b) => {
@@ -577,11 +653,19 @@ Views.myLots = async (view, ctx) => {
 };
 
 /* ───────────── избранное, уведомления, подписки ───────────── */
+/* пометка операции: код способа оплаты — понятным названием, «3 мес.» — на языке сайта */
+const txNote = (x) => {
+  if (!x.note) return '';
+  if (['topup', 'withdraw'].includes(x.kind)) return (PAY_METHODS[x.note] || OUT_METHODS[x.note] || [x.note])[0];
+  if (x.kind === 'pro' && /^[0-9]+ мес\.$/.test(x.note)) return t('{m} мес.', { m: parseInt(x.note, 10) });
+  return x.note;
+};
+
 Views.favs = async (view, ctx) => {
   view.innerHTML = html`<div class="page-head"><h1>❤️ ${t('Избранное')}</h1></div><div id="l">${C.skeleton(4)}</div>`.s;
   const r = await Api.auth('sauda_favs');
   if (!ctx.alive()) return;
-  view.querySelector('#l').innerHTML = (!r.ok ? C.empty('📡', errText(r.error)) : C.lots(r.items) || C.empty('🤍', t('Здесь будут лоты, которые вы отметили сердечком'))).s;
+  view.querySelector('#l').innerHTML = (!r.ok ? C.empty('📡', errText(r.error)) : C.lots(r.items) || C.empty('🤍', t('Здесь будут лоты, которые вы отметили сердечком'), html`<a class="btn primary" href="#/catalog">${t('В каталог')}</a>`)).s;
 };
 
 Views.notifs = async (view, ctx) => {
@@ -635,7 +719,7 @@ Views.pro = async (view) => {
       if (!Api.token) return App.needAuth();
       const months = b.dataset.m;
       const price = prices[months];
-      if (App.me.balance < price) { UI.toast(t('Не хватает {s} на балансе', { s: Fmt.money(price - App.me.balance) }), 'err'); return Wallet.topup(price - App.me.balance); }
+      if (App.me.balance < price) { UI.toast(t('Не хватает {s} на балансе', { s: Fmt.money(price - App.me.balance) }), 'err'); return Wallet.topup(Math.max(price - App.me.balance, 100)); }
       if (!(await UI.ask(t('Подключить Sauda Pro на {m} мес. за {s}?', { m: months, s: Fmt.money(price) }), { yes: t('Подключить') }))) return;
       const r = await Api.auth('sauda_pro', { p_months: +months });
       if (!r.ok) return UI.fail(r);
@@ -651,7 +735,7 @@ Views.ref = async (view, ctx) => {
   const r = await Api.auth('sauda_ref');
   if (!ctx.alive()) return;
   if (!r.ok) { view.innerHTML = C.empty('📡', errText(r.error)).s; return; }
-  const link = location.origin + location.pathname + '?ref=' + r.code;
+  const link = siteUrl('?ref=' + r.code);
   view.innerHTML = html`<div class="page-head"><h1>🤝 ${t('Пригласить друзей')}</h1></div>
     <div class="card stack ref-card"><p>${t('Друзья регистрируются по вашей ссылке — вы получаете {p}% комиссии Sauda с каждой их сделки. Навсегда.', { p: r.pct })}</p>
       <div class="copy-line"><input readonly value="${link}" aria-label="${t('Ваша ссылка')}"><button class="btn primary" data-act="copy">${t('Копировать')}</button></div>
@@ -734,5 +818,5 @@ Views.help = async (view, ctx) => {
     <div class="faq">${qa.map(([id, q, a]) => html`<details class="card" id="q-${id}" ${ctx.query.s === id ? 'open' : ''}><summary>${t(q)}</summary><p>${t(a, vars)}</p></details>`)}</div>
     <section class="block" id="rules"><h2>📜 ${t('Правила Sauda')}</h2><ol class="card rules">${rules.map((x) => html`<li>${t(x)}</li>`)}</ol></section>
     <div class="center"><a class="btn primary" href="#/support">🛟 ${t('Написать в поддержку')}</a></div>`.s;
-  if (ctx.query.s) { const el = view.querySelector('#q-' + ctx.query.s) || view.querySelector('#' + ctx.query.s); if (el) el.scrollIntoView(); }
+  if (ctx.query.s) { const el = document.getElementById('q-' + ctx.query.s) || document.getElementById(ctx.query.s); if (el) el.scrollIntoView(); }
 };

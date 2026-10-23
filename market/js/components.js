@@ -59,7 +59,7 @@ const OUT_METHODS = { kaspi: ['Kaspi Gold', '🔴', 'phone'], halyk: ['Halyk (п
 
 /* официальные логотипы игр и сервисов (img/games/<id>.webp) — только чтобы сразу было видно, к какой игре лот;
    у разделов без бренда (услуги, вещи, «нейросети») остаётся эмодзи. Логотипы принадлежат правообладателям. */
-const GAME_ICONS = new Set(['apex', 'apple', 'arenabreakout', 'blackrussia', 'brawlstars', 'clashroyale', 'coc', 'codm', 'discord', 'eafc', 'fortnite', 'freefire', 'genshin', 'hayday', 'hsr', 'lol', 'minecraft', 'mlbb', 'netflix', 'psn', 'pubgm', 'roblox', 'spotify', 'standoff2', 'stumble', 'tanksblitz', 'telegram', 'valorant', 'xbox', 'youtube']);
+const GAME_ICONS = new Set(['apex', 'apple', 'arenabreakout', 'blackrussia', 'brawlstars', 'clashroyale', 'coc', 'codm', 'cs2', 'discord', 'dota2', 'duolingo', 'eafc', 'fortnite', 'freefire', 'genshin', 'gta5rp', 'hayday', 'hsr', 'instagram', 'kinopoisk', 'lol', 'minecraft', 'mlbb', 'netflix', 'psn', 'pubgm', 'roblox', 'rust', 'spotify', 'standoff2', 'steam', 'stumble', 'tanksblitz', 'tarkov', 'telegram', 'tiktok', 'twitch', 'valorant', 'warface', 'wot', 'wow', 'xbox', 'yandex', 'youtube']);
 const ICON_ALIAS = { youtubech: 'youtube' };
 
 const C = {

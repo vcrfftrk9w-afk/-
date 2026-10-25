@@ -304,7 +304,8 @@
       <dt>Синяя</dt><dd>рывок, на время рывка ты неуязвим</dd>
     </dl>
     <button class="btn" id="playBtn" type="button" disabled>Загрузка…</button>
-    <div class="load" id="loadText">Загружаю модели: 0%</div>
+    <div class="load" id="loadText">Запускаю игру…</div>
+    <div class="load" id="buildTag">версия <!--BUILD--></div>
   </div>
 </section>
 
@@ -327,6 +328,5 @@
 window.addEventListener("error", (e) => { const el = document.getElementById("loadText"); if (el && document.getElementById("playBtn").disabled) el.textContent = "Ошибка: " + (e.message || e.error || "неизвестно"); });
 window.addEventListener("unhandledrejection", (e) => { const el = document.getElementById("loadText"); if (el) el.textContent = "Ошибка: " + (e.reason && e.reason.message || e.reason); });
 </script>
-<script>
-<!--BUNDLE-->
-</script>
+<script>window.BLADE_BUILD = "<!--BUILD-->";</script>
+<script src="game.js" onerror="document.getElementById('loadText').textContent = 'Ошибка: не загрузился файл game.js'"></script>

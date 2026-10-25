@@ -2,9 +2,10 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import ASSETS from "./assets.gen.js";
 
 // обычный скрипт без top-level await: работает в любом встроенном браузере
+const BUILD = window.BLADE_BUILD || "dev";
+
 async function main() {
 
 const $ = (id) => document.getElementById(id);
@@ -57,15 +58,20 @@ resize();
 // ------------------------------------------------------------ загрузка моделей
 const loader = new GLTFLoader();
 const FILES = ["knight", "goblin", "arena", "potion"];
-// модели встроены в код как строки glTF JSON (см. build.mjs), сеть не нужна
-function load(name, i) {
-  return new Promise((res, rej) => {
-    const text = ASSETS[name];
-    loader.parse(text, "", (g) => {
-      $("loadText").textContent = `Загружаю модели: ${Math.round(((i + 1) / FILES.length) * 100)}%`;
-      res(g);
-    }, rej);
-  });
+// модели лежат рядом со страницей: assets/*.json (glTF из Blender)
+const progress = Object.fromEntries(FILES.map((f) => [f, 0]));
+function showProgress() {
+  const p = FILES.reduce((sum, f) => sum + progress[f], 0) / FILES.length;
+  $("loadText").textContent = `Загружаю модели: ${Math.round(p * 100)}%`;
+}
+function load(name) {
+  return new Promise((res, rej) => loader.load(`assets/${name}.json`, (g) => {
+    progress[name] = 1;
+    showProgress();
+    res(g);
+  }, (e) => {
+    if (e.total) { progress[name] = Math.min(0.99, e.loaded / e.total); showProgress(); }
+  }, rej));
 }
 
 let assets;

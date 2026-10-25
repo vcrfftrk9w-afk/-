@@ -64,14 +64,39 @@ function showProgress() {
   const p = FILES.reduce((sum, f) => sum + progress[f], 0) / FILES.length;
   $("loadText").textContent = `Загружаю модели: ${Math.round(p * 100)}%`;
 }
-function load(name) {
-  return new Promise((res, rej) => loader.load(`assets/${name}.json`, (g) => {
-    progress[name] = 1;
-    showProgress();
-    res(g);
-  }, (e) => {
-    if (e.total) { progress[name] = Math.min(0.99, e.loaded / e.total); showProgress(); }
-  }, rej));
+// glTF JSON с буфером в base64 собираем в GLB прямо в памяти:
+// встроенный браузер приложения не даёт загружать data:-адреса.
+function toGlb(gltf) {
+  const uri = gltf.buffers[0].uri;
+  const bin = Uint8Array.from(atob(uri.slice(uri.indexOf(",") + 1)), (c) => c.charCodeAt(0));
+  delete gltf.buffers[0].uri;
+  gltf.buffers[0].byteLength = bin.length;
+  const json = new TextEncoder().encode(JSON.stringify(gltf));
+  const jsonLen = Math.ceil(json.length / 4) * 4;
+  const binLen = Math.ceil(bin.length / 4) * 4;
+  const out = new Uint8Array(12 + 8 + jsonLen + 8 + binLen);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, 0x46546c67, true);        // "glTF"
+  dv.setUint32(4, 2, true);
+  dv.setUint32(8, out.length, true);
+  dv.setUint32(12, jsonLen, true);
+  dv.setUint32(16, 0x4e4f534a, true);       // "JSON"
+  out.set(json, 20);
+  out.fill(0x20, 20 + json.length, 20 + jsonLen);
+  const b = 20 + jsonLen;
+  dv.setUint32(b, binLen, true);
+  dv.setUint32(b + 4, 0x004e4942, true);    // "BIN"
+  out.set(bin, b + 8);
+  return out.buffer;
+}
+
+async function load(name) {
+  const res = await fetch(`assets/${name}.json`);
+  if (!res.ok) throw new Error(`модель ${name}: ответ сервера ${res.status}`);
+  const glb = toGlb(await res.json());
+  progress[name] = 1;
+  showProgress();
+  return new Promise((ok, fail) => loader.parse(glb, "", ok, fail));
 }
 
 let assets;
@@ -80,7 +105,7 @@ try {
   const [knight, goblin, arena, potion] = await Promise.all(FILES.map(load));
   assets = { knight, goblin, arena, potion };
 } catch (err) {
-  $("loadText").textContent = "Модели не загрузились: " + (err && err.message || err);
+  $("loadText").textContent = "Модели не загрузились: " + String(err && err.message || err).slice(0, 160);
   throw err;
 }
 assets.arena.scene.traverse((o) => {
@@ -857,5 +882,5 @@ requestAnimationFrame(frame);
 
 main().catch((err) => {
   const el = document.getElementById("loadText");
-  if (el) el.textContent = "Ошибка: " + (err && err.message || err);
+  if (el) el.textContent = "Ошибка: " + String(err && err.message || err).slice(0, 160);
 });

@@ -202,6 +202,7 @@
   }
   .card {
     width: min(440px, 100%);
+    min-width: 0;
     text-align: center;
     display: grid; gap: 14px; justify-items: center;
   }
@@ -236,7 +237,7 @@
   .howto dd { margin: 0; color: var(--ink-dim); }
   .results { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
   .results .stat { text-align: center; min-width: 84px; }
-  .load { font-size: 13px; color: var(--ink-dim); font-variant-numeric: tabular-nums; min-height: 1.2em; }
+  .load { font-size: 13px; color: var(--ink-dim); font-variant-numeric: tabular-nums; min-height: 1.2em; max-width: 100%; overflow-wrap: anywhere; }
 
   @media (max-width: 420px) {
     .hud { gap: 6px; }
@@ -325,8 +326,8 @@
 
 <script>
 /* ошибки показываем на экране загрузки, чтобы их было видно на телефоне */
-window.addEventListener("error", (e) => { const el = document.getElementById("loadText"); if (el && document.getElementById("playBtn").disabled) el.textContent = "Ошибка: " + (e.message || e.error || "неизвестно"); });
-window.addEventListener("unhandledrejection", (e) => { const el = document.getElementById("loadText"); if (el) el.textContent = "Ошибка: " + (e.reason && e.reason.message || e.reason); });
+window.addEventListener("error", (e) => { const el = document.getElementById("loadText"); if (el && document.getElementById("playBtn").disabled) el.textContent = "Ошибка: " + String(e.message || e.error || "неизвестно").slice(0, 160); });
+window.addEventListener("unhandledrejection", (e) => { const el = document.getElementById("loadText"); if (el) el.textContent = "Ошибка: " + String(e.reason && e.reason.message || e.reason).slice(0, 160); });
 </script>
 <script>window.BLADE_BUILD = "<!--BUILD-->";</script>
 <script src="game.js" onerror="document.getElementById('loadText').textContent = 'Ошибка: не загрузился файл game.js'"></script>

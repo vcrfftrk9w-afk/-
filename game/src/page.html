@@ -1,0 +1,333 @@
+<title>Клинок арены</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ruslan+Display&family=PT+Sans:wght@400;700&display=swap">
+<style>
+  /* Полноэкранная сцена; HUD прижат к краям с учётом вырезов экрана. Тема одна: ночная арена. */
+  :root {
+    --night: #0e1317;
+    --panel: rgba(14, 19, 23, 0.74);
+    --ink: #f2e8d0;
+    --ink-dim: #b9ae96;
+    --ember: #ff9a3c;
+    --blood: #d8402f;
+    --steel: #9fb0c0;
+    --font-display: "Ruslan Display", "Georgia", serif;
+    --font-body: "PT Sans", "Segoe UI", system-ui, sans-serif;
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background: var(--night);
+    color: var(--ink);
+    font-family: var(--font-body);
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+  }
+  #game { position: fixed; inset: 0; }
+  #game canvas { display: block; width: 100%; height: 100%; }
+
+  /* ---------- HUD ---------- */
+  .hud {
+    position: fixed; left: 0; right: 0; top: 0;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    padding-top: calc(10px + var(--sat));
+    padding-left: max(16px, var(--sal));
+    padding-right: max(16px, var(--sar));
+    pointer-events: none;
+    z-index: 5;
+  }
+  .hp {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--panel);
+    border: 1px solid rgba(242, 232, 208, 0.18);
+    border-radius: 6px;
+    padding: 6px 10px 6px 8px;
+  }
+  .hp svg { width: 20px; height: 20px; flex: none; }
+  .hp-track {
+    width: clamp(64px, 24vw, 220px); height: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px; overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.5);
+  }
+  .hp-fill {
+    height: 100%; width: 100%;
+    background: linear-gradient(180deg, #ef5a46, var(--blood));
+    transform-origin: left center;
+    transition: transform 0.18s ease-out;
+  }
+  .hp-num { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; font-size: 14px; }
+  .stats { display: flex; gap: 8px; align-items: center; }
+  .stat {
+    background: var(--panel);
+    border: 1px solid rgba(242, 232, 208, 0.18);
+    border-radius: 6px;
+    padding: 4px 10px;
+    text-align: right;
+    line-height: 1.1;
+  }
+  .stat small { display: block; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
+  .stat b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .icon-btn {
+    pointer-events: auto;
+    width: 40px; height: 40px;
+    display: grid; place-items: center;
+    background: var(--panel);
+    border: 1px solid rgba(242, 232, 208, 0.18);
+    border-radius: 6px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .icon-btn svg { width: 20px; height: 20px; }
+  .icon-btn:focus-visible, .btn:focus-visible, .pad:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+
+  .combo {
+    position: fixed; right: max(16px, var(--sar)); top: calc(68px + var(--sat));
+    font-family: var(--font-display); font-size: 26px; color: var(--ember);
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+    pointer-events: none; z-index: 5;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .combo.on { opacity: 1; }
+
+  .banner {
+    position: fixed; left: 0; right: 0; top: 28%;
+    text-align: center; pointer-events: none; z-index: 6;
+    font-family: var(--font-display);
+    font-size: clamp(34px, 9vw, 64px);
+    color: var(--ink);
+    text-shadow: 0 3px 0 rgba(0, 0, 0, 0.55), 0 0 24px rgba(255, 154, 60, 0.45);
+    opacity: 0; transform: scale(0.92);
+    transition: opacity 0.35s, transform 0.35s;
+  }
+  .banner small { display: block; font-family: var(--font-body); font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); margin-top: 6px; text-shadow: none; }
+  .banner.on { opacity: 1; transform: scale(1); }
+
+  .hurt {
+    position: fixed; inset: 0; pointer-events: none; z-index: 4;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(216, 64, 47, 0.55));
+    opacity: 0; transition: opacity 0.35s;
+  }
+
+  .dmg {
+    position: fixed; left: 0; top: 0; z-index: 4; pointer-events: none;
+    font-weight: 700; font-size: 20px; color: #fff6dc;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7);
+    font-variant-numeric: tabular-nums;
+    will-change: transform, opacity;
+  }
+  .dmg.heal { color: #8cf08c; }
+  .dmg.ouch { color: #ff7a66; }
+
+  /* ---------- сенсорное управление ---------- */
+  .touch { display: none; }
+  .coarse .touch { display: block; }
+  .stick {
+    position: fixed; width: 120px; height: 120px; margin: -60px 0 0 -60px;
+    border-radius: 50%;
+    border: 2px solid rgba(242, 232, 208, 0.35);
+    background: rgba(14, 19, 23, 0.35);
+    pointer-events: none; z-index: 6;
+    left: calc(max(16px, var(--sal)) + 84px);
+    top: calc(100% - var(--sab) - 110px);
+    opacity: 0.55;
+  }
+  .stick.live { opacity: 1; }
+  .knob {
+    position: absolute; left: 50%; top: 50%;
+    width: 52px; height: 52px; margin: -26px 0 0 -26px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #fff4dc, #c9b993);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  }
+  .pads {
+    position: fixed;
+    right: max(18px, var(--sar));
+    bottom: calc(22px + var(--sab));
+    width: 170px; height: 160px;
+    z-index: 6;
+  }
+  .pad {
+    position: absolute;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    color: var(--ink);
+    border: 2px solid rgba(242, 232, 208, 0.4);
+    touch-action: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pad svg { width: 46%; height: 46%; }
+  .pad.attack { right: 0; bottom: 0; width: 96px; height: 96px; background: radial-gradient(circle at 40% 30%, #a83a2c, #5f1d16); }
+  .pad.dash { left: 0; bottom: 18px; width: 64px; height: 64px; background: radial-gradient(circle at 40% 30%, #3e5568, #1c2832); }
+  .pad.dash .cd {
+    position: absolute; inset: -2px; border-radius: 50%;
+    background: conic-gradient(rgba(14, 19, 23, 0.75) var(--cd, 0%), transparent 0);
+    pointer-events: none;
+  }
+  .pad:active, .pad.down { filter: brightness(1.35); transform: scale(0.95); }
+  .keys {
+    position: fixed; left: 0; right: 0; bottom: calc(14px + var(--sab));
+    text-align: center; font-size: 13px; color: var(--ink-dim);
+    pointer-events: none; z-index: 5;
+  }
+  .keys kbd {
+    font-family: var(--font-body); font-weight: 700; color: var(--ink);
+    border: 1px solid rgba(242, 232, 208, 0.3); border-bottom-width: 2px;
+    border-radius: 4px; padding: 1px 6px; background: var(--panel);
+  }
+  .coarse .keys { display: none; }
+
+  /* ---------- экраны ---------- */
+  .screen {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; flex-direction: column; align-items: center; justify-content: safe center;
+    overflow-y: auto;
+    padding-left: max(16px, var(--sal));
+    padding-right: max(16px, var(--sar));
+    padding-block: calc(16px + var(--sat)) calc(16px + var(--sab));
+    background: linear-gradient(180deg, rgba(14, 19, 23, 0.35), rgba(14, 19, 23, 0.82) 70%);
+  }
+  .card {
+    width: min(440px, 100%);
+    text-align: center;
+    display: grid; gap: 14px; justify-items: center;
+  }
+  .card h1, .card h2 {
+    margin: 0; font-family: var(--font-display); font-weight: 400;
+    line-height: 1.02; text-wrap: balance;
+    text-shadow: 0 3px 0 rgba(0, 0, 0, 0.55), 0 0 30px rgba(255, 154, 60, 0.35);
+  }
+  .card h1 { font-size: clamp(46px, 13vw, 76px); }
+  .card h2 { font-size: clamp(38px, 10vw, 58px); }
+  .card p { margin: 0; color: var(--ink-dim); line-height: 1.5; max-width: 34ch; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ember); }
+  .btn {
+    font: 700 18px/1 var(--font-body);
+    letter-spacing: 0.06em;
+    color: #1d1208;
+    background: linear-gradient(180deg, #ffc27a, var(--ember));
+    border: 0; border-radius: 8px;
+    padding: 16px 40px;
+    box-shadow: 0 4px 0 #9a4f12, 0 10px 30px rgba(255, 154, 60, 0.3);
+    cursor: pointer;
+  }
+  .btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #9a4f12; }
+  .btn[disabled] { filter: grayscale(0.8) brightness(0.7); cursor: progress; }
+  .howto {
+    display: grid; grid-template-columns: auto 1fr; gap: 6px 12px;
+    text-align: left; font-size: 14px; color: var(--ink);
+    background: var(--panel); border: 1px solid rgba(242, 232, 208, 0.14);
+    border-radius: 8px; padding: 12px 16px;
+  }
+  .howto dt { color: var(--ember); font-weight: 700; }
+  .howto dd { margin: 0; color: var(--ink-dim); }
+  .results { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .results .stat { text-align: center; min-width: 84px; }
+  .load { font-size: 13px; color: var(--ink-dim); font-variant-numeric: tabular-nums; min-height: 1.2em; }
+
+  @media (max-width: 420px) {
+    .hud { gap: 6px; }
+    .stats { gap: 6px; }
+    .stat { padding: 3px 8px; }
+    .stat b { font-size: 16px; }
+    .hp { padding: 6px 8px 6px 6px; gap: 6px; }
+    .icon-btn { width: 36px; height: 36px; }
+  }
+  @media (max-height: 520px) {
+    .card { gap: 8px; }
+    .card h1 { font-size: 40px; }
+    .card h2 { font-size: 34px; }
+    .howto { font-size: 13px; padding: 8px 12px; }
+    .btn { padding: 12px 32px; }
+    .stick { top: calc(100% - var(--sab) - 90px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .banner, .hp-fill, .hurt, .combo { transition: none; }
+  }
+</style>
+
+<div id="game"></div>
+
+<div class="hud" id="hud" hidden>
+  <div class="hp" aria-label="Здоровье">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#d8402f" d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.2 4.3 2.4h2c.7-1.2 2.2-2.4 4.3-2.4 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>
+    <div class="hp-track"><div class="hp-fill" id="hpFill"></div></div>
+    <span class="hp-num" id="hpNum">100</span>
+  </div>
+  <div class="stats">
+    <div class="stat"><small>Волна</small><b id="waveNum">1</b></div>
+    <div class="stat"><small>Очки</small><b id="scoreNum">0</b></div>
+    <button class="icon-btn" id="muteBtn" type="button" aria-label="Выключить звук">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" stroke="none"/><path id="muteWave" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+    </button>
+  </div>
+</div>
+<div class="combo" id="combo">×2</div>
+<div class="banner" id="banner"></div>
+<div class="hurt" id="hurt"></div>
+
+<div class="touch" id="touchUi" hidden>
+  <div class="stick" id="stick"><div class="knob" id="knob"></div></div>
+  <div class="pads">
+    <button class="pad dash" id="dashBtn" type="button" aria-label="Рывок">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6l6 6-6 6M13 6l6 6-6 6"/></svg>
+      <span class="cd" id="dashCd"></span>
+    </button>
+    <button class="pad attack" id="attackBtn" type="button" aria-label="Удар мечом">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 3.5H20.5V9.5L9 21 3 15z" fill="currentColor" fill-opacity=".25"/><path d="M7 13l4 4M4.5 19.5l2-2"/></svg>
+    </button>
+  </div>
+</div>
+<div class="keys" id="keysHint" hidden><kbd>W A S D</kbd> движение · <kbd>Пробел</kbd> удар · <kbd>Shift</kbd> рывок</div>
+
+<section class="screen" id="startScreen">
+  <div class="card">
+    <span class="eyebrow">Low-poly арена · модели из Blender</span>
+    <h1>Клинок арены</h1>
+    <p>Гоблины лезут на арену волна за волной. Руби их мечом, уходи рывком от дубин и подбирай зелья.</p>
+    <dl class="howto" id="howto">
+      <dt>Джойстик</dt><dd>левая половина экрана — веди пальцем</dd>
+      <dt>Красная</dt><dd>удар мечом, жми чаще — серия ударов</dd>
+      <dt>Синяя</dt><dd>рывок, на время рывка ты неуязвим</dd>
+    </dl>
+    <button class="btn" id="playBtn" type="button" disabled>Загрузка…</button>
+    <div class="load" id="loadText">Загружаю модели: 0%</div>
+  </div>
+</section>
+
+<section class="screen" id="overScreen" hidden>
+  <div class="card">
+    <span class="eyebrow">Арена победила</span>
+    <h2>Ты пал</h2>
+    <div class="results">
+      <div class="stat"><small>Волна</small><b id="resWave">1</b></div>
+      <div class="stat"><small>Очки</small><b id="resScore">0</b></div>
+      <div class="stat"><small>Рекорд</small><b id="resBest">0</b></div>
+    </div>
+    <p id="resNote">Гоблинов повержено: 0</p>
+    <button class="btn" id="againBtn" type="button">Ещё раз</button>
+  </div>
+</section>
+
+<script>
+/* ошибки показываем на экране загрузки, чтобы их было видно на телефоне */
+window.addEventListener("error", (e) => { const el = document.getElementById("loadText"); if (el && document.getElementById("playBtn").disabled) el.textContent = "Ошибка: " + (e.message || e.error || "неизвестно"); });
+window.addEventListener("unhandledrejection", (e) => { const el = document.getElementById("loadText"); if (el) el.textContent = "Ошибка: " + (e.reason && e.reason.message || e.reason); });
+</script>
+<!--ASSETS-->
+<script type="module">
+<!--BUNDLE-->
+</script>

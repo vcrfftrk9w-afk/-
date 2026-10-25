@@ -1,0 +1,2880 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4"><External>null</External><External>nil</External><Item class="Workspace" referent="RBX00000005"><Properties><string name="Name">Workspace</string></Properties></Item><Item class="ReplicatedStorage" referent="RBX00000007"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000004"><Properties><string name="Name">Front</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Config</string><ProtectedString name="Source"><![CDATA[-- Настройки режима «Фронт». Все числа баланса собраны здесь.
+local Config = {}
+
+-- карта
+Config.MAP_W = 80
+Config.MAP_H = 50
+Config.TILE = 4                 -- размер клетки в стадах
+Config.LAND_SHARE = 0.5         -- доля суши
+Config.NATIONS = 20             -- стран в матче (игроки + боты)
+
+-- фазы матча, секунды
+Config.SPAWN_TIME = 20          -- выбор места старта
+Config.IMMUNITY_TIME = 40       -- после старта: страны нельзя атаковать, только нейтральную землю
+Config.MATCH_TIME = 25 * 60     -- по истечении побеждает самая большая страна
+Config.WIN_SHARE = 0.8          -- доля суши для победы
+Config.RESTART_DELAY = 15
+
+-- армия и экономика
+Config.START_TROOPS = 2500
+Config.BASE_MAX_TROOPS = 3000
+Config.TROOPS_PER_TILE = 80
+Config.TROOPS_PER_CITY = 4000   -- за каждый уровень города
+Config.GROWTH_RATE = 0.06       -- рост войск в секунду от текущих
+Config.GROWTH_BASE = 30
+Config.BOT_GROWTH = 0.9         -- боты растут чуть медленнее игроков
+Config.GOLD_BASE = 20           -- золота в секунду
+Config.GOLD_PER_TILE = 0.2
+Config.DEFAULT_RATIO = 0.5      -- какую часть войск отправлять в атаку
+
+-- захват
+Config.ATTACK_TICK = 0.25
+Config.CAPTURE_PER_BORDER = 0.12  -- чем длиннее общая граница, тем быстрее захват
+Config.MAX_CAPTURE_PER_TICK = 30
+Config.NEUTRAL_COST = 10
+Config.ENEMY_BASE_COST = 20
+Config.DENSITY_FACTOR = 1.2       -- плотность обороны: войска врага на клетку
+Config.DEFENDER_LOSS = 0.6
+Config.TERRAIN_COST = { [1] = 1, [2] = 1.5, [3] = 2.5 }  -- равнина, холмы, горы
+
+-- постройки: базовая цена, рост цены за каждый уровень, максимум уровня
+Config.BUILDINGS = {
+	City    = { name = "Город",   cost = 1500, grow = 1.5, max = 5 },
+	Port    = { name = "Порт",    cost = 1200, grow = 1.5, max = 5 },
+	Defense = { name = "Турель",  cost = 600,  grow = 1.4, max = 5 },
+	Factory = { name = "Завод",   cost = 2500, grow = 1.6, max = 5 },
+	Silo    = { name = "Шахта",   cost = 5000, grow = 2.0, max = 3 },
+}
+Config.BUILD_ORDER = { "City", "Port", "Defense", "Factory", "Silo" }
+Config.DEFENSE_RADIUS = 4
+Config.DEFENSE_BONUS = 0.6        -- за уровень турели
+Config.FACTORY_BONUS = 0.12       -- сила атаки за уровень завода
+Config.FACTORY_BONUS_MAX = 1.0
+
+-- флот
+Config.TRANSPORT_SPEED = 10       -- клеток в секунду
+Config.MAX_TRANSPORTS = 3
+Config.TRADE_INTERVAL = 12
+Config.TRADE_SPEED = 7
+Config.TRADE_GOLD_PER_TILE = 6
+
+-- ядерный удар
+Config.NUKE_COST = 8000
+Config.NUKE_RADIUS = 4
+Config.NUKE_TIME_BASE = 3
+Config.NUKE_TIME_PER_TILE = 0.04
+
+-- боты
+Config.BOT_INTERVAL = 1.5
+Config.GANG_UP_SHARE = 0.25       -- лидера с такой долей суши атакуют все соседи
+Config.MAX_ALLIES = 3
+
+-- модели: если импортированные из Blender корабли плывут задом, поставь 180
+Config.MODEL_YAW = 0
+
+Config.NAMES = {
+	"Арктида", "Борея", "Вельмар", "Гардия", "Дорвин", "Эстерра", "Жаромир", "Зелания",
+	"Ирмос", "Калдор", "Лиорна", "Мирград", "Норвель", "Озёрия", "Пеллар", "Рустан",
+	"Солмар", "Тарвия", "Ульмер", "Фальк", "Хорсун", "Цейла", "Черноград", "Штормвик",
+}
+
+Config.COLORS = {
+	{ 231, 76, 60 }, { 52, 152, 219 }, { 46, 204, 113 }, { 241, 196, 15 }, { 155, 89, 182 },
+	{ 230, 126, 34 }, { 26, 188, 156 }, { 236, 112, 160 }, { 149, 165, 166 }, { 52, 73, 94 },
+	{ 192, 57, 43 }, { 41, 128, 185 }, { 39, 174, 96 }, { 243, 156, 18 }, { 142, 68, 173 },
+	{ 211, 84, 0 }, { 22, 160, 133 }, { 255, 118, 117 }, { 116, 185, 255 }, { 85, 239, 196 },
+	{ 253, 203, 110 }, { 162, 155, 254 }, { 250, 177, 160 }, { 99, 110, 114 },
+}
+
+-- номер клетки -> координаты сетки и центр клетки в мире (y = 0, уровень воды)
+function Config.tileXY(i)
+	local j = i - 1
+	return j % Config.MAP_W, j // Config.MAP_W
+end
+
+function Config.tileCenter(i)
+	local x, y = Config.tileXY(i)
+	return Vector3.new((x - Config.MAP_W / 2 + 0.5) * Config.TILE, 0, (y - Config.MAP_H / 2 + 0.5) * Config.TILE)
+end
+
+return Config
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000002"><Properties><string name="Name">Core</string><ProtectedString name="Source"><![CDATA[-- Ядро режима «Фронт»: карта, страны, захват территории, экономика, флот, ядерный удар,
+-- союзы и боты. Чистый Luau без API Roblox: сервер только рисует результат,
+-- а тесты гоняют ядро без Studio (см. tests/sim_test.luau).
+
+local Core = {}
+Core.__index = Core
+
+local WATER, PLAIN, HILL, MOUNTAIN = 0, 1, 2, 3
+Core.WATER, Core.PLAIN, Core.HILL, Core.MOUNTAIN = WATER, PLAIN, HILL, MOUNTAIN
+
+-- ------------------------------------------------------------ случайные числа
+-- свой генератор (xorshift), чтобы карта по seed была одинаковой везде
+
+local function makeRng(seed)
+	local s = math.floor(seed) % 2147483646 + 1
+	return function()
+		s = bit32.bxor(s, bit32.lshift(s, 13))
+		s = bit32.bxor(s, bit32.rshift(s, 17))
+		s = bit32.bxor(s, bit32.lshift(s, 5))
+		return (s % 1000003) / 1000003
+	end
+end
+
+function Core:rand(a, b)
+	local r = self.rng()
+	if a == nil then
+		return r
+	end
+	return a + math.floor(r * (b - a + 1))
+end
+
+-- ------------------------------------------------------------ создание
+
+function Core.new(cfg, seed)
+	local self = setmetatable({}, Core)
+	self.cfg = cfg
+	self.seed = seed or os.time()
+	self.rng = makeRng(self.seed)
+	self.W, self.H = cfg.MAP_W, cfg.MAP_H
+	self.time = 0
+	self.phase = "spawn"
+	self.nations = {}
+	self.attacks = {}
+	self.ships = {}
+	self.missiles = {}
+	self.buildings = {}       -- тайл -> {kind, level}
+	self.tilesOf = {}         -- страна -> множество её клеток
+	self.requests = {}        -- [кому][от кого] = время истечения
+	self.events = {}
+	self.dirty = {}
+	self.tradePaths = {}
+	self.nextId = 0
+	self.acc = { attack = 0, econ = 0, bot = 0 }
+	self.winner = nil
+	self:generateMap()
+	return self
+end
+
+function Core:index(x, y)
+	return y * self.W + x + 1
+end
+
+function Core:xy(i)
+	local j = i - 1
+	return j % self.W, j // self.W
+end
+
+function Core:generateMap()
+	local W, H = self.W, self.H
+	local ox, oy = self:rand() * 1000, self:rand() * 1000
+	local values = {}
+	for y = 0, H - 1 do
+		for x = 0, W - 1 do
+			local n = 0
+			local amp, freq = 1, 0.055
+			for _ = 1, 4 do
+				n += math.noise(x * freq + ox, y * freq + oy, 0.3) * amp
+				amp *= 0.5
+				freq *= 2
+			end
+			local dx, dy = (x / (W - 1) - 0.5) * 2, (y / (H - 1) - 0.5) * 2
+			local d = math.sqrt(dx * dx * 0.8 + dy * dy)
+			values[self:index(x, y)] = n - d * d * 0.55
+		end
+	end
+	-- порог подбираем так, чтобы суши было ровно LAND_SHARE
+	local sorted = table.clone(values)
+	table.sort(sorted)
+	local cut = sorted[math.floor(#sorted * (1 - self.cfg.LAND_SHARE)) + 1]
+	local hillCut = sorted[math.floor(#sorted * 0.86)]
+	local mountainCut = sorted[math.floor(#sorted * 0.95)]
+
+	self.terrain, self.owner, self.border, self.nb, self.coastal = {}, {}, {}, {}, {}
+	self.landCount = 0
+	for i = 1, W * H do
+		local v = values[i]
+		local t = WATER
+		if v >= mountainCut then
+			t = MOUNTAIN
+		elseif v >= hillCut then
+			t = HILL
+		elseif v >= cut then
+			t = PLAIN
+		end
+		self.terrain[i] = t
+		self.owner[i] = t == WATER and -1 or 0
+		self.border[i] = false
+		if t ~= WATER then
+			self.landCount += 1
+		end
+	end
+	for i = 1, W * H do
+		local x, y = self:xy(i)
+		local list = {}
+		if x > 0 then table.insert(list, i - 1) end
+		if x < W - 1 then table.insert(list, i + 1) end
+		if y > 0 then table.insert(list, i - W) end
+		if y < H - 1 then table.insert(list, i + W) end
+		self.nb[i] = list
+	end
+	for i = 1, W * H do
+		local c = false
+		if self.terrain[i] ~= WATER then
+			for _, n in ipairs(self.nb[i]) do
+				if self.terrain[n] == WATER then
+					c = true
+					break
+				end
+			end
+		end
+		self.coastal[i] = c
+	end
+end
+
+-- ------------------------------------------------------------ события для сервера
+
+function Core:emit(e)
+	table.insert(self.events, e)
+end
+
+function Core:takeEvents()
+	local e = self.events
+	self.events = {}
+	return e
+end
+
+function Core:takeDirty()
+	local d = self.dirty
+	self.dirty = {}
+	return d
+end
+
+function Core:notify(id, text)
+	self:emit({ type = "notify", nation = id, text = text })
+end
+
+function Core:broadcast(text)
+	self:emit({ type = "notify", nation = nil, text = text })
+end
+
+-- ------------------------------------------------------------ страны
+
+function Core:addNation(name, isBot, userId)
+	local id = #self.nations + 1
+	local cfg = self.cfg
+	self.nations[id] = {
+		id = id,
+		name = name or cfg.NAMES[(id - 1) % #cfg.NAMES + 1],
+		color = cfg.COLORS[(id - 1) % #cfg.COLORS + 1],
+		isBot = isBot,
+		userId = userId,
+		troops = cfg.START_TROOPS,
+		gold = 500,
+		tiles = 0,
+		alive = true,
+		spawned = false,
+		betrayals = 0,
+		allies = {},
+		built = { City = 0, Port = 0, Defense = 0, Factory = 0, Silo = 0 },
+		ratio = cfg.DEFAULT_RATIO,
+		botPhase = self:rand() * cfg.BOT_INTERVAL,
+		botTimer = 0,
+		personality = self:rand(),   -- 0 осторожный … 1 агрессивный
+	}
+	self.tilesOf[id] = {}
+	self.requests[id] = {}
+	return id
+end
+
+function Core:maxTroops(n)
+	local cfg = self.cfg
+	return cfg.BASE_MAX_TROOPS + n.tiles * cfg.TROOPS_PER_TILE + n.built.City * cfg.TROOPS_PER_CITY
+end
+
+function Core:isImmune()
+	return self.phase == "spawn" or self.time < self.cfg.SPAWN_TIME + self.cfg.IMMUNITY_TIME
+end
+
+function Core:allied(a, b)
+	return a > 0 and b > 0 and self.nations[a].allies[b] == true
+end
+
+function Core:setOwner(i, id)
+	local old = self.owner[i]
+	if old == id then
+		return
+	end
+	if old > 0 then
+		self.tilesOf[old][i] = nil
+		self.nations[old].tiles -= 1
+	end
+	self.owner[i] = id
+	if id > 0 then
+		self.tilesOf[id][i] = true
+		self.nations[id].tiles += 1
+	end
+	local b = self.buildings[i]
+	if b then
+		if old > 0 then
+			self.nations[old].built[b.kind] -= b.level
+		end
+		if id > 0 then
+			self.nations[id].built[b.kind] += b.level
+			self:emit({ type = "buildingOwner", tile = i, owner = id })
+		else
+			self:removeBuilding(i)
+		end
+	end
+	self:updateBorder(i)
+	for _, n in ipairs(self.nb[i]) do
+		self:updateBorder(n)
+	end
+end
+
+function Core:updateBorder(i)
+	local o = self.owner[i]
+	local isBorder = false
+	if o > 0 then
+		for _, n in ipairs(self.nb[i]) do
+			local on = self.owner[n]
+			if on ~= o and on >= 0 then
+				isBorder = true
+				break
+			end
+		end
+	end
+	self.border[i] = isBorder
+	self.dirty[i] = true
+end
+
+local SPAWN_RADIUS = 2
+
+function Core:canSpawnAt(id, i)
+	if not i or i < 1 or i > self.W * self.H then
+		return false, "Мимо карты"
+	end
+	if self.terrain[i] == WATER then
+		return false, "Нужна суша"
+	end
+	if self.owner[i] ~= 0 and self.owner[i] ~= id then
+		return false, "Здесь уже кто-то есть"
+	end
+	local x, y = self:xy(i)
+	local room = 0
+	for dy = -SPAWN_RADIUS, SPAWN_RADIUS do
+		for dx = -SPAWN_RADIUS, SPAWN_RADIUS do
+			local tx, ty = x + dx, y + dy
+			if tx >= 0 and ty >= 0 and tx < self.W and ty < self.H then
+				local o = self.owner[self:index(tx, ty)]
+				if o == 0 or o == id then
+					room += 1
+				end
+			end
+		end
+	end
+	if room < 10 then
+		return false, "Мало свободной земли вокруг"
+	end
+	for _, other in ipairs(self.nations) do
+		if other.id ~= id and other.spawned and other.spawnTile then
+			local ox, oy = self:xy(other.spawnTile)
+			if math.abs(ox - x) + math.abs(oy - y) < 7 then
+				return false, "Слишком близко к соседу"
+			end
+		end
+	end
+	return true
+end
+
+function Core:spawn(id, i)
+	local n = self.nations[id]
+	if self.phase ~= "spawn" and n.spawned then
+		return false, "Место старта уже выбрано"
+	end
+	local ok, msg = self:canSpawnAt(id, i)
+	if not ok then
+		return false, msg
+	end
+	-- в фазе выбора место можно переставить
+	if n.spawned then
+		for t in pairs(self.tilesOf[id]) do
+			self:setOwner(t, 0)
+		end
+	end
+	local cx, cy = self:xy(i)
+	for dy = -SPAWN_RADIUS, SPAWN_RADIUS do
+		for dx = -SPAWN_RADIUS, SPAWN_RADIUS do
+			local x, y = cx + dx, cy + dy
+			if math.abs(dx) + math.abs(dy) <= SPAWN_RADIUS + 1 and x >= 0 and y >= 0 and x < self.W and y < self.H then
+				local t = self:index(x, y)
+				if self.owner[t] == 0 then
+					self:setOwner(t, id)
+				end
+			end
+		end
+	end
+	n.spawned = true
+	n.spawnTile = i
+	self:emit({ type = "spawned", nation = id, tile = i })
+	return true
+end
+
+function Core:randomSpawn(id)
+	for _ = 1, 400 do
+		local i = self:rand(1, self.W * self.H)
+		if self:canSpawnAt(id, i) and self.owner[i] == 0 then
+			return self:spawn(id, i)
+		end
+	end
+	return false, "Нет свободного места"
+end
+
+function Core:eliminate(id, by)
+	local n = self.nations[id]
+	if not n.alive then
+		return
+	end
+	n.alive = false
+	for k, a in ipairs(self.attacks) do
+		if a.attacker == id then
+			a.done = true
+		end
+	end
+	for other in pairs(n.allies) do
+		self.nations[other].allies[id] = nil
+	end
+	n.allies = {}
+	if by and by > 0 then
+		local winner = self.nations[by]
+		winner.gold += n.gold
+		self:broadcast(string.format("%s уничтожена. Золото забирает %s", n.name, winner.name))
+	else
+		self:broadcast(n.name .. " уничтожена")
+	end
+	n.gold = 0
+	n.troops = 0
+	self:emit({ type = "eliminated", nation = id, by = by })
+end
+
+-- ------------------------------------------------------------ захват
+
+function Core:frontier(a, b)
+	local front, seen = {}, {}
+	local owner = self.owner
+	for t in pairs(self.tilesOf[a]) do
+		for _, n in ipairs(self.nb[t]) do
+			if owner[n] == b and not seen[n] then
+				seen[n] = true
+				table.insert(front, n)
+			end
+		end
+	end
+	return front
+end
+
+function Core:hasBorder(a, b)
+	local owner = self.owner
+	for t in pairs(self.tilesOf[a]) do
+		for _, n in ipairs(self.nb[t]) do
+			if owner[n] == b then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function Core:defenseMult(i, defender)
+	if defender <= 0 then
+		return 1
+	end
+	local cfg = self.cfg
+	local x, y = self:xy(i)
+	local best = 0
+	local r = cfg.DEFENSE_RADIUS
+	for dy = -r, r do
+		for dx = -r, r do
+			local tx, ty = x + dx, y + dy
+			if math.abs(dx) + math.abs(dy) <= r and tx >= 0 and ty >= 0 and tx < self.W and ty < self.H then
+				local t = self:index(tx, ty)
+				local b = self.buildings[t]
+				if b and b.kind == "Defense" and self.owner[t] == defender and b.level > best then
+					best = b.level
+				end
+			end
+		end
+	end
+	return 1 + best * cfg.DEFENSE_BONUS
+end
+
+function Core:attackBonus(a)
+	local cfg = self.cfg
+	return 1 + math.min(cfg.FACTORY_BONUS_MAX, self.nations[a].built.Factory * cfg.FACTORY_BONUS)
+end
+
+function Core:tileCost(a, b, i)
+	local cfg = self.cfg
+	local mult = cfg.TERRAIN_COST[self.terrain[i]] or 1
+	if b <= 0 then
+		return cfg.NEUTRAL_COST * mult
+	end
+	local d = self.nations[b]
+	local density = d.troops / math.max(1, d.tiles)
+	return (cfg.ENEMY_BASE_COST + density * cfg.DENSITY_FACTOR) * mult * self:defenseMult(i, b) / self:attackBonus(a)
+end
+
+function Core:atWar(a, b)
+	for _, at in ipairs(self.attacks) do
+		if not at.done and ((at.attacker == a and at.target == b) or (at.attacker == b and at.target == a)) then
+			return true
+		end
+	end
+	return false
+end
+
+-- проверки, общие для атак по суше и с моря
+function Core:checkTarget(a, b)
+	if b == a then
+		return false, "Это твоя земля"
+	end
+	if b > 0 then
+		if not self.nations[b].alive then
+			return false, "Эта страна уже уничтожена"
+		end
+		if self:allied(a, b) then
+			return false, "Это союзник. Сначала разорви союз"
+		end
+		if self:isImmune() then
+			return false, "Щит: страны пока нельзя атаковать"
+		end
+	end
+	return true
+end
+
+function Core:startAttack(a, b, troops)
+	troops = math.floor(troops)
+	local n = self.nations[a]
+	if troops < 1 or troops > n.troops then
+		return false, "Мало войск"
+	end
+	n.troops -= troops
+	for _, at in ipairs(self.attacks) do
+		if not at.done and at.attacker == a and at.target == b then
+			at.troops += troops
+			return true
+		end
+	end
+	self.nextId += 1
+	table.insert(self.attacks, { id = self.nextId, attacker = a, target = b, troops = troops, tankT = 0 })
+	if b > 0 then
+		local d = self.nations[b]
+		self:notify(b, string.format("%s напала на тебя", n.name))
+		d.lastAttacker = a
+	end
+	return true
+end
+
+-- атака по тапу на клетку: по суше, если есть граница, иначе десант с моря
+function Core:attackTile(a, i, ratio)
+	local n = self.nations[a]
+	if not n.alive or not n.spawned then
+		return false, "Сначала выбери место старта"
+	end
+	if self.phase ~= "play" then
+		return false, self.phase == "over" and "Раунд окончен" or "Матч ещё не начался"
+	end
+	if not i or i < 1 or i > self.W * self.H or self.terrain[i] == WATER then
+		return false, "Выбери клетку суши"
+	end
+	local b = self.owner[i]
+	local ok, msg = self:checkTarget(a, b)
+	if not ok then
+		return false, msg
+	end
+	ratio = math.clamp(ratio or n.ratio, 0.05, 1)
+	local troops = n.troops * ratio
+	if self:hasBorder(a, b) then
+		return self:startAttack(a, b, troops)
+	end
+	if self.coastal[i] then
+		return self:sendTransport(a, i, troops)
+	end
+	return false, "Нет общей границы, а клетка не у моря"
+end
+
+function Core:processAttacks()
+	local cfg = self.cfg
+	for _, at in ipairs(self.attacks) do
+		if not at.done then
+			local a, b = at.attacker, at.target
+			local na = self.nations[a]
+			local valid = na.alive and (b <= 0 or (self.nations[b].alive and not self:allied(a, b)))
+			local front = valid and self:frontier(a, b) or {}
+			if #front == 0 then
+				self:finishAttack(at)
+			else
+				local want = math.clamp(math.floor(#front * cfg.CAPTURE_PER_BORDER) + 1, 1, cfg.MAX_CAPTURE_PER_TICK)
+				-- сначала клетки, которые сильнее всего окружены: фронт идёт ровно
+				local scored = {}
+				for _, t in ipairs(front) do
+					local s = 0
+					for _, n in ipairs(self.nb[t]) do
+						if self.owner[n] == a then
+							s += 1
+						end
+					end
+					table.insert(scored, { t = t, s = s + self:rand() * 1.5 })
+				end
+				table.sort(scored, function(p, q)
+					return p.s > q.s
+				end)
+				local captured = 0
+				for k = 1, math.min(want, #scored) do
+					local t = scored[k].t
+					local cost = self:tileCost(a, b, t)
+					if at.troops < cost then
+						break
+					end
+					at.troops -= cost
+					if b > 0 then
+						local d = self.nations[b]
+						d.troops = math.max(0, d.troops - cost * cfg.DEFENDER_LOSS)
+					end
+					self:setOwner(t, a)
+					captured += 1
+					at.last = t
+				end
+				if captured == 0 then
+					self:finishAttack(at)
+				elseif b > 0 and self.nations[b].tiles == 0 then
+					self:eliminate(b, a)
+					self:finishAttack(at)
+				end
+			end
+		end
+	end
+	local alive = {}
+	for _, at in ipairs(self.attacks) do
+		if not at.done then
+			table.insert(alive, at)
+		end
+	end
+	self.attacks = alive
+end
+
+function Core:finishAttack(at)
+	if at.done then
+		return
+	end
+	at.done = true
+	local n = self.nations[at.attacker]
+	if n.alive then
+		n.troops += math.floor(at.troops)
+	end
+	at.troops = 0
+end
+
+-- ------------------------------------------------------------ вода и корабли
+
+-- поиск пути по воде (BFS): от любой водной клетки из starts до первой, где goal(i) истинно
+function Core:waterPath(starts, goal)
+	local prev, queue, head = {}, {}, 1
+	for _, s in ipairs(starts) do
+		if prev[s] == nil then
+			prev[s] = 0
+			table.insert(queue, s)
+		end
+	end
+	while head <= #queue do
+		local c = queue[head]
+		head += 1
+		if goal(c) then
+			local path = {}
+			while c ~= 0 do
+				table.insert(path, c)
+				c = prev[c]
+			end
+			return path
+		end
+		for _, n in ipairs(self.nb[c]) do
+			if prev[n] == nil and self.terrain[n] == WATER then
+				prev[n] = c
+				table.insert(queue, n)
+			end
+		end
+	end
+	return nil
+end
+
+function Core:waterAround(i)
+	local list = {}
+	for _, n in ipairs(self.nb[i]) do
+		if self.terrain[n] == WATER then
+			table.insert(list, n)
+		end
+	end
+	return list
+end
+
+function Core:launchShip(ship)
+	self.nextId += 1
+	ship.id = self.nextId
+	ship.t = 0
+	ship.duration = math.max(1, #ship.path / ship.speed)
+	table.insert(self.ships, ship)
+	self:emit({ type = "ship", id = ship.id, kind = ship.kind, owner = ship.owner, path = ship.path, duration = ship.duration })
+end
+
+function Core:sendTransport(a, landing, troops)
+	local count = 0
+	for _, s in ipairs(self.ships) do
+		if s.kind == "TransportShip" and s.owner == a then
+			count += 1
+		end
+	end
+	if count >= self.cfg.MAX_TRANSPORTS then
+		return false, "Все транспорты уже в море"
+	end
+	local owner, tilesOf = self.owner, self.tilesOf[a]
+	-- ищем от места высадки к своему берегу, потом разворачиваем путь
+	local path = self:waterPath(self:waterAround(landing), function(c)
+		for _, n in ipairs(self.nb[c]) do
+			if owner[n] == a and tilesOf[n] then
+				return true
+			end
+		end
+		return false
+	end)
+	if not path then
+		return false, "Туда не доплыть"
+	end
+	troops = math.floor(troops)
+	local n = self.nations[a]
+	if troops < 1 or troops > n.troops then
+		return false, "Мало войск"
+	end
+	n.troops -= troops
+	self:launchShip({ kind = "TransportShip", owner = a, path = path, speed = self.cfg.TRANSPORT_SPEED, troops = troops, landing = landing })
+	return true
+end
+
+function Core:shipArrived(s)
+	local cfg = self.cfg
+	if s.kind == "TransportShip" then
+		local a, n = s.owner, self.nations[s.owner]
+		if not n.alive then
+			return
+		end
+		local b = self.owner[s.landing]
+		local ok = self:checkTarget(a, b)
+		if b == a or not ok then
+			n.troops += s.troops
+			return
+		end
+		local cost = self:tileCost(a, b, s.landing)
+		if s.troops < cost then
+			self:notify(a, "Десант разбит у берега")
+			return
+		end
+		s.troops -= cost
+		self:setOwner(s.landing, a)
+		if b > 0 and self.nations[b].tiles == 0 then
+			self:eliminate(b, a)
+			n.troops += s.troops
+			return
+		end
+		n.troops += s.troops
+		self:startAttack(a, b, s.troops)
+	elseif s.kind == "TradeShip" then
+		local from, to = s.fromPort, s.toPort
+		local bf, bt = self.buildings[from], self.buildings[to]
+		if not (bf and bt and bf.kind == "Port" and bt.kind == "Port") then
+			return
+		end
+		local of, ot = self.owner[from], self.owner[to]
+		if of <= 0 or ot <= 0 then
+			return
+		end
+		local gold = math.floor(#s.path * cfg.TRADE_GOLD_PER_TILE * (of == ot and 0.5 or 1))
+		self.nations[of].gold += gold
+		if ot ~= of then
+			self.nations[ot].gold += gold
+		end
+		self:emit({ type = "trade", from = from, to = to, gold = gold })
+	end
+end
+
+function Core:updateShips(dt)
+	local keep = {}
+	for _, s in ipairs(self.ships) do
+		s.t += dt
+		if s.t >= s.duration then
+			self:shipArrived(s)
+		else
+			table.insert(keep, s)
+		end
+	end
+	self.ships = keep
+end
+
+function Core:tradeTick()
+	local ports = {}
+	for i, b in pairs(self.buildings) do
+		if b.kind == "Port" and self.owner[i] > 0 then
+			table.insert(ports, i)
+		end
+	end
+	if #ports < 2 then
+		return
+	end
+	for _, p in ipairs(ports) do
+		local b = self.buildings[p]
+		b.tradeTimer = (b.tradeTimer or self:rand() * self.cfg.TRADE_INTERVAL) - 1
+		if b.tradeTimer <= 0 then
+			b.tradeTimer = self.cfg.TRADE_INTERVAL / math.sqrt(b.level)
+			-- чужие порты, с которыми нет войны; если таких нет — свои
+			local o = self.owner[p]
+			local choices = {}
+			for _, q in ipairs(ports) do
+				local oq = self.owner[q]
+				if q ~= p and oq ~= o and not self:atWar(o, oq) then
+					table.insert(choices, q)
+				end
+			end
+			if #choices == 0 then
+				for _, q in ipairs(ports) do
+					if q ~= p then
+						table.insert(choices, q)
+					end
+				end
+			end
+			local q = choices[self:rand(1, #choices)]
+			local key = p .. ":" .. q
+			local path = self.tradePaths[key]
+			if path == nil then
+				local goals = {}
+				for _, w in ipairs(self:waterAround(q)) do
+					goals[w] = true
+				end
+				local found = self:waterPath(self:waterAround(p), function(c)
+					return goals[c] == true
+				end)
+				if found then
+					-- путь найден от q к p: разворачиваем, чтобы корабль шёл из p в q
+					local fwd = {}
+					for k = #found, 1, -1 do
+						table.insert(fwd, found[k])
+					end
+					path = fwd
+				else
+					path = false
+				end
+				self.tradePaths[key] = path
+			end
+			if path and #path > 2 then
+				self:launchShip({ kind = "TradeShip", owner = o, path = path, speed = self.cfg.TRADE_SPEED, fromPort = p, toPort = q })
+			end
+		end
+	end
+end
+
+-- ------------------------------------------------------------ постройки
+
+function Core:buildCost(id, kind)
+	local def = self.cfg.BUILDINGS[kind]
+	if not def then
+		return math.huge
+	end
+	return math.floor(def.cost * def.grow ^ self.nations[id].built[kind])
+end
+
+function Core:build(id, i, kind)
+	local n = self.nations[id]
+	local def = self.cfg.BUILDINGS[kind]
+	if not def then
+		return false, "Неизвестная постройка"
+	end
+	if not n.alive or not n.spawned then
+		return false, "Сначала выбери место старта"
+	end
+	if not i or self.owner[i] ~= id then
+		return false, "Строить можно только на своей земле"
+	end
+	if kind == "Port" and not self.coastal[i] then
+		return false, "Порт ставится на берегу"
+	end
+	local b = self.buildings[i]
+	if b and b.kind ~= kind then
+		return false, "Клетка занята: " .. self.cfg.BUILDINGS[b.kind].name
+	end
+	if b and b.level >= def.max then
+		return false, def.name .. ": максимальный уровень"
+	end
+	local cost = self:buildCost(id, kind)
+	if n.gold < cost then
+		return false, string.format("%s: нужно %d золота", def.name, cost)
+	end
+	n.gold -= cost
+	if b then
+		b.level += 1
+	else
+		b = { kind = kind, level = 1 }
+		self.buildings[i] = b
+	end
+	n.built[kind] += 1
+	self:emit({ type = "building", tile = i, kind = kind, level = b.level, owner = id })
+	return true
+end
+
+function Core:removeBuilding(i)
+	local b = self.buildings[i]
+	if not b then
+		return
+	end
+	local o = self.owner[i]
+	if o > 0 then
+		self.nations[o].built[b.kind] -= b.level
+	end
+	self.buildings[i] = nil
+	for k in pairs(self.tradePaths) do
+		self.tradePaths[k] = nil
+	end
+	self:emit({ type = "buildingRemoved", tile = i })
+end
+
+function Core:launchNuke(id, target)
+	local cfg = self.cfg
+	local n = self.nations[id]
+	if self.phase ~= "play" or self:isImmune() then
+		return false, "Щит: ядерный удар пока нельзя"
+	end
+	if not target or target < 1 or target > self.W * self.H then
+		return false, "Выбери цель"
+	end
+	local o = self.owner[target]
+	if o == id then
+		return false, "Это твоя земля"
+	end
+	if o > 0 and self:allied(id, o) then
+		return false, "Это союзник"
+	end
+	if n.gold < cfg.NUKE_COST then
+		return false, string.format("Ракета: нужно %d золота", cfg.NUKE_COST)
+	end
+	-- ближайшая своя шахта
+	local tx, ty = self:xy(target)
+	local best, bestD = nil, math.huge
+	for t in pairs(self.tilesOf[id]) do
+		local b = self.buildings[t]
+		if b and b.kind == "Silo" then
+			local x, y = self:xy(t)
+			local d = math.sqrt((x - tx) ^ 2 + (y - ty) ^ 2)
+			if d < bestD then
+				best, bestD = t, d
+			end
+		end
+	end
+	if not best then
+		return false, "Нужна ракетная шахта"
+	end
+	n.gold -= cfg.NUKE_COST
+	local duration = cfg.NUKE_TIME_BASE + bestD * cfg.NUKE_TIME_PER_TILE
+	table.insert(self.missiles, { owner = id, from = best, to = target, t = 0, duration = duration })
+	self:emit({ type = "nuke", owner = id, from = best, to = target, duration = duration })
+	if o > 0 then
+		self:notify(o, string.format("%s запустила ракету по тебе!", n.name))
+	end
+	return true
+end
+
+function Core:nukeHit(m)
+	local cfg = self.cfg
+	local cx, cy = self:xy(m.to)
+	local r = cfg.NUKE_RADIUS
+	local lost = {}
+	for dy = -r, r do
+		for dx = -r, r do
+			local x, y = cx + dx, cy + dy
+			if dx * dx + dy * dy <= r * r and x >= 0 and y >= 0 and x < self.W and y < self.H then
+				local t = self:index(x, y)
+				local o = self.owner[t]
+				if o > 0 and o ~= m.owner then
+					lost[o] = (lost[o] or 0) + 1
+					self:setOwner(t, 0)
+				end
+				if self.buildings[t] and self.owner[t] ~= m.owner then
+					self:removeBuilding(t)
+				end
+			end
+		end
+	end
+	for o, count in pairs(lost) do
+		local d = self.nations[o]
+		d.troops = math.max(0, d.troops - d.troops * math.min(0.6, count / math.max(1, d.tiles + count) * 2))
+		if d.tiles == 0 then
+			self:eliminate(o, m.owner)
+		end
+	end
+	self:emit({ type = "nukeHit", tile = m.to, radius = r, owner = m.owner })
+end
+
+function Core:updateMissiles(dt)
+	local keep = {}
+	for _, m in ipairs(self.missiles) do
+		m.t += dt
+		if m.t >= m.duration then
+			self:nukeHit(m)
+		else
+			table.insert(keep, m)
+		end
+	end
+	self.missiles = keep
+end
+
+-- ------------------------------------------------------------ союзы
+
+function Core:requestAlliance(from, to)
+	local a, b = self.nations[from], self.nations[to]
+	if not b or from == to or not b.alive or not a.alive then
+		return false, "Некому предложить союз"
+	end
+	if a.allies[to] then
+		return false, "Вы уже союзники"
+	end
+	if self.requests[from][to] then
+		self:respondAlliance(from, to, true)
+		return true
+	end
+	self.requests[to][from] = self.time + 20
+	if b.isBot then
+		b.pendingAnswer = true
+	else
+		self:emit({ type = "allianceRequest", from = from, to = to })
+	end
+	self:notify(from, "Предложение союза отправлено: " .. b.name)
+	return true
+end
+
+function Core:respondAlliance(to, from, accept)
+	local req = self.requests[to] and self.requests[to][from]
+	if not req then
+		return false, "Предложение уже неактуально"
+	end
+	self.requests[to][from] = nil
+	local a, b = self.nations[from], self.nations[to]
+	if not accept then
+		self:notify(from, b.name .. " отказалась от союза")
+		return true
+	end
+	a.allies[to] = true
+	b.allies[from] = true
+	for _, at in ipairs(self.attacks) do
+		if not at.done and ((at.attacker == from and at.target == to) or (at.attacker == to and at.target == from)) then
+			self:finishAttack(at)
+		end
+	end
+	self:broadcast(string.format("%s и %s заключили союз", a.name, b.name))
+	self:emit({ type = "alliance", a = from, b = to })
+	return true
+end
+
+function Core:breakAlliance(a, b)
+	local na, nb = self.nations[a], self.nations[b]
+	if not (na and nb and na.allies[b]) then
+		return false, "Союза нет"
+	end
+	na.allies[b] = nil
+	nb.allies[a] = nil
+	na.betrayals += 1
+	self:broadcast(string.format("%s разорвала союз с %s (предательств: %d)", na.name, nb.name, na.betrayals))
+	return true
+end
+
+-- ------------------------------------------------------------ экономика
+
+function Core:economyTick()
+	local cfg = self.cfg
+	for _, n in ipairs(self.nations) do
+		if n.alive and n.spawned then
+			local max = self:maxTroops(n)
+			local growth = (n.troops * cfg.GROWTH_RATE + cfg.GROWTH_BASE) * (1 - n.troops / max)
+			if n.isBot then
+				growth *= cfg.BOT_GROWTH
+			end
+			n.troops = math.clamp(n.troops + growth, 0, math.max(max, n.troops))
+			n.gold += cfg.GOLD_BASE + n.tiles * cfg.GOLD_PER_TILE
+		end
+	end
+	for to, list in pairs(self.requests) do
+		for from, expire in pairs(list) do
+			if self.time > expire then
+				list[from] = nil
+			end
+		end
+	end
+	self:tradeTick()
+end
+
+function Core:checkWin()
+	if self.phase ~= "play" then
+		return
+	end
+	local alive, best = 0, nil
+	for _, n in ipairs(self.nations) do
+		if n.alive and n.spawned then
+			alive += 1
+			if not best or n.tiles > best.tiles then
+				best = n
+			end
+		end
+	end
+	if not best then
+		return
+	end
+	local share = best.tiles / self.landCount
+	local reason
+	if share >= self.cfg.WIN_SHARE then
+		reason = string.format("захватила %d%% суши", math.floor(share * 100))
+	elseif alive == 1 then
+		reason = "осталась одна"
+	elseif self.time >= self.cfg.MATCH_TIME then
+		reason = "самая большая страна к концу времени"
+	end
+	if reason then
+		self.phase = "over"
+		self.winner = best.id
+		self:emit({ type = "win", nation = best.id, reason = reason })
+	end
+end
+
+-- ------------------------------------------------------------ боты
+
+function Core:neighbors(id)
+	local counts = {}
+	local owner = self.owner
+	for t in pairs(self.tilesOf[id]) do
+		for _, n in ipairs(self.nb[t]) do
+			local o = owner[n]
+			if o ~= id and o >= 0 then
+				counts[o] = (counts[o] or 0) + 1
+			end
+		end
+	end
+	return counts
+end
+
+function Core:leader()
+	local best
+	for _, n in ipairs(self.nations) do
+		if n.alive and (not best or n.tiles > best.tiles) then
+			best = n
+		end
+	end
+	return best
+end
+
+function Core:pickTile(id, filter)
+	local list = {}
+	for t in pairs(self.tilesOf[id]) do
+		if filter(t) then
+			table.insert(list, t)
+		end
+	end
+	if #list == 0 then
+		return nil
+	end
+	return list[self:rand(1, #list)]
+end
+
+function Core:botThink(n)
+	local id = n.id
+	local cfg = self.cfg
+	local max = self:maxTroops(n)
+	local frac = n.troops / max
+
+	-- ответы на предложения союза
+	if n.pendingAnswer then
+		n.pendingAnswer = false
+		for from in pairs(self.requests[id]) do
+			local f = self.nations[from]
+			local allies = 0
+			for _ in pairs(n.allies) do
+				allies += 1
+			end
+			local accept = f.alive and f.betrayals < 2 and allies < cfg.MAX_ALLIES and not self:atWar(id, from)
+				and (f.troops > n.troops * 0.6 or self:rand() < 0.5)
+			self:respondAlliance(id, from, accept)
+		end
+	end
+
+	local nbrs = self:neighbors(id)
+	local myAttacks, strongFronts = 0, 0
+	for _, at in ipairs(self.attacks) do
+		if at.attacker == id and not at.done then
+			myAttacks += 1
+			if at.target > 0 and self.nations[at.target].troops > n.troops * 0.8 then
+				strongFronts += 1
+			end
+		end
+	end
+
+	if myAttacks < 3 then
+		if nbrs[0] and frac > 0.25 then
+			self:startAttack(id, 0, n.troops * (0.3 + n.personality * 0.25))
+		elseif not self:isImmune() and frac > 0.5 - n.personality * 0.15 then
+			local leader = self:leader()
+			local target, bestScore = nil, -math.huge
+			for o in pairs(nbrs) do
+				if o > 0 and not self:allied(id, o) then
+					local e = self.nations[o]
+					local ratio = e.troops / math.max(1, n.troops)
+					local score = -ratio + (o == n.lastAttacker and 0.4 or 0)
+					if leader and leader.id == o and o ~= id and leader.tiles / self.landCount > cfg.GANG_UP_SHARE then
+						score += 1.2    -- все вместе давим лидера
+					end
+					-- несколько слабых сразу можно, двух сильных — нельзя
+					if ratio > 0.8 and strongFronts > 0 then
+						score = -math.huge
+					end
+					if score > bestScore then
+						target, bestScore = o, score
+					end
+				end
+			end
+			if target and bestScore > -1.1 then
+				self:startAttack(id, target, n.troops * (0.35 + n.personality * 0.3))
+			elseif not next(nbrs) or (nbrs[0] == nil and target == nil) then
+				-- остров без соседей: десант на ближайший чужой берег
+				if frac > 0.6 and self:rand() < 0.3 then
+					local tries = 0
+					while tries < 30 do
+						tries += 1
+						local t = self:rand(1, self.W * self.H)
+						if self.coastal[t] and self.owner[t] ~= id and self:checkTarget(id, self.owner[t]) then
+							self:sendTransport(id, t, n.troops * 0.4)
+							break
+						end
+					end
+				end
+			end
+		end
+	end
+
+	-- стройка
+	local roll = self:rand()
+	if n.gold >= self:buildCost(id, "City") and roll < 0.5 then
+		local t = self:pickTile(id, function(t)
+			return not self.buildings[t] and not self.border[t]
+		end) or self:pickTile(id, function(t)
+			return not self.buildings[t]
+		end)
+		if t then
+			self:build(id, t, "City")
+		end
+	elseif n.built.Port == 0 and n.gold >= self:buildCost(id, "Port") then
+		local t = self:pickTile(id, function(t)
+			return self.coastal[t] and not self.buildings[t]
+		end)
+		if t then
+			self:build(id, t, "Port")
+		end
+	elseif n.gold >= self:buildCost(id, "Defense") * 1.5 and roll < 0.75 then
+		local t = self:pickTile(id, function(t)
+			if not self.border[t] or self.buildings[t] then
+				return false
+			end
+			for _, nb in ipairs(self.nb[t]) do
+				local o = self.owner[nb]
+				if o > 0 and o ~= id and not self:allied(id, o) then
+					return true
+				end
+			end
+			return false
+		end)
+		if t then
+			self:build(id, t, "Defense")
+		end
+	elseif n.tiles > 70 and n.gold >= self:buildCost(id, "Factory") then
+		local t = self:pickTile(id, function(t)
+			return not self.buildings[t]
+		end)
+		if t then
+			self:build(id, t, "Factory")
+		end
+	elseif n.tiles > 160 and n.built.Silo == 0 and n.gold >= self:buildCost(id, "Silo") then
+		local t = self:pickTile(id, function(t)
+			return not self.buildings[t] and not self.border[t]
+		end)
+		if t then
+			self:build(id, t, "Silo")
+		end
+	end
+	if n.built.Silo > 0 and n.gold >= cfg.NUKE_COST + 2000 and not self:isImmune() then
+		local leader = self:leader()
+		if leader and leader.id ~= id and not self:allied(id, leader.id) and self:rand() < 0.4 then
+			local t = self:pickTile(leader.id, function(t)
+				return self.buildings[t] ~= nil
+			end) or self:pickTile(leader.id, function()
+				return true
+			end)
+			if t then
+				self:launchNuke(id, t)
+			end
+		end
+	end
+
+	-- дипломатия
+	if self:rand() < 0.04 then
+		for o in pairs(nbrs) do
+			if o > 0 and not n.allies[o] and self.nations[o].troops > n.troops * 1.2 and self.nations[o].betrayals < 2 then
+				self:requestAlliance(id, o)
+				break
+			end
+		end
+	end
+	-- предать ослабевшего союзника, пока он занят войной;
+	-- а если вокруг одни союзники и воевать не с кем — разорвать союз со слабейшим
+	if not nbrs[0] and frac > 0.7 and self:rand() < 0.08 then
+		local onlyAllies = true
+		for o in pairs(nbrs) do
+			if o > 0 and not n.allies[o] then
+				onlyAllies = false
+			end
+		end
+		local weakest, wt = nil, math.huge
+		for o in pairs(n.allies) do
+			local ally = self.nations[o]
+			if nbrs[o] and (ally.troops < n.troops * 0.35 or onlyAllies) and ally.troops < wt then
+				weakest, wt = o, ally.troops
+			end
+		end
+		if weakest then
+			self:breakAlliance(id, weakest)
+		end
+	end
+end
+
+function Core:botsTick(dt)
+	for _, n in ipairs(self.nations) do
+		if n.isBot and n.alive then
+			n.botTimer += dt
+			if n.botTimer >= self.cfg.BOT_INTERVAL + n.botPhase then
+				n.botTimer = 0
+				n.botPhase = 0
+				if n.spawned then
+					self:botThink(n)
+				end
+			end
+		end
+	end
+end
+
+-- ------------------------------------------------------------ главный цикл
+
+function Core:startPlay()
+	self.phase = "play"
+	for _, n in ipairs(self.nations) do
+		if not n.spawned then
+			self:randomSpawn(n.id)
+		end
+	end
+	self:broadcast("Матч начался! Щит держится " .. self.cfg.IMMUNITY_TIME .. " с — захватывай нейтральные земли")
+end
+
+function Core:step(dt)
+	if self.phase == "over" then
+		return
+	end
+	self.time += dt
+	if self.phase == "spawn" then
+		for _, n in ipairs(self.nations) do
+			if n.isBot and not n.spawned and self.time > 1 + n.id * 0.2 then
+				self:randomSpawn(n.id)
+			end
+		end
+		if self.time >= self.cfg.SPAWN_TIME then
+			self:startPlay()
+		end
+		return
+	end
+	local acc = self.acc
+	acc.attack += dt
+	while acc.attack >= self.cfg.ATTACK_TICK do
+		acc.attack -= self.cfg.ATTACK_TICK
+		self:processAttacks()
+	end
+	acc.econ += dt
+	while acc.econ >= 1 do
+		acc.econ -= 1
+		self:economyTick()
+		self:checkWin()
+	end
+	self:updateShips(dt)
+	self:updateMissiles(dt)
+	self:botsTick(dt)
+end
+
+-- ------------------------------------------------------------ данные для интерфейса
+
+function Core:attackingTroops(id)
+	local s = 0
+	for _, at in ipairs(self.attacks) do
+		if at.attacker == id and not at.done then
+			s += at.troops
+		end
+	end
+	for _, sh in ipairs(self.ships) do
+		if sh.owner == id and sh.troops then
+			s += sh.troops
+		end
+	end
+	return math.floor(s)
+end
+
+function Core:snapshot()
+	local list = {}
+	for _, n in ipairs(self.nations) do
+		table.insert(list, {
+			id = n.id,
+			name = n.name,
+			color = n.color,
+			tiles = n.tiles,
+			troops = math.floor(n.troops),
+			alive = n.alive,
+			bot = n.isBot,
+			betrayals = n.betrayals,
+		})
+	end
+	local timer = 0
+	if self.phase == "spawn" then
+		timer = self.cfg.SPAWN_TIME - self.time
+	elseif self:isImmune() then
+		timer = self.cfg.SPAWN_TIME + self.cfg.IMMUNITY_TIME - self.time
+	elseif self.phase == "play" then
+		timer = self.cfg.MATCH_TIME - self.time
+	end
+	return { phase = self.phase, immune = self:isImmune(), timer = math.max(0, math.floor(timer)), land = self.landCount, nations = list, winner = self.winner }
+end
+
+function Core:personal(id)
+	local n = self.nations[id]
+	if not n then
+		return nil
+	end
+	local costs = {}
+	for _, kind in ipairs(self.cfg.BUILD_ORDER) do
+		costs[kind] = self:buildCost(id, kind)
+	end
+	costs.Nuke = self.cfg.NUKE_COST
+	local allies = {}
+	for o in pairs(n.allies) do
+		table.insert(allies, o)
+	end
+	local requests = {}
+	for from in pairs(self.requests[id]) do
+		table.insert(requests, from)
+	end
+	return {
+		id = id,
+		troops = math.floor(n.troops),
+		max = math.floor(self:maxTroops(n)),
+		gold = math.floor(n.gold),
+		tiles = n.tiles,
+		ratio = n.ratio,
+		alive = n.alive,
+		spawned = n.spawned,
+		attacking = self:attackingTroops(id),
+		costs = costs,
+		allies = allies,
+		requests = requests,
+		hasSilo = n.built.Silo > 0,
+	}
+end
+
+return Core
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">Models</string><ProtectedString name="Source"><![CDATA[-- Модели юнитов и построек.
+-- Берёт модели из ReplicatedStorage.FrontModels (импорт FBX из Blender через 3D Importer).
+-- Если модели там нет, собирает простую замену из блоков, чтобы игра работала сразу.
+-- Детали красятся по началу имени: Team — цвет страны, Metal, Dark, Hazard, Glass, Light.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Models = {}
+
+local PALETTE = {
+	Metal = { Color3.fromRGB(160, 164, 170), Enum.Material.Metal },
+	Dark = { Color3.fromRGB(42, 45, 50), Enum.Material.Metal },
+	Hazard = { Color3.fromRGB(240, 160, 30), Enum.Material.SmoothPlastic },
+	Glass = { Color3.fromRGB(110, 195, 220), Enum.Material.Glass },
+	Light = { Color3.fromRGB(255, 220, 120), Enum.Material.Neon },
+}
+
+local function prefixOf(name)
+	for _, p in ipairs({ "Team", "Metal", "Dark", "Hazard", "Glass", "Light" }) do
+		if string.sub(name, 1, #p) == p then
+			return p
+		end
+	end
+	return nil
+end
+
+function Models.paint(model, teamColor)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local p = prefixOf(d.Name)
+			if p == "Team" then
+				d.Color = teamColor
+				d.Material = Enum.Material.SmoothPlastic
+			elseif p then
+				d.Color = PALETTE[p][1]
+				d.Material = PALETTE[p][2]
+			end
+			if d:IsA("MeshPart") then
+				local sa = d:FindFirstChildOfClass("SurfaceAppearance")
+				if sa and p then
+					sa:Destroy()
+				end
+			end
+		end
+	end
+end
+
+-- ------------------------------------------------------------ запасные модели из блоков
+-- нос юнитов смотрит в -Z (LookVector), низ модели на y = 0
+
+local function block(model, name, size, pos, shape)
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.CFrame = CFrame.new(pos)
+	if shape == "cyl" then
+		p.Shape = Enum.PartType.Cylinder
+	elseif shape == "ball" then
+		p.Shape = Enum.PartType.Ball
+	end
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Parent = model
+	return p
+end
+
+local function rotated(part, cf)
+	part.CFrame = cf
+	return part
+end
+
+local FALLBACK = {}
+
+function FALLBACK.Tank(m)
+	block(m, "Dark", Vector3.new(0.35, 0.45, 1.7), Vector3.new(-0.55, 0.22, 0))
+	block(m, "Dark", Vector3.new(0.35, 0.45, 1.7), Vector3.new(0.55, 0.22, 0))
+	block(m, "Team", Vector3.new(1.0, 0.35, 1.5), Vector3.new(0, 0.6, 0))
+	block(m, "Team", Vector3.new(0.65, 0.3, 0.75), Vector3.new(0, 0.92, 0.1))
+	rotated(block(m, "Metal", Vector3.new(1.1, 0.13, 0.13), Vector3.zero, "cyl"), CFrame.new(0, 0.92, -0.7) * CFrame.Angles(0, math.rad(90), 0))
+end
+
+function FALLBACK.City(m)
+	block(m, "Dark", Vector3.new(3.4, 0.16, 3.4), Vector3.new(0, 0.08, 0))
+	for _, t in ipairs({ { -0.8, -0.7, 0.9, 1.9 }, { 0.7, -0.6, 0.8, 1.3 }, { -0.6, 0.8, 0.9, 1.1 }, { 0.8, 0.8, 0.7, 2.4 } }) do
+		local x, z, w, h = t[1], t[2], t[3], t[4]
+		block(m, "Metal", Vector3.new(w, h, w), Vector3.new(x, 0.16 + h / 2, z))
+		block(m, "Team", Vector3.new(w + 0.08, 0.12, w + 0.08), Vector3.new(x, 0.22 + h, z))
+		block(m, "Glass", Vector3.new(w * 0.7, h * 0.7, 0.04), Vector3.new(x, 0.16 + h / 2, z - w / 2))
+	end
+	block(m, "Light", Vector3.new(0.1, 0.1, 0.1), Vector3.new(0.8, 2.9, 0.8))
+end
+
+function FALLBACK.Port(m)
+	block(m, "Dark", Vector3.new(3.4, 0.24, 3.4), Vector3.new(0, 0.12, 0))
+	block(m, "Metal", Vector3.new(3.4, 0.08, 0.8), Vector3.new(0, 0.28, -1.3))
+	block(m, "Team", Vector3.new(1.6, 1.0, 1.6), Vector3.new(-0.7, 0.75, 0.6))
+	block(m, "Hazard", Vector3.new(0.18, 2.4, 0.18), Vector3.new(0.9, 1.4, -0.2))
+	block(m, "Hazard", Vector3.new(0.16, 0.16, 1.6), Vector3.new(0.9, 2.55, -0.85))
+	block(m, "Team", Vector3.new(0.9, 0.34, 0.42), Vector3.new(1.1, 0.42, 0.9))
+	block(m, "Hazard", Vector3.new(0.9, 0.34, 0.42), Vector3.new(1.1, 0.78, 0.9))
+end
+
+function FALLBACK.Defense(m)
+	block(m, "Dark", Vector3.new(2.4, 0.7, 2.4), Vector3.new(0, 0.35, 0))
+	block(m, "Hazard", Vector3.new(2.0, 0.06, 2.0), Vector3.new(0, 0.72, 0))
+	rotated(block(m, "Team", Vector3.new(0.55, 1.5, 1.5), Vector3.zero, "cyl"), CFrame.new(0, 1.0, 0) * CFrame.Angles(0, 0, math.rad(90)))
+	for _, x in ipairs({ -0.22, 0.22 }) do
+		rotated(block(m, "Metal", Vector3.new(1.3, 0.16, 0.16), Vector3.zero, "cyl"), CFrame.new(x, 1.05, -0.95) * CFrame.Angles(0, math.rad(90), 0))
+	end
+end
+
+function FALLBACK.Factory(m)
+	block(m, "Dark", Vector3.new(3.4, 0.2, 3.4), Vector3.new(0, 0.1, 0))
+	block(m, "Metal", Vector3.new(2.8, 1.3, 2.4), Vector3.new(0, 0.85, 0.2))
+	for i = 0, 3 do
+		rotated(block(m, "Team", Vector3.new(0.5, 0.5, 2.4), Vector3.zero), CFrame.new(-1.05 + i * 0.7, 1.55, 0.2) * CFrame.Angles(0, 0, math.rad(45)))
+	end
+	block(m, "Hazard", Vector3.new(1.4, 0.8, 0.06), Vector3.new(0, 0.6, -1.0))
+	block(m, "Metal", Vector3.new(0.4, 2.0, 0.4), Vector3.new(1.1, 1.7, 1.0))
+	block(m, "Light", Vector3.new(0.12, 0.1, 0.12), Vector3.new(1.1, 2.75, 1.0))
+end
+
+function FALLBACK.Silo(m)
+	block(m, "Dark", Vector3.new(3.2, 0.4, 3.2), Vector3.new(0, 0.2, 0))
+	rotated(block(m, "Hazard", Vector3.new(0.1, 2.6, 2.6), Vector3.zero, "cyl"), CFrame.new(0, 0.45, 0) * CFrame.Angles(0, 0, math.rad(90)))
+	rotated(block(m, "Metal", Vector3.new(0.2, 2.2, 2.2), Vector3.zero, "cyl"), CFrame.new(0, 0.55, 0) * CFrame.Angles(0, 0, math.rad(90)))
+	for _, c in ipairs({ { -1.35, -1.35 }, { 1.35, -1.35 }, { -1.35, 1.35 }, { 1.35, 1.35 } }) do
+		block(m, "Team", Vector3.new(0.4, 0.5, 0.4), Vector3.new(c[1], 0.65, c[2]))
+	end
+end
+
+function FALLBACK.Nuke(m)
+	rotated(block(m, "Metal", Vector3.new(2.2, 0.44, 0.44), Vector3.zero, "cyl"), CFrame.new(0, 0.22, 0) * CFrame.Angles(0, math.rad(90), 0))
+	block(m, "Light", Vector3.new(0.4, 0.4, 0.4), Vector3.new(0, 0.22, -1.2), "ball")
+	block(m, "Team", Vector3.new(0.9, 0.05, 0.4), Vector3.new(0, 0.22, 0.9))
+	block(m, "Team", Vector3.new(0.05, 0.9, 0.4), Vector3.new(0, 0.22, 0.9))
+end
+
+function FALLBACK.TransportShip(m)
+	block(m, "Team", Vector3.new(1.1, 0.5, 2.6), Vector3.new(0, 0.25, 0))
+	rotated(block(m, "Team", Vector3.new(0.78, 0.5, 0.78), Vector3.zero), CFrame.new(0, 0.25, -1.3) * CFrame.Angles(0, math.rad(45), 0))
+	block(m, "Hazard", Vector3.new(0.9, 0.3, 0.08), Vector3.new(0, 0.5, -1.25))
+	block(m, "Metal", Vector3.new(0.7, 0.6, 0.6), Vector3.new(0, 0.85, 0.85))
+	block(m, "Light", Vector3.new(0.08, 0.08, 0.08), Vector3.new(0, 1.5, 1.05))
+end
+
+function FALLBACK.TradeShip(m)
+	block(m, "Dark", Vector3.new(1.2, 0.6, 3.2), Vector3.new(0, 0.3, 0))
+	rotated(block(m, "Dark", Vector3.new(0.85, 0.6, 0.85), Vector3.zero), CFrame.new(0, 0.3, -1.6) * CFrame.Angles(0, math.rad(45), 0))
+	for i = 0, 5 do
+		local x = i % 2 == 0 and -0.27 or 0.27
+		local z = -0.9 + (i // 2) * 0.62
+		block(m, i % 3 == 1 and "Hazard" or "Team", Vector3.new(0.5, 0.44, 0.56), Vector3.new(x, 0.86, z))
+	end
+	block(m, "Metal", Vector3.new(0.9, 0.8, 0.5), Vector3.new(0, 1.0, 1.25))
+end
+
+-- ------------------------------------------------------------ сборка
+
+local cache = {}
+
+local function source(kind)
+	if cache[kind] ~= nil then
+		return cache[kind]
+	end
+	local folder = ReplicatedStorage:FindFirstChild("FrontModels")
+	local found = folder and folder:FindFirstChild(kind, true)
+	if found and found:IsA("BasePart") then
+		local m = Instance.new("Model")
+		m.Name = kind
+		found:Clone().Parent = m
+		found = m
+	elseif found and not found:IsA("Model") then
+		found = nil
+	end
+	if not found then
+		local m = Instance.new("Model")
+		m.Name = kind
+		local build = FALLBACK[kind]
+		if build then
+			build(m)
+		else
+			block(m, "Team", Vector3.new(1, 1, 1), Vector3.new(0, 0.5, 0))
+		end
+		found = m
+	end
+	cache[kind] = found
+	return found
+end
+
+-- копия модели: закреплена, без столкновений и без попадания лучей,
+-- уменьшена так, чтобы её ширина по земле была size стадов, точка опоры — центр низа
+function Models.make(kind, teamColor, size)
+	local m = source(kind):Clone()
+	for _, d in ipairs(m:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			d.CastShadow = false
+		end
+	end
+	Models.paint(m, teamColor)
+	local cf, ext = m:GetBoundingBox()
+	local span = math.max(ext.X, ext.Z, 0.01)
+	m:ScaleTo(m:GetScale() * size / span)
+	cf, ext = m:GetBoundingBox()
+	m.WorldPivot = CFrame.new(cf.Position - Vector3.new(0, ext.Y / 2, 0))
+	return m
+end
+
+return Models
+]]></ProtectedString></Properties></Item></Item><Item class="Folder" referent="RBX00000006"><Properties><string name="Name">FrontModels</string></Properties></Item></Item><Item class="ServerScriptService" referent="RBX00000009"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX00000008"><Properties><string name="Name">FrontServer</string><ProtectedString name="Source"><![CDATA[-- Сервер режима «Фронт»: ведёт матч (ядро Core), рисует карту и постройки,
+-- принимает действия игроков и рассылает им состояние и эффекты.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+
+local Shared = ReplicatedStorage:WaitForChild("Front")
+local Config = require(Shared:WaitForChild("Config"))
+local Core = require(Shared:WaitForChild("Core"))
+local Models = require(Shared:WaitForChild("Models"))
+
+Players.CharacterAutoLoads = false
+
+local remotes = Shared:FindFirstChild("Remotes") or Instance.new("Folder")
+remotes.Name = "Remotes"
+remotes.Parent = Shared
+local function remote(name)
+	local r = remotes:FindFirstChild(name) or Instance.new("RemoteEvent")
+	r.Name = name
+	r.Parent = remotes
+	return r
+end
+local Action = remote("Action") -- клиент -> сервер: действие игрока
+local State = remote("State")   -- сервер -> клиент: состояние матча
+local Fx = remote("Fx")         -- сервер -> клиенты: корабли, ракеты, танки
+local Notice = remote("Notice") -- сервер -> клиент: сообщения и предложения союза
+
+Lighting.ClockTime = 13.5
+Lighting.Brightness = 2
+Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 160)
+Lighting.GlobalShadows = true
+local baseplate = workspace:FindFirstChild("Baseplate")
+if baseplate then
+	baseplate:Destroy()
+end
+
+local T = Config.TILE
+local W, H = Config.MAP_W, Config.MAP_H
+local HEIGHT = { [1] = 1, [2] = 1.8, [3] = 3.2 }
+local TERRAIN_COLOR = {
+	[1] = Color3.fromRGB(118, 164, 84),
+	[2] = Color3.fromRGB(150, 156, 96),
+	[3] = Color3.fromRGB(126, 124, 118),
+}
+local BLACK = Color3.new(0, 0, 0)
+
+local core
+local mapFolder, buildingFolder
+local tileParts = {}
+local buildingModels = {}
+local nationOf = {} -- Player -> id страны
+local playerOf = {} -- id страны -> Player
+local roundOver = false
+local lastActions = {} -- Player -> счётчик действий за секунду
+
+local function nationColor(id)
+	local c = core.nations[id].color
+	return Color3.fromRGB(c[1], c[2], c[3])
+end
+
+local function tileTop(i)
+	local p = tileParts[i]
+	if p then
+		return p.Position + Vector3.new(0, p.Size.Y / 2, 0)
+	end
+	return Config.tileCenter(i)
+end
+
+-- ------------------------------------------------------------ карта
+
+local function paintTile(i)
+	local p = tileParts[i]
+	if not p then
+		return
+	end
+	local o = core.owner[i]
+	local base = TERRAIN_COLOR[core.terrain[i]]
+	if o > 0 then
+		local c = nationColor(o)
+		p.Color = core.border[i] and c:Lerp(BLACK, 0.35) or base:Lerp(c, 0.7)
+	else
+		p.Color = base
+	end
+	p:SetAttribute("O", o)
+end
+
+local function buildMap()
+	if mapFolder then
+		mapFolder:Destroy()
+	end
+	if buildingFolder then
+		buildingFolder:Destroy()
+	end
+	tileParts, buildingModels = {}, {}
+
+	local folder = Instance.new("Folder")
+	folder.Name = "FrontMap"
+	local water = Instance.new("Part")
+	water.Name = "Water"
+	water.Anchored = true
+	water.Size = Vector3.new(W * T + 800, 2, H * T + 800)
+	water.Position = Vector3.new(0, -1, 0)
+	water.Color = Color3.fromRGB(38, 104, 168)
+	water.Material = Enum.Material.SmoothPlastic
+	water.Reflectance = 0.08
+	water.TopSurface = Enum.SurfaceType.Smooth
+	water.Parent = folder
+	for i = 1, W * H do
+		local t = core.terrain[i]
+		if t ~= Core.WATER then
+			local h = HEIGHT[t]
+			local c = Config.tileCenter(i)
+			local p = Instance.new("Part")
+			p.Name = "Tile"
+			p.Anchored = true
+			p.CanCollide = false
+			p.CastShadow = false
+			p.Size = Vector3.new(T, h, T)
+			p.Position = Vector3.new(c.X, h / 2 - 0.2, c.Z)
+			p.Material = t == Core.MOUNTAIN and Enum.Material.Slate or Enum.Material.SmoothPlastic
+			p.TopSurface = Enum.SurfaceType.Smooth
+			p.BottomSurface = Enum.SurfaceType.Smooth
+			p:SetAttribute("I", i)
+			p.Parent = folder
+			tileParts[i] = p
+			paintTile(i)
+		end
+	end
+	folder.Parent = workspace
+	mapFolder = folder
+
+	buildingFolder = Instance.new("Folder")
+	buildingFolder.Name = "FrontBuildings"
+	buildingFolder.Parent = workspace
+end
+
+-- ------------------------------------------------------------ постройки
+
+local function placeBuilding(i, kind, level, owner)
+	local old = buildingModels[i]
+	if old then
+		old:Destroy()
+	end
+	local m = Models.make(kind, nationColor(owner), T * (0.78 + 0.05 * level))
+	local top = tileTop(i)
+	local cf = CFrame.new(top) * CFrame.Angles(0, math.rad(Config.MODEL_YAW), 0)
+	if kind == "Port" then
+		-- причалом к воде
+		for _, n in ipairs(core.nb[i]) do
+			if core.terrain[n] == Core.WATER then
+				local w = Config.tileCenter(n)
+				cf = CFrame.lookAt(top, Vector3.new(w.X, top.Y, w.Z)) * CFrame.Angles(0, math.rad(Config.MODEL_YAW), 0)
+				break
+			end
+		end
+	end
+	m:PivotTo(cf)
+	m.Name = kind
+	m:SetAttribute("Tile", i)
+	m:SetAttribute("Level", level)
+	if level > 1 then
+		local gui = Instance.new("BillboardGui")
+		gui.Size = UDim2.fromOffset(40, 18)
+		gui.StudsOffsetWorldSpace = Vector3.new(0, T * 0.9, 0)
+		gui.AlwaysOnTop = true
+		gui.MaxDistance = 220
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundTransparency = 0.3
+		label.BackgroundColor3 = Color3.fromRGB(20, 22, 26)
+		label.TextColor3 = Color3.new(1, 1, 1)
+		label.Font = Enum.Font.GothamBold
+		label.TextScaled = true
+		label.Text = "ур. " .. level
+		label.Parent = gui
+		gui.Parent = m
+	end
+	m.Parent = buildingFolder
+	buildingModels[i] = m
+end
+
+-- ------------------------------------------------------------ события ядра
+
+local newRound
+
+local function playerFx(kind, data)
+	Fx:FireAllClients(kind, data)
+end
+
+local function handleEvent(e)
+	local t = e.type
+	if t == "building" then
+		placeBuilding(e.tile, e.kind, e.level, e.owner)
+	elseif t == "buildingOwner" then
+		local m = buildingModels[e.tile]
+		if m then
+			Models.paint(m, nationColor(e.owner))
+		end
+	elseif t == "buildingRemoved" then
+		local m = buildingModels[e.tile]
+		if m then
+			m:Destroy()
+			buildingModels[e.tile] = nil
+		end
+	elseif t == "ship" then
+		playerFx("ship", { kind = e.kind, color = nationColor(e.owner), path = e.path, duration = e.duration })
+	elseif t == "nuke" then
+		playerFx("nuke", { from = e.from, to = e.to, duration = e.duration, color = nationColor(e.owner) })
+	elseif t == "nukeHit" then
+		playerFx("boom", { tile = e.tile, radius = e.radius })
+	elseif t == "notify" then
+		if e.nation then
+			local pl = playerOf[e.nation]
+			if pl then
+				Notice:FireClient(pl, { text = e.text })
+			end
+		else
+			Notice:FireAllClients({ text = e.text })
+		end
+	elseif t == "allianceRequest" then
+		local pl = playerOf[e.to]
+		if pl then
+			Notice:FireClient(pl, { request = e.from, text = core.nations[e.from].name .. " предлагает союз" })
+		end
+	elseif t == "eliminated" then
+		local pl = playerOf[e.nation]
+		if pl then
+			Notice:FireClient(pl, { text = "Твоя страна уничтожена. Досмотри матч — новый раунд скоро", bad = true })
+		end
+	elseif t == "win" then
+		if not roundOver then
+			roundOver = true
+			local n = core.nations[e.nation]
+			Notice:FireAllClients({ win = e.nation, text = string.format("Победа: %s — %s", n.name, e.reason) })
+			task.delay(Config.RESTART_DELAY, newRound)
+		end
+	end
+end
+
+-- танки едут к клеткам, которые сейчас захватывают
+local tankTimers = {}
+local function tankFx(dt)
+	local budget = 10
+	for _, at in ipairs(core.attacks) do
+		if not at.done and at.last and budget > 0 then
+			local timer = (tankTimers[at.id] or 0) - dt
+			if timer <= 0 then
+				timer = 1.1
+				local to = at.last
+				for _, n in ipairs(core.nb[to]) do
+					if core.owner[n] == at.attacker then
+						budget -= 1
+						playerFx("tank", { from = n, to = to, color = nationColor(at.attacker) })
+						break
+					end
+				end
+			end
+			tankTimers[at.id] = timer
+		end
+	end
+end
+
+-- ------------------------------------------------------------ игроки
+
+local function joinPlayer(player)
+	if not core or roundOver or nationOf[player] then
+		return
+	end
+	local id = core:addNation(player.DisplayName, false, player.UserId)
+	nationOf[player] = id
+	playerOf[id] = player
+	if core.phase == "play" then
+		local ok = core:randomSpawn(id)
+		if ok then
+			Notice:FireClient(player, { text = "Ты появился на свободной земле. Расширяйся!" })
+		else
+			core.nations[id].alive = false
+			Notice:FireClient(player, { text = "Свободной земли нет — подожди следующий раунд", bad = true })
+		end
+	else
+		Notice:FireClient(player, { text = "Нажми на карту, чтобы выбрать место старта" })
+	end
+end
+
+Players.PlayerAdded:Connect(joinPlayer)
+Players.PlayerRemoving:Connect(function(player)
+	local id = nationOf[player]
+	if id and core then
+		local n = core.nations[id]
+		n.isBot = true
+		n.name = n.name .. " (бот)"
+		playerOf[id] = nil
+	end
+	nationOf[player] = nil
+	lastActions[player] = nil
+end)
+
+local function int(v)
+	if typeof(v) ~= "number" or v ~= v or v == math.huge or v == -math.huge then
+		return nil
+	end
+	return math.floor(v)
+end
+
+Action.OnServerEvent:Connect(function(player, kind, a, b)
+	local id = nationOf[player]
+	if not core or not id or typeof(kind) ~= "string" then
+		return
+	end
+	-- не больше 15 действий в секунду
+	local now = os.clock()
+	local rec = lastActions[player] or { t = now, n = 0 }
+	if now - rec.t > 1 then
+		rec.t, rec.n = now, 0
+	end
+	rec.n += 1
+	lastActions[player] = rec
+	if rec.n > 15 then
+		return
+	end
+
+	local n = core.nations[id]
+	local ok, msg = true, nil
+	local ia = int(a)
+	if kind == "tap" and ia then
+		if core.phase == "spawn" then
+			ok, msg = core:spawn(id, ia)
+		else
+			ok, msg = core:attackTile(id, ia, n.ratio)
+		end
+	elseif kind == "ratio" and typeof(a) == "number" and a == a then
+		n.ratio = math.clamp(a, 0.05, 1)
+	elseif kind == "build" and ia and typeof(b) == "string" then
+		ok, msg = core:build(id, ia, b)
+	elseif kind == "nuke" and ia then
+		ok, msg = core:launchNuke(id, ia)
+	elseif kind == "ally" and ia then
+		ok, msg = core:requestAlliance(id, ia)
+	elseif kind == "allyAt" and ia then
+		local o = core.owner[ia]
+		if o and o > 0 then
+			ok, msg = core:requestAlliance(id, o)
+		else
+			ok, msg = false, "Здесь нет страны"
+		end
+	elseif kind == "answer" and ia then
+		ok, msg = core:respondAlliance(id, ia, b == true)
+	elseif kind == "break" and ia then
+		ok, msg = core:breakAlliance(id, ia)
+	end
+	if not ok and msg then
+		Notice:FireClient(player, { text = msg, bad = true })
+	end
+end)
+
+-- ------------------------------------------------------------ раунды
+
+newRound = function()
+	roundOver = false
+	core = Core.new(Config, os.time() + math.random(1, 1000000))
+	nationOf, playerOf, tankTimers = {}, {}, {}
+	buildMap()
+	for _, p in ipairs(Players:GetPlayers()) do
+		joinPlayer(p)
+	end
+	for _ = #core.nations + 1, Config.NATIONS do
+		core:addNation(nil, true)
+	end
+	Fx:FireAllClients("reset", {})
+end
+
+newRound()
+
+local stateAcc = 0
+RunService.Heartbeat:Connect(function(dt)
+	if not core then
+		return
+	end
+	dt = math.min(dt, 0.2)
+	core:step(dt)
+	for i in pairs(core:takeDirty()) do
+		paintTile(i)
+	end
+	for _, e in ipairs(core:takeEvents()) do
+		handleEvent(e)
+	end
+	tankFx(dt)
+	stateAcc += dt
+	if stateAcc >= 0.5 then
+		stateAcc = 0
+		local snap = core:snapshot()
+		for _, p in ipairs(Players:GetPlayers()) do
+			local id = nationOf[p]
+			State:FireClient(p, snap, id and core:personal(id) or nil)
+		end
+	end
+end)
+]]></ProtectedString></Properties></Item></Item><Item class="StarterPlayer" referent="RBX0000000C"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX0000000B"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX0000000A"><Properties><string name="Name">FrontClient</string><ProtectedString name="Source"><![CDATA[-- Клиент режима «Фронт»: камера сверху, управление пальцем и мышью, интерфейс,
+-- эффекты (корабли, ракеты, танки). Вся логика матча — на сервере.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local Shared = ReplicatedStorage:WaitForChild("Front")
+local Config = require(Shared:WaitForChild("Config"))
+local Models = require(Shared:WaitForChild("Models"))
+local Remotes = Shared:WaitForChild("Remotes")
+local Action = Remotes:WaitForChild("Action")
+local State = Remotes:WaitForChild("State")
+local Fx = Remotes:WaitForChild("Fx")
+local Notice = Remotes:WaitForChild("Notice")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local T = Config.TILE
+local MAP_W, MAP_H = Config.MAP_W * T, Config.MAP_H * T
+
+-- ------------------------------------------------------------ клетки карты
+
+local tiles = {} -- номер клетки -> Part
+local function indexMap(folder)
+	tiles = {}
+	for _, p in ipairs(folder:GetChildren()) do
+		local i = p:GetAttribute("I")
+		if i then
+			tiles[i] = p
+		end
+	end
+end
+local function currentMap()
+	return workspace:FindFirstChild("FrontMap")
+end
+workspace.ChildAdded:Connect(function(c)
+	if c.Name == "FrontMap" then
+		task.wait(0.5)
+		indexMap(c)
+	end
+end)
+task.spawn(function()
+	indexMap(workspace:WaitForChild("FrontMap"))
+end)
+
+local function tileTop(i)
+	local p = tiles[i]
+	if p then
+		return p.Position + Vector3.new(0, p.Size.Y / 2, 0)
+	end
+	return Config.tileCenter(i) + Vector3.new(0, 0.1, 0)
+end
+
+-- ------------------------------------------------------------ камера
+
+local focus = Vector3.zero
+local zoom = 240
+local ZOOM_MIN, ZOOM_MAX = 40, 330
+
+local function clampFocus()
+	focus = Vector3.new(math.clamp(focus.X, -MAP_W / 2, MAP_W / 2), 0, math.clamp(focus.Z, -MAP_H / 2, MAP_H / 2))
+end
+
+local function worldPerPixel()
+	local vp = camera.ViewportSize
+	return 2 * zoom * 1.1 * math.tan(math.rad(camera.FieldOfView / 2)) / math.max(vp.Y, 1)
+end
+
+local function pan(delta)
+	local k = worldPerPixel()
+	focus -= Vector3.new(delta.X * k, 0, delta.Y * k)
+	clampFocus()
+end
+
+RunService:BindToRenderStep("FrontCamera", Enum.RenderPriority.Camera.Value + 1, function()
+	camera.CameraType = Enum.CameraType.Scriptable
+	camera.FieldOfView = 50
+	local pos = focus + Vector3.new(0, zoom, zoom * 0.45)
+	camera.CFrame = CFrame.lookAt(pos, focus)
+end)
+
+-- ------------------------------------------------------------ интерфейс
+
+local COLORS = {
+	panel = Color3.fromRGB(18, 22, 28),
+	panel2 = Color3.fromRGB(30, 36, 44),
+	ink = Color3.fromRGB(236, 238, 240),
+	dim = Color3.fromRGB(150, 158, 168),
+	accent = Color3.fromRGB(255, 176, 46),
+	bad = Color3.fromRGB(235, 87, 70),
+	good = Color3.fromRGB(90, 200, 120),
+	troops = Color3.fromRGB(90, 160, 240),
+}
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "FrontUI"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = player:WaitForChild("PlayerGui")
+local uiScale = Instance.new("UIScale")
+uiScale.Parent = gui
+
+local function corner(parent, r)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, r or 8)
+	c.Parent = parent
+end
+
+local function frame(parent, props)
+	local f = Instance.new("Frame")
+	f.BackgroundColor3 = COLORS.panel
+	f.BackgroundTransparency = 0.15
+	f.BorderSizePixel = 0
+	for k, v in pairs(props or {}) do
+		f[k] = v
+	end
+	f.Parent = parent
+	return f
+end
+
+local function label(parent, props)
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.TextColor3 = COLORS.ink
+	l.Font = Enum.Font.GothamMedium
+	l.TextSize = 14
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	for k, v in pairs(props or {}) do
+		l[k] = v
+	end
+	l.Parent = parent
+	return l
+end
+
+local function button(parent, props)
+	local b = Instance.new("TextButton")
+	b.BackgroundColor3 = COLORS.panel2
+	b.BorderSizePixel = 0
+	b.TextColor3 = COLORS.ink
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 14
+	b.AutoButtonColor = true
+	for k, v in pairs(props or {}) do
+		b[k] = v
+	end
+	b.Parent = parent
+	corner(b, 8)
+	return b
+end
+
+local function fmt(n)
+	n = n or 0
+	if n >= 1e6 then
+		return string.format("%.1fM", n / 1e6)
+	elseif n >= 1e4 then
+		return string.format("%.0fk", n / 1e3)
+	elseif n >= 1e3 then
+		return string.format("%.1fk", n / 1e3)
+	end
+	return tostring(math.floor(n))
+end
+
+-- статистика (слева сверху)
+local stats = frame(gui, { Size = UDim2.fromOffset(230, 92), Position = UDim2.fromOffset(10, 8) })
+corner(stats, 10)
+local troopsLabel = label(stats, { Size = UDim2.new(1, -20, 0, 18), Position = UDim2.fromOffset(10, 6), Text = "Войска" })
+local troopsBack = frame(stats, { Size = UDim2.new(1, -20, 0, 8), Position = UDim2.fromOffset(10, 27), BackgroundColor3 = COLORS.panel2, BackgroundTransparency = 0 })
+corner(troopsBack, 4)
+local troopsFill = frame(troopsBack, { Size = UDim2.fromScale(0, 1), BackgroundColor3 = COLORS.troops, BackgroundTransparency = 0 })
+corner(troopsFill, 4)
+local goldLabel = label(stats, { Size = UDim2.new(1, -20, 0, 18), Position = UDim2.fromOffset(10, 42), Text = "Золото", TextColor3 = COLORS.accent })
+local landLabel = label(stats, { Size = UDim2.new(1, -20, 0, 18), Position = UDim2.fromOffset(10, 64), Text = "Земля", TextColor3 = COLORS.dim, TextSize = 13 })
+
+-- фаза и таймер (по центру сверху)
+local phaseLabel = label(gui, {
+	Size = UDim2.fromOffset(320, 30), Position = UDim2.new(0.5, -160, 0, 8),
+	TextXAlignment = Enum.TextXAlignment.Center, Font = Enum.Font.GothamBold, TextSize = 16,
+	BackgroundTransparency = 0.15, BackgroundColor3 = COLORS.panel,
+})
+corner(phaseLabel, 10)
+
+-- лидеры (справа сверху)
+local board = frame(gui, { Size = UDim2.fromOffset(250, 30), Position = UDim2.new(1, -260, 0, 8), AutomaticSize = Enum.AutomaticSize.Y })
+corner(board, 10)
+local boardList = Instance.new("UIListLayout")
+boardList.Padding = UDim.new(0, 2)
+boardList.SortOrder = Enum.SortOrder.LayoutOrder
+boardList.Parent = board
+local boardPad = Instance.new("UIPadding")
+boardPad.PaddingTop, boardPad.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
+boardPad.PaddingLeft, boardPad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
+boardPad.Parent = board
+local boardTitle = label(board, { Size = UDim2.new(1, 0, 0, 18), Text = "Страны", Font = Enum.Font.GothamBold, TextColor3 = COLORS.dim, TextSize = 12, LayoutOrder = 0 })
+local boardOpen = true
+local boardToggle = button(gui, { Size = UDim2.fromOffset(60, 26), Position = UDim2.new(1, -330, 0, 10), Text = "Топ", TextSize = 13 })
+
+-- уведомления (слева, под статистикой)
+local feed = frame(gui, { Size = UDim2.fromOffset(300, 10), Position = UDim2.fromOffset(10, 108), BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y })
+local feedList = Instance.new("UIListLayout")
+feedList.Padding = UDim.new(0, 4)
+feedList.Parent = feed
+
+-- большой баннер по центру
+local banner = label(gui, {
+	Size = UDim2.new(1, 0, 0, 60), Position = UDim2.new(0, 0, 0.32, 0),
+	TextXAlignment = Enum.TextXAlignment.Center, Font = Enum.Font.GothamBlack, TextSize = 30,
+	TextStrokeTransparency = 0.4, Text = "", Visible = false,
+})
+
+-- доля войск для атаки (слева снизу)
+local ratioBar = frame(gui, { Size = UDim2.fromOffset(270, 52), Position = UDim2.new(0, 10, 1, -62) })
+corner(ratioBar, 10)
+label(ratioBar, { Size = UDim2.fromOffset(250, 14), Position = UDim2.fromOffset(10, 3), Text = "Войск в атаку", TextColor3 = COLORS.dim, TextSize = 11 })
+local ratioButtons = {}
+local RATIOS = { 0.2, 0.4, 0.6, 0.8, 1.0 }
+local myRatio = Config.DEFAULT_RATIO
+for k, r in ipairs(RATIOS) do
+	local b = button(ratioBar, { Size = UDim2.fromOffset(46, 28), Position = UDim2.fromOffset(10 + (k - 1) * 51, 19), Text = math.floor(r * 100) .. "%", TextSize = 13 })
+	b.Activated:Connect(function()
+		myRatio = r
+		Action:FireServer("ratio", r)
+	end)
+	ratioButtons[r] = b
+end
+
+-- режимы и постройки (снизу справа, прокрутка на узком экране)
+local bar = Instance.new("ScrollingFrame")
+bar.Size = UDim2.new(1, -300, 0, 62)
+bar.Position = UDim2.new(0, 290, 1, -66)
+bar.BackgroundTransparency = 1
+bar.BorderSizePixel = 0
+bar.ScrollBarThickness = 3
+bar.ScrollingDirection = Enum.ScrollingDirection.X
+bar.AutomaticCanvasSize = Enum.AutomaticSize.X
+bar.CanvasSize = UDim2.new(0, 0, 0, 0)
+bar.Parent = gui
+local barList = Instance.new("UIListLayout")
+barList.FillDirection = Enum.FillDirection.Horizontal
+barList.HorizontalAlignment = Enum.HorizontalAlignment.Right
+barList.Padding = UDim.new(0, 6)
+barList.SortOrder = Enum.SortOrder.LayoutOrder
+barList.Parent = bar
+
+local mode = "attack"
+local modeButtons = {}
+local MODES = {
+	{ id = "attack", name = "Атака" },
+	{ id = "City", name = "Город" },
+	{ id = "Port", name = "Порт" },
+	{ id = "Defense", name = "Турель" },
+	{ id = "Factory", name = "Завод" },
+	{ id = "Silo", name = "Шахта" },
+	{ id = "Nuke", name = "Ракета" },
+	{ id = "ally", name = "Союз" },
+}
+for k, m in ipairs(MODES) do
+	local b = button(bar, { Size = UDim2.fromOffset(74, 54), Text = "", LayoutOrder = k })
+	label(b, { Name = "Title", Size = UDim2.new(1, 0, 0, 20), Position = UDim2.fromOffset(0, 8), Text = m.name, Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Center })
+	label(b, { Name = "Price", Size = UDim2.new(1, 0, 0, 16), Position = UDim2.fromOffset(0, 30), Text = "", TextSize = 12, TextColor3 = COLORS.accent, TextXAlignment = Enum.TextXAlignment.Center })
+	b.Activated:Connect(function()
+		mode = (mode == m.id and m.id ~= "attack") and "attack" or m.id
+	end)
+	modeButtons[m.id] = b
+end
+
+-- предложение союза
+local requestBox = frame(gui, { Size = UDim2.fromOffset(330, 44), Position = UDim2.new(0.5, -165, 0, 46), Visible = false })
+corner(requestBox, 10)
+local requestText = label(requestBox, { Size = UDim2.new(1, -170, 1, 0), Position = UDim2.fromOffset(10, 0), TextWrapped = true, TextSize = 13 })
+local acceptBtn = button(requestBox, { Size = UDim2.fromOffset(74, 30), Position = UDim2.new(1, -160, 0, 7), Text = "Принять", BackgroundColor3 = Color3.fromRGB(40, 120, 70) })
+local declineBtn = button(requestBox, { Size = UDim2.fromOffset(74, 30), Position = UDim2.new(1, -80, 0, 7), Text = "Отказ" })
+local requestFrom = nil
+
+local function layout()
+	local vp = camera.ViewportSize
+	uiScale.Scale = vp.Y < 420 and 0.8 or (vp.Y < 600 and 0.9 or 1)
+	board.Visible = boardOpen
+end
+camera:GetPropertyChangedSignal("ViewportSize"):Connect(layout)
+layout()
+boardToggle.Activated:Connect(function()
+	boardOpen = not boardOpen
+	layout()
+end)
+
+local function toast(text, color, life)
+	local l = label(feed, {
+		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Text = text, TextWrapped = true,
+		TextSize = 13, TextColor3 = color or COLORS.ink, BackgroundTransparency = 0.25, BackgroundColor3 = COLORS.panel,
+	})
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
+	pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 4), UDim.new(0, 4)
+	pad.Parent = l
+	corner(l, 6)
+	local items = feed:GetChildren()
+	local count = 0
+	for _, c in ipairs(items) do
+		if c:IsA("TextLabel") then
+			count += 1
+		end
+	end
+	if count > 5 then
+		for _, c in ipairs(items) do
+			if c:IsA("TextLabel") and c ~= l then
+				c:Destroy()
+				break
+			end
+		end
+	end
+	task.delay(life or 6, function()
+		if l.Parent then
+			l:Destroy()
+		end
+	end)
+end
+
+local bannerToken = 0
+local function showBanner(text, seconds)
+	bannerToken += 1
+	local token = bannerToken
+	banner.Text = text
+	banner.Visible = true
+	if seconds then
+		task.delay(seconds, function()
+			if bannerToken == token then
+				banner.Visible = false
+			end
+		end)
+	end
+end
+
+acceptBtn.Activated:Connect(function()
+	if requestFrom then
+		Action:FireServer("answer", requestFrom, true)
+	end
+	requestFrom = nil
+	requestBox.Visible = false
+end)
+declineBtn.Activated:Connect(function()
+	if requestFrom then
+		Action:FireServer("answer", requestFrom, false)
+	end
+	requestFrom = nil
+	requestBox.Visible = false
+end)
+
+-- ------------------------------------------------------------ состояние
+
+local snap, me = nil, nil
+local boardRows = {}
+
+local function nationColor(n)
+	return Color3.fromRGB(n.color[1], n.color[2], n.color[3])
+end
+
+local function renderBoard()
+	for _, r in ipairs(boardRows) do
+		r:Destroy()
+	end
+	boardRows = {}
+	if not snap then
+		return
+	end
+	local list = {}
+	for _, n in ipairs(snap.nations) do
+		if n.alive and n.tiles > 0 then
+			table.insert(list, n)
+		end
+	end
+	table.sort(list, function(a, b)
+		return a.tiles > b.tiles
+	end)
+	local allies = {}
+	if me then
+		for _, a in ipairs(me.allies) do
+			allies[a] = true
+		end
+	end
+	local shown = {}
+	for k, n in ipairs(list) do
+		if k <= 7 or (me and n.id == me.id) or allies[n.id] then
+			table.insert(shown, { rank = k, n = n })
+		end
+	end
+	boardTitle.Text = string.format("Страны · живых %d · победа %d%% суши", #list, math.floor(Config.WIN_SHARE * 100))
+	for k, item in ipairs(shown) do
+		local n = item.n
+		local row = Instance.new("Frame")
+		row.BackgroundTransparency = 1
+		row.Size = UDim2.new(1, 0, 0, 24)
+		row.LayoutOrder = k
+		row.Parent = board
+		local sw = frame(row, { Size = UDim2.fromOffset(10, 10), Position = UDim2.fromOffset(0, 7), BackgroundColor3 = nationColor(n), BackgroundTransparency = 0 })
+		corner(sw, 3)
+		local isMe = me and n.id == me.id
+		local name = string.format("%d. %s%s", item.rank, allies[n.id] and "★ " or "", n.name)
+		label(row, {
+			Size = UDim2.new(1, -112, 1, 0), Position = UDim2.fromOffset(16, 0), Text = name, TextSize = 13,
+			TextTruncate = Enum.TextTruncate.AtEnd, Font = isMe and Enum.Font.GothamBold or Enum.Font.GothamMedium,
+			TextColor3 = isMe and COLORS.accent or COLORS.ink,
+		})
+		label(row, {
+			Size = UDim2.fromOffset(44, 24), Position = UDim2.new(1, -96, 0, 0), TextSize = 12, TextColor3 = COLORS.dim,
+			TextXAlignment = Enum.TextXAlignment.Right, Text = string.format("%.0f%%", n.tiles / snap.land * 100),
+		})
+		if me and not isMe and me.alive then
+			local isAlly = allies[n.id]
+			local b = button(row, {
+				Size = UDim2.fromOffset(46, 20), Position = UDim2.new(1, -46, 0, 2), TextSize = 11,
+				Text = isAlly and "Рвать" or "Союз", BackgroundColor3 = isAlly and Color3.fromRGB(110, 40, 36) or COLORS.panel2,
+			})
+			local target = n.id
+			b.Activated:Connect(function()
+				Action:FireServer(isAlly and "break" or "ally", target)
+			end)
+		end
+		table.insert(boardRows, row)
+	end
+end
+
+local lastPhase
+local function renderState()
+	if not snap then
+		return
+	end
+	if snap.phase == "spawn" then
+		phaseLabel.Text = string.format("Выбери место старта: %d с", snap.timer)
+		phaseLabel.TextColor3 = COLORS.accent
+	elseif snap.phase == "play" and snap.immune then
+		phaseLabel.Text = string.format("Щит: %d с — захватывай ничьи земли", snap.timer)
+		phaseLabel.TextColor3 = COLORS.troops
+	elseif snap.phase == "play" then
+		phaseLabel.Text = string.format("До конца матча %d:%02d", snap.timer // 60, snap.timer % 60)
+		phaseLabel.TextColor3 = COLORS.ink
+	else
+		phaseLabel.Text = "Раунд окончен"
+		phaseLabel.TextColor3 = COLORS.dim
+	end
+	if snap.phase ~= lastPhase then
+		if snap.phase == "spawn" then
+			showBanner("Нажми на карту — там начнётся твоя страна", 5)
+		elseif snap.phase == "play" and lastPhase == "spawn" then
+			showBanner("В бой!", 2)
+		end
+		lastPhase = snap.phase
+	end
+
+	if me then
+		troopsLabel.Text = string.format("Войска %s / %s%s", fmt(me.troops), fmt(me.max), me.attacking > 0 and (" · в атаке " .. fmt(me.attacking)) or "")
+		troopsFill.Size = UDim2.fromScale(math.clamp(me.troops / math.max(1, me.max), 0, 1), 1)
+		goldLabel.Text = "Золото " .. fmt(me.gold)
+		landLabel.Text = string.format("Земля %d клеток · %.1f%% суши", me.tiles, me.tiles / snap.land * 100)
+		myRatio = me.ratio
+	else
+		troopsLabel.Text = "Ты зритель"
+		goldLabel.Text = ""
+		landLabel.Text = "Новый раунд скоро"
+	end
+	for r, b in pairs(ratioButtons) do
+		b.BackgroundColor3 = math.abs(r - myRatio) < 0.01 and Color3.fromRGB(60, 100, 160) or COLORS.panel2
+	end
+	for id, b in pairs(modeButtons) do
+		local price = me and me.costs[id]
+		b.Price.Text = price and fmt(price) or (id == "attack" and "по тапу" or (id == "ally" and "тап по стране" or ""))
+		local can = not price or (me and me.gold >= price)
+		b.Price.TextColor3 = can and COLORS.accent or COLORS.bad
+		b.BackgroundColor3 = mode == id and Color3.fromRGB(160, 100, 20) or COLORS.panel2
+	end
+	renderBoard()
+end
+
+State.OnClientEvent:Connect(function(s, mine)
+	snap, me = s, mine
+	renderState()
+end)
+
+Notice.OnClientEvent:Connect(function(data)
+	if data.request then
+		requestFrom = data.request
+		requestText.Text = data.text
+		requestBox.Visible = true
+		task.delay(18, function()
+			if requestFrom == data.request then
+				requestBox.Visible = false
+				requestFrom = nil
+			end
+		end)
+	elseif data.win then
+		showBanner(data.text, Config.RESTART_DELAY)
+		toast(data.text, COLORS.accent, 10)
+	else
+		toast(data.text, data.bad and COLORS.bad or nil)
+	end
+end)
+
+-- ------------------------------------------------------------ нажатия на карту
+
+local marker = Instance.new("Part")
+marker.Name = "FrontMarker"
+marker.Anchored = true
+marker.CanCollide = false
+marker.CanQuery = false
+marker.Material = Enum.Material.Neon
+marker.Color = COLORS.accent
+marker.Transparency = 1
+marker.Size = Vector3.new(T * 0.9, 0.2, T * 0.9)
+marker.Parent = workspace
+
+local function flashMarker(i)
+	marker.Position = tileTop(i) + Vector3.new(0, 0.15, 0)
+	marker.Transparency = 0.2
+	TweenService:Create(marker, TweenInfo.new(0.5), { Transparency = 1 }):Play()
+end
+
+local function tap(screenPos)
+	local folder = currentMap()
+	if not folder then
+		return
+	end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { folder }
+	local ray = camera:ScreenPointToRay(screenPos.X, screenPos.Y)
+	local hit = workspace:Raycast(ray.Origin, ray.Direction * 3000, params)
+	if not hit then
+		return
+	end
+	local i = hit.Instance:GetAttribute("I")
+	if not i then
+		return
+	end
+	flashMarker(i)
+	if mode == "attack" then
+		Action:FireServer("tap", i)
+	elseif mode == "Nuke" then
+		Action:FireServer("nuke", i)
+		mode = "attack"
+	elseif mode == "ally" then
+		Action:FireServer("allyAt", i)
+		mode = "attack"
+	else
+		Action:FireServer("build", i, mode)
+	end
+	renderState()
+end
+
+-- мышь: клик — действие, перетаскивание — сдвиг карты, колесо — зум
+local mouseDown = nil
+UserInputService.InputBegan:Connect(function(input, gp)
+	if gp then
+		return
+	end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+		mouseDown = { start = Vector2.new(input.Position.X, input.Position.Y), last = Vector2.new(input.Position.X, input.Position.Y), moved = false, button = input.UserInputType }
+	end
+end)
+UserInputService.InputChanged:Connect(function(input, gp)
+	if input.UserInputType == Enum.UserInputType.MouseWheel and not gp then
+		zoom = math.clamp(zoom * (input.Position.Z > 0 and 0.88 or 1.14), ZOOM_MIN, ZOOM_MAX)
+	elseif input.UserInputType == Enum.UserInputType.MouseMovement and mouseDown then
+		local p = Vector2.new(input.Position.X, input.Position.Y)
+		if (p - mouseDown.start).Magnitude > 6 then
+			mouseDown.moved = true
+		end
+		if mouseDown.moved then
+			pan(p - mouseDown.last)
+		end
+		mouseDown.last = p
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if mouseDown and input.UserInputType == mouseDown.button then
+		if not mouseDown.moved and mouseDown.button == Enum.UserInputType.MouseButton1 then
+			tap(mouseDown.start)
+		end
+		mouseDown = nil
+	end
+end)
+
+-- пальцы: тап — действие, один палец — сдвиг, два — зум щипком
+local touches = {}
+local gestureMulti = false
+local function touchCount()
+	local c = 0
+	for _ in pairs(touches) do
+		c += 1
+	end
+	return c
+end
+UserInputService.TouchStarted:Connect(function(input, gp)
+	if gp then
+		return
+	end
+	local p = Vector2.new(input.Position.X, input.Position.Y)
+	touches[input] = { start = p, pos = p, moved = false }
+	if touchCount() > 1 then
+		gestureMulti = true
+	end
+end)
+UserInputService.TouchMoved:Connect(function(input)
+	local t = touches[input]
+	if not t then
+		return
+	end
+	local p = Vector2.new(input.Position.X, input.Position.Y)
+	local count = touchCount()
+	if count == 1 then
+		if (p - t.start).Magnitude > 12 then
+			t.moved = true
+		end
+		if t.moved then
+			pan(p - t.pos)
+		end
+	elseif count == 2 then
+		local other
+		for k, v in pairs(touches) do
+			if k ~= input then
+				other = v
+			end
+		end
+		local before = (t.pos - other.pos).Magnitude
+		local after = (p - other.pos).Magnitude
+		if before > 10 and after > 10 then
+			zoom = math.clamp(zoom * before / after, ZOOM_MIN, ZOOM_MAX)
+		end
+		pan((p - t.pos) * 0.5)
+		t.moved = true
+	end
+	t.pos = p
+end)
+UserInputService.TouchEnded:Connect(function(input)
+	local t = touches[input]
+	touches[input] = nil
+	if t and not t.moved and not gestureMulti then
+		tap(t.start)
+	end
+	if touchCount() == 0 then
+		gestureMulti = false
+	end
+end)
+
+-- ------------------------------------------------------------ эффекты
+
+local fxFolder = Instance.new("Folder")
+fxFolder.Name = "FrontFx"
+fxFolder.Parent = workspace
+local movers = {}
+
+local function waterPoint(i)
+	return Config.tileCenter(i) + Vector3.new(0, 0.05, 0)
+end
+
+local function addShip(data)
+	local m = Models.make(data.kind, data.color, data.kind == "TradeShip" and T * 0.55 or T * 0.5)
+	m.Parent = fxFolder
+	local pts = {}
+	for _, i in ipairs(data.path) do
+		table.insert(pts, waterPoint(i))
+	end
+	table.insert(movers, { model = m, pts = pts, t = 0, duration = data.duration, kind = "ship" })
+end
+
+local function addNuke(data)
+	local m = Models.make("Nuke", data.color, T * 0.5)
+	m.Parent = fxFolder
+	table.insert(movers, { model = m, from = tileTop(data.from), to = tileTop(data.to), t = 0, duration = data.duration, kind = "nuke" })
+end
+
+local function addTank(data)
+	local m = Models.make("Tank", data.color, T * 0.45)
+	m.Parent = fxFolder
+	table.insert(movers, { model = m, from = tileTop(data.from), to = tileTop(data.to), t = 0, duration = 1.0, kind = "tank" })
+end
+
+local function boom(data)
+	local center = tileTop(data.tile)
+	local ball = Instance.new("Part")
+	ball.Shape = Enum.PartType.Ball
+	ball.Anchored = true
+	ball.CanCollide = false
+	ball.CanQuery = false
+	ball.Material = Enum.Material.Neon
+	ball.Color = Color3.fromRGB(255, 170, 60)
+	ball.Size = Vector3.new(2, 2, 2)
+	ball.Position = center
+	ball.Parent = fxFolder
+	local r = data.radius * T * 2.2
+	TweenService:Create(ball, TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(r, r, r) }):Play()
+	TweenService:Create(ball, TweenInfo.new(1.6), { Transparency = 1, Color = Color3.fromRGB(80, 70, 60) }):Play()
+	task.delay(1.7, function()
+		ball:Destroy()
+	end)
+	if (center - focus).Magnitude < zoom * 1.5 then
+		local shakeEnd = os.clock() + 0.5
+		task.spawn(function()
+			while os.clock() < shakeEnd do
+				focus += Vector3.new(math.random(-10, 10) / 10, 0, math.random(-10, 10) / 10)
+				task.wait(0.03)
+			end
+		end)
+	end
+end
+
+local yaw = CFrame.Angles(0, math.rad(Config.MODEL_YAW), 0)
+
+RunService.RenderStepped:Connect(function(dt)
+	local keep = {}
+	for _, mv in ipairs(movers) do
+		mv.t += dt
+		local u = math.clamp(mv.t / mv.duration, 0, 1)
+		if mv.kind == "ship" then
+			local n = #mv.pts
+			if n >= 2 then
+				local f = u * (n - 1)
+				local k = math.clamp(math.floor(f) + 1, 1, n - 1)
+				local a, b = mv.pts[k], mv.pts[k + 1]
+				local pos = a:Lerp(b, f - (k - 1))
+				mv.model:PivotTo(CFrame.lookAt(pos, pos + (b - a)) * yaw)
+			elseif n == 1 then
+				mv.model:PivotTo(CFrame.new(mv.pts[1]))
+			end
+		elseif mv.kind == "nuke" then
+			local h = 25 + (mv.to - mv.from).Magnitude * 0.35
+			local function at(v)
+				return mv.from:Lerp(mv.to, v) + Vector3.new(0, math.sin(v * math.pi) * h, 0)
+			end
+			local pos, ahead = at(u), at(math.min(1, u + 0.02))
+			if (ahead - pos).Magnitude > 0.01 then
+				mv.model:PivotTo(CFrame.lookAt(pos, ahead) * yaw)
+			end
+		else
+			local pos = mv.from:Lerp(mv.to, u)
+			local dir = mv.to - mv.from
+			if dir.Magnitude > 0.01 then
+				mv.model:PivotTo(CFrame.lookAt(pos, pos + Vector3.new(dir.X, 0, dir.Z)) * yaw)
+			end
+		end
+		if u >= 1 then
+			mv.model:Destroy()
+		else
+			table.insert(keep, mv)
+		end
+	end
+	movers = keep
+end)
+
+Fx.OnClientEvent:Connect(function(kind, data)
+	if kind == "ship" then
+		addShip(data)
+	elseif kind == "nuke" then
+		addNuke(data)
+	elseif kind == "boom" then
+		boom(data)
+	elseif kind == "tank" then
+		if #movers < 80 then
+			addTank(data)
+		end
+	elseif kind == "reset" then
+		for _, mv in ipairs(movers) do
+			mv.model:Destroy()
+		end
+		movers = {}
+		focus = Vector3.zero
+		zoom = 240
+		mode = "attack"
+	end
+end)
+]]></ProtectedString></Properties></Item></Item></Item></roblox>

@@ -1,0 +1,26 @@
+{
+  "name": "Front",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Front": {
+        "$path": "src/shared"
+      },
+      "FrontModels": {
+        "$className": "Folder"
+      }
+    },
+    "ServerScriptService": {
+      "FrontServer": {
+        "$path": "src/server/FrontServer.server.luau"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "FrontClient": {
+          "$path": "src/client/FrontClient.client.luau"
+        }
+      }
+    }
+  }
+}

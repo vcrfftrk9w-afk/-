@@ -2,6 +2,10 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import ASSETS from "./assets.gen.js";
+
+// обычный скрипт без top-level await: работает в любом встроенном браузере
+async function main() {
 
 const $ = (id) => document.getElementById(id);
 const coarse = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
@@ -53,10 +57,10 @@ resize();
 // ------------------------------------------------------------ загрузка моделей
 const loader = new GLTFLoader();
 const FILES = ["knight", "goblin", "arena", "potion"];
-// модели встроены в страницу как glTF JSON (см. build.mjs), сеть не нужна
+// модели встроены в код как строки glTF JSON (см. build.mjs), сеть не нужна
 function load(name, i) {
   return new Promise((res, rej) => {
-    const text = document.getElementById(`asset-${name}`).textContent;
+    const text = ASSETS[name];
     loader.parse(text, "", (g) => {
       $("loadText").textContent = `Загружаю модели: ${Math.round(((i + 1) / FILES.length) * 100)}%`;
       res(g);
@@ -843,3 +847,9 @@ $("loadText").textContent = "";
 document.addEventListener("visibilitychange", () => clock.getDelta());
 window.__game = { get state() { return state; }, get enemies() { return enemies; }, get player() { return player; }, spawnEnemy };
 requestAnimationFrame(frame);
+}
+
+main().catch((err) => {
+  const el = document.getElementById("loadText");
+  if (el) el.textContent = "Ошибка: " + (err && err.message || err);
+});

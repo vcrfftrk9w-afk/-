@@ -466,7 +466,7 @@ local function renderState()
 	end
 	for id, b in pairs(modeButtons) do
 		local price = me and me.costs[id]
-		b.Price.Text = price and fmt(price) or (id == "attack" and "по тапу" or (id == "ally" and "тап по стране" or ""))
+		b.Price.Text = price and fmt(price) or (id == "attack" and "по тапу" or (id == "ally" and "по стране" or ""))
 		local can = not price or (me and me.gold >= price)
 		b.Price.TextColor3 = can and COLORS.accent or COLORS.bad
 		b.BackgroundColor3 = mode == id and Color3.fromRGB(160, 100, 20) or COLORS.panel2

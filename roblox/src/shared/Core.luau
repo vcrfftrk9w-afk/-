@@ -130,6 +130,53 @@ function Core:generateMap()
 		end
 		self.coastal[i] = c
 	end
+	-- водоёмы: море отличаем от озёр, порты ставятся только у моря
+	self.waterBody, self.waterSize = {}, {}
+	local body = 0
+	for i = 1, W * H do
+		if self.terrain[i] == WATER and not self.waterBody[i] then
+			body += 1
+			local queue, head = { i }, 1
+			self.waterBody[i] = body
+			while head <= #queue do
+				local c = queue[head]
+				head += 1
+				for _, n in ipairs(self.nb[c]) do
+					if self.terrain[n] == WATER and not self.waterBody[n] then
+						self.waterBody[n] = body
+						table.insert(queue, n)
+					end
+				end
+			end
+			self.waterSize[body] = #queue
+		end
+	end
+	self.seaCoast = {}
+	for i = 1, W * H do
+		local sea = false
+		if self.coastal[i] then
+			for _, n in ipairs(self.nb[i]) do
+				local b = self.waterBody[n]
+				if b and self.waterSize[b] >= 60 then
+					sea = true
+					break
+				end
+			end
+		end
+		self.seaCoast[i] = sea
+	end
+end
+
+-- водоёмы, к которым выходит клетка суши
+function Core:bodiesAround(i)
+	local set = {}
+	for _, n in ipairs(self.nb[i]) do
+		local b = self.waterBody[n]
+		if b then
+			set[b] = true
+		end
+	end
+	return set
 end
 
 -- ------------------------------------------------------------ события для сервера
@@ -735,24 +782,33 @@ function Core:tradeTick()
 			b.tradeTimer = self.cfg.TRADE_INTERVAL / math.sqrt(b.level)
 			-- чужие порты, с которыми нет войны; если таких нет — свои
 			local o = self.owner[p]
-			local choices = {}
+			local mine = self:bodiesAround(p)
+			local function sameWater(q)
+				for bq in pairs(self:bodiesAround(q)) do
+					if mine[bq] then
+						return true
+					end
+				end
+				return false
+			end
+			local choices, own = {}, {}
 			for _, q in ipairs(ports) do
 				local oq = self.owner[q]
-				if q ~= p and oq ~= o and not self:atWar(o, oq) then
-					table.insert(choices, q)
-				end
-			end
-			if #choices == 0 then
-				for _, q in ipairs(ports) do
-					if q ~= p then
+				if q ~= p and sameWater(q) then
+					if oq ~= o and not self:atWar(o, oq) then
 						table.insert(choices, q)
+					elseif oq == o then
+						table.insert(own, q)
 					end
 				end
 			end
-			local q = choices[self:rand(1, #choices)]
-			local key = p .. ":" .. q
-			local path = self.tradePaths[key]
-			if path == nil then
+			if #choices == 0 then
+				choices = own
+			end
+			local q = #choices > 0 and choices[self:rand(1, #choices)] or nil
+			local key = q and (p .. ":" .. q)
+			local path = key and self.tradePaths[key]
+			if q and path == nil then
 				local goals = {}
 				for _, w in ipairs(self:waterAround(q)) do
 					goals[w] = true
@@ -801,8 +857,8 @@ function Core:build(id, i, kind)
 	if not i or self.owner[i] ~= id then
 		return false, "Строить можно только на своей земле"
 	end
-	if kind == "Port" and not self.coastal[i] then
-		return false, "Порт ставится на берегу"
+	if kind == "Port" and not self.seaCoast[i] then
+		return false, "Порт ставится на берегу моря"
 	end
 	local b = self.buildings[i]
 	if b and b.kind ~= kind then
@@ -1174,7 +1230,7 @@ function Core:botThink(n)
 		end
 	elseif n.built.Port == 0 and n.gold >= self:buildCost(id, "Port") then
 		local t = self:pickTile(id, function(t)
-			return self.coastal[t] and not self.buildings[t]
+			return self.seaCoast[t] and not self.buildings[t]
 		end)
 		if t then
 			self:build(id, t, "Port")

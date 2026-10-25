@@ -25,7 +25,7 @@ Config.GROWTH_BASE = 30
 Config.BOT_GROWTH = 0.9         -- боты растут чуть медленнее игроков
 Config.GOLD_BASE = 20           -- золота в секунду
 Config.GOLD_PER_TILE = 0.2
-Config.DEFAULT_RATIO = 0.5      -- какую часть войск отправлять в атаку
+Config.DEFAULT_RATIO = 0.4      -- какую часть войск отправлять в атаку (одна из кнопок 20–100%)
 
 -- захват
 Config.ATTACK_TICK = 0.25

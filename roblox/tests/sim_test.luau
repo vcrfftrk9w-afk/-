@@ -26,7 +26,7 @@ local spawnTile
 for i = 1, Config.MAP_W * Config.MAP_H do
 	local x, y = core:xy(i)
 	local nearCoast = x > 1 and y > 1 and x < Config.MAP_W - 2 and y < Config.MAP_H - 2
-		and (core.coastal[i + 2] or core.coastal[i - 2] or core.coastal[i + 2 * Config.MAP_W])
+		and (core.seaCoast[i + 2] or core.seaCoast[i - 2] or core.seaCoast[i + 2 * Config.MAP_W])
 	if core.terrain[i] == Core.PLAIN and nearCoast and core:canSpawnAt(me, i) then spawnTile = i break end
 end
 check(core:spawn(me, spawnTile), "спавн игрока")
@@ -70,7 +70,7 @@ local okp, mp = core:build(me, inner, "Port")
 check(not okp, "порт на занятой клетке нельзя")
 local coastMine
 for t in pairs(core.tilesOf[me]) do
-	if core.coastal[t] and not core.buildings[t] then coastMine = t break end
+	if core.seaCoast[t] and not core.buildings[t] then coastMine = t break end
 end
 check(core:build(me, coastMine, "Port"), "порт на берегу")
 -- щит: атаковать страну нельзя

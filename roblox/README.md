@@ -33,7 +33,10 @@
 ## Как запустить (нужен компьютер с Roblox Studio)
 
 1. Установи [Roblox Studio](https://create.roblox.com/) и войди в свой аккаунт.
-2. Открой `Front.rbxlx`: **File → Open from File…**
+2. Скачай [`Front.rbxl`](https://raw.githubusercontent.com/vcrfftrk9w-afk/-/claude/blender-sword/roblox/Front.rbxl)
+   (браузер сохранит его в «Загрузки») и открой двойным щелчком или через **File → Open from File…**
+   В папке есть и текстовая версия `Front.rbxlx` с тем же содержимым: её удобно смотреть глазами,
+   но браузер показывает её как текст вместо скачивания.
 3. Нажми **Play** (F5). Появится карта с ботами. Нажми на сушу, чтобы выбрать место старта.
    Управление на компьютере такое: клик действует, перетаскивание двигает карту, колесо меняет масштаб.
    Чтобы проверить игру как на телефоне, включи **Test → Device** и выбери телефон.
@@ -73,6 +76,6 @@
 - `src/server/FrontServer.server.luau`: сервер, карта, постройки, удалённые события.
 - `src/client/FrontClient.client.luau`: камера, управление, интерфейс, эффекты.
 - `default.project.json`: проект для [Rojo](https://rojo.space/), если работаешь из VS Code.
-- `python3 build_place.py`: пересобирает `Front.rbxlx` из `src/`.
+- `python3 build_place.py`: пересобирает `Front.rbxlx` из `src/`; `rojo build default.project.json -o Front.rbxl` собирает бинарный `Front.rbxl`.
 - `tests/run_all.sh`: тесты без Studio через [Luau CLI](https://github.com/luau-lang/luau/releases).
   Они проверяют полный матч ботов, серверный и клиентский скрипты на эмуляторе API Roblox.

@@ -7,7 +7,7 @@
   "scripts": {
     "atlas": "node tools/build-atlas.js",
     "place": "node tools/build-place.js",
-    "test": "node tests/syntax.js && node tests/png.js && node tests/sim.js 20 && node tests/client.js 1500"
+    "test": "node tests/syntax.js && node tests/png.js && node tests/sim.js 20 && node tests/client.js 1500 && node tests/client.js 300 --atlas= && node tests/client.js 300 --bad-image --no-editable"
   },
   "devDependencies": {
     "fengari": "0.1.4"

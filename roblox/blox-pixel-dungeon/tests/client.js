@@ -1,14 +1,19 @@
 // Прогон клиентского кода (интерфейс + отрисовка) на имитации Roblox API:
-// жмёт кнопки, ходит, открывает окна, спускается по этажам. node tests/client.js [кадров]
-// ATLAS_ID=<что угодно с номером> — проверить путь с загруженной картинкой вместо встроенной
-// NO_EDITABLE=1 — Roblox запрещает EditableImage: игра без атласа, цветными квадратами
+// жмёт кнопки, ходит, открывает окна, спускается по этажам.
+//   node tests/client.js [кадров] [--atlas=<ID или пусто>] [--bad-image] [--no-editable]
+// --atlas=      подменить Config.ATLAS_ID (пусто — проверить встроенную графику через EditableImage)
+// --bad-image   загруженная картинка не грузится (ещё на проверке или неверный ID)
+// --no-editable Roblox запрещает EditableImage: без атласа игра рисует цветные квадраты
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const { newState, run } = require('./lua.js');
 const { lua, to_luastring, to_jsstring } = require('fengari');
 
-const frames = Number(process.argv[2] || 3000);
+const args = process.argv.slice(2);
+const flag = (name) => args.find((a) => a === '--' + name || a.startsWith('--' + name + '='));
+const atlasArg = flag('atlas');
+const frames = Number(args.find((a) => !a.startsWith('--')) || 3000);
 const SRC = path.join(__dirname, '..', 'src');
 
 // дерево как его собирает Rojo: *.client.luau → LocalScript, *.server.luau → Script, *.luau → ModuleScript
@@ -56,9 +61,9 @@ const toLuaIdx = (node) => `{ name = ${JSON.stringify(node.name)}, class = ${JSO
 run(L, `
 local ok, err = xpcall(function()
   mock.build(mock.ReplicatedStorage, ${toLuaIdx(shared)})
-  mock.noEditable = ${process.env.NO_EDITABLE ? 'true' : 'false'}
-  local atlasId = ${JSON.stringify(process.env.ATLAS_ID || '')}
-  if atlasId ~= '' then require(mock.ReplicatedStorage.BPD.Config).ATLAS_ID = atlasId end
+  mock.noEditable = ${flag('no-editable') ? 'true' : 'false'}
+  ${flag('bad-image') ? "mock.preloadStatus = Enum.AssetFetchStatus.Failure" : ''}
+  ${atlasArg ? `require(mock.ReplicatedStorage.BPD.Config).ATLAS_ID = ${JSON.stringify(atlasArg.split('=').slice(1).join('='))}` : ''}
   local serverFolder = mock.build(game:GetService('ServerScriptService'), ${toLuaIdx(server)})
   for _, s in ipairs(serverFolder:GetChildren()) do mock.runScript(s) end
   local scripts = Instance.new('PlayerScripts')

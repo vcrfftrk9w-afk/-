@@ -7,15 +7,16 @@ local InsertService = game:GetService("InsertService")
 local Shared = ReplicatedStorage:WaitForChild("BPD")
 local Config = require(Shared:WaitForChild("Config"))
 
--- подойдёт что угодно с числом: "123", "rbxassetid://123", ссылка на страницу ассета
-local id = tonumber(string.match(tostring(Config.ATLAS_ID), "%d%d%d%d+"))
+-- подойдёт что угодно с числом: "123", "rbxassetid://123", ссылка на страницу ассета.
+-- Номер храним строкой: длинные ID при переводе в число и обратно могут исказиться.
+local id = string.match(tostring(Config.ATLAS_ID), "%d%d%d%d+")
 if not id then
 	return
 end
 
 local image = "rbxassetid://" .. id
 local ok, model = pcall(function()
-	return InsertService:LoadAsset(id)
+	return InsertService:LoadAsset(tonumber(id))
 end)
 if ok and model then
 	local decal = model:FindFirstChildWhichIsA("Decal", true)

@@ -1,0 +1,28 @@
+{
+  "name": "BloxPixelDungeon",
+  "tree": {
+    "$className": "DataModel",
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": false
+      }
+    },
+    "ReplicatedStorage": {
+      "BPD": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "BPDServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "BPDClient": {
+          "$path": "src/client"
+        }
+      }
+    }
+  }
+}

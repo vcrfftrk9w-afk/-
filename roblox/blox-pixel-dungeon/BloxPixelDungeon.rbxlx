@@ -799,9 +799,9 @@ apgJYCMg4B/75pMJEPD3zicTIODvnU8QFvD3zicTIOAf9PoC/t75ZAIE/GEAIAiCoMYaAazEh5UAIQiC
 					<string name="Name">Config</string>
 					<ProtectedString name="Source"><![CDATA[-- Настройки, которые можно менять в Studio.
 return {
-	-- ID загруженной картинки assets/atlas.png, например "rbxassetid://1234567890".
-	-- Пусто — игра соберёт графику сама через EditableImage (работает в Studio;
-	-- в опубликованной игре надёжнее загрузить картинку и вставить сюда её ID).
+	-- Номер загруженной в Roblox картинки assets/atlas.png, например "1234567890".
+	-- Подойдёт и номер наклейки (Decal), и ссылка на страницу картинки целиком.
+	-- Пусто — игра попробует собрать графику сама через EditableImage (работает не везде).
 	ATLAS_ID = "",
 
 	-- Где лежит исходный код этой версии (лицензия GPL-3.0 требует дать на него ссылку).
@@ -3905,15 +3905,49 @@ return Png
 			</Item>
 		</Item>
 	</Item>
-	<Item class="ServerScriptService" referent="RBX00000000000000000000000000000013">
+	<Item class="ServerScriptService" referent="RBX00000000000000000000000000000014">
 		<Properties>
 			<string name="Name">ServerScriptService</string>
 		</Properties>
-		<Item class="Folder" referent="RBX00000000000000000000000000000012">
+		<Item class="Folder" referent="RBX00000000000000000000000000000013">
 			<Properties>
 				<string name="Name">BPDServer</string>
 			</Properties>
 			<Item class="Script" referent="RBX00000000000000000000000000000011">
+				<Properties>
+					<string name="Name">AtlasImage</string>
+					<ProtectedString name="Source"><![CDATA[-- Узнаёт настоящий ID картинки атласа. Если в Config.ATLAS_ID вставили ID наклейки (Decal),
+-- например после загрузки на сайте Roblox, достаём из неё картинку через InsertService.
+-- Результат кладём в атрибут BPD.AtlasImage — клиенты берут его оттуда.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local InsertService = game:GetService("InsertService")
+
+local Shared = ReplicatedStorage:WaitForChild("BPD")
+local Config = require(Shared:WaitForChild("Config"))
+
+-- подойдёт что угодно с числом: "123", "rbxassetid://123", ссылка на страницу ассета
+local id = tonumber(string.match(tostring(Config.ATLAS_ID), "%d%d%d%d+"))
+if not id then
+	return
+end
+
+local image = "rbxassetid://" .. id
+local ok, model = pcall(function()
+	return InsertService:LoadAsset(id)
+end)
+if ok and model then
+	local decal = model:FindFirstChildWhichIsA("Decal", true)
+	if decal and decal.Texture ~= "" then
+		image = decal.Texture
+	end
+	model:Destroy()
+end
+Shared:SetAttribute("AtlasImage", image)
+]]></ProtectedString>
+					<bool name="Disabled">false</bool>
+				</Properties>
+			</Item>
+			<Item class="Script" referent="RBX00000000000000000000000000000012">
 				<Properties>
 					<string name="Name">Records</string>
 					<ProtectedString name="Source"><![CDATA[-- Рекорды игроков: самая большая глубина и число побед над Гу (таблица лидеров + DataStore).
@@ -4013,19 +4047,19 @@ end)
 			</Item>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX0000000000000000000000000000001B">
+	<Item class="StarterPlayer" referent="RBX0000000000000000000000000000001C">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX0000000000000000000000000000001A">
+		<Item class="StarterPlayerScripts" referent="RBX0000000000000000000000000000001B">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="Folder" referent="RBX00000000000000000000000000000019">
+			<Item class="Folder" referent="RBX0000000000000000000000000000001A">
 				<Properties>
 					<string name="Name">BPDClient</string>
 				</Properties>
-				<Item class="LocalScript" referent="RBX00000000000000000000000000000014">
+				<Item class="LocalScript" referent="RBX00000000000000000000000000000015">
 					<Properties>
 						<string name="Name">Main</string>
 						<ProtectedString name="Source"><![CDATA[-- Blox Pixel Dungeon: запуск, титульный экран, управление и связь ядра с отрисовкой.
@@ -4072,26 +4106,59 @@ Ui.Atlas = Atlas
 local loading = Ui.label(gui, "Загрузка графики…", 22, { Size = UDim2.fromScale(1, 1), ZIndex = 100 })
 task.wait()
 
-local function loadAtlas()
-	if Config.ATLAS_ID ~= "" then
-		return { image = Config.ATLAS_ID }
+local atlasProblems = {} -- почему не удалось показать графику (для титульного экрана)
+
+-- 1) загруженная картинка: ID из Config; сервер заменяет ID наклейки (Decal) на ID картинки
+local function atlasFromUpload()
+	local id = string.match(tostring(Config.ATLAS_ID), "%d%d%d%d+")
+	if not id then
+		return nil
 	end
+	local image = Shared:GetAttribute("AtlasImage")
+	local t0 = os.clock()
+	while not image and os.clock() - t0 < 6 do
+		task.wait(0.2)
+		image = Shared:GetAttribute("AtlasImage")
+	end
+	image = image or ("rbxassetid://" .. id)
+	local probe = Ui.new("ImageLabel", { Image = image })
+	local status
+	pcall(function()
+		game:GetService("ContentProvider"):PreloadAsync({ probe }, function(_, s)
+			status = s
+		end)
+	end)
+	probe:Destroy()
+	if status == Enum.AssetFetchStatus.Failure then
+		table.insert(atlasProblems, "Картинка " .. image .. " не загрузилась: ID неверный или она ещё на проверке у Roblox.")
+		return nil
+	end
+	return { image = image }
+end
+
+-- 2) встроенная картинка: распаковываем PNG в EditableImage (нужно разрешение Roblox)
+local function atlasFromEmbedded()
 	local ok, res = pcall(function()
 		local Png = require(Shared:WaitForChild("Png"))
 		local data = require(Shared:WaitForChild("AtlasData"))
 		local img = Png.decode(Png.base64(data))
 		local editable = game:GetService("AssetService"):CreateEditableImage({ Size = Vector2.new(img.width, img.height) })
+		assert(editable, "EditableImage не создан")
 		editable:WritePixelsBuffer(Vector2.zero, Vector2.new(img.width, img.height), img.buf)
 		return { content = Content.fromObject(editable), editable = editable }
 	end)
 	if ok then
 		return res
 	end
-	warn("[Blox Pixel Dungeon] Встроенная графика недоступна (" .. tostring(res) .. "). "
-		.. "Загрузите assets/atlas.png и впишите ID в ReplicatedStorage.BPD.Config.ATLAS_ID.")
+	table.insert(atlasProblems, "Встроенная графика недоступна: " .. tostring(res))
 	return nil
 end
-Ui.atlas = loadAtlas()
+
+Ui.atlas = atlasFromUpload() or atlasFromEmbedded()
+if not Ui.atlas then
+	warn("[Blox Pixel Dungeon] " .. table.concat(atlasProblems, " ")
+		.. " Загрузите assets/atlas.png в Roblox и впишите его ID в ReplicatedStorage.BPD.Config.ATLAS_ID.")
+end
 loading:Destroy()
 
 ------------------------------------------------------------------ состояние
@@ -4449,8 +4516,12 @@ showTitle = function()
 	end, { Size = UDim2.fromOffset(240, 52), TextSize = 22, LayoutOrder = 5 })
 	Ui.button(col, "Об игре", showAbout, { Size = UDim2.fromOffset(240, 40), LayoutOrder = 6 })
 	if not Ui.atlas then
-		Ui.label(col, "Графика не загружена — см. README (ATLAS_ID).", 13, {
-			Size = UDim2.new(1, 0, 0, 16),
+		Ui.label(col, "Графика не загрузилась, поэтому вместо картинок цветные квадраты. "
+			.. "Загрузите assets/atlas.png в Roblox и впишите его ID в ReplicatedStorage → BPD → Config → ATLAS_ID.\n"
+			.. table.concat(atlasProblems, "\n"), 12, {
+			Size = UDim2.new(1, 40, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			TextWrapped = true,
 			TextColor3 = Ui.LOG.warn,
 			LayoutOrder = 7,
 		})
@@ -4631,15 +4702,16 @@ showTitle()
 						<bool name="Disabled">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Folder" referent="RBX00000000000000000000000000000018">
+				<Item class="Folder" referent="RBX00000000000000000000000000000019">
 					<Properties>
 						<string name="Name">Modules</string>
 					</Properties>
-					<Item class="ModuleScript" referent="RBX00000000000000000000000000000015">
+					<Item class="ModuleScript" referent="RBX00000000000000000000000000000016">
 						<Properties>
 							<string name="Name">Hud</string>
 							<ProtectedString name="Source"><![CDATA[-- Интерфейс поверх подземелья: здоровье и опыт, журнал, панель кнопок,
 -- рюкзак и окна предметов. Похоже на панели Shattered Pixel Dungeon.
+local GuiService = game:GetService("GuiService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("BPD")
 local Defs = require(Shared:WaitForChild("Core"):WaitForChild("Defs"))
 local Ui = require(script.Parent:WaitForChild("Ui"))
@@ -4660,13 +4732,25 @@ function Hud.new(gui, on)
 	})
 	self.root = root
 	local safe = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = root })
-	Ui.new("UIPadding", {
-		PaddingTop = UDim.new(0, 44),
+	local padding = Ui.new("UIPadding", {
+		PaddingTop = UDim.new(0, 64),
 		PaddingLeft = UDim.new(0, 10),
 		PaddingRight = UDim.new(0, 10),
 		PaddingBottom = UDim.new(0, 10),
 		Parent = safe,
 	})
+	-- панели начинаются ниже кнопок Roblox (меню, чат, микрофон) в верхнем углу
+	local function fitTopbar()
+		local top = 64
+		pcall(function()
+			top = math.max(top, GuiService.TopbarInset.Max.Y + 8)
+		end)
+		padding.PaddingTop = UDim.new(0, top)
+	end
+	fitTopbar()
+	pcall(function()
+		GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(fitTopbar)
+	end)
 
 	-- статус героя
 	local status = Ui.panel(safe, { Size = UDim2.fromOffset(250, 70), BackgroundTransparency = 0.1 })
@@ -4851,7 +4935,7 @@ function Hud:update()
 	local now = os.clock()
 	for _, l in ipairs(self.lines) do
 		local age = now - l.born
-		local fade = math.clamp((age - 8) / 4, 0, 0.85)
+		local fade = math.clamp((age - 10) / 4, 0, 0.5)
 		l.label.TextTransparency = fade
 		l.label.TextStrokeTransparency = 0.3 + fade * 0.7
 	end
@@ -5058,7 +5142,7 @@ return Hud
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000000000000000000000000000016">
+					<Item class="ModuleScript" referent="RBX00000000000000000000000000000017">
 						<Properties>
 							<string name="Name">Ui</string>
 							<ProtectedString name="Source"><![CDATA[-- Общие помощники интерфейса: создание объектов, окна, кнопки, картинки из атласа.
@@ -5319,7 +5403,7 @@ return Ui
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000000000000000000000000000017">
+					<Item class="ModuleScript" referent="RBX00000000000000000000000000000018">
 						<Properties>
 							<string name="Name">View</string>
 							<ProtectedString name="Source"><![CDATA[-- Отрисовка подземелья: тайлы, туман войны, предметы на полу, персонажи с анимациями,
@@ -5455,6 +5539,9 @@ function View:buildCell(i)
 	end
 
 	local gv = Tiles.ground(map, w, h, i, lvl.variance[i])
+	if gv < 0 and not Ui.atlas and Terrain.isWall(t) then
+		gv = 0 -- без атласа стена — просто серый квадрат, верхушек стен нет
+	end
 	local below = (i + w <= w * h) and lvl.variance[i + w] or 0
 	local uv = Tiles.upper(map, w, h, i, lvl.variance[i], below)
 	self:setTile(self.ground, self.lGround, i, gv, pos, size, t)

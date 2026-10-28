@@ -1,5 +1,7 @@
 // Прогон клиентского кода (интерфейс + отрисовка) на имитации Roblox API:
 // жмёт кнопки, ходит, открывает окна, спускается по этажам. node tests/client.js [кадров]
+// ATLAS_ID=<что угодно с номером> — проверить путь с загруженной картинкой вместо встроенной
+// NO_EDITABLE=1 — Roblox запрещает EditableImage: игра без атласа, цветными квадратами
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -37,8 +39,10 @@ function register(node) {
 }
 const shared = tree(SRC + '/shared', 'BPD');
 const client = tree(SRC + '/client', 'BPDClient');
+const server = tree(SRC + '/server', 'BPDServer');
 register(shared);
 register(client);
+register(server);
 lua.lua_createtable(L, files.length, 0);
 files.forEach((s, i) => {
   lua.lua_pushstring(L, to_luastring(s));
@@ -52,6 +56,11 @@ const toLuaIdx = (node) => `{ name = ${JSON.stringify(node.name)}, class = ${JSO
 run(L, `
 local ok, err = xpcall(function()
   mock.build(mock.ReplicatedStorage, ${toLuaIdx(shared)})
+  mock.noEditable = ${process.env.NO_EDITABLE ? 'true' : 'false'}
+  local atlasId = ${JSON.stringify(process.env.ATLAS_ID || '')}
+  if atlasId ~= '' then require(mock.ReplicatedStorage.BPD.Config).ATLAS_ID = atlasId end
+  local serverFolder = mock.build(game:GetService('ServerScriptService'), ${toLuaIdx(server)})
+  for _, s in ipairs(serverFolder:GetChildren()) do mock.runScript(s) end
   local scripts = Instance.new('PlayerScripts')
   scripts.Parent = mock.player
   local clientFolder = mock.build(scripts, ${toLuaIdx(client)})

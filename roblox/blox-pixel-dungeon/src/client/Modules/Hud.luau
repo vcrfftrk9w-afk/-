@@ -1,5 +1,6 @@
 -- Интерфейс поверх подземелья: здоровье и опыт, журнал, панель кнопок,
 -- рюкзак и окна предметов. Похоже на панели Shattered Pixel Dungeon.
+local GuiService = game:GetService("GuiService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("BPD")
 local Defs = require(Shared:WaitForChild("Core"):WaitForChild("Defs"))
 local Ui = require(script.Parent:WaitForChild("Ui"))
@@ -20,13 +21,25 @@ function Hud.new(gui, on)
 	})
 	self.root = root
 	local safe = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = root })
-	Ui.new("UIPadding", {
-		PaddingTop = UDim.new(0, 44),
+	local padding = Ui.new("UIPadding", {
+		PaddingTop = UDim.new(0, 64),
 		PaddingLeft = UDim.new(0, 10),
 		PaddingRight = UDim.new(0, 10),
 		PaddingBottom = UDim.new(0, 10),
 		Parent = safe,
 	})
+	-- панели начинаются ниже кнопок Roblox (меню, чат, микрофон) в верхнем углу
+	local function fitTopbar()
+		local top = 64
+		pcall(function()
+			top = math.max(top, GuiService.TopbarInset.Max.Y + 8)
+		end)
+		padding.PaddingTop = UDim.new(0, top)
+	end
+	fitTopbar()
+	pcall(function()
+		GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(fitTopbar)
+	end)
 
 	-- статус героя
 	local status = Ui.panel(safe, { Size = UDim2.fromOffset(250, 70), BackgroundTransparency = 0.1 })
@@ -211,7 +224,7 @@ function Hud:update()
 	local now = os.clock()
 	for _, l in ipairs(self.lines) do
 		local age = now - l.born
-		local fade = math.clamp((age - 8) / 4, 0, 0.85)
+		local fade = math.clamp((age - 10) / 4, 0, 0.5)
 		l.label.TextTransparency = fade
 		l.label.TextStrokeTransparency = 0.3 + fade * 0.7
 	end

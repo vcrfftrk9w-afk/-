@@ -131,6 +131,9 @@ function View:buildCell(i)
 	end
 
 	local gv = Tiles.ground(map, w, h, i, lvl.variance[i])
+	if gv < 0 and not Ui.atlas and Terrain.isWall(t) then
+		gv = 0 -- без атласа стена — просто серый квадрат, верхушек стен нет
+	end
 	local below = (i + w <= w * h) and lvl.variance[i + w] or 0
 	local uv = Tiles.upper(map, w, h, i, lvl.variance[i], below)
 	self:setTile(self.ground, self.lGround, i, gv, pos, size, t)

@@ -79,6 +79,7 @@ local methods = {}
 local EVENTS = {
   Activated = true, MouseButton1Down = true, MouseButton1Up = true, MouseButton1Click = true,
   Destroying = true, Changed = true, OnServerEvent = true, OnClientEvent = true, FocusLost = true,
+  PlayerAdded = true, PlayerRemoving = true,
 }
 mock.created = 0
 
@@ -107,6 +108,18 @@ function methods:GetDescendants()
   return t
 end
 function methods:IsA(class) return self.ClassName == class end
+function methods:FindFirstChildWhichIsA(class, recursive)
+  for _, c in ipairs(recursive and self:GetDescendants() or self:GetChildren()) do
+    if c.ClassName == class then return c end
+  end
+  return nil
+end
+function methods:PreloadAsync(list, cb)
+  for _, item in ipairs(list) do
+    if cb then cb(item.Image, mock.preloadStatus or Enum.AssetFetchStatus.Success) end
+  end
+end
+function methods:LoadAsset(id) error('LoadAsset: нет доступа к ассету ' .. tostring(id)) end
 function methods:Destroy()
   if rawget(self, '_destroyed') then return end
   rawset(self, '_destroyed', true)
@@ -131,6 +144,7 @@ end
 function methods:SetCoreGuiEnabled() end
 function methods:GetGuiInset() return vec2(0, 36), vec2(0, 0) end
 function methods:CreateEditableImage(opts)
+  if mock.noEditable then error('Insufficient permissions to create EditableImage') end
   local img = Instance.new('EditableImage')
   img.Size = opts.Size
   return img
@@ -207,6 +221,10 @@ service('GuiService')
 service('StarterGui')
 service('AssetService')
 service('DataStoreService')
+service('ContentProvider')
+service('ServerScriptService')
+service('InsertService')
+game.GuiService.TopbarInset = { Min = vec2(80, 0), Max = vec2(1280, 58), Height = 58 }
 RunService.RenderStepped = newSignal()
 RunService.Heartbeat = newSignal()
 UIS.InputBegan = newSignal()
@@ -225,7 +243,7 @@ remote.Parent = ReplicatedStorage
 ------------------------------------------------------------------ task, require
 local timers = {}
 task = {
-  wait = function() return 0 end,
+  wait = function(t) now = now + (t or 0.03); return t or 0.03 end,
   delay = function(t, fn, ...) table.insert(timers, { at = now + t, fn = fn, args = { ... } }) end,
   spawn = function(fn, ...) fn(...) end,
   defer = function(fn, ...) table.insert(timers, { at = now, fn = fn, args = { ... } }) end,

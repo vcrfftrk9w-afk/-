@@ -42,26 +42,59 @@ Ui.Atlas = Atlas
 local loading = Ui.label(gui, "Загрузка графики…", 22, { Size = UDim2.fromScale(1, 1), ZIndex = 100 })
 task.wait()
 
-local function loadAtlas()
-	if Config.ATLAS_ID ~= "" then
-		return { image = Config.ATLAS_ID }
+local atlasProblems = {} -- почему не удалось показать графику (для титульного экрана)
+
+-- 1) загруженная картинка: ID из Config; сервер заменяет ID наклейки (Decal) на ID картинки
+local function atlasFromUpload()
+	local id = string.match(tostring(Config.ATLAS_ID), "%d%d%d%d+")
+	if not id then
+		return nil
 	end
+	local image = Shared:GetAttribute("AtlasImage")
+	local t0 = os.clock()
+	while not image and os.clock() - t0 < 6 do
+		task.wait(0.2)
+		image = Shared:GetAttribute("AtlasImage")
+	end
+	image = image or ("rbxassetid://" .. id)
+	local probe = Ui.new("ImageLabel", { Image = image })
+	local status
+	pcall(function()
+		game:GetService("ContentProvider"):PreloadAsync({ probe }, function(_, s)
+			status = s
+		end)
+	end)
+	probe:Destroy()
+	if status == Enum.AssetFetchStatus.Failure then
+		table.insert(atlasProblems, "Картинка " .. image .. " не загрузилась: ID неверный или она ещё на проверке у Roblox.")
+		return nil
+	end
+	return { image = image }
+end
+
+-- 2) встроенная картинка: распаковываем PNG в EditableImage (нужно разрешение Roblox)
+local function atlasFromEmbedded()
 	local ok, res = pcall(function()
 		local Png = require(Shared:WaitForChild("Png"))
 		local data = require(Shared:WaitForChild("AtlasData"))
 		local img = Png.decode(Png.base64(data))
 		local editable = game:GetService("AssetService"):CreateEditableImage({ Size = Vector2.new(img.width, img.height) })
+		assert(editable, "EditableImage не создан")
 		editable:WritePixelsBuffer(Vector2.zero, Vector2.new(img.width, img.height), img.buf)
 		return { content = Content.fromObject(editable), editable = editable }
 	end)
 	if ok then
 		return res
 	end
-	warn("[Blox Pixel Dungeon] Встроенная графика недоступна (" .. tostring(res) .. "). "
-		.. "Загрузите assets/atlas.png и впишите ID в ReplicatedStorage.BPD.Config.ATLAS_ID.")
+	table.insert(atlasProblems, "Встроенная графика недоступна: " .. tostring(res))
 	return nil
 end
-Ui.atlas = loadAtlas()
+
+Ui.atlas = atlasFromUpload() or atlasFromEmbedded()
+if not Ui.atlas then
+	warn("[Blox Pixel Dungeon] " .. table.concat(atlasProblems, " ")
+		.. " Загрузите assets/atlas.png в Roblox и впишите его ID в ReplicatedStorage.BPD.Config.ATLAS_ID.")
+end
 loading:Destroy()
 
 ------------------------------------------------------------------ состояние
@@ -419,8 +452,12 @@ showTitle = function()
 	end, { Size = UDim2.fromOffset(240, 52), TextSize = 22, LayoutOrder = 5 })
 	Ui.button(col, "Об игре", showAbout, { Size = UDim2.fromOffset(240, 40), LayoutOrder = 6 })
 	if not Ui.atlas then
-		Ui.label(col, "Графика не загружена — см. README (ATLAS_ID).", 13, {
-			Size = UDim2.new(1, 0, 0, 16),
+		Ui.label(col, "Графика не загрузилась, поэтому вместо картинок цветные квадраты. "
+			.. "Загрузите assets/atlas.png в Roblox и впишите его ID в ReplicatedStorage → BPD → Config → ATLAS_ID.\n"
+			.. table.concat(atlasProblems, "\n"), 12, {
+			Size = UDim2.new(1, 40, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			TextWrapped = true,
 			TextColor3 = Ui.LOG.warn,
 			LayoutOrder = 7,
 		})

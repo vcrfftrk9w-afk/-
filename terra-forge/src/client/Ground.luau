@@ -26,9 +26,9 @@ local Y0 = -8 -- bottom of the lowest voxel layer
 local LAYERS = 8
 local MAX_TREES = 1800
 
--- territory plates lie just above the plains; units and buildings stand on them
-Ground.PLATE_Y = LAND_TOP + 0.25
-Ground.STAND_Y = LAND_TOP + 0.32
+-- units and buildings stand this high above the terrain surface, on the territory plates
+local STAND = 0.3
+Ground.STAND_Y = LAND_TOP + STAND
 
 local biome, coast, wdist = Map.biomeBuf, Map.coastBuf, Map.wdistBuf
 local AIR, WATER = Enum.Material.Air, Enum.Material.Water
@@ -108,7 +108,7 @@ local function classify()
 			end
 			writeu8(colMat, c, mat)
 			writeu8(colRise, c, rise)
-			writef32(colTop, c * 4, if rise > 0 then LAND_TOP + rise * VOX - 1 else Ground.STAND_Y)
+			writef32(colTop, c * 4, if rise > 0 then LAND_TOP + rise * VOX - 1 + STAND else Ground.STAND_Y)
 		end
 	end
 end
@@ -117,6 +117,19 @@ end
 function Ground.landTile(t: number): boolean
 	local x, y = t % W, t // W
 	return readu8(colMat, (y // B) * VX + x // B) ~= 0
+end
+
+-- true when territory is drawn on a tile: land, but not mountain slopes
+function Ground.plateTile(t: number): boolean
+	local x, y = t % W, t // W
+	local m = readu8(colMat, (y // B) * VX + x // B)
+	return m ~= 0 and m ~= 3
+end
+
+-- the terrain surface at a tile, in studs (where territory plates lie)
+function Ground.tileSurface(t: number): number
+	local x, y = t % W, t // W
+	return readf32(colTop, ((y // B) * VX + x // B) * 4) - STAND
 end
 
 local function top(vx: number, vz: number): number
@@ -193,12 +206,12 @@ end
 local function buildTerrain()
 	local terrain = workspace.Terrain
 	pcall(function()
-		terrain:SetMaterialColor(Enum.Material.Grass, Color3.fromRGB(118, 158, 78))
-		terrain:SetMaterialColor(Enum.Material.LeafyGrass, Color3.fromRGB(84, 126, 62))
-		terrain:SetMaterialColor(Enum.Material.Sand, Color3.fromRGB(226, 208, 152))
-		terrain:SetMaterialColor(Enum.Material.Rock, Color3.fromRGB(132, 126, 116))
-		terrain:SetMaterialColor(Enum.Material.Snow, Color3.fromRGB(240, 244, 248))
-		terrain:SetMaterialColor(Enum.Material.Ground, Color3.fromRGB(150, 156, 118))
+		terrain:SetMaterialColor(Enum.Material.Grass, Color3.fromRGB(102, 148, 64))
+		terrain:SetMaterialColor(Enum.Material.LeafyGrass, Color3.fromRGB(70, 114, 52))
+		terrain:SetMaterialColor(Enum.Material.Sand, Color3.fromRGB(212, 184, 126))
+		terrain:SetMaterialColor(Enum.Material.Rock, Color3.fromRGB(118, 110, 102))
+		terrain:SetMaterialColor(Enum.Material.Snow, Color3.fromRGB(232, 238, 246))
+		terrain:SetMaterialColor(Enum.Material.Ground, Color3.fromRGB(136, 146, 102))
 		terrain.WaterColor = Color3.fromRGB(28, 96, 134)
 		terrain.WaterTransparency = 0.6
 		terrain.WaterReflectance = 0.45
@@ -220,6 +233,29 @@ local function buildTerrain()
 			if not ok then
 				warn("[Terra Forge] terrain: " .. tostring(err))
 			end
+			task.wait()
+		end
+	end
+end
+
+-- the terrain engine decides where the surface really is, so ask it with raycasts
+local function measure()
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { workspace.Terrain }
+	params.IgnoreWater = true
+	local down = Vector3.new(0, -100, 0)
+	for vz = 0, VZ - 1 do
+		for vx = 0, VX - 1 do
+			local c = vz * VX + vx
+			if readu8(colMat, c) ~= 0 then
+				local hit = workspace:Raycast(Vector3.new((vx + 0.5) * VOX, 60, (vz + 0.5) * VOX), down, params)
+				if hit then
+					writef32(colTop, c * 4, hit.Position.Y + STAND)
+				end
+			end
+		end
+		if vz % 24 == 23 then
 			task.wait()
 		end
 	end
@@ -268,7 +304,7 @@ local function plantTrees()
 			if chance > 0 and count < MAX_TREES and rng:NextNumber() < chance then
 				local tree = Models.tree(m == 5, rng)
 				local x, z = (vx + rng:NextNumber()) * B, (vz + rng:NextNumber()) * B
-				tree.CFrame = CFrame.new(x * S, LAND_TOP + tree.Size.Y * 0.36, z * S)
+				tree.CFrame = CFrame.new(x * S, Ground.height(x, z) - STAND + tree.Size.Y * 0.36, z * S)
 				tree.CastShadow = false
 				tree.Parent = trees
 				count += 1
@@ -287,6 +323,8 @@ function Ground.init(): boolean
 	classify()
 	setupLighting()
 	buildTerrain()
+	task.wait()
+	measure()
 	plantTrees()
 	Ground.ready = true
 	return true

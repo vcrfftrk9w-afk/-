@@ -481,6 +481,7 @@ function Match:addBuilding(n, kind: string, x: number, y: number): boolean
 		auto = nil,
 		autoPaid = nil,
 		blocked = false,
+		shotAt = 0,
 	}
 	self.buildings[b.id] = b
 	if kind == "city" then
@@ -762,7 +763,7 @@ function Match:tickCombat(dt: number)
 		else
 			self.hpDirty[target] = true
 		end
-		if t - attacker.shotAt > 0.7 and #self.shots < 240 then
+		if t - (attacker.shotAt or 0) > 0.7 and #self.shots < 240 then
 			attacker.shotAt = t
 			table.insert(self.shots, math.round(attacker.px * 10) / 10)
 			table.insert(self.shots, math.round(attacker.py * 10) / 10)

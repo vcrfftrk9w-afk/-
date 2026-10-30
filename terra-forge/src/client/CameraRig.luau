@@ -52,7 +52,8 @@ local function updateLimits()
 	local vp = camera().ViewportSize
 	local aspect = math.max(vp.X, 1) / math.max(vp.Y, 1)
 	local tanHalf = math.tan(math.rad(Rig.FOV / 2))
-	maxD = math.clamp(math.max(H * S * 0.56 / tanHalf, W * S * 0.56 / (tanHalf * aspect)), 150 * S, 900 * S)
+	-- terrain far away is not drawn, so the whole world can't be in view at once: the minimap shows it
+	maxD = math.clamp(math.max(H * S * 0.56 / tanHalf, W * S * 0.56 / (tanHalf * aspect)), 150 * S, 260 * S)
 end
 
 local function clampView()

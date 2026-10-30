@@ -113,15 +113,27 @@ function Territory.update(owner: buffer, look: (number) -> (Color3?, number), ma
 		while x < W do
 			local t = base + x
 			local o = readu16(owner, t * 2)
-			if o ~= 0 and Ground.landTile(t) then
+			if o ~= 0 and Ground.plateTile(t) then
+				-- a plate spans tiles of one owner at about the same height, and lies on the highest
+				local h0 = Ground.tileSurface(t)
+				local top = h0
 				local x1 = x + 1
-				while x1 < W and readu16(owner, (base + x1) * 2) == o and Ground.landTile(base + x1) do
+				while x1 < W do
+					local t1 = base + x1
+					if readu16(owner, t1 * 2) ~= o or not Ground.plateTile(t1) then
+						break
+					end
+					local h = Ground.tileSurface(t1)
+					if math.abs(h - h0) > 0.75 then
+						break
+					end
+					top = math.max(top, h)
 					x1 += 1
 				end
 				local color, alpha = look(o)
 				if color then
 					used += 1
-					plate(list, used, x, x1, y, 1, Ground.PLATE_Y, color, alpha)
+					plate(list, used, x, x1, y, 1, top + 0.12, color, alpha)
 				end
 				x = x1
 			else
@@ -154,7 +166,7 @@ function Territory.updateFog(visible: buffer, fw: number, cell: number, on: bool
 						cx1 += 1
 					end
 					used += 1
-					plate(list, used, cx * cell, cx1 * cell, cy * cell, cell, Ground.PLATE_Y + 0.3, FOG_COLOR, FOG_ALPHA)
+					plate(list, used, cx * cell, cx1 * cell, cy * cell, cell, Ground.STAND_Y + 0.4, FOG_COLOR, FOG_ALPHA)
 					cx = cx1
 				else
 					cx += 1

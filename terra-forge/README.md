@@ -54,6 +54,14 @@ python3 tools/build_place.py
 
 Ещё можно подключить [Rojo](https://rojo.space) к `default.project.json`.
 
+Опубликовать новую версию в Roblox без Studio:
+
+```
+tools/publish.sh
+```
+
+Скрипт проверяет код, собирает файл и отправляет его через Open Cloud. Нужен ключ API с правом universe-places: write. В облачной среде Claude ключ лежит в сетевом секрете для `apis.roblox.com` (заголовок `x-api-key`). Ещё ключ можно передать вручную: `ROBLOX_API_KEY=... tools/publish.sh`.
+
 Генераторы данных:
 
 - `tools/gen_map.py` переводит карту Natural Earth (общественное достояние) в клетки;

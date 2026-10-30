@@ -32,7 +32,8 @@ local NEUTRAL = Color3.fromRGB(150, 158, 172)
 local SELECT = Color3.fromRGB(120, 255, 150)
 local HP_BACK = Color3.fromRGB(14, 17, 22)
 
--- turret sprites of the buildings that shoot
+-- turret sprites of the buildings that shoot; when the picture has its gun drawn in,
+-- the whole building turns to aim instead
 local BUILDING_GUN = { tower = "tower_gun", aa = "aa_gun" }
 -- how each shooter's shot looks
 local SHOT_LOOK = {
@@ -180,6 +181,24 @@ local function playZoom(): number
 end
 
 ---------------------------------------------------------------- sprites
+
+-- the painted ground, cut into pictures that each cover part of parent
+local function groundPictures(parent: Instance, z: number)
+	local cols, rows = Map.chunks[1], Map.chunks[2]
+	for i = 0, cols * rows - 1 do
+		local img = make("ImageLabel", {
+			Name = "Ground" .. i,
+			Position = UDim2.fromScale((i % cols) / cols, (i // cols) / rows),
+			Size = UDim2.new(1 / cols, 1, 1 / rows, 1),
+			BackgroundTransparency = 1,
+			ZIndex = z,
+			Parent = parent,
+		})
+		Art.watch("map" .. i, function(image)
+			img.Image = image
+		end)
+	end
+end
 
 -- a sprite and its team-colour layer, centred in parent, rotated together by the caller
 local function spritePair(parent: Instance, name: string, color: Color3, z: number, scale: number)
@@ -526,9 +545,12 @@ function MapView.addBuilding(info)
 	rec.frame = make("Frame", { BackgroundTransparency = 1, Position = at(rec.x, rec.y), Size = span(size, size), ZIndex = Z.building, Parent = board })
 	rec.base, rec.tint = spritePair(rec.frame, def.icon, color, 1, 1)
 	local gun = BUILDING_GUN[info.kind]
-	if gun then
+	if gun and Sprites.has(gun) then
 		rec.gun, rec.gunTint = spritePair(rec.frame, gun, color, 3, 0.85)
 		rec.gun.Rotation, rec.gunTint.Rotation = rec.gunAngle, rec.gunAngle
+	elseif gun then
+		rec.spin = true
+		rec.gunAngle = 0
 	end
 	rec.hpBar, rec.hpFill = makeBar(rec.frame, UDim2.new(0.5, 0, 1, -2), Vector2.new(0.5, 1), 6)
 	rec.workBar, rec.workFill = makeBar(rec.frame, UDim2.new(0.5, 0, 1, -8), Vector2.new(0.5, 1), 6)
@@ -676,7 +698,7 @@ function MapView.addUnit(info)
 		Sprites.set(u.shadowTint, def.icon, "team")
 	end
 	u.body, u.bodyTint = spritePair(u.frame, def.icon, color, 2, 1)
-	if def.gun then
+	if def.gun and Sprites.has(def.gun) then
 		u.gun, u.gunTint = spritePair(u.frame, def.gun, color, 4, 1)
 	end
 	if info.kind == "gunship" then
@@ -833,10 +855,12 @@ local function updateUnits(dt: number)
 		end
 	end
 	for _, b in buildings do
-		if b.gun then
+		if b.gun or b.spin then
 			local want = if b.aimUntil and b.aimUntil > clock then b.aim else b.gunAngle
 			b.gunAngle = turn(b.gunAngle, want, 200 * dt)
-			b.gun.Rotation, b.gunTint.Rotation = b.gunAngle, b.gunAngle
+			local turret = if b.gun then b.gun else b.base
+			local turretTint = if b.gun then b.gunTint else b.tint
+			turret.Rotation, turretTint.Rotation = b.gunAngle, b.gunAngle
 		end
 	end
 end
@@ -1099,18 +1123,7 @@ function MapView.attachMinimap(holder: GuiObject?)
 		return
 	end
 	mini = { holder = holder, dots = {}, used = 0 }
-	for i = 0, 3 do
-		local img = make("ImageLabel", {
-			Position = UDim2.fromScale(0.5 * (i % 2), 0.5 * (i // 2)),
-			Size = UDim2.new(0.5, 1, 0.5, 1),
-			BackgroundTransparency = 1,
-			ZIndex = holder.ZIndex,
-			Parent = holder,
-		})
-		Art.watch("map" .. i, function(image)
-			img.Image = image
-		end)
-	end
+	groundPictures(holder, holder.ZIndex)
 	mini.camRect = make("Frame", { BackgroundTransparency = 1, ZIndex = holder.ZIndex + 2, Parent = holder }, {
 		make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1.5 }),
 	})
@@ -1324,19 +1337,7 @@ function MapView.init(playerGui: PlayerGui)
 		BorderSizePixel = 0,
 		Parent = view,
 	})
-	for i = 0, 3 do
-		local img = make("ImageLabel", {
-			Name = "Ground" .. i,
-			Position = UDim2.fromScale(0.5 * (i % 2), 0.5 * (i // 2)),
-			Size = UDim2.new(0.5, 1, 0.5, 1),
-			BackgroundTransparency = 1,
-			ZIndex = Z.ground,
-			Parent = board,
-		})
-		Art.watch("map" .. i, function(image)
-			img.Image = image
-		end)
-	end
+	groundPictures(board, Z.ground)
 	ghost = make("Frame", { BackgroundTransparency = 0.7, Visible = false, ZIndex = Z.top, Parent = board }, {
 		make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2 }),
 	})

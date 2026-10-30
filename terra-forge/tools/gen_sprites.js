@@ -288,13 +288,16 @@ const ROOT = path.dirname(__dirname);
     const base = document.createElement('canvas'); base.width = base.height = ATLAS;
     const team = document.createElement('canvas'); team.width = team.height = ATLAS;
     const bx = base.getContext('2d'), tx = team.getContext('2d');
+    // units are drawn on a 64-unit grid into 128 px cells (two rows at the top),
+    // buildings on a 128-unit grid into 256 px cells below them
+    const SMALL = 128, BIG = 256;
     const cells = {};
-    let x64 = 0, y64 = 0, x128 = 0, y128 = 256;
+    let xs = 0, ys = 0, xb = 0, yb = 2 * SMALL;
     for (const [name, spr] of Object.entries(SPR)) {
-      const px = spr.size === 1 ? 64 : 128;
+      const px = spr.size === 1 ? SMALL : BIG;
       let cx, cy;
-      if (px === 64) { cx = x64; cy = y64; x64 += 64; if (x64 >= ATLAS) { x64 = 0; y64 += 64; } }
-      else { cx = x128; cy = y128; x128 += 128; if (x128 >= ATLAS) { x128 = 0; y128 += 128; } }
+      if (px === SMALL) { cx = xs; cy = ys; xs += SMALL; if (xs >= ATLAS) { xs = 0; ys += SMALL; } }
+      else { cx = xb; cy = yb; xb += BIG; if (xb >= ATLAS) { xb = 0; yb += BIG; } }
       const unit = px / (spr.size === 1 ? 64 : 128);
       const render = (pass) => {
         const c = document.createElement('canvas'); c.width = c.height = px * SS; const ctx = c.getContext('2d');

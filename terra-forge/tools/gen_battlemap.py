@@ -1,7 +1,7 @@
 """Makes the skirmish map: a 4-player map, mirrored so every corner base is equal, with grass,
 sand, dirt, lakes, rock ridges and resource pools. Writes the tile grid, pools and start
-spots to src/shared/MapData.luau, and paints the ground picture to OUT_DIR as 2 x 2 chunks
-(map_<n>.png) plus map_full.png.
+spots to src/shared/MapData.luau, and paints the ground picture from the textures in art/
+(ground_*.jpg) to OUT_DIR as 3 x 2 chunks (map_<n>.png, row by row) plus map_full.png.
 Usage: python3 tools/gen_battlemap.py OUT_DIR
 """
 import base64
@@ -15,8 +15,8 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 W, H = 112, 72  # tiles
 QW, QH = W // 2, H // 2  # one quadrant, mirrored into the other three
-P = 16  # picture pixels per tile
-CX, CY = 2, 2  # picture chunks
+P = 24  # picture pixels per tile
+CX, CY = 3, 2  # picture chunks, each 896 x 864: Roblox keeps pictures up to 1024 px
 WATER, GRASS, SAND, DIRT, ROCK = 0, 1, 2, 3, 4
 START = (11, 10)  # base centre in the top-left quadrant
 
@@ -143,70 +143,86 @@ def col(*rgb):
     return np.array(rgb, np.float32)
 
 
+def texture(name, size, shape, shift=(0, 0)):
+    """a ground texture from art/, made seamless, scaled to size px and repeated over the map"""
+    t = np.asarray(Image.open(os.path.join(ROOT, 'art', f'ground_{name}.jpg')).convert('RGB').resize((size, size), Image.LANCZOS), np.float32)
+    # blend with a copy shifted by half: the seams of one fall in the middle of the other
+    ramp = 1 - np.abs(np.linspace(-1, 1, size, dtype=np.float32))
+    wgt = np.minimum.outer(ramp, ramp)[..., None]
+    t = t * wgt + np.roll(np.roll(t, size // 2, 0), size // 2, 1) * (1 - wgt)
+    reps = (shape[0] // size + 2, shape[1] // size + 2, 1)
+    big = np.tile(t, reps)
+    return big[shift[1]:shift[1] + shape[0], shift[0]:shift[0] + shape[1]]
+
+
 def paint(g, pools):
     rng = np.random.default_rng(5)
+    k = P / 16  # sizes below were tuned for 16 px tiles
     shape = (H * P, W * P)
-    n_big = fbm(rng, shape, (64, 28))
-    n_mid = fbm(rng, shape, (14, 6))
-    grain = rng.random(shape).astype(np.float32) - 0.5  # pixel grain, like hand-made tiles
-    grain2 = blur(rng.random(shape).astype(np.float32) - 0.5, 1, 1)
+    n_big = fbm(rng, shape, (int(64 * k), int(28 * k)))
+    n_mid = fbm(rng, shape, (int(14 * k), int(6 * k)))
     # soft but slightly ragged edges between ground types
-    rag = fbm(rng, shape, (6, 3)) * 0.35
+    rag = fbm(rng, shape, (int(6 * k), int(3 * k))) * 0.35
 
     def area(kind, r=5):
-        return np.clip(blur(up(g == kind), r) + rag, 0, 1)
+        return np.clip(blur(up(g == kind), int(r * k)) + rag, 0, 1)
 
     water = area(WATER, 4)
     sand = area(SAND)
     dirt = area(DIRT)
     rock = area(ROCK, 6)
 
-    grass_c = mix(col(86, 150, 52), col(64, 124, 42), n_big * 2 + 0.5)
-    grass_c = mix(grass_c, col(110, 168, 64), np.clip(n_mid * 3, 0, 1))
-    grass_c += (grain[..., None] * 26 + grain2[..., None] * 30) * col(0.7, 1, 0.5)
-    sand_c = mix(col(214, 190, 136), col(196, 168, 116), n_big * 2 + 0.5)
-    ripples = np.sin(np.arange(shape[1])[None, :] * 0.35 + np.arange(shape[0])[:, None] * 0.12 + n_mid * 30) * 0.5 + 0.5
-    sand_c += (ripples[..., None] * 10 + grain[..., None] * 20) * col(1, 0.95, 0.8)
-    dirt_c = mix(col(132, 104, 72), col(112, 88, 62), n_big * 2 + 0.5)
-    dirt_c += grain[..., None] * 30 + grain2[..., None] * 24
-    rock_h = blur(up(g == ROCK), 6) * 2 + fbm(rng, shape, (10, 4, 2)) * 1.4
-    dx = np.roll(rock_h, -2, 1) - np.roll(rock_h, 2, 1)
-    dy = np.roll(rock_h, -2, 0) - np.roll(rock_h, 2, 0)
-    rock_shade = np.clip(1 - (dx + dy) * 0.9, 0.55, 1.4)
-    rock_c = mix(col(126, 118, 108), col(98, 92, 86), n_mid * 2 + 0.5) * rock_shade[..., None]
-    rock_c += grain[..., None] * 16
+    # grass with patches of trampled grass and dirt; large soft light and dark areas hide the repeats
+    grass_c = texture('grass', 22 * P, shape)
+    grass_c = mix(grass_c, texture('grass_dirt', 22 * P, shape, (7 * P, 3 * P)), np.clip(n_big * 3 + 0.15, 0, 1) * 0.85)
+    grass_c *= (1 + n_big[..., None] * 0.25)
+    sand_c = texture('sand', 20 * P, shape, (5 * P, 9 * P)) * (1 + n_mid[..., None] * 0.12)
+    dirt_c = texture('dirt', 16 * P, shape, (11 * P, 2 * P)) * (1 + n_big[..., None] * 0.2)
+    # rock: the texture lit from the top left, so the ridges stand up from the ground
+    rock_h = blur(up(g == ROCK), int(6 * k)) * 2 + fbm(rng, shape, (int(10 * k), int(4 * k), 2)) * 1.4
+    d = int(2 * k)
+    dx = np.roll(rock_h, -d, 1) - np.roll(rock_h, d, 1)
+    dy = np.roll(rock_h, -d, 0) - np.roll(rock_h, d, 0)
+    rock_shade = np.clip(1 - (dx + dy) * 0.7, 0.6, 1.35)
+    rock_c = texture('rock', 14 * P, shape, (3 * P, 6 * P)) * rock_shade[..., None]
 
     img = grass_c
     img = mix(img, dirt_c, dirt)
     img = mix(img, sand_c, sand)
-    # cliffs cast a shadow to the south-east
-    shadow = np.roll(np.roll(rock, 10, 0), 10, 1) * (1 - rock)
-    img = img * (1 - shadow[..., None] * 0.35)
-    img = mix(img, rock_c, np.clip((rock - 0.4) * 3, 0, 1))
+    # cliffs cast a shadow to the south-east, and have a dark foot
+    off = int(10 * k)
+    shadow = np.roll(np.roll(rock, off, 0), off, 1) * (1 - rock)
+    img = img * (1 - shadow[..., None] * 0.4)
+    rk = np.clip((rock - 0.4) * 3, 0, 1)
+    foot = np.clip(1 - np.abs(rock - 0.45) / 0.12, 0, 1)
+    img = mix(img, rock_c, rk)
+    img = img * (1 - foot[..., None] * 0.35)
 
-    # water: deep in the middle, light at the edge, surf on the shore
-    depth = blur(up(g == WATER), 10, 4)
-    water_c = mix(col(70, 150, 176), col(28, 78, 132), np.clip((depth - 0.5) * 2.2, 0, 1))
-    water_c += (n_mid[..., None] * 14 + grain2[..., None] * 10) * col(0.6, 0.9, 1)
+    # water: the texture, light and green at the shore, dark in the deep; surf on the shore
+    depth = blur(up(g == WATER), int(10 * k), 4)
+    water_c = texture('water', 22 * P, shape, (9 * P, 13 * P))
+    shallow = np.clip(1 - (depth - 0.45) * 2.4, 0, 1)[..., None]
+    water_c = water_c * (1 + shallow * 0.9) + shallow * col(10, 40, 30)
     wk = np.clip((water - 0.45) * 6, 0, 1)
     img = mix(img, water_c, wk)
-    surf = np.clip(1 - np.abs(water - 0.5) / 0.07, 0, 1)
-    img = mix(img, col(220, 236, 232), surf * 0.7)
+    surf = np.clip(1 - np.abs(water - 0.5) / 0.06, 0, 1)
+    img = mix(img, col(222, 236, 230), surf * 0.65)
 
     # resource pools: a crater with a glowing pool
     yy, xx = np.mgrid[0:shape[0], 0:shape[1]].astype(np.float32)
     for px, py in pools:
         cx, cy = (px + 1) * P, (py + 1) * P
         sl = (slice(int(cy - 2 * P), int(cy + 2 * P)), slice(int(cx - 2 * P), int(cx + 2 * P)))
-        d = np.hypot(xx[sl] - cx, yy[sl] - cy) / P
-        rim = np.clip(1 - np.abs(d - 0.95) / 0.22, 0, 1)
-        hole = np.clip((0.95 - d) * 4, 0, 1)
-        glow = np.clip((0.62 - d) * 3, 0, 1)
+        dd = np.hypot(xx[sl] - cx, yy[sl] - cy) / P
+        rim = np.clip(1 - np.abs(dd - 0.95) / 0.22, 0, 1)
+        hole = np.clip((0.95 - dd) * 4, 0, 1)
+        glow = np.clip((0.62 - dd) * 3, 0, 1)
         part = img[sl]
-        part = mix(part, col(70, 62, 54), hole)
+        part = part * (1 - np.clip(1 - np.abs(dd - 1.3) / 0.35, 0, 1)[..., None] * 0.3)
+        part = mix(part, col(62, 56, 50), hole)
         part = mix(part, col(52, 200, 170), glow * 0.85)
-        part = mix(part, col(230, 255, 240), np.clip((0.22 - d) * 6, 0, 1) * 0.8)
-        part = mix(part, col(160, 146, 120), rim * 0.8)
+        part = mix(part, col(230, 255, 240), np.clip((0.22 - dd) * 6, 0, 1) * 0.8)
+        part = mix(part, col(150, 138, 116), rim * 0.75)
         img[sl] = part
 
     return np.clip(img, 0, 255).astype(np.uint8)
@@ -228,12 +244,14 @@ def write_luau(g, starts, pools):
         '-- Generated by tools/gen_battlemap.py. Do not edit by hand.',
         f'-- {W} x {H} tiles. Tiles: run-length encoded, base64, each byte = kind << 5 | (run length - 1);',
         '-- kinds: 0 water, 1 grass, 2 sand, 3 dirt, 4 rock. Pools: top-left tile of each 2 x 2 resource pool.',
+        '-- chunks: columns and rows of the ground pictures map0, map1, ... (row by row).',
         'return {',
         f'\tW = {W},',
         f'\tH = {H},',
         f'\ttiles = "{b64}",',
         '\tstarts = { ' + ', '.join(f'{{ {x}, {y} }}' for x, y in starts) + ' },',
         '\tpools = { ' + ', '.join(f'{{ {x}, {y} }}' for x, y in pools) + ' },',
+        f'\tchunks = {{ {CX}, {CY} }},',
         '}',
         '',
     ]
@@ -248,7 +266,7 @@ def main():
     write_luau(g, starts, pools)
     img = paint(g, pools)
     Image.fromarray(img).save(os.path.join(out, 'map_full.png'))
-    cw, ch = W // CX * P, H // CY * P
+    cw, ch = W * P // CX, H * P // CY
     for j in range(CY):
         for i in range(CX):
             Image.fromarray(img[j * ch:(j + 1) * ch, i * cw:(i + 1) * cw]).save(os.path.join(out, f'map_{j * CX + i}.png'))

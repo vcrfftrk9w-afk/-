@@ -3,7 +3,7 @@ src/shared/MapArt.luau, by name. The game server turns decal ids into image ids 
 The API key (assets read and write) comes from the cloud environment's network secret for
 apis.roblox.com, or from ROBLOX_API_KEY.
 Usage: python3 tools/upload_art.py name=path.png [name=path.png ...]
-Names: map0..map3 (ground chunks, row by row), atlas (sprites), team (team-colour layer).
+Names: map0..map5 (ground chunks, row by row), atlas (sprites), team (team-colour layer).
 """
 import json
 import os

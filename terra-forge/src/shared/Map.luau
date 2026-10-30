@@ -28,6 +28,9 @@ Map.pools = {}
 for _, p in MapData.pools do
 	table.insert(Map.pools, { x = p[1], y = p[2] })
 end
+-- the ground picture is cut into columns x rows pictures: map0, map1, ... row by row
+Map.chunks = MapData.chunks or { 2, 2 }
+
 Map.starts = {}
 for _, s in MapData.starts do
 	table.insert(Map.starts, { x = s[1], y = s[2] })

@@ -17,7 +17,32 @@ action.Parent = remotes
 remotes.Parent = ReplicatedStorage
 
 local Config = require(ReplicatedStorage:WaitForChild("TerraForge").Config)
+local MapArt = require(ReplicatedStorage:WaitForChild("TerraForge").MapArt)
 local Match = require(script.Match)
+
+-- the painted map is uploaded as decals; clients need the image inside each of them
+local InsertService = game:GetService("InsertService")
+local art = Instance.new("Folder")
+art.Name = "TerraForgeArt"
+art.Parent = ReplicatedStorage
+for i, id in MapArt.map do
+	task.spawn(function()
+		for attempt = 1, 6 do
+			local ok, model = pcall(InsertService.LoadAsset, InsertService, id)
+			if ok and model then
+				local decal = model:FindFirstChildWhichIsA("Decal", true)
+				local image = if decal then decal.Texture else nil
+				model:Destroy()
+				if image and image ~= "" then
+					art:SetAttribute("map" .. (i - 1), image)
+					return
+				end
+			end
+			task.wait(attempt * 2)
+		end
+		warn("[Terra Forge] map picture " .. tostring(id) .. " could not be loaded")
+	end)
+end
 
 local match = nil
 

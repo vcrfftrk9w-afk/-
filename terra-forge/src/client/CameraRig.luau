@@ -35,7 +35,7 @@ end
 
 local function tilt(d: number): number
 	local k = math.clamp((math.log(d) - math.log(Rig.MIN_D)) / (math.log(maxD) - math.log(Rig.MIN_D)), 0, 1)
-	return math.rad(50 + 32 * k)
+	return math.rad(58 + 27 * k)
 end
 
 function Rig.maxDist(): number
@@ -52,8 +52,7 @@ local function updateLimits()
 	local vp = camera().ViewportSize
 	local aspect = math.max(vp.X, 1) / math.max(vp.Y, 1)
 	local tanHalf = math.tan(math.rad(Rig.FOV / 2))
-	-- terrain far away is not drawn, so the whole world can't be in view at once: the minimap shows it
-	maxD = math.clamp(math.max(H * S * 0.56 / tanHalf, W * S * 0.56 / (tanHalf * aspect)), 150 * S, 260 * S)
+	maxD = math.clamp(math.max(H * S * 0.56 / tanHalf, W * S * 0.56 / (tanHalf * aspect)), 150 * S, 900 * S)
 end
 
 local function clampView()

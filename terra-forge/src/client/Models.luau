@@ -222,15 +222,21 @@ end
 
 local BUILDING_BUILDERS = {}
 
+-- the command centre: a fortified block with corner towers, a team-coloured dome and an antenna
 function BUILDING_BUILDERS.capital(kit, team: Color3)
-	add(kit, BLOCK, Vector3.new(1.4, 0.12, 1.4), at(0, 0.06, 0), Color3.fromRGB(196, 190, 178))
-	add(kit, BLOCK, Vector3.new(0.96, 0.56, 0.8), at(0, 0.4, 0.05), WALL)
-	add(kit, BLOCK, Vector3.new(1.06, 0.08, 0.9), at(0, 0.72, 0.05), team)
-	add(kit, BALL, Vector3.new(0.5, 0.5, 0.5), at(0, 0.76, 0.05), lighter(team, 0.15))
-	for _, x in { -0.3, -0.1, 0.1, 0.3 } do
-		add(kit, CYL, Vector3.new(0.5, 0.07, 0.07), at(x, 0.37, 0.5) * UPRIGHT, Color3.fromRGB(250, 248, 240))
+	add(kit, BLOCK, Vector3.new(1.9, 0.12, 1.9), at(0, 0.06, 0), Color3.fromRGB(92, 96, 104))
+	add(kit, BLOCK, Vector3.new(1.32, 0.5, 1.32), at(0, 0.37, 0), Color3.fromRGB(178, 184, 194), METAL)
+	add(kit, BLOCK, Vector3.new(1.36, 0.09, 1.36), at(0, 0.5, 0), team)
+	add(kit, BLOCK, Vector3.new(1.2, 0.06, 1.2), at(0, 0.64, 0), Color3.fromRGB(150, 156, 166))
+	for _, c in { { -0.66, -0.66 }, { 0.66, -0.66 }, { -0.66, 0.66 }, { 0.66, 0.66 } } do
+		add(kit, CYL, Vector3.new(0.78, 0.38, 0.38), at(c[1], 0.45, c[2]) * UPRIGHT, Color3.fromRGB(160, 166, 176), METAL)
+		add(kit, CYL, Vector3.new(0.12, 0.42, 0.42), at(c[1], 0.88, c[2]) * UPRIGHT, team)
 	end
-	flag(kit, -0.55, -0.5, 1.15, team)
+	add(kit, BALL, Vector3.new(0.78, 0.78, 0.78), at(0, 0.7, 0), lighter(team, 0.12))
+	add(kit, BLOCK, Vector3.new(0.5, 0.26, 0.04), at(0, 0.28, 0.67), DARK)
+	add(kit, CYL, Vector3.new(0.6, 0.04, 0.04), at(0.18, 1.3, -0.1) * UPRIGHT, Color3.fromRGB(210, 214, 220))
+	add(kit, BALL, Vector3.new(0.08, 0.08, 0.08), at(0.18, 1.62, -0.1), Color3.fromRGB(255, 70, 60), NEON)
+	flag(kit, -0.9, -0.9, 1.3, team)
 end
 
 function BUILDING_BUILDERS.extractor(kit, team: Color3)

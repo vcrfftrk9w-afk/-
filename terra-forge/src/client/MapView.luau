@@ -1136,7 +1136,6 @@ end
 -- the whole map drawn with frames in the HUD: land, nations (in 4 x 4-tile cells) and what
 -- the camera sees; tap or drag it to move the camera
 local mini = nil
-local MINI_LAND = Color3.fromRGB(122, 156, 96)
 
 local function miniRun(parent: GuiObject, x0: number, x1: number, cy: number, color: Color3, transparency: number, z: number): Frame
 	return make("Frame", {
@@ -1154,22 +1153,21 @@ function MapView.attachMinimap(holder: GuiObject?)
 	if not holder then
 		return
 	end
-	-- land, drawn once: a cell is land when its middle tile is
-	for cy = 0, FH - 1 do
-		local cx = 0
-		while cx < FW do
-			if Ground.landTile((cy * FOG + 2) * W + cx * FOG + 2) then
-				local cx1 = cx + 1
-				while cx1 < FW and Ground.landTile((cy * FOG + 2) * W + cx1 * FOG + 2) do
-					cx1 += 1
-				end
-				miniRun(holder, cx, cx1, cy, MINI_LAND, 0, 1)
-				cx = cx1
-			else
-				cx += 1
-			end
-		end
+	-- the painted map, in the same pieces as the ground
+	local pieces = {}
+	for c = 0, Ground.CX * Ground.CY - 1 do
+		local ci, cj = c % Ground.CX, c // Ground.CX
+		pieces[c] = make("ImageLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(ci / Ground.CX, cj / Ground.CY),
+			Size = UDim2.fromScale(1 / Ground.CX, 1 / Ground.CY),
+			ZIndex = 1,
+			Parent = holder,
+		})
 	end
+	task.spawn(Ground.onImage, function(c: number, image: string)
+		pieces[c].Image = image
+	end)
 	local nationsLayer = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 2, Parent = holder })
 	local rect = make("Frame", { BackgroundTransparency = 1, ZIndex = 4, Parent = holder }, {
 		make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1.5 }),
@@ -1232,7 +1230,7 @@ local function updateMinimapNations()
 			for _, r in runs do
 				local color = look(r[3])
 				if color then
-					table.insert(frames, miniRun(mini.layer, r[1], r[2], cy, color, 0.1, 2))
+					table.insert(frames, miniRun(mini.layer, r[1], r[2], cy, color, 0.35, 2))
 				end
 			end
 			mini.rows[cy] = frames

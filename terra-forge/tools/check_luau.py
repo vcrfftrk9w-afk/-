@@ -15,7 +15,7 @@ GLOBALS = {
     'ColorSequence', 'ColorSequenceKeypoint', 'NumberSequence', 'NumberSequenceKeypoint', 'Enum',
     'Random', 'TweenInfo', 'Font', 'Content', 'buffer', 'math', 'string', 'table', 'task', 'typeof',
     'type', 'tostring', 'tonumber', 'pairs', 'ipairs', 'setmetatable', 'getmetatable', 'pcall', 'error',
-    'print', 'warn', 'os', 'utf8', 'bit32', 'require', 'select', 'next', 'unpack', 'assert', 'rawget',
+    'print', 'warn', 'xpcall', 'os', 'utf8', 'bit32', 'require', 'select', 'next', 'unpack', 'assert', 'rawget',
     'rawset', 'coroutine', 'debug', 'self', 'shared', 'tick', 'time', 'Rect', 'CFrame', 'BrickColor',
     # type names used in annotations
     'number', 'boolean', 'any', 'Player', 'PlayerGui', 'RemoteEvent', 'GuiObject', 'InputObject',

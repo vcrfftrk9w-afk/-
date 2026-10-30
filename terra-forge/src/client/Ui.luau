@@ -1003,7 +1003,7 @@ function UI.setEconomy(eco, troops: number, fmt)
 				b.parts[r].TextColor3 = if lack then C.bad else Color3.fromRGB(198, 207, 221)
 			end
 		end
-		b.icon.ImageTransparency = if poor then 0.5 else 0
+		Sprites.setTransparency(b.icon, if poor then 0.5 else 0)
 	end
 end
 
@@ -1098,8 +1098,53 @@ function UI.showTip(k: string?)
 	refs.tip.Visible = true
 end
 
+-- the map needs EditableImage, which is off until the owner allows it for the experience
 function UI.mapError()
-	UI.toast("Карта не загрузилась. Включи «Allow Mesh / Image APIs» в настройках игры (Game Settings → Security) и перезапусти.", true, 30)
+	if refs.mapError then
+		refs.mapError.Visible = true
+		return
+	end
+	local panel = Theme.panel({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.42),
+		Size = UDim2.fromOffset(560, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = Color3.fromRGB(16, 21, 34),
+		BackgroundTransparency = 0.02,
+		ZIndex = 40,
+		Parent = root,
+	})
+	panel:FindFirstChildOfClass("UIStroke").Color = C.bad
+	panel:FindFirstChildOfClass("UIStroke").Transparency = 0.3
+	Theme.pad(20, 16).Parent = panel
+	Theme.list(Enum.FillDirection.Vertical, 8).Parent = panel
+	Theme.label({ Text = "КАРТА ВЫКЛЮЧЕНА", Size = UDim2.new(1, -50, 0, 24), TextSize = 20, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, ZIndex = 41, LayoutOrder = 1, Parent = panel })
+	Theme.label({
+		Text = "Карте нужен доступ к созданию картинок, а в этой игре он пока выключен. Владелец игры включает его один раз:\n\n"
+			.. "1. Roblox Studio → вкладка Home → Experience Settings (раньше Game Settings).\n"
+			.. "2. Раздел Security → включи «Allow Mesh / Image APIs» → Save.\n"
+			.. "Или на сайте: create.roblox.com → Creations → эта игра → Configure → Settings → «Enable Mesh / Image APIs».\n\n"
+			.. "Игра должна быть опубликована (File → Publish to Roblox). Потом перезапусти её.",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		TextWrapped = true,
+		TextSize = 15,
+		FontFace = font(Enum.FontWeight.SemiBold),
+		TextColor3 = Color3.fromRGB(214, 222, 235),
+		ZIndex = 41,
+		LayoutOrder = 2,
+		Parent = panel,
+	})
+	local close = iconButton("close", panel, function()
+		panel.Visible = false
+	end)
+	close.AnchorPoint = Vector2.new(1, 0)
+	close.Position = UDim2.new(1, 0, 0, 0)
+	close.ZIndex = 42
+	-- keep the close button out of the list layout
+	local holder = make("Frame", { Size = UDim2.fromScale(1, 0), BackgroundTransparency = 1, LayoutOrder = 0, ZIndex = 41, Parent = panel })
+	close.Parent = holder
+	refs.mapError = panel
 end
 
 return UI

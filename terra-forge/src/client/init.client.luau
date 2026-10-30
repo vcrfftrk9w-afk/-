@@ -7,6 +7,68 @@ local StarterGui = game:GetService("StarterGui")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
+-- errors are shown on screen too, so they can be reported from a phone with a screenshot
+local errorLabel = nil
+local errorCount = 0
+local lastError = ""
+local function showError(where: string, err)
+	local text = tostring(err)
+	if text == lastError then
+		return
+	end
+	lastError = text
+	errorCount += 1
+	warn("[Terra Forge] " .. where .. ": " .. text)
+	if errorCount > 20 then
+		return
+	end
+	if not errorLabel then
+		local gui = Instance.new("ScreenGui")
+		gui.Name = "TerraForgeErrors"
+		gui.ResetOnSpawn = false
+		gui.DisplayOrder = 100
+		local frame = Instance.new("TextButton")
+		frame.AutoButtonColor = false
+		frame.Text = ""
+		frame.AnchorPoint = Vector2.new(0.5, 1)
+		frame.Position = UDim2.new(0.5, 0, 1, -10)
+		frame.Size = UDim2.new(0.9, 0, 0, 0)
+		frame.AutomaticSize = Enum.AutomaticSize.Y
+		frame.BackgroundColor3 = Color3.fromRGB(60, 14, 18)
+		frame.BackgroundTransparency = 0.05
+		frame.Parent = gui
+		Instance.new("UICorner").Parent = frame
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 12), UDim.new(0, 12)
+		pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 8), UDim.new(0, 8)
+		pad.Parent = frame
+		errorLabel = Instance.new("TextLabel")
+		errorLabel.BackgroundTransparency = 1
+		errorLabel.Size = UDim2.new(1, 0, 0, 0)
+		errorLabel.AutomaticSize = Enum.AutomaticSize.Y
+		errorLabel.TextWrapped = true
+		errorLabel.TextXAlignment = Enum.TextXAlignment.Left
+		errorLabel.TextSize = 13
+		errorLabel.TextColor3 = Color3.fromRGB(255, 220, 220)
+		errorLabel.Font = Enum.Font.Code
+		errorLabel.Parent = frame
+		frame.Activated:Connect(function()
+			gui.Enabled = false
+		end)
+		gui.Parent = playerGui
+	end
+	errorLabel.Parent.Parent.Enabled = true
+	errorLabel.Text = "Ошибка Terra Forge (" .. where .. "). Сделай скриншот и пришли его. Нажми, чтобы скрыть.\n" .. string.sub(tostring(err), 1, 700)
+end
+
+local function safe(where: string, fn, ...)
+	local ok, err = xpcall(fn, debug.traceback, ...)
+	if not ok then
+		showError(where, err)
+	end
+	return ok
+end
+
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
 local Map = require(Shared.Map)
@@ -23,12 +85,14 @@ for _, kind in { Enum.CoreGuiType.PlayerList, Enum.CoreGuiType.Backpack, Enum.Co
 	end)
 end
 
-MapView.init(playerGui)
-UI.init(playerGui, player)
-MapView.setMode("menu")
-UI.showMenu()
+safe("карта", MapView.init, playerGui)
+safe("интерфейс", UI.init, playerGui, player)
+safe("меню", function()
+	MapView.setMode("menu")
+	UI.showMenu()
+end)
 if not MapView.ok then
-	UI.mapError()
+	safe("сообщение о карте", UI.mapError)
 end
 
 local state = {
@@ -262,6 +326,10 @@ function handlers.lobby(msg)
 	UI.setLobby(msg)
 end
 
+function handlers.error(msg)
+	showError("сервер", msg.text)
+end
+
 function handlers.nomatch()
 	MapView.clear()
 	state.phase = "none"
@@ -277,7 +345,7 @@ event.OnClientEvent:Connect(function(kind, batch)
 	for _, msg in batch do
 		local h = handlers[msg.t]
 		if h then
-			h(msg)
+			safe("сообщение " .. tostring(msg.t), h, msg)
 		end
 	end
 end)
@@ -346,8 +414,15 @@ end
 
 ---------------------------------------------------------------- per frame
 
+do
+	local onTap = MapView.onTap
+	MapView.onTap = function(x, y, sx, sy)
+		safe("нажатие", onTap, x, y, sx, sy)
+	end
+end
+
 local hudAcc = 0
-RunService.RenderStepped:Connect(function(dt)
+local function frame(dt: number)
 	MapView.update(dt)
 	if state.phase == "spawn" or state.phase == "game" or state.phase == "ended" then
 		state.timer -= dt
@@ -395,4 +470,8 @@ RunService.RenderStepped:Connect(function(dt)
 	if mine then
 		UI.setMe(mine.count / Map.landCount, mine.troops, MapView.fmt)
 	end
+end
+
+RunService.RenderStepped:Connect(function(dt)
+	safe("кадр", frame, dt)
 end)

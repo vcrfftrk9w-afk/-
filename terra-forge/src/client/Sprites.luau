@@ -1,4 +1,7 @@
--- Turns the packed icon data into EditableImages, tinted with a nation's colour and cached.
+-- Turns the packed icon data into EditableImages. Each icon is two images: the fixed colours
+-- (outline, metal, glass) and a light layer for the nation-coloured parts, which a child
+-- ImageLabel tints with ImageColor3. One pair of images serves every nation, which keeps
+-- memory low on phones.
 local AssetService = game:GetService("AssetService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
@@ -11,7 +14,10 @@ local readu8, writeu8 = buffer.readu8, buffer.writeu8
 local Sprites = {}
 Sprites.available = true
 
-local decoded = {}
+-- brightness of the tinted parts: main, dark and light shades of the nation colour
+local TINT = { m = 220, d = 150, l = 255 }
+local NEUTRAL = Color3.fromRGB(142, 152, 170)
+
 local cache = {}
 
 local function hexRGB(h: string): (number, number, number)
@@ -25,51 +31,43 @@ local function shade(r: number, g: number, b: number, k: number): (number, numbe
 	return math.round(r * (1 + k)), math.round(g * (1 + k)), math.round(b * (1 + k))
 end
 
-local function create(size: Vector2)
-	local ok, img = pcall(function()
-		return AssetService:CreateEditableImage({ Size = size })
+-- an EditableImage filled with pixels, or nil if this device or experience doesn't allow it
+local function create(size: Vector2, pixels: buffer?)
+	local img = nil
+	local ok = pcall(function()
+		img = AssetService:CreateEditableImage({ Size = size })
+		if img and pixels then
+			img:WritePixelsBuffer(Vector2.zero, size, pixels)
+		end
 	end)
 	if ok and img then
 		return img
 	end
+	Sprites.available = false
 	return nil
 end
 Sprites.create = create
 
--- EditableImage for an icon, or nil if images can't be created on this device
-function Sprites.get(name: string, colorHex: string?, flip: boolean?)
-	local key = name .. "|" .. (colorHex or "") .. (if flip then "|f" else "")
-	local cached = cache[key]
-	if cached ~= nil then
-		return cached or nil
-	end
+local function build(name: string, flip: boolean)
 	local icon = Icons.icons[name]
 	if not icon then
 		return nil
 	end
-	local raw = decoded[name]
-	if not raw then
-		raw = Base64.decode(icon.data)
-		decoded[name] = raw
-	end
-	local mr, mg, mb = hexRGB(colorHex or "#8e98aa")
+	local raw = Base64.decode(icon.data)
 	local pal = {}
 	for i, p in icon.palette do
-		local r, g, b
-		if p == "m" then
-			r, g, b = mr, mg, mb
-		elseif p == "d" then
-			r, g, b = shade(mr, mg, mb, -0.32)
-		elseif p == "l" then
-			r, g, b = shade(mr, mg, mb, 0.38)
-		elseif #p == 1 then
-			r, g, b = hexRGB(Icons.slots[p])
+		local entry
+		if TINT[p] then
+			entry = { tint = true, v = TINT[p] }
 		else
-			r, g, b = hexRGB(p)
+			local r, g, b = hexRGB(if #p == 1 then Icons.slots[p] else p)
+			entry = { r = r, g = g, b = b }
 		end
-		pal[i - 1] = { r, g, b }
+		pal[i - 1] = entry
 	end
-	local px = buffer.create(S * S * 4)
+	local base = buffer.create(S * S * 4)
+	local tint = buffer.create(S * S * 4)
+	local hasTint = false
 	for i = 0, S * S - 1 do
 		local v = readu8(raw, i)
 		local a = v % 16
@@ -80,32 +78,70 @@ function Sprites.get(name: string, colorHex: string?, flip: boolean?)
 				x = S - 1 - x
 			end
 			local o = (y * S + x) * 4
-			writeu8(px, o, c[1])
-			writeu8(px, o + 1, c[2])
-			writeu8(px, o + 2, c[3])
-			writeu8(px, o + 3, a * 17)
+			if c.tint then
+				hasTint = true
+				writeu8(tint, o, c.v)
+				writeu8(tint, o + 1, c.v)
+				writeu8(tint, o + 2, c.v)
+				writeu8(tint, o + 3, a * 17)
+			else
+				writeu8(base, o, c.r)
+				writeu8(base, o + 1, c.g)
+				writeu8(base, o + 2, c.b)
+				writeu8(base, o + 3, a * 17)
+			end
 		end
 	end
-	local img = create(Vector2.new(S, S))
-	if not img then
-		Sprites.available = false
-		cache[key] = false
+	local size = Vector2.new(S, S)
+	local baseImg = create(size, base)
+	if not baseImg then
 		return nil
 	end
-	img:WritePixelsBuffer(Vector2.zero, Vector2.new(S, S), px)
-	cache[key] = img
-	return img
+	local tintImg = if hasTint then create(size, tint) else nil
+	return { base = baseImg, tint = tintImg }
 end
 
--- shows an icon in an ImageLabel/ImageButton; returns false if it couldn't
+-- shows an icon in an ImageLabel/ImageButton, tinted with a nation colour; false if it couldn't
 function Sprites.apply(label: GuiObject, name: string, colorHex: string?, flip: boolean?): boolean
-	local img = Sprites.get(name, colorHex, flip)
-	if img then
-		local target: any = label
-		target.ImageContent = Content.fromObject(img)
-		return true
+	local key = name .. (if flip then "|f" else "")
+	local entry = cache[key]
+	if entry == nil then
+		entry = build(name, flip == true) or false
+		cache[key] = entry
 	end
-	return false
+	if not entry then
+		return false
+	end
+	local ok = pcall(function()
+		local target: any = label
+		target.ImageContent = Content.fromObject(entry.base)
+		local layer: any = label:FindFirstChild("Tint")
+		if entry.tint then
+			if not layer then
+				layer = Instance.new("ImageLabel")
+				layer.Name = "Tint"
+				layer.BackgroundTransparency = 1
+				layer.Size = UDim2.fromScale(1, 1)
+				layer.Parent = label
+			end
+			layer.ImageContent = Content.fromObject(entry.tint)
+			layer.ImageColor3 = if colorHex then Color3.fromHex(colorHex) else NEUTRAL
+			layer.ImageTransparency = target.ImageTransparency
+		elseif layer then
+			layer:Destroy()
+		end
+	end)
+	return ok
+end
+
+-- fades an icon, including its tinted layer
+function Sprites.setTransparency(label: GuiObject, value: number)
+	local target: any = label
+	target.ImageTransparency = value
+	local layer: any = label:FindFirstChild("Tint")
+	if layer then
+		layer.ImageTransparency = value
+	end
 end
 
 Sprites.hexRGB = hexRGB

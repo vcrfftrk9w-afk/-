@@ -21,6 +21,26 @@ local Match = require(script.Match)
 
 local match = nil
 
+-- server errors are also sent to players, so they can be reported from a phone
+local reported = {}
+local function report(where: string, err)
+	local text = where .. ": " .. string.sub(tostring(err), 1, 600)
+	warn("[Terra Forge] " .. text)
+	if reported[text] or #Players:GetPlayers() == 0 then
+		return
+	end
+	reported[text] = true
+	event:FireAllClients("batch", { { t = "error", text = text } })
+end
+
+local function safe(where: string, fn, ...)
+	local ok, err = xpcall(fn, debug.traceback, ...)
+	if not ok then
+		report(where, err)
+	end
+	return ok
+end
+
 local function isNumber(v): boolean
 	return typeof(v) == "number" and v == v and math.abs(v) < 1e6
 end
@@ -35,7 +55,7 @@ end
 -- simple flood protection: at most 25 actions per player per second
 local budget = {}
 
-action.OnServerEvent:Connect(function(player: Player, kind, a, b, c)
+local function onAction(player: Player, kind, a, b, c)
 	if typeof(kind) ~= "string" then
 		return
 	end
@@ -77,6 +97,10 @@ action.OnServerEvent:Connect(function(player: Player, kind, a, b, c)
 	elseif kind == "leave" then
 		match:leave(player)
 	end
+end
+
+action.OnServerEvent:Connect(function(player: Player, kind, a, b, c)
+	safe("действие " .. tostring(kind), onAction, player, kind, a, b, c)
 end)
 
 Players.PlayerAdded:Connect(function(player)
@@ -93,9 +117,19 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 
 local lobbyAcc = 0
+local failures = 0
 RunService.Heartbeat:Connect(function(dt)
 	if match then
-		match:step(dt)
+		if safe("матч", match.step, match, dt) then
+			failures = 0
+		else
+			-- a broken match would keep failing every frame: end it after a few seconds
+			failures += 1
+			if failures > 180 then
+				failures = 0
+				match.done = true
+			end
+		end
 		if match.done then
 			match = nil
 			event:FireAllClients("batch", { { t = "nomatch" } })

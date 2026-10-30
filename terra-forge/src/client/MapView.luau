@@ -246,15 +246,21 @@ local function flushOverlay()
 	local x0, y0, x1, y1 = dirtyRect[1], dirtyRect[2], dirtyRect[3], dirtyRect[4]
 	dirtyRect = nil
 	local w, h = x1 - x0 + 1, y1 - y0 + 1
-	if w * h > N // 3 then
-		ovImg:WritePixelsBuffer(Vector2.zero, Vector2.new(W, H), ov)
-		return
+	local ok = pcall(function()
+		if w * h > N // 3 then
+			ovImg:WritePixelsBuffer(Vector2.zero, Vector2.new(W, H), ov)
+			return
+		end
+		local sub = buffer.create(w * h * 4)
+		for row = 0, h - 1 do
+			buffer.copy(sub, row * w * 4, ov, ((y0 + row) * W + x0) * 4, w * 4)
+		end
+		ovImg:WritePixelsBuffer(Vector2.new(x0, y0), Vector2.new(w, h), sub)
+	end)
+	if not ok then
+		ovImg = nil
+		MapView.ok = false
 	end
-	local sub = buffer.create(w * h * 4)
-	for row = 0, h - 1 do
-		buffer.copy(sub, row * w * 4, ov, ((y0 + row) * W + x0) * 4, w * 4)
-	end
-	ovImg:WritePixelsBuffer(Vector2.new(x0, y0), Vector2.new(w, h), sub)
 end
 
 function MapView.ownerAt(x: number, y: number): number
@@ -333,14 +339,17 @@ function MapView.init(playerGui: PlayerGui)
 	})
 	gui.Parent = playerGui
 
-	local baseImg = Sprites.create(Vector2.new(W, H))
-	ovImg = Sprites.create(Vector2.new(W, H))
-	if not baseImg or not ovImg then
-		MapView.ok = false
-	else
-		baseImg:WritePixelsBuffer(Vector2.zero, Vector2.new(W, H), buildTerrain())
+	-- both images need "Allow Mesh / Image APIs" switched on for the experience
+	local size = Vector2.new(W, H)
+	local baseImg = Sprites.create(size, buildTerrain())
+	ovImg = if baseImg then Sprites.create(size, nil) else nil
+	local shown = baseImg ~= nil and ovImg ~= nil and pcall(function()
 		baseLabel.ImageContent = Content.fromObject(baseImg)
 		ovLabel.ImageContent = Content.fromObject(ovImg)
+	end)
+	if not shown then
+		MapView.ok = false
+		ovImg = nil
 	end
 
 	for _, d in Map.deposits do

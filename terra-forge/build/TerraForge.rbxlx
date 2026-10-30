@@ -566,6 +566,26 @@ local Match = require(script.Match)
 
 local match = nil
 
+-- server errors are also sent to players, so they can be reported from a phone
+local reported = {}
+local function report(where: string, err)
+	local text = where .. ": " .. string.sub(tostring(err), 1, 600)
+	warn("[Terra Forge] " .. text)
+	if reported[text] or #Players:GetPlayers() == 0 then
+		return
+	end
+	reported[text] = true
+	event:FireAllClients("batch", { { t = "error", text = text } })
+end
+
+local function safe(where: string, fn, ...)
+	local ok, err = xpcall(fn, debug.traceback, ...)
+	if not ok then
+		report(where, err)
+	end
+	return ok
+end
+
 local function isNumber(v): boolean
 	return typeof(v) == "number" and v == v and math.abs(v) < 1e6
 end
@@ -580,7 +600,7 @@ end
 -- simple flood protection: at most 25 actions per player per second
 local budget = {}
 
-action.OnServerEvent:Connect(function(player: Player, kind, a, b, c)
+local function onAction(player: Player, kind, a, b, c)
 	if typeof(kind) ~= "string" then
 		return
 	end
@@ -622,6 +642,10 @@ action.OnServerEvent:Connect(function(player: Player, kind, a, b, c)
 	elseif kind == "leave" then
 		match:leave(player)
 	end
+end
+
+action.OnServerEvent:Connect(function(player: Player, kind, a, b, c)
+	safe("действие " .. tostring(kind), onAction, player, kind, a, b, c)
 end)
 
 Players.PlayerAdded:Connect(function(player)
@@ -638,9 +662,19 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 
 local lobbyAcc = 0
+local failures = 0
 RunService.Heartbeat:Connect(function(dt)
 	if match then
-		match:step(dt)
+		if safe("матч", match.step, match, dt) then
+			failures = 0
+		else
+			-- a broken match would keep failing every frame: end it after a few seconds
+			failures += 1
+			if failures > 180 then
+				failures = 0
+				match.done = true
+			end
+		end
 		if match.done then
 			match = nil
 			event:FireAllClients("batch", { { t = "nomatch" } })
@@ -2369,6 +2403,68 @@ local StarterGui = game:GetService("StarterGui")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
+-- errors are shown on screen too, so they can be reported from a phone with a screenshot
+local errorLabel = nil
+local errorCount = 0
+local lastError = ""
+local function showError(where: string, err)
+	local text = tostring(err)
+	if text == lastError then
+		return
+	end
+	lastError = text
+	errorCount += 1
+	warn("[Terra Forge] " .. where .. ": " .. text)
+	if errorCount > 20 then
+		return
+	end
+	if not errorLabel then
+		local gui = Instance.new("ScreenGui")
+		gui.Name = "TerraForgeErrors"
+		gui.ResetOnSpawn = false
+		gui.DisplayOrder = 100
+		local frame = Instance.new("TextButton")
+		frame.AutoButtonColor = false
+		frame.Text = ""
+		frame.AnchorPoint = Vector2.new(0.5, 1)
+		frame.Position = UDim2.new(0.5, 0, 1, -10)
+		frame.Size = UDim2.new(0.9, 0, 0, 0)
+		frame.AutomaticSize = Enum.AutomaticSize.Y
+		frame.BackgroundColor3 = Color3.fromRGB(60, 14, 18)
+		frame.BackgroundTransparency = 0.05
+		frame.Parent = gui
+		Instance.new("UICorner").Parent = frame
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 12), UDim.new(0, 12)
+		pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 8), UDim.new(0, 8)
+		pad.Parent = frame
+		errorLabel = Instance.new("TextLabel")
+		errorLabel.BackgroundTransparency = 1
+		errorLabel.Size = UDim2.new(1, 0, 0, 0)
+		errorLabel.AutomaticSize = Enum.AutomaticSize.Y
+		errorLabel.TextWrapped = true
+		errorLabel.TextXAlignment = Enum.TextXAlignment.Left
+		errorLabel.TextSize = 13
+		errorLabel.TextColor3 = Color3.fromRGB(255, 220, 220)
+		errorLabel.Font = Enum.Font.Code
+		errorLabel.Parent = frame
+		frame.Activated:Connect(function()
+			gui.Enabled = false
+		end)
+		gui.Parent = playerGui
+	end
+	errorLabel.Parent.Parent.Enabled = true
+	errorLabel.Text = "Ошибка Terra Forge (" .. where .. "). Сделай скриншот и пришли его. Нажми, чтобы скрыть.\n" .. string.sub(tostring(err), 1, 700)
+end
+
+local function safe(where: string, fn, ...)
+	local ok, err = xpcall(fn, debug.traceback, ...)
+	if not ok then
+		showError(where, err)
+	end
+	return ok
+end
+
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
 local Map = require(Shared.Map)
@@ -2385,12 +2481,14 @@ for _, kind in { Enum.CoreGuiType.PlayerList, Enum.CoreGuiType.Backpack, Enum.Co
 	end)
 end
 
-MapView.init(playerGui)
-UI.init(playerGui, player)
-MapView.setMode("menu")
-UI.showMenu()
+safe("карта", MapView.init, playerGui)
+safe("интерфейс", UI.init, playerGui, player)
+safe("меню", function()
+	MapView.setMode("menu")
+	UI.showMenu()
+end)
 if not MapView.ok then
-	UI.mapError()
+	safe("сообщение о карте", UI.mapError)
 end
 
 local state = {
@@ -2624,6 +2722,10 @@ function handlers.lobby(msg)
 	UI.setLobby(msg)
 end
 
+function handlers.error(msg)
+	showError("сервер", msg.text)
+end
+
 function handlers.nomatch()
 	MapView.clear()
 	state.phase = "none"
@@ -2639,7 +2741,7 @@ event.OnClientEvent:Connect(function(kind, batch)
 	for _, msg in batch do
 		local h = handlers[msg.t]
 		if h then
-			h(msg)
+			safe("сообщение " .. tostring(msg.t), h, msg)
 		end
 	end
 end)
@@ -2708,8 +2810,15 @@ end
 
 ---------------------------------------------------------------- per frame
 
+do
+	local onTap = MapView.onTap
+	MapView.onTap = function(x, y, sx, sy)
+		safe("нажатие", onTap, x, y, sx, sy)
+	end
+end
+
 local hudAcc = 0
-RunService.RenderStepped:Connect(function(dt)
+local function frame(dt: number)
 	MapView.update(dt)
 	if state.phase == "spawn" or state.phase == "game" or state.phase == "ended" then
 		state.timer -= dt
@@ -2757,6 +2866,10 @@ RunService.RenderStepped:Connect(function(dt)
 	if mine then
 		UI.setMe(mine.count / Map.landCount, mine.troops, MapView.fmt)
 	end
+end
+
+RunService.RenderStepped:Connect(function(dt)
+	safe("кадр", frame, dt)
 end)
 ]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">MapView</string><ProtectedString name="Source"><![CDATA[-- The world map on screen: terrain and territory images, pan/zoom, deposits, buildings,
 -- units, nation labels and capture effects. Everything sits on a "board" frame, so markers
@@ -3006,15 +3119,21 @@ local function flushOverlay()
 	local x0, y0, x1, y1 = dirtyRect[1], dirtyRect[2], dirtyRect[3], dirtyRect[4]
 	dirtyRect = nil
 	local w, h = x1 - x0 + 1, y1 - y0 + 1
-	if w * h > N // 3 then
-		ovImg:WritePixelsBuffer(Vector2.zero, Vector2.new(W, H), ov)
-		return
+	local ok = pcall(function()
+		if w * h > N // 3 then
+			ovImg:WritePixelsBuffer(Vector2.zero, Vector2.new(W, H), ov)
+			return
+		end
+		local sub = buffer.create(w * h * 4)
+		for row = 0, h - 1 do
+			buffer.copy(sub, row * w * 4, ov, ((y0 + row) * W + x0) * 4, w * 4)
+		end
+		ovImg:WritePixelsBuffer(Vector2.new(x0, y0), Vector2.new(w, h), sub)
+	end)
+	if not ok then
+		ovImg = nil
+		MapView.ok = false
 	end
-	local sub = buffer.create(w * h * 4)
-	for row = 0, h - 1 do
-		buffer.copy(sub, row * w * 4, ov, ((y0 + row) * W + x0) * 4, w * 4)
-	end
-	ovImg:WritePixelsBuffer(Vector2.new(x0, y0), Vector2.new(w, h), sub)
 end
 
 function MapView.ownerAt(x: number, y: number): number
@@ -3093,14 +3212,17 @@ function MapView.init(playerGui: PlayerGui)
 	})
 	gui.Parent = playerGui
 
-	local baseImg = Sprites.create(Vector2.new(W, H))
-	ovImg = Sprites.create(Vector2.new(W, H))
-	if not baseImg or not ovImg then
-		MapView.ok = false
-	else
-		baseImg:WritePixelsBuffer(Vector2.zero, Vector2.new(W, H), buildTerrain())
+	-- both images need "Allow Mesh / Image APIs" switched on for the experience
+	local size = Vector2.new(W, H)
+	local baseImg = Sprites.create(size, buildTerrain())
+	ovImg = if baseImg then Sprites.create(size, nil) else nil
+	local shown = baseImg ~= nil and ovImg ~= nil and pcall(function()
 		baseLabel.ImageContent = Content.fromObject(baseImg)
 		ovLabel.ImageContent = Content.fromObject(ovImg)
+	end)
+	if not shown then
+		MapView.ok = false
+		ovImg = nil
 	end
 
 	for _, d in Map.deposits do
@@ -4000,7 +4122,10 @@ function MapView.viewInfo()
 end
 
 return MapView
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Turns the packed icon data into EditableImages, tinted with a nation's colour and cached.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Turns the packed icon data into EditableImages. Each icon is two images: the fixed colours
+-- (outline, metal, glass) and a light layer for the nation-coloured parts, which a child
+-- ImageLabel tints with ImageColor3. One pair of images serves every nation, which keeps
+-- memory low on phones.
 local AssetService = game:GetService("AssetService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
@@ -4013,7 +4138,10 @@ local readu8, writeu8 = buffer.readu8, buffer.writeu8
 local Sprites = {}
 Sprites.available = true
 
-local decoded = {}
+-- brightness of the tinted parts: main, dark and light shades of the nation colour
+local TINT = { m = 220, d = 150, l = 255 }
+local NEUTRAL = Color3.fromRGB(142, 152, 170)
+
 local cache = {}
 
 local function hexRGB(h: string): (number, number, number)
@@ -4027,51 +4155,43 @@ local function shade(r: number, g: number, b: number, k: number): (number, numbe
 	return math.round(r * (1 + k)), math.round(g * (1 + k)), math.round(b * (1 + k))
 end
 
-local function create(size: Vector2)
-	local ok, img = pcall(function()
-		return AssetService:CreateEditableImage({ Size = size })
+-- an EditableImage filled with pixels, or nil if this device or experience doesn't allow it
+local function create(size: Vector2, pixels: buffer?)
+	local img = nil
+	local ok = pcall(function()
+		img = AssetService:CreateEditableImage({ Size = size })
+		if img and pixels then
+			img:WritePixelsBuffer(Vector2.zero, size, pixels)
+		end
 	end)
 	if ok and img then
 		return img
 	end
+	Sprites.available = false
 	return nil
 end
 Sprites.create = create
 
--- EditableImage for an icon, or nil if images can't be created on this device
-function Sprites.get(name: string, colorHex: string?, flip: boolean?)
-	local key = name .. "|" .. (colorHex or "") .. (if flip then "|f" else "")
-	local cached = cache[key]
-	if cached ~= nil then
-		return cached or nil
-	end
+local function build(name: string, flip: boolean)
 	local icon = Icons.icons[name]
 	if not icon then
 		return nil
 	end
-	local raw = decoded[name]
-	if not raw then
-		raw = Base64.decode(icon.data)
-		decoded[name] = raw
-	end
-	local mr, mg, mb = hexRGB(colorHex or "#8e98aa")
+	local raw = Base64.decode(icon.data)
 	local pal = {}
 	for i, p in icon.palette do
-		local r, g, b
-		if p == "m" then
-			r, g, b = mr, mg, mb
-		elseif p == "d" then
-			r, g, b = shade(mr, mg, mb, -0.32)
-		elseif p == "l" then
-			r, g, b = shade(mr, mg, mb, 0.38)
-		elseif #p == 1 then
-			r, g, b = hexRGB(Icons.slots[p])
+		local entry
+		if TINT[p] then
+			entry = { tint = true, v = TINT[p] }
 		else
-			r, g, b = hexRGB(p)
+			local r, g, b = hexRGB(if #p == 1 then Icons.slots[p] else p)
+			entry = { r = r, g = g, b = b }
 		end
-		pal[i - 1] = { r, g, b }
+		pal[i - 1] = entry
 	end
-	local px = buffer.create(S * S * 4)
+	local base = buffer.create(S * S * 4)
+	local tint = buffer.create(S * S * 4)
+	local hasTint = false
 	for i = 0, S * S - 1 do
 		local v = readu8(raw, i)
 		local a = v % 16
@@ -4082,32 +4202,70 @@ function Sprites.get(name: string, colorHex: string?, flip: boolean?)
 				x = S - 1 - x
 			end
 			local o = (y * S + x) * 4
-			writeu8(px, o, c[1])
-			writeu8(px, o + 1, c[2])
-			writeu8(px, o + 2, c[3])
-			writeu8(px, o + 3, a * 17)
+			if c.tint then
+				hasTint = true
+				writeu8(tint, o, c.v)
+				writeu8(tint, o + 1, c.v)
+				writeu8(tint, o + 2, c.v)
+				writeu8(tint, o + 3, a * 17)
+			else
+				writeu8(base, o, c.r)
+				writeu8(base, o + 1, c.g)
+				writeu8(base, o + 2, c.b)
+				writeu8(base, o + 3, a * 17)
+			end
 		end
 	end
-	local img = create(Vector2.new(S, S))
-	if not img then
-		Sprites.available = false
-		cache[key] = false
+	local size = Vector2.new(S, S)
+	local baseImg = create(size, base)
+	if not baseImg then
 		return nil
 	end
-	img:WritePixelsBuffer(Vector2.zero, Vector2.new(S, S), px)
-	cache[key] = img
-	return img
+	local tintImg = if hasTint then create(size, tint) else nil
+	return { base = baseImg, tint = tintImg }
 end
 
--- shows an icon in an ImageLabel/ImageButton; returns false if it couldn't
+-- shows an icon in an ImageLabel/ImageButton, tinted with a nation colour; false if it couldn't
 function Sprites.apply(label: GuiObject, name: string, colorHex: string?, flip: boolean?): boolean
-	local img = Sprites.get(name, colorHex, flip)
-	if img then
-		local target: any = label
-		target.ImageContent = Content.fromObject(img)
-		return true
+	local key = name .. (if flip then "|f" else "")
+	local entry = cache[key]
+	if entry == nil then
+		entry = build(name, flip == true) or false
+		cache[key] = entry
 	end
-	return false
+	if not entry then
+		return false
+	end
+	local ok = pcall(function()
+		local target: any = label
+		target.ImageContent = Content.fromObject(entry.base)
+		local layer: any = label:FindFirstChild("Tint")
+		if entry.tint then
+			if not layer then
+				layer = Instance.new("ImageLabel")
+				layer.Name = "Tint"
+				layer.BackgroundTransparency = 1
+				layer.Size = UDim2.fromScale(1, 1)
+				layer.Parent = label
+			end
+			layer.ImageContent = Content.fromObject(entry.tint)
+			layer.ImageColor3 = if colorHex then Color3.fromHex(colorHex) else NEUTRAL
+			layer.ImageTransparency = target.ImageTransparency
+		elseif layer then
+			layer:Destroy()
+		end
+	end)
+	return ok
+end
+
+-- fades an icon, including its tinted layer
+function Sprites.setTransparency(label: GuiObject, value: number)
+	local target: any = label
+	target.ImageTransparency = value
+	local layer: any = label:FindFirstChild("Tint")
+	if layer then
+		layer.ImageTransparency = value
+	end
 end
 
 Sprites.hexRGB = hexRGB
@@ -5259,7 +5417,7 @@ function UI.setEconomy(eco, troops: number, fmt)
 				b.parts[r].TextColor3 = if lack then C.bad else Color3.fromRGB(198, 207, 221)
 			end
 		end
-		b.icon.ImageTransparency = if poor then 0.5 else 0
+		Sprites.setTransparency(b.icon, if poor then 0.5 else 0)
 	end
 end
 
@@ -5354,8 +5512,53 @@ function UI.showTip(k: string?)
 	refs.tip.Visible = true
 end
 
+-- the map needs EditableImage, which is off until the owner allows it for the experience
 function UI.mapError()
-	UI.toast("Карта не загрузилась. Включи «Allow Mesh / Image APIs» в настройках игры (Game Settings → Security) и перезапусти.", true, 30)
+	if refs.mapError then
+		refs.mapError.Visible = true
+		return
+	end
+	local panel = Theme.panel({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.42),
+		Size = UDim2.fromOffset(560, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = Color3.fromRGB(16, 21, 34),
+		BackgroundTransparency = 0.02,
+		ZIndex = 40,
+		Parent = root,
+	})
+	panel:FindFirstChildOfClass("UIStroke").Color = C.bad
+	panel:FindFirstChildOfClass("UIStroke").Transparency = 0.3
+	Theme.pad(20, 16).Parent = panel
+	Theme.list(Enum.FillDirection.Vertical, 8).Parent = panel
+	Theme.label({ Text = "КАРТА ВЫКЛЮЧЕНА", Size = UDim2.new(1, -50, 0, 24), TextSize = 20, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, ZIndex = 41, LayoutOrder = 1, Parent = panel })
+	Theme.label({
+		Text = "Карте нужен доступ к созданию картинок, а в этой игре он пока выключен. Владелец игры включает его один раз:\n\n"
+			.. "1. Roblox Studio → вкладка Home → Experience Settings (раньше Game Settings).\n"
+			.. "2. Раздел Security → включи «Allow Mesh / Image APIs» → Save.\n"
+			.. "Или на сайте: create.roblox.com → Creations → эта игра → Configure → Settings → «Enable Mesh / Image APIs».\n\n"
+			.. "Игра должна быть опубликована (File → Publish to Roblox). Потом перезапусти её.",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		TextWrapped = true,
+		TextSize = 15,
+		FontFace = font(Enum.FontWeight.SemiBold),
+		TextColor3 = Color3.fromRGB(214, 222, 235),
+		ZIndex = 41,
+		LayoutOrder = 2,
+		Parent = panel,
+	})
+	local close = iconButton("close", panel, function()
+		panel.Visible = false
+	end)
+	close.AnchorPoint = Vector2.new(1, 0)
+	close.Position = UDim2.new(1, 0, 0, 0)
+	close.ZIndex = 42
+	-- keep the close button out of the list layout
+	local holder = make("Frame", { Size = UDim2.fromScale(1, 0), BackgroundTransparency = 1, LayoutOrder = 0, ZIndex = 41, Parent = panel })
+	close.Parent = holder
+	refs.mapError = panel
 end
 
 return UI

@@ -381,6 +381,9 @@ function Economy:score(n): number
 	for _, u in self.units do
 		if u.n == n then
 			s += Config.UNITS[u.kind].cost
+			for _, c in u.cargo or {} do
+				s += Config.UNITS[c.kind].cost
+			end
 		end
 	end
 	return s

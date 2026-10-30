@@ -19,6 +19,9 @@ local Factory = {}
 -- ctx: { UI = the interface, refs = shared widget references, color = the player's team colour }
 local ctx, refs
 
+local ROW, GAP = 46, 5 -- height of a unit row and the gap between rows
+local SHOWN = 4 -- rows seen at once; a factory with more scrolls
+
 function Factory.build(context, play: Instance)
 	ctx, refs = context, context.refs
 	local UI = ctx.UI
@@ -46,8 +49,19 @@ function Factory.build(context, play: Instance)
 	})
 	refs.facTitle = Theme.label({ Text = "", Size = UDim2.new(1, -50, 0, 22), TextSize = 18, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 9, LayoutOrder = 1, Parent = body })
 	refs.facSub = Theme.label({ Text = "", Size = UDim2.new(1, -50, 0, 16), TextSize = 12.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 9, LayoutOrder = 2, Parent = body })
-	refs.facRows = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, ZIndex = 9, LayoutOrder = 3, Parent = body }, {
-		Theme.list(Enum.FillDirection.Vertical, 6),
+	refs.facRows = make("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 0, ROW),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.fromOffset(0, 0),
+		ScrollBarThickness = 4,
+		ZIndex = 9,
+		LayoutOrder = 3,
+		Parent = body,
+	}, {
+		Theme.list(Enum.FillDirection.Vertical, GAP),
 	})
 	local barBg = make("Frame", { Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.9, ZIndex = 9, LayoutOrder = 4, Parent = body }, { Theme.corner(nil, 1) })
 	refs.facBar = make("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = C.molten, ZIndex = 10, Parent = barBg }, { Theme.corner(nil, 1) })
@@ -76,28 +90,29 @@ end
 local function factoryRow(kind: string, order: number)
 	local UI = ctx.UI
 	local u = Config.UNITS[kind]
-	local row = make("Frame", { Size = UDim2.new(1, 0, 0, 58), BackgroundColor3 = C.panelHi, LayoutOrder = order, ZIndex = 9, Parent = refs.facRows }, {
+	-- the scroll bar takes 6 pixels on the right
+	local row = make("Frame", { Size = UDim2.new(1, -6, 0, ROW), BackgroundColor3 = C.panelHi, LayoutOrder = order, ZIndex = 9, Parent = refs.facRows }, {
 		Theme.corner(12),
 	})
 	local stroke = make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = row })
-	local img = icon(u.icon, 46, { Position = UDim2.fromOffset(6, 6), ZIndex = 10, color = ctx.color, Parent = row })
-	Theme.label({ Text = u.title, Position = UDim2.fromOffset(58, 6), Size = UDim2.new(1, -200, 0, 20), TextSize = 15, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 10, Parent = row })
+	local img = icon(u.icon, 38, { Position = UDim2.fromOffset(5, 4), ZIndex = 10, color = ctx.color, Parent = row })
+	Theme.label({ Text = u.title, Position = UDim2.fromOffset(50, 3), Size = UDim2.new(1, -190, 0, 18), TextSize = 14, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 10, Parent = row })
 	local info = Theme.label({
 		Text = string.format("%d 🔩 · %d с · здоровье %d", u.cost, u.time, u.hp),
-		Position = UDim2.fromOffset(58, 27),
-		Size = UDim2.new(1, -200, 0, 16),
-		TextSize = 12,
+		Position = UDim2.fromOffset(50, 20),
+		Size = UDim2.new(1, -190, 0, 13),
+		TextSize = 11.5,
 		TextColor3 = Color3.fromRGB(198, 207, 221),
 		FontFace = font(Enum.FontWeight.SemiBold),
 		ZIndex = 10,
 		Parent = row,
 	})
-	local queued = Theme.label({ Text = "", Position = UDim2.fromOffset(58, 42), Size = UDim2.new(1, -200, 0, 14), TextSize = 11.5, TextColor3 = C.moltenHi, FontFace = font(Enum.FontWeight.Bold), ZIndex = 10, Parent = row })
+	local queued = Theme.label({ Text = "", Position = UDim2.fromOffset(50, 32), Size = UDim2.new(1, -190, 0, 12), TextSize = 11, TextColor3 = C.moltenHi, FontFace = font(Enum.FontWeight.Bold), ZIndex = 10, Parent = row })
 	local auto = make("TextButton", {
 		Text = "Авто",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -78, 0.5, 0),
-		Size = UDim2.fromOffset(56, 38),
+		Position = UDim2.new(1, -74, 0.5, 0),
+		Size = UDim2.fromOffset(54, 34),
 		AutoButtonColor = true,
 		FontFace = font(Enum.FontWeight.Bold),
 		TextSize = 13,
@@ -114,8 +129,8 @@ local function factoryRow(kind: string, order: number)
 	local plus = make("TextButton", {
 		Text = "",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -8, 0.5, 0),
-		Size = UDim2.fromOffset(64, 40),
+		Position = UDim2.new(1, -6, 0.5, 0),
+		Size = UDim2.fromOffset(62, 36),
 		AutoButtonColor = false,
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 10,
@@ -148,6 +163,9 @@ function Factory.show(info)
 		for i, kind in def.units do
 			table.insert(refs.facRowList, factoryRow(kind, i))
 		end
+		local shown = math.min(#def.units, SHOWN)
+		refs.facRows.Size = UDim2.new(1, 0, 0, shown * ROW + (shown - 1) * GAP)
+		refs.facRows.CanvasPosition = Vector2.zero
 	end
 	refs.facTitle.Text = def.name
 	local queue = info.queue or {}
@@ -197,7 +215,9 @@ function Factory.show(info)
 		refs.facBar.Size = UDim2.fromScale(0, 1)
 		refs.facQueue.Text = "Очередь пустая"
 	end
-	refs.facNote.Text = "«Авто» выпускает выбранный юнит по кругу, пока хватает металла. «Точка сбора»: нажми её, потом место на карте."
+	refs.facNote.Text = if #def.units > SHOWN
+		then "Список листается. «Авто» — выпуск по кругу. «Точка сбора» — куда ехать новым."
+		else "«Авто» — выпуск по кругу, пока хватает металла. «Точка сбора» — куда ехать новым."
 	refs.tip.Visible = false
 	refs.fac.Visible = true
 end

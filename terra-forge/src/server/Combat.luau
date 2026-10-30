@@ -1,6 +1,7 @@
 -- Combat in a skirmish: every unit and armed building shoots the nearest enemy in range, found
--- on a coarse grid; the dead are removed, and players hear when their base is hit. These are
--- methods of Match (Match.luau adds them); self is the match.
+-- on a coarse grid, and splash weapons hurt what stands next to the target; the dead are
+-- removed, and players hear when their base is hit. These are methods of Match (Match.luau
+-- adds them); self is the match.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -10,6 +11,7 @@ local Motion = require(Shared.Motion)
 local CELL = 8 -- spatial grid cell size for finding targets, in tiles
 local COLS = math.ceil(Map.W / CELL)
 local ROWS = math.ceil(Map.H / CELL)
+local SPLASH_SHARE = 0.5 -- what the others near the target take of a splash weapon's hit
 
 local Combat = {}
 
@@ -79,7 +81,34 @@ function Combat:tickCombat(dt: number)
 		insert(b)
 	end
 
-	local function fire(attacker, kind: string, dps: number, range: number, hitsAir: number, groundToo: boolean, vsBuildings: number)
+	-- rockets and bombs also hurt the enemies on the ground around the target
+	local function splashAround(attacker, target, base: number, radius: number, vsBuildings: number)
+		local c0x = math.clamp(math.floor((target.px - radius - 2) / CELL), 0, COLS - 1)
+		local c1x = math.clamp(math.floor((target.px + radius + 2) / CELL), 0, COLS - 1)
+		local c0y = math.clamp(math.floor((target.py - radius - 2) / CELL), 0, ROWS - 1)
+		local c1y = math.clamp(math.floor((target.py + radius + 2) / CELL), 0, ROWS - 1)
+		for cy = c0y, c1y do
+			for cx = c0x, c1x do
+				for _, o in grid[cy * COLS + cx] or {} do
+					if o ~= target and o.n ~= attacker.n and o.hp > 0 and not o.air then
+						local edge = if o.isBuilding then o.size * 0.5 else 0
+						if math.sqrt((o.px - target.px) ^ 2 + (o.py - target.py) ^ 2) - edge <= radius then
+							if o.isBuilding then
+								o.hp -= base * vsBuildings
+								self.bhpDirty[o] = true
+								self:alert(o.n, o.px, o.py, t)
+							else
+								o.hp -= base * (1 - o.n.armor)
+								self.hpDirty[o] = true
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	local function fire(attacker, kind: string, dps: number, range: number, hitsAir: number, groundToo: boolean, vsBuildings: number, splash: number?)
 		local target = attacker.target
 		if target then
 			local gone = target.hp <= 0 or (if target.isBuilding then not self.buildings[target.id] else not self.units[target.id])
@@ -116,6 +145,9 @@ function Combat:tickCombat(dt: number)
 		else
 			self.hpDirty[target] = true
 		end
+		if splash and not target.air then
+			splashAround(attacker, target, dps * dt * (1 + attacker.n.damage) * SPLASH_SHARE, splash, vsBuildings)
+		end
 		if t - (attacker.shotAt or 0) > 0.7 and #self.shots < 240 then
 			attacker.shotAt = t
 			table.insert(self.shots, math.round(attacker.px * 10) / 10)
@@ -128,7 +160,7 @@ function Combat:tickCombat(dt: number)
 	for _, u in self.units do
 		local def = Config.UNITS[u.kind]
 		if def.dps > 0 then
-			fire(u, u.kind, def.dps, def.range, def.hitsAir, def.hitsGround ~= false, def.vsBuildings or 1)
+			fire(u, u.kind, def.dps, def.range, def.hitsAir, def.hitsGround ~= false, def.vsBuildings or 1, def.splash)
 		end
 	end
 	for _, b in self.buildings do

@@ -115,6 +115,7 @@ local state = {
 	defeated = false,
 	rallyFor = nil,
 	amove = false, -- attack-move is armed: the next tap on the map gives it
+	unload = false, -- landing is armed: the next tap on the map is where transports set riders down
 	groups = {}, -- number key -> unit ids
 	shortOfEnergy = false, -- the base uses more energy than it makes
 	armyFull = false, -- a factory waits because the army limit is reached
@@ -130,9 +131,11 @@ local function goMenu()
 	state.defeated = false
 	state.rallyFor = nil
 	state.amove = false
+	state.unload = false
 	MapView.boxArmed = false
 	UI.setArmed("amove", false)
 	UI.setArmed("box", false)
+	UI.setArmed("load", false)
 	MapView.setMode("menu")
 	UI.showMenu()
 	Music.setMode("menu")
@@ -255,11 +258,14 @@ for g, group in UI.GROUPS do
 	end
 end
 
-local ORDER_TEXT = { move = "едут", amove = "атака с ходу", attack = "атакуют цель", stop = "стоят", hold = "держат позицию" }
+local ORDER_TEXT = {
+	move = "едут", amove = "атака с ходу", attack = "атакуют цель", stop = "стоят", hold = "держат позицию",
+	board = "садятся в транспорт", unload = "летят высаживать десант",
+}
 
 -- one line about the selected units: what they are, their health, guns and current order
 local function selectionInfo(): string?
-	local kinds, count, hp, maxHp, order = {}, 0, 0, 0, nil
+	local kinds, count, hp, maxHp, order, load = {}, 0, 0, 0, nil, 0
 	for id in MapView.selected do
 		local u = MapView.unitRecord(id)
 		if u then
@@ -268,6 +274,7 @@ local function selectionInfo(): string?
 			hp += u.hp
 			maxHp += u.maxHp
 			order = order or u.orderText
+			load += u.load or 0
 		end
 	end
 	if count == 0 then
@@ -280,6 +287,10 @@ local function selectionInfo(): string?
 		local def = Config.UNITS[only]
 		if def.repairs then
 			return string.format("%s ×%d · здоровье %d%% · ремонт %d/с · скорость %g%s", def.title, count, health, def.repairs, def.speed, tail)
+		elseif def.carry then
+			return string.format("%s ×%d · здоровье %d%% · десант %d/%d · скорость %g%s", def.title, count, health, load, def.carry * count, def.speed, tail)
+		elseif def.dps == 0 then
+			return string.format("%s ×%d · здоровье %d%% · обзор %d · скорость %g%s", def.title, count, health, def.vision, def.speed, tail)
 		end
 		return string.format("%s ×%d · здоровье %d%% · урон %d/с · дальность %g · скорость %g%s", def.title, count, health, def.dps, def.range, def.speed, tail)
 	end
@@ -342,6 +353,11 @@ local function setAmove(on: boolean)
 	UI.setArmed("amove", on)
 end
 
+local function setUnload(on: boolean)
+	state.unload = on
+	UI.setArmed("load", on)
+end
+
 UI.onSelectKind = function(group)
 	local ids = {}
 	for _, id in MapView.ownUnits(nil) do
@@ -369,6 +385,7 @@ end
 UI.onClearSelection = function()
 	table.clear(MapView.selected)
 	setAmove(false)
+	setUnload(false)
 	refreshArmy()
 end
 
@@ -651,12 +668,20 @@ local function enemyAt(sx: number, sy: number): (number?, number?, number?)
 	return nil, nil, nil
 end
 
--- the selected units attack what is under the finger, or go to the tile (fighting on the way if armed)
+local LANDING = Color3.fromRGB(120, 200, 255)
+
+-- the selected units attack what is under the finger, get into the own transport under it, or
+-- go to the tile (fighting on the way if armed)
 local function command(x: number, y: number, sx: number, sy: number)
 	local ref, ex, ey = enemyAt(sx, sy)
+	local own = MapView.unitAt(sx, sy)
+	local tr = if own and not MapView.selected[own] then MapView.unitRecord(own) else nil
 	if ref and ex and ey then
 		sendOrder("attack", ex, ey, ref)
 		MapView.marker(ex, ey, RED)
+	elseif tr and tr.def.carry then
+		sendOrder("board", tr.x, tr.y, own)
+		MapView.marker(tr.x, tr.y, LANDING)
 	elseif state.amove then
 		sendOrder("amove", x + 0.5, y + 0.5)
 		MapView.marker(x + 0.5, y + 0.5, ORANGE)
@@ -665,6 +690,7 @@ local function command(x: number, y: number, sx: number, sy: number)
 		MapView.marker(x + 0.5, y + 0.5)
 	end
 	setAmove(false)
+	setUnload(false)
 end
 
 local function tryBuild(kind: string, x: number, y: number)
@@ -700,6 +726,13 @@ MapView.onTap = function(x, y, sx, sy)
 		return
 	end
 	local hasSelection = next(MapView.selected) ~= nil
+	if hasSelection and state.unload then
+		-- the selected transports fly here and set their riders down
+		sendOrder("unload", x + 0.5, y + 0.5)
+		MapView.marker(x + 0.5, y + 0.5, LANDING)
+		setUnload(false)
+		return
+	end
 	if hasSelection and (state.amove or enemyAt(sx, sy)) then
 		command(x, y, sx, sy)
 		return
@@ -809,11 +842,37 @@ UI.onCommand = function(name)
 		end
 	elseif name == "stop" or name == "hold" then
 		sendOrder(name, 0, 0)
+	elseif name == "load" then
+		-- transports selected with riders: the riders get in; transports with riders inside: the
+		-- next tap on the map is where they set them down
+		local riders, transports, load = 0, 0, 0
+		for id in MapView.selected do
+			local u = MapView.unitRecord(id)
+			if u and u.def.carry then
+				transports += 1
+				load += u.load
+			elseif u and u.def.boards then
+				riders += 1
+			end
+		end
+		if transports > 0 and riders > 0 then
+			sendOrder("board", 0, 0)
+			UI.toast("Пехота садится в транспорт. Потом нажми «Десант» ещё раз и место на карте.")
+		elseif load > 0 then
+			setUnload(not state.unload)
+			if state.unload then
+				UI.toast("Нажми на карту: транспорт полетит туда и высадит десант.")
+			end
+		elseif transports > 0 then
+			UI.toast("Транспорт пустой. Выбери его вместе с пехотой и нажми «Десант».", true)
+		else
+			UI.toast("Выбери транспортный вертолёт (аэродром) вместе с пехотой и нажми «Десант».", true)
+		end
 	end
 end
 
--- keys: F attack-move, X stop, H hold, Space to the base, Backspace drops the selection,
--- Ctrl + 1-9 remembers a group, 1-9 picks it (twice quickly: the camera goes there)
+-- keys: F attack-move, X stop, H hold, T landing party, Space to the base, Backspace drops the
+-- selection, Ctrl + 1-9 remembers a group, 1-9 picks it (twice quickly: the camera goes there)
 local DIGITS = {
 	[Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2, [Enum.KeyCode.Three] = 3,
 	[Enum.KeyCode.Four] = 4, [Enum.KeyCode.Five] = 5, [Enum.KeyCode.Six] = 6,
@@ -835,6 +894,8 @@ local function onKey(input: InputObject)
 		UI.onCommand("stop")
 	elseif key == Enum.KeyCode.H then
 		UI.onCommand("hold")
+	elseif key == Enum.KeyCode.T then
+		UI.onCommand("load")
 	elseif DIGITS[key] then
 		local g = DIGITS[key]
 		if ctrl then

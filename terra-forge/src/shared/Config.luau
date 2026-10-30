@@ -88,10 +88,10 @@ Config.BUILD = {
 		cost = 250,
 		time = 8,
 		hp = 500,
-		units = { "infantry", "rocket", "engineer" },
+		units = { "infantry", "rocket", "sniper", "engineer" },
 		vision = 6,
 		energy = -2,
-		desc = "Обучает пехоту, ракетчиков и инженеров. Нажми на неё, чтобы заказать.",
+		desc = "Обучает пехоту, ракетчиков, снайперов и инженеров. Нажми на неё, чтобы заказать.",
 	},
 	tankf = {
 		name = "Завод бронетехники",
@@ -101,10 +101,10 @@ Config.BUILD = {
 		cost = 600,
 		time = 12,
 		hp = 900,
-		units = { "scout", "tank", "artillery", "heavy" },
+		units = { "scout", "tank", "heavy", "artillery", "mlrs", "aagun" },
 		vision = 6,
 		energy = -4,
-		desc = "Собирает броневики, танки и артиллерию. Нажми на него, чтобы заказать.",
+		desc = "Собирает броневики, танки, артиллерию, РСЗО и зенитки. Нажми на него, чтобы заказать.",
 	},
 	air = {
 		name = "Аэродром",
@@ -113,10 +113,10 @@ Config.BUILD = {
 		cost = 800,
 		time = 15,
 		hp = 700,
-		units = { "fighter", "gunship" },
+		units = { "fighter", "gunship", "bomber", "transport", "drone" },
 		vision = 7,
 		energy = -5,
-		desc = "Выпускает истребители и вертолёты. Нажми на него, чтобы заказать.",
+		desc = "Выпускает истребители, вертолёты, бомбардировщики, транспорты и дроны. Нажми на него, чтобы заказать.",
 	},
 	lab = {
 		name = "Исследовательский центр",
@@ -190,21 +190,32 @@ Config.BUILD = {
 -- hp, damage per second, range and vision in tiles; hitsAir = damage multiplier against aircraft;
 -- size = sprite size in tiles; gun = turret sprite, if the unit has one; pop = places in the army
 -- limit; repairs = health per second an engineer gives a building within range; needs = the
--- research that must be done before the unit can be ordered
-Config.UNIT_ORDER = { "infantry", "rocket", "engineer", "scout", "tank", "heavy", "artillery", "fighter", "gunship" }
+-- research that must be done before the unit can be ordered; splash = radius in tiles around
+-- the target where others take half the damage; boards = can ride in a transport; carry = how
+-- many riders a transport takes; hover = an aircraft that stays still instead of circling
+Config.UNIT_ORDER = {
+	"infantry", "rocket", "sniper", "engineer", "scout", "tank", "heavy", "artillery", "mlrs", "aagun",
+	"fighter", "gunship", "bomber", "transport", "drone",
+}
 Config.UNITS = {
 	infantry = {
-		title = "Пехота", name = "пехота", icon = "infantry", cost = 60, time = 4, size = 1.8, pop = 1,
+		title = "Пехота", name = "пехота", icon = "infantry", cost = 60, time = 4, size = 1.8, pop = 1, boards = true,
 		hp = 60, dps = 7, range = 2, speed = 1.7, vision = 6, hitsAir = 0.25, power = 0.03,
 		desc = "Дешёвая. Может стрелять по авиации.",
 	},
 	rocket = {
-		title = "Ракетчик", name = "ракетчик", icon = "rocket", cost = 110, time = 6, size = 1.8, pop = 1,
+		title = "Ракетчик", name = "ракетчик", icon = "rocket", cost = 110, time = 6, size = 1.8, pop = 1, boards = true,
 		hp = 55, dps = 9, range = 3, speed = 1.5, vision = 6, hitsAir = 0.8, power = 0.04,
 		desc = "Сильно бьёт по технике и авиации, слаб против пехоты.",
 	},
+	-- the units from here to the drone have no pictures of their own yet: Drawn draws them
+	sniper = {
+		title = "Снайпер", name = "снайпер", icon = "sniper", cost = 150, time = 6, size = 1.4, pop = 1, boards = true,
+		hp = 45, dps = 8, range = 6, speed = 1.5, vision = 9, hitsAir = 0, power = 0.04,
+		desc = "Бьёт издалека и выбивает пехоту. Против техники почти бесполезен.",
+	},
 	engineer = {
-		title = "Инженер", name = "инженер", icon = "engineer", cost = 90, time = 5, size = 1.3, pop = 1,
+		title = "Инженер", name = "инженер", icon = "engineer", cost = 90, time = 5, size = 1.3, pop = 1, boards = true,
 		hp = 60, dps = 0, range = 3, speed = 1.8, vision = 6, hitsAir = 0, hitsGround = false, repairs = 15, power = 0.02,
 		desc = "Чинит постройки рядом с собой и ускоряет стройку. Не стреляет.",
 	},
@@ -229,6 +240,16 @@ Config.UNITS = {
 		hp = 110, dps = 22, range = 7, speed = 1.4, vision = 8, hitsAir = 0, power = 0.06, vsBuildings = 1.6,
 		desc = "Бьёт издалека, особенно по постройкам. Береги от танков.",
 	},
+	mlrs = {
+		title = "РСЗО", name = "РСЗО", icon = "mlrs", cost = 450, time = 12, size = 1.7, pop = 3,
+		hp = 120, dps = 16, range = 8, speed = 1.6, vision = 8, hitsAir = 0, power = 0.07, vsBuildings = 1.3, splash = 1.6,
+		desc = "Залп ракет бьёт далеко и задевает всех рядом с целью. Слаба вблизи.",
+	},
+	aagun = {
+		title = "Зенитка", name = "зенитка", icon = "aagun", cost = 300, time = 8, size = 1.6, pop = 2,
+		hp = 170, dps = 26, range = 6, speed = 2.6, vision = 9, hitsAir = 1, hitsGround = false, power = 0.05,
+		desc = "Подвижная ПВО: сбивает авиацию и прикрывает войска. По земле не стреляет.",
+	},
 	fighter = {
 		title = "Истребитель", name = "истребитель", icon = "fighter", cost = 400, time = 10, size = 1.8, pop = 3,
 		hp = 90, dps = 16, range = 3.5, speed = 6.5, vision = 11, hitsAir = 1, hitsGround = false, air = true, power = 0.04,
@@ -239,14 +260,31 @@ Config.UNITS = {
 		hp = 140, dps = 15, range = 3, speed = 4.5, vision = 9, hitsAir = 0, air = true, power = 0.06,
 		desc = "Летает где угодно и бьёт по наземным войскам и постройкам.",
 	},
+	bomber = {
+		title = "Бомбардировщик", name = "бомбардировщик", icon = "bomber", cost = 650, time = 14, size = 2.2, pop = 5,
+		hp = 210, dps = 24, range = 3, speed = 4, vision = 9, hitsAir = 0, air = true, power = 0.08, vsBuildings = 2.2, splash = 1.5,
+		desc = "Тяжёлые бомбы по постройкам и скоплениям войск. Беззащитен перед истребителями и ПВО.",
+	},
+	transport = {
+		title = "Транспорт", name = "транспортный вертолёт", icon = "transport", cost = 350, time = 10, size = 2, pop = 3,
+		hp = 220, dps = 0, range = 0, speed = 5, vision = 8, hitsAir = 0, hitsGround = false, air = true, hover = true, carry = 6, power = 0.02,
+		desc = "Перевозит до 6 пехотинцев. Выбери его вместе с пехотой и нажми «Десант».",
+	},
+	drone = {
+		title = "Дрон", name = "дрон-разведчик", icon = "drone", cost = 120, time = 5, size = 1.1, pop = 1,
+		hp = 50, dps = 0, range = 0, speed = 7.5, vision = 16, hitsAir = 0, hitsGround = false, air = true, power = 0.01,
+		desc = "Быстрый разведчик с огромным обзором. Не стреляет.",
+	},
 }
 -- extra damage multipliers: attacker kind -> target kind
 Config.VS = {
-	infantry = { tank = 0.5, heavy = 0.4, scout = 0.7 },
-	rocket = { tank = 1.8, heavy = 1.8, scout = 1.5, infantry = 0.6 },
-	scout = { infantry = 1.4, rocket = 1.3 },
-	tank = { infantry = 1.6, rocket = 1.3 },
-	heavy = { infantry = 1.5, rocket = 1.2 },
+	infantry = { tank = 0.5, heavy = 0.4, scout = 0.7, mlrs = 0.7, aagun = 0.7 },
+	rocket = { tank = 1.8, heavy = 1.8, scout = 1.5, mlrs = 1.6, aagun = 1.6, infantry = 0.6, sniper = 0.6 },
+	scout = { infantry = 1.4, rocket = 1.3, sniper = 1.4 },
+	tank = { infantry = 1.6, rocket = 1.3, sniper = 1.6 },
+	heavy = { infantry = 1.5, rocket = 1.2, sniper = 1.5 },
+	sniper = { infantry = 2.6, rocket = 2.6, sniper = 2.6, engineer = 2.6, scout = 0.3, tank = 0.15, heavy = 0.1, artillery = 0.3, mlrs = 0.3, aagun = 0.3 },
+	mlrs = { infantry = 1.3, rocket = 1.3, sniper = 1.3, engineer = 1.3 },
 }
 Config.MAX_UNITS = 240 -- all bases together, to keep the server fast
 

@@ -126,10 +126,10 @@ Config.BUILD = {
 		cost = 250,
 		time = 8,
 		hp = 500,
-		units = { "infantry", "rocket", "engineer" },
+		units = { "infantry", "rocket", "sniper", "engineer" },
 		vision = 6,
 		energy = -2,
-		desc = "Обучает пехоту, ракетчиков и инженеров. Нажми на неё, чтобы заказать.",
+		desc = "Обучает пехоту, ракетчиков, снайперов и инженеров. Нажми на неё, чтобы заказать.",
 	},
 	tankf = {
 		name = "Завод бронетехники",
@@ -139,10 +139,10 @@ Config.BUILD = {
 		cost = 600,
 		time = 12,
 		hp = 900,
-		units = { "scout", "tank", "artillery", "heavy" },
+		units = { "scout", "tank", "heavy", "artillery", "mlrs", "aagun" },
 		vision = 6,
 		energy = -4,
-		desc = "Собирает броневики, танки и артиллерию. Нажми на него, чтобы заказать.",
+		desc = "Собирает броневики, танки, артиллерию, РСЗО и зенитки. Нажми на него, чтобы заказать.",
 	},
 	air = {
 		name = "Аэродром",
@@ -151,10 +151,10 @@ Config.BUILD = {
 		cost = 800,
 		time = 15,
 		hp = 700,
-		units = { "fighter", "gunship" },
+		units = { "fighter", "gunship", "bomber", "transport", "drone" },
 		vision = 7,
 		energy = -5,
-		desc = "Выпускает истребители и вертолёты. Нажми на него, чтобы заказать.",
+		desc = "Выпускает истребители, вертолёты, бомбардировщики, транспорты и дроны. Нажми на него, чтобы заказать.",
 	},
 	lab = {
 		name = "Исследовательский центр",
@@ -228,21 +228,32 @@ Config.BUILD = {
 -- hp, damage per second, range and vision in tiles; hitsAir = damage multiplier against aircraft;
 -- size = sprite size in tiles; gun = turret sprite, if the unit has one; pop = places in the army
 -- limit; repairs = health per second an engineer gives a building within range; needs = the
--- research that must be done before the unit can be ordered
-Config.UNIT_ORDER = { "infantry", "rocket", "engineer", "scout", "tank", "heavy", "artillery", "fighter", "gunship" }
+-- research that must be done before the unit can be ordered; splash = radius in tiles around
+-- the target where others take half the damage; boards = can ride in a transport; carry = how
+-- many riders a transport takes; hover = an aircraft that stays still instead of circling
+Config.UNIT_ORDER = {
+	"infantry", "rocket", "sniper", "engineer", "scout", "tank", "heavy", "artillery", "mlrs", "aagun",
+	"fighter", "gunship", "bomber", "transport", "drone",
+}
 Config.UNITS = {
 	infantry = {
-		title = "Пехота", name = "пехота", icon = "infantry", cost = 60, time = 4, size = 1.8, pop = 1,
+		title = "Пехота", name = "пехота", icon = "infantry", cost = 60, time = 4, size = 1.8, pop = 1, boards = true,
 		hp = 60, dps = 7, range = 2, speed = 1.7, vision = 6, hitsAir = 0.25, power = 0.03,
 		desc = "Дешёвая. Может стрелять по авиации.",
 	},
 	rocket = {
-		title = "Ракетчик", name = "ракетчик", icon = "rocket", cost = 110, time = 6, size = 1.8, pop = 1,
+		title = "Ракетчик", name = "ракетчик", icon = "rocket", cost = 110, time = 6, size = 1.8, pop = 1, boards = true,
 		hp = 55, dps = 9, range = 3, speed = 1.5, vision = 6, hitsAir = 0.8, power = 0.04,
 		desc = "Сильно бьёт по технике и авиации, слаб против пехоты.",
 	},
+	-- the units from here to the drone have no pictures of their own yet: Drawn draws them
+	sniper = {
+		title = "Снайпер", name = "снайпер", icon = "sniper", cost = 150, time = 6, size = 1.4, pop = 1, boards = true,
+		hp = 45, dps = 8, range = 6, speed = 1.5, vision = 9, hitsAir = 0, power = 0.04,
+		desc = "Бьёт издалека и выбивает пехоту. Против техники почти бесполезен.",
+	},
 	engineer = {
-		title = "Инженер", name = "инженер", icon = "engineer", cost = 90, time = 5, size = 1.3, pop = 1,
+		title = "Инженер", name = "инженер", icon = "engineer", cost = 90, time = 5, size = 1.3, pop = 1, boards = true,
 		hp = 60, dps = 0, range = 3, speed = 1.8, vision = 6, hitsAir = 0, hitsGround = false, repairs = 15, power = 0.02,
 		desc = "Чинит постройки рядом с собой и ускоряет стройку. Не стреляет.",
 	},
@@ -267,6 +278,16 @@ Config.UNITS = {
 		hp = 110, dps = 22, range = 7, speed = 1.4, vision = 8, hitsAir = 0, power = 0.06, vsBuildings = 1.6,
 		desc = "Бьёт издалека, особенно по постройкам. Береги от танков.",
 	},
+	mlrs = {
+		title = "РСЗО", name = "РСЗО", icon = "mlrs", cost = 450, time = 12, size = 1.7, pop = 3,
+		hp = 120, dps = 16, range = 8, speed = 1.6, vision = 8, hitsAir = 0, power = 0.07, vsBuildings = 1.3, splash = 1.6,
+		desc = "Залп ракет бьёт далеко и задевает всех рядом с целью. Слаба вблизи.",
+	},
+	aagun = {
+		title = "Зенитка", name = "зенитка", icon = "aagun", cost = 300, time = 8, size = 1.6, pop = 2,
+		hp = 170, dps = 26, range = 6, speed = 2.6, vision = 9, hitsAir = 1, hitsGround = false, power = 0.05,
+		desc = "Подвижная ПВО: сбивает авиацию и прикрывает войска. По земле не стреляет.",
+	},
 	fighter = {
 		title = "Истребитель", name = "истребитель", icon = "fighter", cost = 400, time = 10, size = 1.8, pop = 3,
 		hp = 90, dps = 16, range = 3.5, speed = 6.5, vision = 11, hitsAir = 1, hitsGround = false, air = true, power = 0.04,
@@ -277,14 +298,31 @@ Config.UNITS = {
 		hp = 140, dps = 15, range = 3, speed = 4.5, vision = 9, hitsAir = 0, air = true, power = 0.06,
 		desc = "Летает где угодно и бьёт по наземным войскам и постройкам.",
 	},
+	bomber = {
+		title = "Бомбардировщик", name = "бомбардировщик", icon = "bomber", cost = 650, time = 14, size = 2.2, pop = 5,
+		hp = 210, dps = 24, range = 3, speed = 4, vision = 9, hitsAir = 0, air = true, power = 0.08, vsBuildings = 2.2, splash = 1.5,
+		desc = "Тяжёлые бомбы по постройкам и скоплениям войск. Беззащитен перед истребителями и ПВО.",
+	},
+	transport = {
+		title = "Транспорт", name = "транспортный вертолёт", icon = "transport", cost = 350, time = 10, size = 2, pop = 3,
+		hp = 220, dps = 0, range = 0, speed = 5, vision = 8, hitsAir = 0, hitsGround = false, air = true, hover = true, carry = 6, power = 0.02,
+		desc = "Перевозит до 6 пехотинцев. Выбери его вместе с пехотой и нажми «Десант».",
+	},
+	drone = {
+		title = "Дрон", name = "дрон-разведчик", icon = "drone", cost = 120, time = 5, size = 1.1, pop = 1,
+		hp = 50, dps = 0, range = 0, speed = 7.5, vision = 16, hitsAir = 0, hitsGround = false, air = true, power = 0.01,
+		desc = "Быстрый разведчик с огромным обзором. Не стреляет.",
+	},
 }
 -- extra damage multipliers: attacker kind -> target kind
 Config.VS = {
-	infantry = { tank = 0.5, heavy = 0.4, scout = 0.7 },
-	rocket = { tank = 1.8, heavy = 1.8, scout = 1.5, infantry = 0.6 },
-	scout = { infantry = 1.4, rocket = 1.3 },
-	tank = { infantry = 1.6, rocket = 1.3 },
-	heavy = { infantry = 1.5, rocket = 1.2 },
+	infantry = { tank = 0.5, heavy = 0.4, scout = 0.7, mlrs = 0.7, aagun = 0.7 },
+	rocket = { tank = 1.8, heavy = 1.8, scout = 1.5, mlrs = 1.6, aagun = 1.6, infantry = 0.6, sniper = 0.6 },
+	scout = { infantry = 1.4, rocket = 1.3, sniper = 1.4 },
+	tank = { infantry = 1.6, rocket = 1.3, sniper = 1.6 },
+	heavy = { infantry = 1.5, rocket = 1.2, sniper = 1.5 },
+	sniper = { infantry = 2.6, rocket = 2.6, sniper = 2.6, engineer = 2.6, scout = 0.3, tank = 0.15, heavy = 0.1, artillery = 0.3, mlrs = 0.3, aagun = 0.3 },
+	mlrs = { infantry = 1.3, rocket = 1.3, sniper = 1.3, engineer = 1.3 },
 }
 Config.MAX_UNITS = 240 -- all bases together, to keep the server fast
 
@@ -879,8 +917,9 @@ end
 
 return Bots
 ]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">Combat</string><ProtectedString name="Source"><![CDATA[-- Combat in a skirmish: every unit and armed building shoots the nearest enemy in range, found
--- on a coarse grid; the dead are removed, and players hear when their base is hit. These are
--- methods of Match (Match.luau adds them); self is the match.
+-- on a coarse grid, and splash weapons hurt what stands next to the target; the dead are
+-- removed, and players hear when their base is hit. These are methods of Match (Match.luau
+-- adds them); self is the match.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -890,6 +929,7 @@ local Motion = require(Shared.Motion)
 local CELL = 8 -- spatial grid cell size for finding targets, in tiles
 local COLS = math.ceil(Map.W / CELL)
 local ROWS = math.ceil(Map.H / CELL)
+local SPLASH_SHARE = 0.5 -- what the others near the target take of a splash weapon's hit
 
 local Combat = {}
 
@@ -959,7 +999,34 @@ function Combat:tickCombat(dt: number)
 		insert(b)
 	end
 
-	local function fire(attacker, kind: string, dps: number, range: number, hitsAir: number, groundToo: boolean, vsBuildings: number)
+	-- rockets and bombs also hurt the enemies on the ground around the target
+	local function splashAround(attacker, target, base: number, radius: number, vsBuildings: number)
+		local c0x = math.clamp(math.floor((target.px - radius - 2) / CELL), 0, COLS - 1)
+		local c1x = math.clamp(math.floor((target.px + radius + 2) / CELL), 0, COLS - 1)
+		local c0y = math.clamp(math.floor((target.py - radius - 2) / CELL), 0, ROWS - 1)
+		local c1y = math.clamp(math.floor((target.py + radius + 2) / CELL), 0, ROWS - 1)
+		for cy = c0y, c1y do
+			for cx = c0x, c1x do
+				for _, o in grid[cy * COLS + cx] or {} do
+					if o ~= target and o.n ~= attacker.n and o.hp > 0 and not o.air then
+						local edge = if o.isBuilding then o.size * 0.5 else 0
+						if math.sqrt((o.px - target.px) ^ 2 + (o.py - target.py) ^ 2) - edge <= radius then
+							if o.isBuilding then
+								o.hp -= base * vsBuildings
+								self.bhpDirty[o] = true
+								self:alert(o.n, o.px, o.py, t)
+							else
+								o.hp -= base * (1 - o.n.armor)
+								self.hpDirty[o] = true
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	local function fire(attacker, kind: string, dps: number, range: number, hitsAir: number, groundToo: boolean, vsBuildings: number, splash: number?)
 		local target = attacker.target
 		if target then
 			local gone = target.hp <= 0 or (if target.isBuilding then not self.buildings[target.id] else not self.units[target.id])
@@ -996,6 +1063,9 @@ function Combat:tickCombat(dt: number)
 		else
 			self.hpDirty[target] = true
 		end
+		if splash and not target.air then
+			splashAround(attacker, target, dps * dt * (1 + attacker.n.damage) * SPLASH_SHARE, splash, vsBuildings)
+		end
 		if t - (attacker.shotAt or 0) > 0.7 and #self.shots < 240 then
 			attacker.shotAt = t
 			table.insert(self.shots, math.round(attacker.px * 10) / 10)
@@ -1008,7 +1078,7 @@ function Combat:tickCombat(dt: number)
 	for _, u in self.units do
 		local def = Config.UNITS[u.kind]
 		if def.dps > 0 then
-			fire(u, u.kind, def.dps, def.range, def.hitsAir, def.hitsGround ~= false, def.vsBuildings or 1)
+			fire(u, u.kind, def.dps, def.range, def.hitsAir, def.hitsGround ~= false, def.vsBuildings or 1, def.splash)
 		end
 	end
 	for _, b in self.buildings do
@@ -1419,6 +1489,9 @@ function Economy:score(n): number
 	for _, u in self.units do
 		if u.n == n then
 			s += Config.UNITS[u.kind].cost
+			for _, c in u.cargo or {} do
+				s += Config.UNITS[c.kind].cost
+			end
 		end
 	end
 	return s
@@ -1498,6 +1571,7 @@ local function unitInfo(u)
 		orbit = u.orbit,
 		hp = math.ceil(u.hp),
 		maxHp = u.maxHp,
+		load = if u.cargo then #u.cargo else nil, -- riders inside a transport
 	}
 end
 
@@ -1851,8 +1925,9 @@ function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
 		py = y,
 		shotAt = 0,
 		orderedAt = 0,
+		cargo = if def.carry then {} else nil,
 	}
-	if u.air then
+	if u.air and not def.hover then
 		local r = 2.5 + self.rng:NextNumber() * 1.5
 		u.orbit = { r = r, a0 = self.rng:NextNumber() * math.pi * 2, w = (if self.rng:NextNumber() < 0.5 then 1 else -1) * 2.6 / r }
 	end
@@ -1869,16 +1944,70 @@ function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
 	return u
 end
 
+-- takes a unit out of its base's army counts
+function Match:forget(u)
+	self.unitCount -= 1
+	u.n.army[u.kind] = math.max(0, (u.n.army[u.kind] or 1) - 1)
+	u.n.unitTotal = math.max(0, u.n.unitTotal - 1)
+	u.n.pop = math.max(0, u.n.pop - Config.UNITS[u.kind].pop)
+end
+
 function Match:removeUnit(u)
 	if self.units[u.id] then
 		self.units[u.id] = nil
 		self.hpDirty[u] = nil
-		self.unitCount -= 1
-		u.n.army[u.kind] = math.max(0, (u.n.army[u.kind] or 1) - 1)
-		u.n.unitTotal = math.max(0, u.n.unitTotal - 1)
-		u.n.pop = math.max(0, u.n.pop - Config.UNITS[u.kind].pop)
+		self:forget(u)
+		-- the riders go down with their transport
+		for _, c in u.cargo or {} do
+			self:forget(c)
+		end
+		u.cargo = nil
 		self:send({ t = "ugone", id = u.id })
 	end
+end
+
+-- a rider gets into a transport: it leaves the map but stays in the army
+function Match:board(u, tr)
+	local carry = Config.UNITS[tr.kind].carry or 0
+	u.order = nil
+	if self.units[u.id] ~= u or self.units[tr.id] ~= tr or not tr.cargo or #tr.cargo >= carry then
+		return
+	end
+	self.units[u.id] = nil
+	self.hpDirty[u] = nil
+	u.target = nil
+	table.insert(tr.cargo, u)
+	self:send({ t = "ugone", id = u.id })
+	self:send({ t = "unit", u = unitInfo(tr) })
+end
+
+-- a transport sets its riders down on the land under it
+function Match:unload(tr)
+	tr.order = nil
+	if not tr.cargo or #tr.cargo == 0 then
+		return
+	end
+	local t = now()
+	local x, y = Motion.position(tr, t)
+	local lx, ly = Path.nearestLand(x, y, 4)
+	if not lx or not ly then
+		self:toast(tr.n, "Тут негде высадить десант: вокруг вода или скалы.", true)
+		return
+	end
+	for i, c in tr.cargo do
+		local a, r = i * 2.4, 0.6 * math.sqrt(i)
+		local cx, cy = Path.nearestLand(lx + 0.5 + math.cos(a) * r, ly + 0.5 + math.sin(a) * r, 2)
+		cx, cy = (cx or lx) + 0.5, (cy or ly) + 0.5
+		c.path = { cx, cy }
+		c.t0 = t
+		c.orderedAt = t
+		c.px, c.py = cx, cy
+		self.units[c.id] = c
+		self:send({ t = "unit", u = unitInfo(c) })
+	end
+	tr.cargo = {}
+	self:send({ t = "unit", u = unitInfo(tr) })
+	self:toast(tr.n, "Десант высажен.")
 end
 
 -- sends one unit towards (tx, ty) along a land route (aircraft fly straight)
@@ -1943,8 +2072,10 @@ function Match:orderGroup(list, tx: number, ty: number)
 	end
 end
 
--- a player's order for several of their units: kind is move, amove (attack-move), attack, stop
--- or hold; for attack, targetRef is a unit id, or minus a building id
+-- a player's order for several of their units: kind is move, amove (attack-move), attack, stop,
+-- hold, board (riders get into transports) or unload (transports fly to the point and set their
+-- riders down); for attack, targetRef is a unit id, or minus a building id; for board, the id of
+-- the transport to get into
 function Match:command(player: Player, ids, kind: string, tx: number, ty: number, targetRef: number?)
 	local n = self.humans[player]
 	if not n or self.phase ~= "game" or not n.alive or not Orders.KINDS[kind] then
@@ -1973,6 +2104,12 @@ function Match:command(player: Player, ids, kind: string, tx: number, ty: number
 		if not target or target.n == n or not Orders.alive(self, target) then
 			kind = "move"
 			target = nil
+		end
+	elseif kind == "board" and targetRef and targetRef > 0 then
+		-- the riders get into this own transport, even if it is not selected
+		local tr = self.units[targetRef]
+		if tr and tr.n == n and tr.cargo then
+			target = tr
 		end
 	end
 	Orders.give(self, list, kind, tx, ty, target)
@@ -2132,19 +2269,21 @@ end
 
 return Match
 ]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Orders</string><ProtectedString name="Source"><![CDATA[-- Unit orders beyond a plain move: attack one target (chase it into range), attack-move (go
--- somewhere and fight whatever is met on the way), and hold position. Orders are checked a few
--- times a second for the units that have one; the shooting itself is done by Match:tickCombat,
--- which prefers the target an order points at.
+-- somewhere and fight whatever is met on the way), hold position, get into a transport and set
+-- the riders down. Orders are checked a few times a second for the units that have one; the
+-- shooting itself is done by Match:tickCombat, which prefers the target an order points at.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
 local Motion = require(Shared.Motion)
+local Path = require(script.Parent.Path)
 
 local Orders = {}
 
-Orders.KINDS = { move = true, amove = true, attack = true, stop = true, hold = true }
+Orders.KINDS = { move = true, amove = true, attack = true, stop = true, hold = true, board = true, unload = true }
 
 local REPATH = 1.0 -- seconds between new routes while chasing
+local BOARD_REACH = 1.8 -- a rider this close to its transport (tiles) gets in
 
 -- distance from a unit to a target, measured to the edge of buildings
 local function reach(u, target): number
@@ -2191,12 +2330,32 @@ end
 
 -- one round of order checks; t = server time
 function Orders.step(match, t: number)
+	-- riders getting in and transports setting down change the unit list: done after the loop
+	local boarding, landing = {}, {}
 	for _, u in match.units do
 		local order = u.order
 		if not order then
 			continue
 		end
-		if order.kind == "attack" then
+		if order.kind == "board" then
+			local tr = order.target
+			if not Orders.alive(match, tr) or not tr.cargo or #tr.cargo >= Config.UNITS[tr.kind].carry then
+				u.order = nil
+			elseif math.sqrt((tr.px - u.px) ^ 2 + (tr.py - u.py) ^ 2) <= BOARD_REACH then
+				table.insert(boarding, { u, tr })
+			else
+				local _, _, arrived = Motion.position(u, t)
+				if arrived or t >= order.repathAt then
+					order.repathAt = t + REPATH
+					match:orderUnit(u, tr.px, tr.py, 6000)
+				end
+			end
+		elseif order.kind == "unload" then
+			local _, _, arrived = Motion.position(u, t)
+			if arrived or (u.px - order.x) ^ 2 + (u.py - order.y) ^ 2 < 2.25 then
+				table.insert(landing, u)
+			end
+		elseif order.kind == "attack" then
 			if Orders.alive(match, order.target) then
 				chase(match, u, order.target, order, t)
 			else
@@ -2226,10 +2385,72 @@ function Orders.step(match, t: number)
 			end
 		end
 	end
+	for _, pair in boarding do
+		match:board(pair[1], pair[2])
+	end
+	for _, tr in landing do
+		match:unload(tr)
+	end
 end
 
--- gives units of one owner an order; ids already checked. target = unit or building for "attack"
+-- riders get into transports: each transport (the selected ones, or the one tapped) takes as
+-- many of the selected riders as fit, comes down on land in the middle of them, and they walk in
+local function board(match, list, target)
+	local transports, riders = {}, {}
+	for _, u in list do
+		local def = Config.UNITS[u.kind]
+		if u.cargo then
+			table.insert(transports, u)
+		elseif def.boards then
+			table.insert(riders, u)
+		end
+	end
+	if target then
+		transports = { target }
+	end
+	for _, tr in transports do
+		local group = {}
+		local room = Config.UNITS[tr.kind].carry - #tr.cargo
+		while room > 0 and #riders > 0 do
+			table.insert(group, table.remove(riders, 1))
+			room -= 1
+		end
+		if #group > 0 then
+			local cx, cy = 0, 0
+			for _, r in group do
+				cx += r.px
+				cy += r.py
+			end
+			local lx, ly = Path.nearestLand(cx / #group, cy / #group, 6)
+			if lx and ly then
+				tr.order = nil
+				match:orderUnit(tr, lx + 0.5, ly + 0.5, 6000)
+				for _, r in group do
+					r.order = { kind = "board", target = tr, repathAt = 0 }
+					match:orderUnit(r, lx + 0.5, ly + 0.5, 6000)
+				end
+			end
+		end
+	end
+end
+
+-- gives units of one owner an order; ids already checked. target = unit or building for
+-- "attack", own transport for "board"
 function Orders.give(match, list, kind: string, x: number, y: number, target)
+	if kind == "board" then
+		board(match, list, target)
+		return
+	end
+	if kind == "unload" then
+		-- the transports with riders fly there and set them down; the others stay
+		for _, u in list do
+			if u.cargo and #u.cargo > 0 then
+				match:orderUnit(u, x, y, 6000)
+				u.order = { kind = "unload", x = x, y = y }
+			end
+		end
+		return
+	end
 	if kind == "stop" or kind == "hold" then
 		for _, u in list do
 			match:halt(u)
@@ -2621,6 +2842,7 @@ local state = {
 	defeated = false,
 	rallyFor = nil,
 	amove = false, -- attack-move is armed: the next tap on the map gives it
+	unload = false, -- landing is armed: the next tap on the map is where transports set riders down
 	groups = {}, -- number key -> unit ids
 	shortOfEnergy = false, -- the base uses more energy than it makes
 	armyFull = false, -- a factory waits because the army limit is reached
@@ -2636,9 +2858,11 @@ local function goMenu()
 	state.defeated = false
 	state.rallyFor = nil
 	state.amove = false
+	state.unload = false
 	MapView.boxArmed = false
 	UI.setArmed("amove", false)
 	UI.setArmed("box", false)
+	UI.setArmed("load", false)
 	MapView.setMode("menu")
 	UI.showMenu()
 	Music.setMode("menu")
@@ -2761,11 +2985,14 @@ for g, group in UI.GROUPS do
 	end
 end
 
-local ORDER_TEXT = { move = "едут", amove = "атака с ходу", attack = "атакуют цель", stop = "стоят", hold = "держат позицию" }
+local ORDER_TEXT = {
+	move = "едут", amove = "атака с ходу", attack = "атакуют цель", stop = "стоят", hold = "держат позицию",
+	board = "садятся в транспорт", unload = "летят высаживать десант",
+}
 
 -- one line about the selected units: what they are, their health, guns and current order
 local function selectionInfo(): string?
-	local kinds, count, hp, maxHp, order = {}, 0, 0, 0, nil
+	local kinds, count, hp, maxHp, order, load = {}, 0, 0, 0, nil, 0
 	for id in MapView.selected do
 		local u = MapView.unitRecord(id)
 		if u then
@@ -2774,6 +3001,7 @@ local function selectionInfo(): string?
 			hp += u.hp
 			maxHp += u.maxHp
 			order = order or u.orderText
+			load += u.load or 0
 		end
 	end
 	if count == 0 then
@@ -2786,6 +3014,10 @@ local function selectionInfo(): string?
 		local def = Config.UNITS[only]
 		if def.repairs then
 			return string.format("%s ×%d · здоровье %d%% · ремонт %d/с · скорость %g%s", def.title, count, health, def.repairs, def.speed, tail)
+		elseif def.carry then
+			return string.format("%s ×%d · здоровье %d%% · десант %d/%d · скорость %g%s", def.title, count, health, load, def.carry * count, def.speed, tail)
+		elseif def.dps == 0 then
+			return string.format("%s ×%d · здоровье %d%% · обзор %d · скорость %g%s", def.title, count, health, def.vision, def.speed, tail)
 		end
 		return string.format("%s ×%d · здоровье %d%% · урон %d/с · дальность %g · скорость %g%s", def.title, count, health, def.dps, def.range, def.speed, tail)
 	end
@@ -2848,6 +3080,11 @@ local function setAmove(on: boolean)
 	UI.setArmed("amove", on)
 end
 
+local function setUnload(on: boolean)
+	state.unload = on
+	UI.setArmed("load", on)
+end
+
 UI.onSelectKind = function(group)
 	local ids = {}
 	for _, id in MapView.ownUnits(nil) do
@@ -2875,6 +3112,7 @@ end
 UI.onClearSelection = function()
 	table.clear(MapView.selected)
 	setAmove(false)
+	setUnload(false)
 	refreshArmy()
 end
 
@@ -3157,12 +3395,20 @@ local function enemyAt(sx: number, sy: number): (number?, number?, number?)
 	return nil, nil, nil
 end
 
--- the selected units attack what is under the finger, or go to the tile (fighting on the way if armed)
+local LANDING = Color3.fromRGB(120, 200, 255)
+
+-- the selected units attack what is under the finger, get into the own transport under it, or
+-- go to the tile (fighting on the way if armed)
 local function command(x: number, y: number, sx: number, sy: number)
 	local ref, ex, ey = enemyAt(sx, sy)
+	local own = MapView.unitAt(sx, sy)
+	local tr = if own and not MapView.selected[own] then MapView.unitRecord(own) else nil
 	if ref and ex and ey then
 		sendOrder("attack", ex, ey, ref)
 		MapView.marker(ex, ey, RED)
+	elseif tr and tr.def.carry then
+		sendOrder("board", tr.x, tr.y, own)
+		MapView.marker(tr.x, tr.y, LANDING)
 	elseif state.amove then
 		sendOrder("amove", x + 0.5, y + 0.5)
 		MapView.marker(x + 0.5, y + 0.5, ORANGE)
@@ -3171,6 +3417,7 @@ local function command(x: number, y: number, sx: number, sy: number)
 		MapView.marker(x + 0.5, y + 0.5)
 	end
 	setAmove(false)
+	setUnload(false)
 end
 
 local function tryBuild(kind: string, x: number, y: number)
@@ -3206,6 +3453,13 @@ MapView.onTap = function(x, y, sx, sy)
 		return
 	end
 	local hasSelection = next(MapView.selected) ~= nil
+	if hasSelection and state.unload then
+		-- the selected transports fly here and set their riders down
+		sendOrder("unload", x + 0.5, y + 0.5)
+		MapView.marker(x + 0.5, y + 0.5, LANDING)
+		setUnload(false)
+		return
+	end
 	if hasSelection and (state.amove or enemyAt(sx, sy)) then
 		command(x, y, sx, sy)
 		return
@@ -3315,11 +3569,37 @@ UI.onCommand = function(name)
 		end
 	elseif name == "stop" or name == "hold" then
 		sendOrder(name, 0, 0)
+	elseif name == "load" then
+		-- transports selected with riders: the riders get in; transports with riders inside: the
+		-- next tap on the map is where they set them down
+		local riders, transports, load = 0, 0, 0
+		for id in MapView.selected do
+			local u = MapView.unitRecord(id)
+			if u and u.def.carry then
+				transports += 1
+				load += u.load
+			elseif u and u.def.boards then
+				riders += 1
+			end
+		end
+		if transports > 0 and riders > 0 then
+			sendOrder("board", 0, 0)
+			UI.toast("Пехота садится в транспорт. Потом нажми «Десант» ещё раз и место на карте.")
+		elseif load > 0 then
+			setUnload(not state.unload)
+			if state.unload then
+				UI.toast("Нажми на карту: транспорт полетит туда и высадит десант.")
+			end
+		elseif transports > 0 then
+			UI.toast("Транспорт пустой. Выбери его вместе с пехотой и нажми «Десант».", true)
+		else
+			UI.toast("Выбери транспортный вертолёт (аэродром) вместе с пехотой и нажми «Десант».", true)
+		end
 	end
 end
 
--- keys: F attack-move, X stop, H hold, Space to the base, Backspace drops the selection,
--- Ctrl + 1-9 remembers a group, 1-9 picks it (twice quickly: the camera goes there)
+-- keys: F attack-move, X stop, H hold, T landing party, Space to the base, Backspace drops the
+-- selection, Ctrl + 1-9 remembers a group, 1-9 picks it (twice quickly: the camera goes there)
 local DIGITS = {
 	[Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2, [Enum.KeyCode.Three] = 3,
 	[Enum.KeyCode.Four] = 4, [Enum.KeyCode.Five] = 5, [Enum.KeyCode.Six] = 6,
@@ -3341,6 +3621,8 @@ local function onKey(input: InputObject)
 		UI.onCommand("stop")
 	elseif key == Enum.KeyCode.H then
 		UI.onCommand("hold")
+	elseif key == Enum.KeyCode.T then
+		UI.onCommand("load")
 	elseif DIGITS[key] then
 		local g = DIGITS[key]
 		if ctrl then
@@ -3708,10 +3990,11 @@ end
 
 return Camera
 ]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">Drawn</string><ProtectedString name="Source"><![CDATA[-- Pictures drawn with interface shapes for the buildings and units that have no painted sprite
--- yet: the radar, the power plant, the repair station, the research centre and the engineer.
--- A drawing fills its
--- parent; it returns its holder and the parts the map animates, and can be recoloured for a
--- team. Once a painted sprite with the same name is in the sprite sheet, the map uses that.
+-- yet: the radar, the power plant, the repair station and the research centre; the engineer,
+-- the sniper, the MLRS, the AA vehicle, the bomber, the transport and the drone. A drawing
+-- fills its parent; it returns its holder and the parts the map animates, and can be
+-- recoloured for a team. Once a painted sprite with the same name is in the sprite sheet, the
+-- map uses that.
 local Theme = require(script.Parent.Theme)
 
 local make = Theme.make
@@ -3806,23 +4089,139 @@ function Drawn.building(kind: string, parent: Instance, color: Color3)
 	return h, parts
 end
 
--- a unit's drawing, facing up like the sprites: holder, { recolor = fn(Color3) }, or nil
-function Drawn.unit(kind: string, parent: Instance, color: Color3)
-	if kind ~= "engineer" then
-		return nil, nil
+local GREY = Color3.fromRGB(150, 156, 164)
+local STEEL = Color3.fromRGB(96, 102, 110)
+local GLASS = Color3.fromRGB(70, 130, 180)
+
+-- a spinning rotor: two crossed blades in a frame the map turns
+local function rotor(parent: Instance, x: number, y: number, size: number, z: number): Frame
+	local r = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(x, y),
+		Size = UDim2.fromScale(size, size),
+		BackgroundTransparency = 1,
+		ZIndex = z,
+		Parent = parent,
+	})
+	for _, rot in { 0, 90 } do
+		local blade = shape(r, 0.5, 0.5, 1, 0.08, Color3.fromRGB(30, 32, 36), z, 0.5)
+		blade.BackgroundTransparency = 0.25
+		blade.Rotation = rot
 	end
-	local h = holderIn(parent, false)
-	h.ZIndex = 2
+	return r
+end
+
+-- the team-coloured parts of each unit drawing, and what else it has
+local UNITS = {}
+
+function UNITS.engineer(h: Frame, color: Color3)
 	-- seen from above: shoulders in the team colour, a yellow hard hat and a wrench
 	local body = shape(h, 0.5, 0.58, 0.56, 0.34, color, 2, 0.5, DARK, 1)
 	shape(h, 0.5, 0.46, 0.34, 0.34, Color3.fromRGB(242, 196, 46), 3, 1, DARK, 1)
 	local wrench = shape(h, 0.82, 0.42, 0.1, 0.4, Color3.fromRGB(196, 202, 210), 3, 0.5, DARK, 1)
 	wrench.Rotation = 20
-	return h, {
-		recolor = function(c: Color3)
-			body.BackgroundColor3 = c
-		end,
-	}
+	return { body }
+end
+
+function UNITS.sniper(h: Frame, color: Color3)
+	-- a soldier in a dark hood with a long rifle and a scope
+	local body = shape(h, 0.5, 0.6, 0.5, 0.3, color, 2, 0.5, DARK, 1)
+	shape(h, 0.5, 0.5, 0.28, 0.28, Color3.fromRGB(58, 74, 48), 3, 1, DARK, 1)
+	shape(h, 0.64, 0.3, 0.06, 0.66, Color3.fromRGB(40, 40, 44), 4, 0.5)
+	shape(h, 0.64, 0.42, 0.11, 0.13, STEEL, 5, 0.3)
+	return { body }
+end
+
+function UNITS.mlrs(h: Frame, color: Color3)
+	-- a truck: the cab in front, the team-coloured chassis and a pod of rocket tubes
+	local chassis = shape(h, 0.5, 0.58, 0.48, 0.66, color, 2, 0.18, DARK, 1)
+	shape(h, 0.5, 0.2, 0.42, 0.2, GREY, 3, 0.25, DARK, 1)
+	shape(h, 0.5, 0.64, 0.38, 0.46, Color3.fromRGB(70, 74, 80), 3, 0.1, DARK, 1)
+	for _, y in { 0.5, 0.64, 0.78 } do
+		for _, x in { 0.41, 0.59 } do
+			shape(h, x, y, 0.11, 0.11, Color3.fromRGB(24, 26, 30), 4, 1)
+		end
+	end
+	return { chassis }
+end
+
+function UNITS.aagun(h: Frame, color: Color3)
+	-- a tracked hull with a round turret and two long barrels pointing up
+	for _, x in { 0.28, 0.72 } do
+		shape(h, x, 0.56, 0.14, 0.72, DARK, 2, 0.3)
+	end
+	local hull = shape(h, 0.5, 0.56, 0.44, 0.62, color, 3, 0.2, DARK, 1)
+	shape(h, 0.5, 0.54, 0.32, 0.32, STEEL, 4, 1, DARK, 1)
+	for _, x in { 0.44, 0.56 } do
+		shape(h, x, 0.26, 0.06, 0.44, Color3.fromRGB(200, 204, 210), 5, 0.5, DARK, 1)
+	end
+	return { hull }
+end
+
+function UNITS.bomber(h: Frame, color: Color3)
+	-- wide team-coloured wings and tail, a long body, two engines and the cockpit glass
+	local wings = shape(h, 0.5, 0.46, 0.98, 0.22, color, 2, 0.4, DARK, 1)
+	local tail = shape(h, 0.5, 0.86, 0.42, 0.1, color, 2, 0.4, DARK, 1)
+	shape(h, 0.5, 0.5, 0.18, 0.88, GREY, 3, 0.5, DARK, 1)
+	for _, x in { 0.28, 0.72 } do
+		shape(h, x, 0.42, 0.09, 0.18, DARK, 4, 0.4)
+	end
+	shape(h, 0.5, 0.16, 0.1, 0.12, GLASS, 4, 1)
+	return { wings, tail }
+end
+
+function UNITS.transport(h: Frame, color: Color3, parts)
+	-- a long helicopter body with two rotors, front and back
+	local body = shape(h, 0.5, 0.5, 0.34, 0.86, color, 2, 0.45, DARK, 1)
+	shape(h, 0.5, 0.14, 0.2, 0.1, GLASS, 3, 0.5)
+	shape(h, 0.5, 0.52, 0.16, 0.44, Color3.fromRGB(70, 74, 80), 3, 0.3)
+	parts.rotors = { rotor(h, 0.5, 0.2, 0.9, 6), rotor(h, 0.5, 0.8, 0.9, 6) }
+	return { body }
+end
+
+function UNITS.drone(h: Frame, color: Color3)
+	-- a small quadcopter: two crossed arms, four rotor discs and a red camera eye
+	for _, rot in { 45, -45 } do
+		local arm = shape(h, 0.5, 0.5, 0.92, 0.1, DARK, 2, 0.5)
+		arm.Rotation = rot
+	end
+	for _, p in { { 0.2, 0.2 }, { 0.8, 0.2 }, { 0.2, 0.8 }, { 0.8, 0.8 } } do
+		local disc = shape(h, p[1], p[2], 0.3, 0.3, Color3.fromRGB(200, 210, 220), 3, 1)
+		disc.BackgroundTransparency = 0.45
+	end
+	local body = shape(h, 0.5, 0.5, 0.32, 0.32, color, 4, 0.3, DARK, 1)
+	shape(h, 0.5, 0.38, 0.09, 0.09, Color3.fromRGB(255, 80, 70), 5, 1)
+	return { body }
+end
+
+-- a unit's drawing, facing up like the sprites: holder, { recolor = fn(Color3), rotors = frames
+-- to spin }, or nil. shadow = the dark copy an aircraft casts on the ground below it
+function Drawn.unit(kind: string, parent: Instance, color: Color3, shadow: boolean?)
+	local draw = UNITS[kind]
+	if not draw then
+		return nil, nil
+	end
+	local h = holderIn(parent, false)
+	h.ZIndex = if shadow then 0 else 2
+	local parts = {}
+	local tinted = draw(h, color, parts)
+	if shadow then
+		for _, d in h:GetDescendants() do
+			if d:IsA("UIStroke") then
+				d:Destroy()
+			elseif d:IsA("Frame") and d.BackgroundTransparency < 1 then
+				d.BackgroundColor3 = Color3.new(0, 0, 0)
+				d.BackgroundTransparency = 0.6
+			end
+		end
+		return h, {}
+	end
+	parts.recolor = function(c: Color3)
+		for _, f in tinted do
+			f.BackgroundColor3 = c
+		end
+	end
+	return h, parts
 end
 
 return Drawn
@@ -4169,6 +4568,9 @@ local Factory = {}
 -- ctx: { UI = the interface, refs = shared widget references, color = the player's team colour }
 local ctx, refs
 
+local ROW, GAP = 46, 5 -- height of a unit row and the gap between rows
+local SHOWN = 4 -- rows seen at once; a factory with more scrolls
+
 function Factory.build(context, play: Instance)
 	ctx, refs = context, context.refs
 	local UI = ctx.UI
@@ -4196,8 +4598,19 @@ function Factory.build(context, play: Instance)
 	})
 	refs.facTitle = Theme.label({ Text = "", Size = UDim2.new(1, -50, 0, 22), TextSize = 18, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 9, LayoutOrder = 1, Parent = body })
 	refs.facSub = Theme.label({ Text = "", Size = UDim2.new(1, -50, 0, 16), TextSize = 12.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 9, LayoutOrder = 2, Parent = body })
-	refs.facRows = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, ZIndex = 9, LayoutOrder = 3, Parent = body }, {
-		Theme.list(Enum.FillDirection.Vertical, 6),
+	refs.facRows = make("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 0, ROW),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.fromOffset(0, 0),
+		ScrollBarThickness = 4,
+		ZIndex = 9,
+		LayoutOrder = 3,
+		Parent = body,
+	}, {
+		Theme.list(Enum.FillDirection.Vertical, GAP),
 	})
 	local barBg = make("Frame", { Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.9, ZIndex = 9, LayoutOrder = 4, Parent = body }, { Theme.corner(nil, 1) })
 	refs.facBar = make("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = C.molten, ZIndex = 10, Parent = barBg }, { Theme.corner(nil, 1) })
@@ -4226,28 +4639,29 @@ end
 local function factoryRow(kind: string, order: number)
 	local UI = ctx.UI
 	local u = Config.UNITS[kind]
-	local row = make("Frame", { Size = UDim2.new(1, 0, 0, 58), BackgroundColor3 = C.panelHi, LayoutOrder = order, ZIndex = 9, Parent = refs.facRows }, {
+	-- the scroll bar takes 6 pixels on the right
+	local row = make("Frame", { Size = UDim2.new(1, -6, 0, ROW), BackgroundColor3 = C.panelHi, LayoutOrder = order, ZIndex = 9, Parent = refs.facRows }, {
 		Theme.corner(12),
 	})
 	local stroke = make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = row })
-	local img = icon(u.icon, 46, { Position = UDim2.fromOffset(6, 6), ZIndex = 10, color = ctx.color, Parent = row })
-	Theme.label({ Text = u.title, Position = UDim2.fromOffset(58, 6), Size = UDim2.new(1, -200, 0, 20), TextSize = 15, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 10, Parent = row })
+	local img = icon(u.icon, 38, { Position = UDim2.fromOffset(5, 4), ZIndex = 10, color = ctx.color, Parent = row })
+	Theme.label({ Text = u.title, Position = UDim2.fromOffset(50, 3), Size = UDim2.new(1, -190, 0, 18), TextSize = 14, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 10, Parent = row })
 	local info = Theme.label({
 		Text = string.format("%d 🔩 · %d с · здоровье %d", u.cost, u.time, u.hp),
-		Position = UDim2.fromOffset(58, 27),
-		Size = UDim2.new(1, -200, 0, 16),
-		TextSize = 12,
+		Position = UDim2.fromOffset(50, 20),
+		Size = UDim2.new(1, -190, 0, 13),
+		TextSize = 11.5,
 		TextColor3 = Color3.fromRGB(198, 207, 221),
 		FontFace = font(Enum.FontWeight.SemiBold),
 		ZIndex = 10,
 		Parent = row,
 	})
-	local queued = Theme.label({ Text = "", Position = UDim2.fromOffset(58, 42), Size = UDim2.new(1, -200, 0, 14), TextSize = 11.5, TextColor3 = C.moltenHi, FontFace = font(Enum.FontWeight.Bold), ZIndex = 10, Parent = row })
+	local queued = Theme.label({ Text = "", Position = UDim2.fromOffset(50, 32), Size = UDim2.new(1, -190, 0, 12), TextSize = 11, TextColor3 = C.moltenHi, FontFace = font(Enum.FontWeight.Bold), ZIndex = 10, Parent = row })
 	local auto = make("TextButton", {
 		Text = "Авто",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -78, 0.5, 0),
-		Size = UDim2.fromOffset(56, 38),
+		Position = UDim2.new(1, -74, 0.5, 0),
+		Size = UDim2.fromOffset(54, 34),
 		AutoButtonColor = true,
 		FontFace = font(Enum.FontWeight.Bold),
 		TextSize = 13,
@@ -4264,8 +4678,8 @@ local function factoryRow(kind: string, order: number)
 	local plus = make("TextButton", {
 		Text = "",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -8, 0.5, 0),
-		Size = UDim2.fromOffset(64, 40),
+		Position = UDim2.new(1, -6, 0.5, 0),
+		Size = UDim2.fromOffset(62, 36),
 		AutoButtonColor = false,
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 10,
@@ -4298,6 +4712,9 @@ function Factory.show(info)
 		for i, kind in def.units do
 			table.insert(refs.facRowList, factoryRow(kind, i))
 		end
+		local shown = math.min(#def.units, SHOWN)
+		refs.facRows.Size = UDim2.new(1, 0, 0, shown * ROW + (shown - 1) * GAP)
+		refs.facRows.CanvasPosition = Vector2.zero
 	end
 	refs.facTitle.Text = def.name
 	local queue = info.queue or {}
@@ -4347,7 +4764,9 @@ function Factory.show(info)
 		refs.facBar.Size = UDim2.fromScale(0, 1)
 		refs.facQueue.Text = "Очередь пустая"
 	end
-	refs.facNote.Text = "«Авто» выпускает выбранный юнит по кругу, пока хватает металла. «Точка сбора»: нажми её, потом место на карте."
+	refs.facNote.Text = if #def.units > SHOWN
+		then "Список листается. «Авто» — выпуск по кругу. «Точка сбора» — куда ехать новым."
+		else "«Авто» — выпуск по кругу, пока хватает металла. «Точка сбора» — куда ехать новым."
 	refs.tip.Visible = false
 	refs.fac.Visible = true
 end
@@ -4674,12 +5093,14 @@ local Hud = {}
 
 -- unit kinds grouped for the army panel: infantry, vehicles, aircraft
 local GROUPS = {
-	inf = { kinds = { "infantry", "rocket", "engineer" }, icon = "infantry", title = "Пехота" },
-	veh = { kinds = { "scout", "tank", "heavy", "artillery" }, icon = "tank", title = "Техника" },
-	air = { kinds = { "fighter", "gunship" }, icon = "fighter", title = "Авиация" },
+	inf = { kinds = { "infantry", "rocket", "sniper", "engineer" }, icon = "infantry", title = "Пехота" },
+	veh = { kinds = { "scout", "tank", "heavy", "artillery", "mlrs", "aagun" }, icon = "tank", title = "Техника" },
+	air = { kinds = { "fighter", "gunship", "bomber", "transport", "drone" }, icon = "fighter", title = "Авиация" },
 }
 local GROUP_ORDER = { "inf", "veh", "air" }
 Hud.GROUPS = GROUPS
+
+local ARMY_W = 280 -- width of the army panel; the build bar starts right of it
 
 -- ctx: { UI = the interface, refs = shared widget references, color = the player's team colour }
 local ctx, refs
@@ -4811,7 +5232,7 @@ function Hud.build(context, play: Instance)
 	refs.hudBottom = hudBottom
 
 	-- army: select units by kind, then tap the map to send them
-	local armyPanel = Theme.panel({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -12), Size = UDim2.fromOffset(250, 132), Parent = hudBottom })
+	local armyPanel = Theme.panel({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -12), Size = UDim2.fromOffset(ARMY_W, 132), Parent = hudBottom })
 	Theme.pad(10, 8).Parent = armyPanel
 	Theme.label({ Text = "Армия", Size = UDim2.new(1, -40, 0, 16), TextSize = 14, FontFace = font(Enum.FontWeight.ExtraBold), Parent = armyPanel })
 	local clear = make("TextButton", {
@@ -4857,17 +5278,19 @@ function Hud.build(context, play: Instance)
 		end)
 		refs.armyBtns[k] = { button = b, count = count, stroke = b:FindFirstChildOfClass("UIStroke") }
 	end
-	-- commands: everyone on screen, box selection (for touch screens), attack-move, stop, hold
+	-- commands: everyone on screen, box selection (for touch screens), attack-move, stop, hold,
+	-- and the landing party: riders get into transports, then transports set them down
+	local commands = { { "screen", "Экран" }, { "box", "Рамка" }, { "amove", "Атака" }, { "stop", "Стоп" }, { "hold", "Держ." }, { "load", "Десант" } }
 	local cmds = make("Frame", { Position = UDim2.fromOffset(0, 56), Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, Parent = armyPanel }, {
-		make("UIGridLayout", { CellSize = UDim2.new(0.2, -4, 1, 0), CellPadding = UDim2.fromOffset(5, 0), SortOrder = Enum.SortOrder.LayoutOrder }),
+		make("UIGridLayout", { CellSize = UDim2.new(1 / #commands, -4, 1, 0), CellPadding = UDim2.fromOffset(4, 0), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 	refs.cmdBtns = {}
-	for i, c in { { "screen", "Экран" }, { "box", "Рамка" }, { "amove", "Атака" }, { "stop", "Стоп" }, { "hold", "Держ." } } do
+	for i, c in commands do
 		local b = make("TextButton", {
 			Text = c[2],
 			AutoButtonColor = true,
 			FontFace = font(Enum.FontWeight.Bold),
-			TextSize = 11,
+			TextScaled = true,
 			TextColor3 = C.ink,
 			BackgroundColor3 = C.panelHi,
 			LayoutOrder = i,
@@ -4875,6 +5298,8 @@ function Hud.build(context, play: Instance)
 		}, {
 			Theme.corner(8),
 			make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+			make("UITextSizeConstraint", { MaxTextSize = 11 }),
+			Theme.pad(2, 0),
 		})
 		b.Activated:Connect(function()
 			Sfx.play("click")
@@ -5020,7 +5445,7 @@ end
 -- they still do not); w = width of the interface in its own units
 function Hud.layout(w: number)
 	if refs.buildScroll then
-		local left, right = 16 + 250 + 8, 16 + 44 + 8
+		local left, right = 16 + ARMY_W + 8, 16 + 44 + 8
 		local avail = w - left - right
 		local n = #Config.BUILD_ORDER
 		local bw = math.clamp(math.floor((avail - 12 - (n - 1) * 6) / n), 50, 74)
@@ -5516,22 +5941,22 @@ local HP_BACK = Color3.fromRGB(14, 17, 22)
 local BUILDING_GUN = { tower = "tower_gun", aa = "aa_gun" }
 -- how each shooter's shot looks, and sounds
 local SHOT_LOOK = {
-	infantry = "bullet", scout = "bullet", fighter = "bullet", cc = "bullet",
+	infantry = "bullet", scout = "bullet", fighter = "bullet", cc = "bullet", sniper = "bullet",
 	tank = "cannon", heavy = "cannon", tower = "cannon",
-	rocket = "rocket", gunship = "rocket",
-	artillery = "shell",
-	aa = "flak",
+	rocket = "rocket", gunship = "rocket", mlrs = "rocket",
+	artillery = "shell", bomber = "shell",
+	aa = "flak", aagun = "flak",
 }
 local SHOT_SOUND = {
-	infantry = "rifle", scout = "mg", fighter = "mg", cc = "mg",
+	infantry = "rifle", scout = "mg", fighter = "mg", cc = "mg", sniper = "rifle",
 	tank = "cannon", heavy = "cannon", tower = "tower",
-	rocket = "rocket", gunship = "rocket",
-	artillery = "artillery",
-	aa = "flak",
+	rocket = "rocket", gunship = "rocket", mlrs = "rocket",
+	artillery = "artillery", bomber = "artillery",
+	aa = "flak", aagun = "flak",
 }
 -- soldiers walk with a little sway; tracked and wheeled vehicles leave prints on the ground
-local WALKERS = { infantry = true, rocket = true, engineer = true }
-local TRACKED = { tank = 0.4, heavy = 0.5, artillery = 0.4, scout = 0.28 } -- kind -> how dark the prints are
+local WALKERS = { infantry = true, rocket = true, engineer = true, sniper = true }
+local TRACKED = { tank = 0.4, heavy = 0.5, artillery = 0.4, scout = 0.28, mlrs = 0.3, aagun = 0.4 } -- kind -> how dark the prints are
 
 local gui, view, board
 local buildings = {} -- id -> record
@@ -5978,6 +6403,7 @@ function MapView.addUnit(info)
 	if u then
 		u.path, u.t0, u.speed, u.orbit = info.path, info.t0, info.speed, info.orbit
 		u.hp, u.maxHp = info.hp, info.maxHp
+		u.load = info.load or 0
 		refreshUnit(u)
 		return
 	end
@@ -5999,6 +6425,7 @@ function MapView.addUnit(info)
 		air = def.air == true,
 		heading = 180,
 		gunAngle = 180,
+		load = info.load or 0, -- riders inside a transport
 	}
 	local color = teamColor(info.owner)
 	local s = def.size or 1.5
@@ -6009,7 +6436,14 @@ function MapView.addUnit(info)
 		ZIndex = if u.air then Z.air else Z.unit,
 		Parent = board,
 	})
-	if u.air then
+	local drawn = not Sprites.has(def.icon)
+	if u.air and drawn then
+		-- the aircraft's shadow on the ground below it: a dark copy of the drawing
+		local shadow = Drawn.unit(info.kind, u.frame, color, true)
+		if shadow then
+			u.shadow, u.shadowTint = shadow, shadow
+		end
+	elseif u.air then
 		-- the aircraft's shadow on the ground below it
 		local props = {
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -6027,12 +6461,13 @@ function MapView.addUnit(info)
 		Sprites.set(u.shadowTint, def.icon, "team")
 	end
 	local art, drawnParts = nil, nil
-	if not Sprites.has(def.icon) then
+	if drawn then
 		art, drawnParts = Drawn.unit(info.kind, u.frame, color)
 	end
 	if art then
 		u.body, u.bodyTint = art, art
 		u.recolor = drawnParts.recolor
+		u.rotors = drawnParts.rotors
 	else
 		u.body, u.bodyTint = spritePair(u.frame, def.icon, color, 2, 1)
 	end
@@ -6258,7 +6693,7 @@ local function updateUnits(dt: number)
 				end
 			end
 		elseif u.air then
-			if u.kind == "gunship" then
+			if u.kind == "gunship" or u.def.hover then
 				-- hovering: the helicopter breathes up and down
 				local bob = 1 + math.sin(clock * 3 + u.id) * 0.03
 				sx, sy = bob, bob
@@ -6285,6 +6720,9 @@ local function updateUnits(dt: number)
 		end
 		if u.rotor then
 			u.rotor.Rotation = (u.rotor.Rotation + dt * 1080) % 360
+		end
+		for _, r in u.rotors or {} do
+			r.Rotation = (r.Rotation + dt * 900) % 360
 		end
 	end
 	for _, b in buildings do
@@ -6579,7 +7017,7 @@ function Menu.build(context, root: Instance, player: Player): Frame
 		Parent = menu,
 	}, { Theme.list(Enum.FillDirection.Horizontal, 8, nil, Enum.VerticalAlignment.Center) })
 	iconButton("help", topLeft, function()
-		UI.toast("Экстракторы на светящихся месторождениях дают металл, электростанции — энергию для заводов и башен. Построй казарму и завод, нажми на завод и заказывай войска. Армия ограничена: сверху видно, сколько мест занято. Инженеры чинят постройки, ремонтная станция — войска. Выбери войска (нажми на них или протяни рамку) и нажми на карту или на врага. Компьютер: ЛКМ — выбор, протяни ЛКМ — рамка, ПКМ — приказ, F — атака с ходу, X — стоп, H — держать, Ctrl+1–9 — запомнить группу, 1–9 — выбрать её, WASD или край экрана — камера, пробел — к базе.", false, 14)
+		UI.toast("Экстракторы на светящихся месторождениях дают металл, электростанции — энергию для заводов и башен. Построй казарму и завод, нажми на завод и заказывай войска. Армия ограничена: сверху видно, сколько мест занято. Инженеры чинят постройки, ремонтная станция — войска. Выбери войска (нажми на них или протяни рамку) и нажми на карту или на врага. Компьютер: ЛКМ — выбор, протяни ЛКМ — рамка, ПКМ — приказ, F — атака с ходу, X — стоп, H — держать, T — десант (транспорт с пехотой), Ctrl+1–9 — запомнить группу, 1–9 — выбрать её, WASD или край экрана — камера, пробел — к базе.", false, 14)
 	end)
 	iconButton("shield", topLeft, function()
 		Menu.openArsenal()
@@ -6685,7 +7123,7 @@ function Menu.build(context, root: Instance, player: Player): Frame
 		Parent = refs.side,
 	}, { Theme.corner(16), Theme.stroke(), Theme.pad(14, 12), Theme.list(Enum.FillDirection.Vertical, 4) })
 	Theme.label({ Text = "АРСЕНАЛ", Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 1, Parent = ars })
-	Theme.label({ Text = "9 видов войск: пехота, техника, авиация и инженеры.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.Medium), LayoutOrder = 2, Parent = ars })
+	Theme.label({ Text = "15 видов войск: пехота, техника, авиация, инженеры и десант.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.Medium), LayoutOrder = 2, Parent = ars })
 	local row = make("Frame", { Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, LayoutOrder = 3, Parent = ars }, { Theme.list(Enum.FillDirection.Horizontal, 6) })
 	for _, k in { "infantry", "tank", "artillery", "gunship" } do
 		local cell = make("Frame", { Size = UDim2.fromOffset(52, 44), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.95, Parent = row }, { Theme.corner(10) })
@@ -6847,7 +7285,10 @@ function Menu.buildArsenal(root: Instance)
 		Theme.label({ Text = u.title, Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), LayoutOrder = 2, ZIndex = 22, Parent = card })
 		Theme.label({ Text = u.desc, Size = UDim2.new(1, 0, 0, 52), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextSize = 12.5, TextColor3 = Color3.fromRGB(200, 209, 223), FontFace = font(Enum.FontWeight.SemiBold), LayoutOrder = 3, ZIndex = 22, Parent = card })
 		Theme.label({
-			Text = if u.repairs then string.format("%d 🔩 · здоровье %d · ремонт %d", u.cost, u.hp, u.repairs) else string.format("%d 🔩 · здоровье %d · урон %d", u.cost, u.hp, u.dps),
+			Text = if u.repairs then string.format("%d 🔩 · здоровье %d · ремонт %d", u.cost, u.hp, u.repairs)
+				elseif u.carry then string.format("%d 🔩 · здоровье %d · десант %d", u.cost, u.hp, u.carry)
+				elseif u.dps == 0 then string.format("%d 🔩 · здоровье %d · обзор %d", u.cost, u.hp, u.vision)
+				else string.format("%d 🔩 · здоровье %d · урон %d", u.cost, u.hp, u.dps),
 			Size = UDim2.new(1, 0, 0, 16),
 			TextSize = 11.5,
 			TextColor3 = C.moltenHi,
@@ -7602,6 +8043,12 @@ local GLYPHS = {
 	power = { "⚡" },
 	repair = { "🔧" },
 	engineer = { "👷" },
+	sniper = { "🔭" },
+	mlrs = { "🚀" },
+	aagun = { "🎯" },
+	bomber = { "💣" },
+	transport = { "🚁" },
+	drone = { "🛩️" },
 	flag = { "🚩" },
 	trophy = { "🏆" },
 	exit = { "⏏", Color3.fromRGB(238, 242, 248) },

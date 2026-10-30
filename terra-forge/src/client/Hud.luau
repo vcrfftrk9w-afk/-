@@ -21,12 +21,14 @@ local Hud = {}
 
 -- unit kinds grouped for the army panel: infantry, vehicles, aircraft
 local GROUPS = {
-	inf = { kinds = { "infantry", "rocket", "engineer" }, icon = "infantry", title = "Пехота" },
-	veh = { kinds = { "scout", "tank", "heavy", "artillery" }, icon = "tank", title = "Техника" },
-	air = { kinds = { "fighter", "gunship" }, icon = "fighter", title = "Авиация" },
+	inf = { kinds = { "infantry", "rocket", "sniper", "engineer" }, icon = "infantry", title = "Пехота" },
+	veh = { kinds = { "scout", "tank", "heavy", "artillery", "mlrs", "aagun" }, icon = "tank", title = "Техника" },
+	air = { kinds = { "fighter", "gunship", "bomber", "transport", "drone" }, icon = "fighter", title = "Авиация" },
 }
 local GROUP_ORDER = { "inf", "veh", "air" }
 Hud.GROUPS = GROUPS
+
+local ARMY_W = 280 -- width of the army panel; the build bar starts right of it
 
 -- ctx: { UI = the interface, refs = shared widget references, color = the player's team colour }
 local ctx, refs
@@ -158,7 +160,7 @@ function Hud.build(context, play: Instance)
 	refs.hudBottom = hudBottom
 
 	-- army: select units by kind, then tap the map to send them
-	local armyPanel = Theme.panel({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -12), Size = UDim2.fromOffset(250, 132), Parent = hudBottom })
+	local armyPanel = Theme.panel({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -12), Size = UDim2.fromOffset(ARMY_W, 132), Parent = hudBottom })
 	Theme.pad(10, 8).Parent = armyPanel
 	Theme.label({ Text = "Армия", Size = UDim2.new(1, -40, 0, 16), TextSize = 14, FontFace = font(Enum.FontWeight.ExtraBold), Parent = armyPanel })
 	local clear = make("TextButton", {
@@ -204,17 +206,19 @@ function Hud.build(context, play: Instance)
 		end)
 		refs.armyBtns[k] = { button = b, count = count, stroke = b:FindFirstChildOfClass("UIStroke") }
 	end
-	-- commands: everyone on screen, box selection (for touch screens), attack-move, stop, hold
+	-- commands: everyone on screen, box selection (for touch screens), attack-move, stop, hold,
+	-- and the landing party: riders get into transports, then transports set them down
+	local commands = { { "screen", "Экран" }, { "box", "Рамка" }, { "amove", "Атака" }, { "stop", "Стоп" }, { "hold", "Держ." }, { "load", "Десант" } }
 	local cmds = make("Frame", { Position = UDim2.fromOffset(0, 56), Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, Parent = armyPanel }, {
-		make("UIGridLayout", { CellSize = UDim2.new(0.2, -4, 1, 0), CellPadding = UDim2.fromOffset(5, 0), SortOrder = Enum.SortOrder.LayoutOrder }),
+		make("UIGridLayout", { CellSize = UDim2.new(1 / #commands, -4, 1, 0), CellPadding = UDim2.fromOffset(4, 0), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 	refs.cmdBtns = {}
-	for i, c in { { "screen", "Экран" }, { "box", "Рамка" }, { "amove", "Атака" }, { "stop", "Стоп" }, { "hold", "Держ." } } do
+	for i, c in commands do
 		local b = make("TextButton", {
 			Text = c[2],
 			AutoButtonColor = true,
 			FontFace = font(Enum.FontWeight.Bold),
-			TextSize = 11,
+			TextScaled = true,
 			TextColor3 = C.ink,
 			BackgroundColor3 = C.panelHi,
 			LayoutOrder = i,
@@ -222,6 +226,8 @@ function Hud.build(context, play: Instance)
 		}, {
 			Theme.corner(8),
 			make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+			make("UITextSizeConstraint", { MaxTextSize = 11 }),
+			Theme.pad(2, 0),
 		})
 		b.Activated:Connect(function()
 			Sfx.play("click")
@@ -367,7 +373,7 @@ end
 -- they still do not); w = width of the interface in its own units
 function Hud.layout(w: number)
 	if refs.buildScroll then
-		local left, right = 16 + 250 + 8, 16 + 44 + 8
+		local left, right = 16 + ARMY_W + 8, 16 + 44 + 8
 		local avail = w - left - right
 		local n = #Config.BUILD_ORDER
 		local bw = math.clamp(math.floor((avail - 12 - (n - 1) * 6) / n), 50, 74)

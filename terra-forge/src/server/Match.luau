@@ -62,6 +62,7 @@ local function unitInfo(u)
 		orbit = u.orbit,
 		hp = math.ceil(u.hp),
 		maxHp = u.maxHp,
+		load = if u.cargo then #u.cargo else nil, -- riders inside a transport
 	}
 end
 
@@ -415,8 +416,9 @@ function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
 		py = y,
 		shotAt = 0,
 		orderedAt = 0,
+		cargo = if def.carry then {} else nil,
 	}
-	if u.air then
+	if u.air and not def.hover then
 		local r = 2.5 + self.rng:NextNumber() * 1.5
 		u.orbit = { r = r, a0 = self.rng:NextNumber() * math.pi * 2, w = (if self.rng:NextNumber() < 0.5 then 1 else -1) * 2.6 / r }
 	end
@@ -433,16 +435,70 @@ function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
 	return u
 end
 
+-- takes a unit out of its base's army counts
+function Match:forget(u)
+	self.unitCount -= 1
+	u.n.army[u.kind] = math.max(0, (u.n.army[u.kind] or 1) - 1)
+	u.n.unitTotal = math.max(0, u.n.unitTotal - 1)
+	u.n.pop = math.max(0, u.n.pop - Config.UNITS[u.kind].pop)
+end
+
 function Match:removeUnit(u)
 	if self.units[u.id] then
 		self.units[u.id] = nil
 		self.hpDirty[u] = nil
-		self.unitCount -= 1
-		u.n.army[u.kind] = math.max(0, (u.n.army[u.kind] or 1) - 1)
-		u.n.unitTotal = math.max(0, u.n.unitTotal - 1)
-		u.n.pop = math.max(0, u.n.pop - Config.UNITS[u.kind].pop)
+		self:forget(u)
+		-- the riders go down with their transport
+		for _, c in u.cargo or {} do
+			self:forget(c)
+		end
+		u.cargo = nil
 		self:send({ t = "ugone", id = u.id })
 	end
+end
+
+-- a rider gets into a transport: it leaves the map but stays in the army
+function Match:board(u, tr)
+	local carry = Config.UNITS[tr.kind].carry or 0
+	u.order = nil
+	if self.units[u.id] ~= u or self.units[tr.id] ~= tr or not tr.cargo or #tr.cargo >= carry then
+		return
+	end
+	self.units[u.id] = nil
+	self.hpDirty[u] = nil
+	u.target = nil
+	table.insert(tr.cargo, u)
+	self:send({ t = "ugone", id = u.id })
+	self:send({ t = "unit", u = unitInfo(tr) })
+end
+
+-- a transport sets its riders down on the land under it
+function Match:unload(tr)
+	tr.order = nil
+	if not tr.cargo or #tr.cargo == 0 then
+		return
+	end
+	local t = now()
+	local x, y = Motion.position(tr, t)
+	local lx, ly = Path.nearestLand(x, y, 4)
+	if not lx or not ly then
+		self:toast(tr.n, "Тут негде высадить десант: вокруг вода или скалы.", true)
+		return
+	end
+	for i, c in tr.cargo do
+		local a, r = i * 2.4, 0.6 * math.sqrt(i)
+		local cx, cy = Path.nearestLand(lx + 0.5 + math.cos(a) * r, ly + 0.5 + math.sin(a) * r, 2)
+		cx, cy = (cx or lx) + 0.5, (cy or ly) + 0.5
+		c.path = { cx, cy }
+		c.t0 = t
+		c.orderedAt = t
+		c.px, c.py = cx, cy
+		self.units[c.id] = c
+		self:send({ t = "unit", u = unitInfo(c) })
+	end
+	tr.cargo = {}
+	self:send({ t = "unit", u = unitInfo(tr) })
+	self:toast(tr.n, "Десант высажен.")
 end
 
 -- sends one unit towards (tx, ty) along a land route (aircraft fly straight)
@@ -507,8 +563,10 @@ function Match:orderGroup(list, tx: number, ty: number)
 	end
 end
 
--- a player's order for several of their units: kind is move, amove (attack-move), attack, stop
--- or hold; for attack, targetRef is a unit id, or minus a building id
+-- a player's order for several of their units: kind is move, amove (attack-move), attack, stop,
+-- hold, board (riders get into transports) or unload (transports fly to the point and set their
+-- riders down); for attack, targetRef is a unit id, or minus a building id; for board, the id of
+-- the transport to get into
 function Match:command(player: Player, ids, kind: string, tx: number, ty: number, targetRef: number?)
 	local n = self.humans[player]
 	if not n or self.phase ~= "game" or not n.alive or not Orders.KINDS[kind] then
@@ -537,6 +595,12 @@ function Match:command(player: Player, ids, kind: string, tx: number, ty: number
 		if not target or target.n == n or not Orders.alive(self, target) then
 			kind = "move"
 			target = nil
+		end
+	elseif kind == "board" and targetRef and targetRef > 0 then
+		-- the riders get into this own transport, even if it is not selected
+		local tr = self.units[targetRef]
+		if tr and tr.n == n and tr.cargo then
+			target = tr
 		end
 	end
 	Orders.give(self, list, kind, tx, ty, target)

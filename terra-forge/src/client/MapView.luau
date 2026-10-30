@@ -48,22 +48,22 @@ local HP_BACK = Color3.fromRGB(14, 17, 22)
 local BUILDING_GUN = { tower = "tower_gun", aa = "aa_gun" }
 -- how each shooter's shot looks, and sounds
 local SHOT_LOOK = {
-	infantry = "bullet", scout = "bullet", fighter = "bullet", cc = "bullet",
+	infantry = "bullet", scout = "bullet", fighter = "bullet", cc = "bullet", sniper = "bullet",
 	tank = "cannon", heavy = "cannon", tower = "cannon",
-	rocket = "rocket", gunship = "rocket",
-	artillery = "shell",
-	aa = "flak",
+	rocket = "rocket", gunship = "rocket", mlrs = "rocket",
+	artillery = "shell", bomber = "shell",
+	aa = "flak", aagun = "flak",
 }
 local SHOT_SOUND = {
-	infantry = "rifle", scout = "mg", fighter = "mg", cc = "mg",
+	infantry = "rifle", scout = "mg", fighter = "mg", cc = "mg", sniper = "rifle",
 	tank = "cannon", heavy = "cannon", tower = "tower",
-	rocket = "rocket", gunship = "rocket",
-	artillery = "artillery",
-	aa = "flak",
+	rocket = "rocket", gunship = "rocket", mlrs = "rocket",
+	artillery = "artillery", bomber = "artillery",
+	aa = "flak", aagun = "flak",
 }
 -- soldiers walk with a little sway; tracked and wheeled vehicles leave prints on the ground
-local WALKERS = { infantry = true, rocket = true, engineer = true }
-local TRACKED = { tank = 0.4, heavy = 0.5, artillery = 0.4, scout = 0.28 } -- kind -> how dark the prints are
+local WALKERS = { infantry = true, rocket = true, engineer = true, sniper = true }
+local TRACKED = { tank = 0.4, heavy = 0.5, artillery = 0.4, scout = 0.28, mlrs = 0.3, aagun = 0.4 } -- kind -> how dark the prints are
 
 local gui, view, board
 local buildings = {} -- id -> record
@@ -510,6 +510,7 @@ function MapView.addUnit(info)
 	if u then
 		u.path, u.t0, u.speed, u.orbit = info.path, info.t0, info.speed, info.orbit
 		u.hp, u.maxHp = info.hp, info.maxHp
+		u.load = info.load or 0
 		refreshUnit(u)
 		return
 	end
@@ -531,6 +532,7 @@ function MapView.addUnit(info)
 		air = def.air == true,
 		heading = 180,
 		gunAngle = 180,
+		load = info.load or 0, -- riders inside a transport
 	}
 	local color = teamColor(info.owner)
 	local s = def.size or 1.5
@@ -541,7 +543,14 @@ function MapView.addUnit(info)
 		ZIndex = if u.air then Z.air else Z.unit,
 		Parent = board,
 	})
-	if u.air then
+	local drawn = not Sprites.has(def.icon)
+	if u.air and drawn then
+		-- the aircraft's shadow on the ground below it: a dark copy of the drawing
+		local shadow = Drawn.unit(info.kind, u.frame, color, true)
+		if shadow then
+			u.shadow, u.shadowTint = shadow, shadow
+		end
+	elseif u.air then
 		-- the aircraft's shadow on the ground below it
 		local props = {
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -559,12 +568,13 @@ function MapView.addUnit(info)
 		Sprites.set(u.shadowTint, def.icon, "team")
 	end
 	local art, drawnParts = nil, nil
-	if not Sprites.has(def.icon) then
+	if drawn then
 		art, drawnParts = Drawn.unit(info.kind, u.frame, color)
 	end
 	if art then
 		u.body, u.bodyTint = art, art
 		u.recolor = drawnParts.recolor
+		u.rotors = drawnParts.rotors
 	else
 		u.body, u.bodyTint = spritePair(u.frame, def.icon, color, 2, 1)
 	end
@@ -790,7 +800,7 @@ local function updateUnits(dt: number)
 				end
 			end
 		elseif u.air then
-			if u.kind == "gunship" then
+			if u.kind == "gunship" or u.def.hover then
 				-- hovering: the helicopter breathes up and down
 				local bob = 1 + math.sin(clock * 3 + u.id) * 0.03
 				sx, sy = bob, bob
@@ -817,6 +827,9 @@ local function updateUnits(dt: number)
 		end
 		if u.rotor then
 			u.rotor.Rotation = (u.rotor.Rotation + dt * 1080) % 360
+		end
+		for _, r in u.rotors or {} do
+			r.Rotation = (r.Rotation + dt * 900) % 360
 		end
 	end
 	for _, b in buildings do

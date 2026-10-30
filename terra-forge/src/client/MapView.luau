@@ -50,7 +50,6 @@ local nearView = true -- close enough to draw unit models; further out units are
 local airSpots = {} -- flat x, y (tiles), height (studs) of aircraft this frame, for tracers
 
 local GRAY3 = Color3.fromRGB(200, 200, 200)
-local SPAWN_GRAY = Color3.fromRGB(Config.SPAWN_GRAY[1], Config.SPAWN_GRAY[2], Config.SPAWN_GRAY[3])
 local NEAR_IN, NEAR_OUT = 105 * S, 125 * S
 
 ---------------------------------------------------------------- helpers
@@ -85,16 +84,13 @@ end
 
 ---------------------------------------------------------------- territory
 
--- colour and transparency of a nation's land; in the spawn phase other nations are grey
+-- colour and transparency of a nation's land: always its own colour, never white or grey
 local function look(o: number): (Color3?, number)
 	local n = nations[o]
 	if not n then
 		return nil, 1
 	end
-	if MapView.phase == "spawn" and o ~= MapView.myId then
-		return SPAWN_GRAY, 0.4
-	end
-	return n.color3, if o == MapView.myId then 0.38 else 0.46
+	return n.color3, if o == MapView.myId then 0.36 else 0.44
 end
 
 -- fog of war: the map is split into 4 x 4-tile cells; a cell is visible near your land, buildings and units
@@ -1337,16 +1333,7 @@ function MapView.applyDelta(data: buffer)
 end
 
 function MapView.setPhase(phase: string)
-	if phase ~= MapView.phase then
-		local wasSpawn = MapView.phase == "spawn"
-		MapView.phase = phase
-		if wasSpawn or phase == "spawn" then
-			Territory.markAll()
-			if mini then
-				table.clear(mini.keys)
-			end
-		end
-	end
+	MapView.phase = phase
 end
 
 function MapView.setMode(mode: string)

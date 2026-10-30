@@ -94,6 +94,12 @@ local function onAction(player: Player, kind, a, b, c)
 			end
 		end
 		match:move(player, ids, b, c)
+	elseif kind == "queue" and isNumber(a) then
+		match:queueUnit(player, a)
+	elseif kind == "cancel" and isNumber(a) then
+		match:cancelUnit(player, a)
+	elseif kind == "auto" and isNumber(a) and typeof(b) == "boolean" then
+		match:setAuto(player, a, b)
 	elseif kind == "leave" then
 		match:leave(player)
 	end

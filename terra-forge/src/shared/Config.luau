@@ -13,6 +13,9 @@ Config.WIN_SHARE = 0.25 -- share of all land that wins the match
 Config.MATCH_SECONDS = 25 * 60
 Config.RESULT_SECONDS = 12
 Config.CAPITAL_RADIUS = 3
+Config.CAPITAL_POWER = 8 -- energy every capital gives for free
+Config.LOW_POWER_SPEED = 0.4 -- factories still work this fast with no energy at all
+Config.MAX_QUEUE = 10
 
 Config.START_TROOPS = 2500
 Config.START_RES = { iron = 450, coal = 160, oil = 120, steel = 220 }
@@ -123,7 +126,7 @@ Config.BUILD = {
 		unit = "infantry",
 		every = 6,
 		ucost = { pop = 60 },
-		desc = "Обучает пехоту. Каждый солдат делает твои атаки сильнее.",
+		desc = "Обучает пехоту. Нажми на казарму на карте, чтобы заказать солдат.",
 	},
 	tankf = {
 		name = "Танковый завод",
@@ -133,7 +136,7 @@ Config.BUILD = {
 		unit = "tank",
 		every = 9,
 		ucost = { steel = 25, oil = 8 },
-		desc = "Собирает танки. Танк заметно усиливает атаки и оборону.",
+		desc = "Собирает танки. Нажми на завод на карте, чтобы заказать танки.",
 	},
 	air = {
 		name = "Аэродром",
@@ -143,15 +146,15 @@ Config.BUILD = {
 		unit = "plane",
 		every = 12,
 		ucost = { steel = 35, oil = 20 },
-		desc = "Выпускает самолёты. Они патрулируют небо и помогают в атаках.",
+		desc = "Выпускает самолёты. Нажми на аэродром на карте, чтобы заказать самолёты.",
 	},
 }
 
 -- hp, damage per second, range in tiles; hitsAir = damage multiplier against planes
 Config.UNITS = {
-	infantry = { name = "пехота", speed = 1.7, power = 0.03, hp = 60, dps = 7, range = 1.6, hitsAir = 0.25 },
-	tank = { name = "танк", speed = 2.4, power = 0.08, hp = 220, dps = 18, range = 2.6, hitsAir = 0 },
-	plane = { name = "самолёт", speed = 6, power = 0.05, hp = 90, dps = 12, range = 2.4, hitsAir = 1, air = true },
+	infantry = { title = "Пехота", name = "пехота", speed = 1.7, power = 0.03, hp = 60, dps = 7, range = 1.6, hitsAir = 0.25 },
+	tank = { title = "Танк", name = "танк", speed = 2.4, power = 0.08, hp = 220, dps = 18, range = 2.6, hitsAir = 0 },
+	plane = { title = "Самолёт", name = "самолёт", speed = 6, power = 0.05, hp = 90, dps = 12, range = 2.4, hitsAir = 1, air = true },
 }
 -- extra damage multipliers: attacker kind -> target kind
 Config.VS = {

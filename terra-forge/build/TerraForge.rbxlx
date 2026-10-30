@@ -123,6 +123,9 @@ Config.WIN_SHARE = 0.25 -- share of all land that wins the match
 Config.MATCH_SECONDS = 25 * 60
 Config.RESULT_SECONDS = 12
 Config.CAPITAL_RADIUS = 3
+Config.CAPITAL_POWER = 8 -- energy every capital gives for free
+Config.LOW_POWER_SPEED = 0.4 -- factories still work this fast with no energy at all
+Config.MAX_QUEUE = 10
 
 Config.START_TROOPS = 2500
 Config.START_RES = { iron = 450, coal = 160, oil = 120, steel = 220 }
@@ -233,7 +236,7 @@ Config.BUILD = {
 		unit = "infantry",
 		every = 6,
 		ucost = { pop = 60 },
-		desc = "Обучает пехоту. Каждый солдат делает твои атаки сильнее.",
+		desc = "Обучает пехоту. Нажми на казарму на карте, чтобы заказать солдат.",
 	},
 	tankf = {
 		name = "Танковый завод",
@@ -243,7 +246,7 @@ Config.BUILD = {
 		unit = "tank",
 		every = 9,
 		ucost = { steel = 25, oil = 8 },
-		desc = "Собирает танки. Танк заметно усиливает атаки и оборону.",
+		desc = "Собирает танки. Нажми на завод на карте, чтобы заказать танки.",
 	},
 	air = {
 		name = "Аэродром",
@@ -253,15 +256,15 @@ Config.BUILD = {
 		unit = "plane",
 		every = 12,
 		ucost = { steel = 35, oil = 20 },
-		desc = "Выпускает самолёты. Они патрулируют небо и помогают в атаках.",
+		desc = "Выпускает самолёты. Нажми на аэродром на карте, чтобы заказать самолёты.",
 	},
 }
 
 -- hp, damage per second, range in tiles; hitsAir = damage multiplier against planes
 Config.UNITS = {
-	infantry = { name = "пехота", speed = 1.7, power = 0.03, hp = 60, dps = 7, range = 1.6, hitsAir = 0.25 },
-	tank = { name = "танк", speed = 2.4, power = 0.08, hp = 220, dps = 18, range = 2.6, hitsAir = 0 },
-	plane = { name = "самолёт", speed = 6, power = 0.05, hp = 90, dps = 12, range = 2.4, hitsAir = 1, air = true },
+	infantry = { title = "Пехота", name = "пехота", speed = 1.7, power = 0.03, hp = 60, dps = 7, range = 1.6, hitsAir = 0.25 },
+	tank = { title = "Танк", name = "танк", speed = 2.4, power = 0.08, hp = 220, dps = 18, range = 2.6, hitsAir = 0 },
+	plane = { title = "Самолёт", name = "самолёт", speed = 6, power = 0.05, hp = 90, dps = 12, range = 2.4, hitsAir = 1, air = true },
 }
 -- extra damage multipliers: attacker kind -> target kind
 Config.VS = {
@@ -639,6 +642,12 @@ local function onAction(player: Player, kind, a, b, c)
 			end
 		end
 		match:move(player, ids, b, c)
+	elseif kind == "queue" and isNumber(a) then
+		match:queueUnit(player, a)
+	elseif kind == "cancel" and isNumber(a) then
+		match:cancelUnit(player, a)
+	elseif kind == "auto" and isNumber(a) and typeof(b) == "boolean" then
+		match:setAuto(player, a, b)
 	elseif kind == "leave" then
 		match:leave(player)
 	end
@@ -1040,6 +1049,79 @@ local function canAfford(n, cost): boolean
 	return true
 end
 
+local function missingText(n, cost): string
+	local missing = {}
+	for _, k in Config.RES_ORDER do
+		local need = cost[k]
+		local have = if k == "pop" then n.troops else n.res[k]
+		if need and have and have < need then
+			table.insert(missing, math.ceil(need - have) .. " " .. Config.RES_OF[k])
+		end
+	end
+	return "Не хватает: " .. table.concat(missing, ", ")
+end
+
+local function payCost(n, cost, sign: number)
+	for k, v in cost do
+		if k == "pop" then
+			n.troops -= v * sign
+		else
+			n.res[k] -= v * sign
+		end
+	end
+end
+
+-- a player's own factory, or nil
+function Match:factoryOf(player: Player, id: number)
+	local n = self.humans[player]
+	local b = self.buildings[id]
+	if not n or not b or b.n ~= n or self.phase ~= "game" or not Config.BUILD[b.kind].unit then
+		return nil, nil
+	end
+	return n, b
+end
+
+-- orders one unit from a factory; it is paid now and refunded if cancelled
+function Match:queueUnit(player: Player, id: number)
+	local n, b = self:factoryOf(player, id)
+	if not n then
+		return
+	end
+	local def = Config.BUILD[b.kind]
+	if b.queue >= Config.MAX_QUEUE then
+		self:toast(n, "Очередь полная: не больше " .. Config.MAX_QUEUE .. " юнитов.", true)
+		return
+	end
+	if not canAfford(n, def.ucost) then
+		self:toast(n, missingText(n, def.ucost), true)
+		return
+	end
+	payCost(n, def.ucost, 1)
+	b.queue += 1
+	self:sendEconomy()
+end
+
+function Match:cancelUnit(player: Player, id: number)
+	local n, b = self:factoryOf(player, id)
+	if not n or b.queue <= 0 then
+		return
+	end
+	payCost(n, Config.BUILD[b.kind].ucost, -1)
+	b.queue -= 1
+	if b.queue == 0 and not b.auto then
+		b.prog = 0
+	end
+	self:sendEconomy()
+end
+
+function Match:setAuto(player: Player, id: number, on: boolean)
+	local n, b = self:factoryOf(player, id)
+	if n then
+		b.auto = on
+		self:sendEconomy()
+	end
+end
+
 function Match:build(player: Player, kind: string, x: number, y: number)
 	local n = self.humans[player]
 	local def = Config.BUILD[kind]
@@ -1056,14 +1138,7 @@ function Match:build(player: Player, kind: string, x: number, y: number)
 		return
 	end
 	if not canAfford(n, def.cost) then
-		local missing = {}
-		for _, k in Config.RES_ORDER do
-			local need = def.cost[k]
-			if need and n.res[k] and n.res[k] < need then
-				table.insert(missing, math.ceil(need - n.res[k]) .. " " .. Config.RES_OF[k])
-			end
-		end
-		self:toast(n, "Не хватает: " .. table.concat(missing, ", "), true)
+		self:toast(n, missingText(n, def.cost), true)
 		return
 	end
 	if not self:addBuilding(n, kind, x, y) then
@@ -1080,8 +1155,10 @@ function Match:build(player: Player, kind: string, x: number, y: number)
 	elseif kind == "rig" then
 		extra = if dep == 3 then ": на нефти, ×5" else " (нефти тут мало, ищи чёрные пятна)"
 	end
-	if def.power > 0 and n.energy.supply < n.energy.need + def.power then
-		extra ..= ". Нужна энергия: поставь электростанцию"
+	if def.unit then
+		extra ..= ". Нажми на неё на карте, чтобы заказать войска"
+	elseif def.power > 0 and n.energy.supply < n.energy.need + def.power then
+		extra ..= ". Энергии мало: поставь электростанцию"
 	end
 	self:toast(n, "Построено: " .. def.name .. extra)
 end
@@ -1115,9 +1192,12 @@ function Match:addBuilding(n, kind: string, x: number, y: number): boolean
 		hp = hp,
 		maxHp = hp,
 		isBuilding = true,
-		prog = if n.isHuman then 0.6 else self.rng:NextNumber() * 0.5,
+		prog = if n.isHuman then 0 else self.rng:NextNumber() * 0.5,
 		on = true,
 		blocked = false,
+		queue = 0,
+		auto = false,
+		paid = false,
 	}
 	self.buildings[b.id] = b
 	if kind == "city" then
@@ -1147,7 +1227,8 @@ function Match:spawnUnit(n, kind: string, x: number, y: number): boolean
 	end
 	local def = Config.UNITS[kind]
 	if kind ~= "plane" then
-		local lx, ly = Path.nearestLand(x + self.rng:NextNumber() * 2 - 1, y + self.rng:NextNumber() * 2 - 1, 3)
+		-- new units wait just below their factory, so they don't cover it
+		local lx, ly = Path.nearestLand(x + self.rng:NextNumber() * 2 - 1, y + 1.5 + self.rng:NextNumber(), 3)
 		if lx then
 			x, y = lx + 0.5, ly + 0.5
 		end
@@ -1633,7 +1714,7 @@ end
 function Match:tickEconomy(dt: number)
 	local world = self.world
 	for _, n in self.humans do
-		local supply, need = 0, 0
+		local supply, need = Config.CAPITAL_POWER, 0
 		for _, b in self.buildings do
 			if b.n == n then
 				if b.kind == "power" then
@@ -1652,7 +1733,8 @@ function Match:tickEconomy(dt: number)
 		end
 		n.energy.supply = supply
 		n.energy.need = need
-		n.eff = if need > 0 then math.min(1, supply / need) else 1
+		local floor = Config.LOW_POWER_SPEED
+		n.eff = if need > 0 then floor + (1 - floor) * math.min(1, supply / need) else 1
 	end
 	for _, b in self.buildings do
 		local n = b.n
@@ -1701,25 +1783,31 @@ function Match:tickEconomy(dt: number)
 				b.on = false
 			end
 		elseif def.unit then
-			b.on = eff > 0
-			b.prog = math.min(1, b.prog + dt * eff / def.every)
-			if b.prog >= 1 then
-				if n.unitTotal >= Config.MAX_UNITS_PER_NATION then
-					b.blocked = true
-				elseif canAfford(n, def.ucost) then
-					for k, v in def.ucost do
-						if k == "pop" then
-							n.troops -= v
-							flow.pop -= v
-						else
-							gain(k, -v)
-						end
-					end
-					self:spawnUnit(n, def.unit, b.x + 0.5, b.y + 0.5)
-					b.prog = 0
-					b.blocked = false
+			-- queued units are paid when ordered; in auto mode each unit is paid when it starts
+			b.on = n.energy.supply >= n.energy.need
+			b.blocked = false
+			if b.queue == 0 and b.auto and not b.paid then
+				if canAfford(n, def.ucost) then
+					payCost(n, def.ucost, 1)
+					b.paid = true
 				else
 					b.blocked = true
+				end
+			end
+			if b.queue > 0 or b.paid then
+				if n.unitTotal >= Config.MAX_UNITS_PER_NATION then
+					b.blocked = true
+				else
+					b.prog = math.min(1, b.prog + dt * eff / def.every)
+					if b.prog >= 1 then
+						self:spawnUnit(n, def.unit, b.x + 0.5, b.y + 0.5)
+						b.prog = 0
+						if b.queue > 0 then
+							b.queue -= 1
+						else
+							b.paid = false
+						end
+					end
 				end
 			end
 		end
@@ -1742,8 +1830,10 @@ function Match:sendEconomy()
 		for _, b in self.buildings do
 			if b.n == n then
 				table.insert(prog, b.id)
-				table.insert(prog, if b.blocked then -b.prog else b.prog)
+				table.insert(prog, if b.blocked then -math.max(b.prog, 0.001) else b.prog)
 				table.insert(prog, if b.on then 1 else 0)
+				table.insert(prog, b.queue or 0)
+				table.insert(prog, if b.auto then 1 else 0)
 			end
 		end
 		self:sendTo(player, {
@@ -2597,7 +2687,7 @@ function handlers.phase(msg)
 			focusCapital(1.2)
 			task.delay(2.4, function()
 				if state.screen == "play" and state.phase == "game" then
-					UI.toast("Нажми на землю у своей границы: туда пойдут войска. Внизу постройки: шахты, заводы, аэродром.", false, 6.5)
+					UI.toast("Нажми на землю у своей границы, чтобы захватить её. Построй казарму или танковый завод и нажми на него на карте, чтобы заказать войска.", false, 7)
 				end
 			end)
 		end
@@ -2613,6 +2703,9 @@ end
 
 function handlers.bgone(msg)
 	MapView.removeBuilding(msg.id)
+	if UI.factoryId == msg.id then
+		UI.hideFactory()
+	end
 end
 
 function handlers.unit(msg)
@@ -2672,6 +2765,18 @@ UI.onClearSelection = function()
 	refreshArmy()
 end
 
+UI.onQueue = function(id)
+	action:FireServer("queue", id)
+end
+
+UI.onCancel = function(id)
+	action:FireServer("cancel", id)
+end
+
+UI.onAuto = function(id, on)
+	action:FireServer("auto", id, on)
+end
+
 function handlers.fx(msg)
 	if state.screen == "play" then
 		MapView.fx(msg.x, msg.y)
@@ -2698,9 +2803,23 @@ function handlers.bhp(msg)
 	MapView.setBuildingHp(msg.s)
 end
 
+local function refreshFactory()
+	local id = UI.factoryId
+	if not id then
+		return
+	end
+	local b = MapView.buildingRecord(id)
+	if not b then
+		UI.hideFactory()
+		return
+	end
+	UI.showFactory({ id = id, kind = b.kind, prog = b.prog, queue = b.queue, auto = b.auto, on = b.on ~= false })
+end
+
 function handlers.eco(msg)
 	state.eco = msg
 	MapView.setProgress(msg.prog)
+	refreshFactory()
 	local n = me()
 	UI.setEconomy(msg, if n then n.troops else 0, MapView.fmt)
 end
@@ -2775,6 +2894,19 @@ MapView.onTap = function(x, y, sx, sy)
 		action:FireServer("spawn", x, y)
 	elseif state.phase == "game" then
 		if not UI.buildSel then
+			-- with nothing selected, a factory under the finger wins over units parked next to it
+			local bid = if next(MapView.selected) == nil then MapView.buildingAt(sx, sy) else nil
+			if bid then
+				local b = MapView.buildingRecord(bid)
+				local def = Config.BUILD[b.kind]
+				if def.unit then
+					UI.showFactory({ id = bid, kind = b.kind, prog = b.prog, queue = b.queue, auto = b.auto, on = b.on ~= false })
+				else
+					UI.hideFactory()
+					UI.toast(def.name .. ": " .. def.desc)
+				end
+				return
+			end
 			local unit = MapView.unitAt(sx, sy)
 			if unit then
 				MapView.selected[unit] = if MapView.selected[unit] then nil else true
@@ -2785,6 +2917,10 @@ MapView.onTap = function(x, y, sx, sy)
 			if #ids > 0 then
 				action:FireServer("move", ids, x, y)
 				MapView.marker(x + 0.5, y + 0.5)
+				return
+			end
+			if UI.factoryId then
+				UI.hideFactory()
 				return
 			end
 		end
@@ -3694,21 +3830,44 @@ function MapView.removeBuilding(id: number)
 	end
 end
 
--- prog: flat list of building id, progress (negative = waiting for resources), powered (1/0)
+-- prog: per building id, progress (negative = waiting), powered (1/0), queued units, auto (1/0)
 function MapView.setProgress(prog)
-	for i = 1, #prog - 2, 3 do
+	for i = 1, #prog - 4, 5 do
 		local b = buildings[prog[i]]
 		if b then
 			local p, on = prog[i + 1], prog[i + 2] == 1
 			local def = Config.BUILD[b.kind]
+			b.prog, b.on, b.queue, b.auto = p, on, prog[i + 3], prog[i + 4] == 1
 			if def.unit then
-				b.bar.Visible = view.z >= 3.5
+				local busy = b.queue > 0 or b.auto
+				b.bar.Visible = busy and view.z >= 3.5
 				b.bar.Size = UDim2.new(math.abs(p), 0, 0, 4)
 				b.bar.BackgroundColor3 = if p < 0 then C.bad else C.molten
 			end
 			b.warn.Visible = not on and def.power > 0 and view.z >= 3.5
 		end
 	end
+end
+
+-- the player's building under a screen point, if any
+function MapView.buildingAt(sx: number, sy: number): number?
+	local radius = math.max(16, math.clamp(view.z * 1.9, 14, 40) / 2 + 6)
+	local best, bestD = nil, radius * radius
+	for id, b in buildings do
+		if b.owner == MapView.myId then
+			local x, y = view.x + (b.x + 0.5) * view.z, view.y + (b.y + 0.5) * view.z
+			local d = (x - sx) ^ 2 + (y - sy) ^ 2
+			if d < bestD then
+				bestD = d
+				best = id
+			end
+		end
+	end
+	return best
+end
+
+function MapView.buildingRecord(id: number)
+	return buildings[id]
 end
 
 -- list: flat building id, hp
@@ -4431,6 +4590,10 @@ UI.onLeave = nil
 UI.onZoom = nil
 UI.onSelectKind = nil
 UI.onClearSelection = nil
+UI.onQueue = nil
+UI.onCancel = nil
+UI.onAuto = nil
+UI.factoryId = nil
 UI.buildSel = nil
 UI.attackPct = 40
 
@@ -4558,7 +4721,7 @@ local function buildMenu(player: Player)
 		Parent = menu,
 	}, { Theme.list(Enum.FillDirection.Horizontal, 8, nil, Enum.VerticalAlignment.Center) })
 	iconButton("help", topLeft, function()
-		UI.toast("1. Поставь столицу. 2. Захватывай землю войсками. 3. Строй шахты и заводы, выпускай армию. 4. Выбери войска и нажми на карту, куда им идти.", false, 7)
+		UI.toast("1. Поставь столицу. 2. Захватывай землю войсками. 3. Построй казарму или танковый завод, нажми на него на карте и заказывай войска. 4. Выбери войска и нажми на карту, куда им идти.", false, 8)
 	end)
 	iconButton("shield", topLeft, function()
 		UI.openArsenal()
@@ -4676,7 +4839,7 @@ local function buildMenu(player: Player)
 		Parent = refs.side,
 	}, { Theme.corner(16), Theme.stroke(), Theme.pad(14, 12), Theme.list(Enum.FillDirection.Vertical, 6) })
 	Theme.label({ Text = "КАК ИГРАТЬ", Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 0, Parent = how })
-	for i, s in { "Поставь столицу в любой точке Земли", "Захватывай соседние земли войсками", "Строй шахты и заводы, выпускай танки и самолёты", "Выбери войска и нажми на карту: они поедут туда и будут воевать" } do
+	for i, s in { "Поставь столицу в любой точке Земли", "Захватывай соседние земли войсками", "Строй казарму или танковый завод, нажми на него и заказывай войска", "Выбери войска и нажми на карту: они поедут туда и будут воевать" } do
 		local line = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = i, Parent = how }, {
 			Theme.list(Enum.FillDirection.Horizontal, 8),
 		})
@@ -5143,6 +5306,68 @@ local function buildPlay()
 		end
 	end)
 
+	-- factory panel: order units, see the queue, toggle automatic production
+	local fac = Theme.panel({
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -120),
+		Size = UDim2.fromOffset(380, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = Color3.fromRGB(16, 21, 34),
+		BackgroundTransparency = 0.02,
+		Visible = false,
+		ZIndex = 8,
+		Parent = play,
+	})
+	Theme.pad(14, 12).Parent = fac
+	refs.facTitle = Theme.label({ Text = "", Size = UDim2.new(1, -50, 0, 22), TextSize = 18, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 9, Parent = fac })
+	refs.facSub = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, -50, 0, 16), TextSize = 12.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 9, Parent = fac })
+	local facClose = iconButton("close", fac, function()
+		UI.hideFactory()
+	end)
+	facClose.AnchorPoint = Vector2.new(1, 0)
+	facClose.Position = UDim2.new(1, 0, 0, -2)
+	facClose.Size = UDim2.fromOffset(36, 36)
+	facClose.ZIndex = 10
+	local orderBtn = make("TextButton", {
+		Text = "",
+		AutoButtonColor = true,
+		Position = UDim2.fromOffset(0, 48),
+		Size = UDim2.new(1, 0, 0, 74),
+		BackgroundColor3 = C.panelHi,
+		ZIndex = 9,
+		Parent = fac,
+	}, { Theme.corner(14), make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 0.2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }) })
+	refs.facIcon = icon("infantry", 60, { Position = UDim2.fromOffset(8, 7), ZIndex = 10, color = myColor, Parent = orderBtn })
+	refs.facUnit = Theme.label({ Text = "", Position = UDim2.fromOffset(78, 10), Size = UDim2.new(1, -170, 0, 22), TextSize = 17, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 10, Parent = orderBtn })
+	refs.facCost = Theme.label({ Text = "", Position = UDim2.fromOffset(78, 34), Size = UDim2.new(1, -170, 0, 32), TextSize = 12.5, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = Color3.fromRGB(198, 207, 221), FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 10, Parent = orderBtn })
+	local plus = make("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(84, 44), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 10, Parent = orderBtn }, { Theme.corner(12), Theme.molten(90) })
+	Theme.label({ Text = "+1", Size = UDim2.fromScale(1, 1), TextSize = 20, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenInk, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 11, Parent = plus })
+	orderBtn.Activated:Connect(function()
+		if UI.onQueue and UI.factoryId then
+			UI.onQueue(UI.factoryId)
+		end
+	end)
+	local barBg = make("Frame", { Position = UDim2.fromOffset(0, 132), Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.9, ZIndex = 9, Parent = fac }, { Theme.corner(nil, 1) })
+	refs.facBar = make("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = C.molten, ZIndex = 10, Parent = barBg }, { Theme.corner(nil, 1) })
+	refs.facQueue = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 144), Size = UDim2.new(1, 0, 0, 18), TextSize = 13.5, FontFace = font(Enum.FontWeight.Bold), ZIndex = 9, Parent = fac })
+	local row = make("Frame", { Position = UDim2.fromOffset(0, 168), Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, ZIndex = 9, Parent = fac }, {
+		make("UIGridLayout", { CellSize = UDim2.new(0.5, -4, 1, 0), CellPadding = UDim2.fromOffset(8, 0), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	local cancel = make("TextButton", { Text = "Отменить 1", AutoButtonColor = true, FontFace = font(Enum.FontWeight.Bold), TextSize = 14, TextColor3 = C.ink, BackgroundColor3 = C.panelHi, LayoutOrder = 1, ZIndex = 10, Parent = row }, { Theme.corner(10) })
+	cancel.Activated:Connect(function()
+		if UI.onCancel and UI.factoryId then
+			UI.onCancel(UI.factoryId)
+		end
+	end)
+	refs.facAuto = make("TextButton", { Text = "Авто: выкл", AutoButtonColor = true, FontFace = font(Enum.FontWeight.Bold), TextSize = 14, TextColor3 = C.ink, BackgroundColor3 = C.panelHi, LayoutOrder = 2, ZIndex = 10, Parent = row }, { Theme.corner(10) })
+	refs.facAuto.Activated:Connect(function()
+		if UI.onAuto and UI.factoryId then
+			UI.onAuto(UI.factoryId, not refs.facAutoOn)
+		end
+	end)
+	refs.facNote = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 210), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 12.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 9, Parent = fac })
+	refs.fac = fac
+
 	local tip = Theme.panel({
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -120),
@@ -5259,6 +5484,9 @@ end
 
 function UI.setPhase(phase: string, spectator: boolean)
 	local inGame = phase == "game" and not spectator
+	if not inGame then
+		UI.hideFactory()
+	end
 	refs.hudTop.Visible = inGame
 	refs.hudBottom.Visible = inGame
 	refs.banner.Visible = phase == "spawn" or spectator or phase == "ended"
@@ -5467,6 +5695,9 @@ end
 
 function UI.selectBuild(k: string?)
 	UI.buildSel = k
+	if k and refs.fac then
+		UI.hideFactory()
+	end
 	for key, b in refs.buildBtns do
 		local on = key == k
 		b.stroke.Transparency = if on then 0 else 1
@@ -5477,7 +5708,7 @@ function UI.selectBuild(k: string?)
 end
 
 function UI.showTip(k: string?)
-	if not k or not refs.hudBottom.Visible then
+	if not k or not refs.hudBottom.Visible or refs.fac.Visible then
 		refs.tip.Visible = false
 		return
 	end
@@ -5513,6 +5744,53 @@ function UI.showTip(k: string?)
 end
 
 -- the map needs EditableImage, which is off until the owner allows it for the experience
+-- info: { id, kind, prog, queue, auto, on, blocked }
+function UI.showFactory(info)
+	local def = Config.BUILD[info.kind]
+	local unit = Config.UNITS[def.unit]
+	UI.factoryId = info.id
+	UI.selectBuild(nil)
+	refs.facTitle.Text = def.name
+	refs.facSub.Text = "Нажми, чтобы заказать. Юнит появится у постройки."
+	Sprites.apply(refs.facIcon, def.unit, myColor)
+	refs.facUnit.Text = unit.title
+	local parts = {}
+	for _, r in Config.RES_ORDER do
+		if def.ucost[r] then
+			table.insert(parts, def.ucost[r] .. " " .. Config.RES_OF[r])
+		end
+	end
+	refs.facCost.Text = string.format("%s · %d с · здоровье %d, урон %d", table.concat(parts, ", "), def.every, unit.hp, unit.dps)
+	local p = math.abs(info.prog or 0)
+	refs.facBar.Size = UDim2.fromScale(if (info.queue or 0) > 0 or info.auto then p else 0, 1)
+	refs.facBar.BackgroundColor3 = if (info.prog or 0) < 0 then C.bad else C.molten
+	if (info.queue or 0) > 0 then
+		refs.facQueue.Text = string.format("В очереди: %d · готово на %d%%", info.queue, math.floor(p * 100))
+	elseif info.auto then
+		refs.facQueue.Text = if (info.prog or 0) < 0 then "Авто: ждёт ресурсы" else string.format("Авто: готово на %d%%", math.floor(p * 100))
+	else
+		refs.facQueue.Text = "Очередь пустая"
+	end
+	refs.facAutoOn = info.auto == true
+	refs.facAuto.Text = if info.auto then "Авто: вкл" else "Авто: выкл"
+	refs.facAuto.BackgroundColor3 = if info.auto then Color3.fromRGB(70, 42, 18) else C.panelHi
+	refs.facAuto.TextColor3 = if info.auto then C.moltenHi else C.ink
+	if not info.on then
+		refs.facNote.Text = "Мало энергии: завод работает медленнее. Поставь электростанцию."
+		refs.facNote.TextColor3 = C.bad
+	else
+		refs.facNote.Text = "«Авто» выпускает юниты сам, пока хватает ресурсов."
+		refs.facNote.TextColor3 = C.muted
+	end
+	refs.tip.Visible = false
+	refs.fac.Visible = true
+end
+
+function UI.hideFactory()
+	UI.factoryId = nil
+	refs.fac.Visible = false
+end
+
 function UI.mapError()
 	if refs.mapError then
 		refs.mapError.Visible = true

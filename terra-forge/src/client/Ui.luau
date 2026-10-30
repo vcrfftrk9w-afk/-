@@ -17,6 +17,10 @@ UI.onLeave = nil
 UI.onZoom = nil
 UI.onSelectKind = nil
 UI.onClearSelection = nil
+UI.onQueue = nil
+UI.onCancel = nil
+UI.onAuto = nil
+UI.factoryId = nil
 UI.buildSel = nil
 UI.attackPct = 40
 
@@ -144,7 +148,7 @@ local function buildMenu(player: Player)
 		Parent = menu,
 	}, { Theme.list(Enum.FillDirection.Horizontal, 8, nil, Enum.VerticalAlignment.Center) })
 	iconButton("help", topLeft, function()
-		UI.toast("1. Поставь столицу. 2. Захватывай землю войсками. 3. Строй шахты и заводы, выпускай армию. 4. Выбери войска и нажми на карту, куда им идти.", false, 7)
+		UI.toast("1. Поставь столицу. 2. Захватывай землю войсками. 3. Построй казарму или танковый завод, нажми на него на карте и заказывай войска. 4. Выбери войска и нажми на карту, куда им идти.", false, 8)
 	end)
 	iconButton("shield", topLeft, function()
 		UI.openArsenal()
@@ -262,7 +266,7 @@ local function buildMenu(player: Player)
 		Parent = refs.side,
 	}, { Theme.corner(16), Theme.stroke(), Theme.pad(14, 12), Theme.list(Enum.FillDirection.Vertical, 6) })
 	Theme.label({ Text = "КАК ИГРАТЬ", Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 0, Parent = how })
-	for i, s in { "Поставь столицу в любой точке Земли", "Захватывай соседние земли войсками", "Строй шахты и заводы, выпускай танки и самолёты", "Выбери войска и нажми на карту: они поедут туда и будут воевать" } do
+	for i, s in { "Поставь столицу в любой точке Земли", "Захватывай соседние земли войсками", "Строй казарму или танковый завод, нажми на него и заказывай войска", "Выбери войска и нажми на карту: они поедут туда и будут воевать" } do
 		local line = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = i, Parent = how }, {
 			Theme.list(Enum.FillDirection.Horizontal, 8),
 		})
@@ -729,6 +733,68 @@ local function buildPlay()
 		end
 	end)
 
+	-- factory panel: order units, see the queue, toggle automatic production
+	local fac = Theme.panel({
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -120),
+		Size = UDim2.fromOffset(380, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = Color3.fromRGB(16, 21, 34),
+		BackgroundTransparency = 0.02,
+		Visible = false,
+		ZIndex = 8,
+		Parent = play,
+	})
+	Theme.pad(14, 12).Parent = fac
+	refs.facTitle = Theme.label({ Text = "", Size = UDim2.new(1, -50, 0, 22), TextSize = 18, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 9, Parent = fac })
+	refs.facSub = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, -50, 0, 16), TextSize = 12.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 9, Parent = fac })
+	local facClose = iconButton("close", fac, function()
+		UI.hideFactory()
+	end)
+	facClose.AnchorPoint = Vector2.new(1, 0)
+	facClose.Position = UDim2.new(1, 0, 0, -2)
+	facClose.Size = UDim2.fromOffset(36, 36)
+	facClose.ZIndex = 10
+	local orderBtn = make("TextButton", {
+		Text = "",
+		AutoButtonColor = true,
+		Position = UDim2.fromOffset(0, 48),
+		Size = UDim2.new(1, 0, 0, 74),
+		BackgroundColor3 = C.panelHi,
+		ZIndex = 9,
+		Parent = fac,
+	}, { Theme.corner(14), make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 0.2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }) })
+	refs.facIcon = icon("infantry", 60, { Position = UDim2.fromOffset(8, 7), ZIndex = 10, color = myColor, Parent = orderBtn })
+	refs.facUnit = Theme.label({ Text = "", Position = UDim2.fromOffset(78, 10), Size = UDim2.new(1, -170, 0, 22), TextSize = 17, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 10, Parent = orderBtn })
+	refs.facCost = Theme.label({ Text = "", Position = UDim2.fromOffset(78, 34), Size = UDim2.new(1, -170, 0, 32), TextSize = 12.5, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = Color3.fromRGB(198, 207, 221), FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 10, Parent = orderBtn })
+	local plus = make("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(84, 44), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 10, Parent = orderBtn }, { Theme.corner(12), Theme.molten(90) })
+	Theme.label({ Text = "+1", Size = UDim2.fromScale(1, 1), TextSize = 20, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenInk, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 11, Parent = plus })
+	orderBtn.Activated:Connect(function()
+		if UI.onQueue and UI.factoryId then
+			UI.onQueue(UI.factoryId)
+		end
+	end)
+	local barBg = make("Frame", { Position = UDim2.fromOffset(0, 132), Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.9, ZIndex = 9, Parent = fac }, { Theme.corner(nil, 1) })
+	refs.facBar = make("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = C.molten, ZIndex = 10, Parent = barBg }, { Theme.corner(nil, 1) })
+	refs.facQueue = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 144), Size = UDim2.new(1, 0, 0, 18), TextSize = 13.5, FontFace = font(Enum.FontWeight.Bold), ZIndex = 9, Parent = fac })
+	local row = make("Frame", { Position = UDim2.fromOffset(0, 168), Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, ZIndex = 9, Parent = fac }, {
+		make("UIGridLayout", { CellSize = UDim2.new(0.5, -4, 1, 0), CellPadding = UDim2.fromOffset(8, 0), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	local cancel = make("TextButton", { Text = "Отменить 1", AutoButtonColor = true, FontFace = font(Enum.FontWeight.Bold), TextSize = 14, TextColor3 = C.ink, BackgroundColor3 = C.panelHi, LayoutOrder = 1, ZIndex = 10, Parent = row }, { Theme.corner(10) })
+	cancel.Activated:Connect(function()
+		if UI.onCancel and UI.factoryId then
+			UI.onCancel(UI.factoryId)
+		end
+	end)
+	refs.facAuto = make("TextButton", { Text = "Авто: выкл", AutoButtonColor = true, FontFace = font(Enum.FontWeight.Bold), TextSize = 14, TextColor3 = C.ink, BackgroundColor3 = C.panelHi, LayoutOrder = 2, ZIndex = 10, Parent = row }, { Theme.corner(10) })
+	refs.facAuto.Activated:Connect(function()
+		if UI.onAuto and UI.factoryId then
+			UI.onAuto(UI.factoryId, not refs.facAutoOn)
+		end
+	end)
+	refs.facNote = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 210), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 12.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 9, Parent = fac })
+	refs.fac = fac
+
 	local tip = Theme.panel({
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -120),
@@ -845,6 +911,9 @@ end
 
 function UI.setPhase(phase: string, spectator: boolean)
 	local inGame = phase == "game" and not spectator
+	if not inGame then
+		UI.hideFactory()
+	end
 	refs.hudTop.Visible = inGame
 	refs.hudBottom.Visible = inGame
 	refs.banner.Visible = phase == "spawn" or spectator or phase == "ended"
@@ -1053,6 +1122,9 @@ end
 
 function UI.selectBuild(k: string?)
 	UI.buildSel = k
+	if k and refs.fac then
+		UI.hideFactory()
+	end
 	for key, b in refs.buildBtns do
 		local on = key == k
 		b.stroke.Transparency = if on then 0 else 1
@@ -1063,7 +1135,7 @@ function UI.selectBuild(k: string?)
 end
 
 function UI.showTip(k: string?)
-	if not k or not refs.hudBottom.Visible then
+	if not k or not refs.hudBottom.Visible or refs.fac.Visible then
 		refs.tip.Visible = false
 		return
 	end
@@ -1099,6 +1171,53 @@ function UI.showTip(k: string?)
 end
 
 -- the map needs EditableImage, which is off until the owner allows it for the experience
+-- info: { id, kind, prog, queue, auto, on, blocked }
+function UI.showFactory(info)
+	local def = Config.BUILD[info.kind]
+	local unit = Config.UNITS[def.unit]
+	UI.factoryId = info.id
+	UI.selectBuild(nil)
+	refs.facTitle.Text = def.name
+	refs.facSub.Text = "Нажми, чтобы заказать. Юнит появится у постройки."
+	Sprites.apply(refs.facIcon, def.unit, myColor)
+	refs.facUnit.Text = unit.title
+	local parts = {}
+	for _, r in Config.RES_ORDER do
+		if def.ucost[r] then
+			table.insert(parts, def.ucost[r] .. " " .. Config.RES_OF[r])
+		end
+	end
+	refs.facCost.Text = string.format("%s · %d с · здоровье %d, урон %d", table.concat(parts, ", "), def.every, unit.hp, unit.dps)
+	local p = math.abs(info.prog or 0)
+	refs.facBar.Size = UDim2.fromScale(if (info.queue or 0) > 0 or info.auto then p else 0, 1)
+	refs.facBar.BackgroundColor3 = if (info.prog or 0) < 0 then C.bad else C.molten
+	if (info.queue or 0) > 0 then
+		refs.facQueue.Text = string.format("В очереди: %d · готово на %d%%", info.queue, math.floor(p * 100))
+	elseif info.auto then
+		refs.facQueue.Text = if (info.prog or 0) < 0 then "Авто: ждёт ресурсы" else string.format("Авто: готово на %d%%", math.floor(p * 100))
+	else
+		refs.facQueue.Text = "Очередь пустая"
+	end
+	refs.facAutoOn = info.auto == true
+	refs.facAuto.Text = if info.auto then "Авто: вкл" else "Авто: выкл"
+	refs.facAuto.BackgroundColor3 = if info.auto then Color3.fromRGB(70, 42, 18) else C.panelHi
+	refs.facAuto.TextColor3 = if info.auto then C.moltenHi else C.ink
+	if not info.on then
+		refs.facNote.Text = "Мало энергии: завод работает медленнее. Поставь электростанцию."
+		refs.facNote.TextColor3 = C.bad
+	else
+		refs.facNote.Text = "«Авто» выпускает юниты сам, пока хватает ресурсов."
+		refs.facNote.TextColor3 = C.muted
+	end
+	refs.tip.Visible = false
+	refs.fac.Visible = true
+end
+
+function UI.hideFactory()
+	UI.factoryId = nil
+	refs.fac.Visible = false
+end
+
 function UI.mapError()
 	if refs.mapError then
 		refs.mapError.Visible = true

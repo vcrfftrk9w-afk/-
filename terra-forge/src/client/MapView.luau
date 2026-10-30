@@ -821,21 +821,44 @@ function MapView.removeBuilding(id: number)
 	end
 end
 
--- prog: flat list of building id, progress (negative = waiting for resources), powered (1/0)
+-- prog: per building id, progress (negative = waiting), powered (1/0), queued units, auto (1/0)
 function MapView.setProgress(prog)
-	for i = 1, #prog - 2, 3 do
+	for i = 1, #prog - 4, 5 do
 		local b = buildings[prog[i]]
 		if b then
 			local p, on = prog[i + 1], prog[i + 2] == 1
 			local def = Config.BUILD[b.kind]
+			b.prog, b.on, b.queue, b.auto = p, on, prog[i + 3], prog[i + 4] == 1
 			if def.unit then
-				b.bar.Visible = view.z >= 3.5
+				local busy = b.queue > 0 or b.auto
+				b.bar.Visible = busy and view.z >= 3.5
 				b.bar.Size = UDim2.new(math.abs(p), 0, 0, 4)
 				b.bar.BackgroundColor3 = if p < 0 then C.bad else C.molten
 			end
 			b.warn.Visible = not on and def.power > 0 and view.z >= 3.5
 		end
 	end
+end
+
+-- the player's building under a screen point, if any
+function MapView.buildingAt(sx: number, sy: number): number?
+	local radius = math.max(16, math.clamp(view.z * 1.9, 14, 40) / 2 + 6)
+	local best, bestD = nil, radius * radius
+	for id, b in buildings do
+		if b.owner == MapView.myId then
+			local x, y = view.x + (b.x + 0.5) * view.z, view.y + (b.y + 0.5) * view.z
+			local d = (x - sx) ^ 2 + (y - sy) ^ 2
+			if d < bestD then
+				bestD = d
+				best = id
+			end
+		end
+	end
+	return best
+end
+
+function MapView.buildingRecord(id: number)
+	return buildings[id]
 end
 
 -- list: flat building id, hp

@@ -201,7 +201,7 @@ function handlers.phase(msg)
 			focusCapital(1.2)
 			task.delay(2.4, function()
 				if state.screen == "play" and state.phase == "game" then
-					UI.toast("Нажми на землю у своей границы: туда пойдут войска. Внизу постройки: шахты, заводы, аэродром.", false, 6.5)
+					UI.toast("Нажми на землю у своей границы, чтобы захватить её. Построй казарму или танковый завод и нажми на него на карте, чтобы заказать войска.", false, 7)
 				end
 			end)
 		end
@@ -217,6 +217,9 @@ end
 
 function handlers.bgone(msg)
 	MapView.removeBuilding(msg.id)
+	if UI.factoryId == msg.id then
+		UI.hideFactory()
+	end
 end
 
 function handlers.unit(msg)
@@ -276,6 +279,18 @@ UI.onClearSelection = function()
 	refreshArmy()
 end
 
+UI.onQueue = function(id)
+	action:FireServer("queue", id)
+end
+
+UI.onCancel = function(id)
+	action:FireServer("cancel", id)
+end
+
+UI.onAuto = function(id, on)
+	action:FireServer("auto", id, on)
+end
+
 function handlers.fx(msg)
 	if state.screen == "play" then
 		MapView.fx(msg.x, msg.y)
@@ -302,9 +317,23 @@ function handlers.bhp(msg)
 	MapView.setBuildingHp(msg.s)
 end
 
+local function refreshFactory()
+	local id = UI.factoryId
+	if not id then
+		return
+	end
+	local b = MapView.buildingRecord(id)
+	if not b then
+		UI.hideFactory()
+		return
+	end
+	UI.showFactory({ id = id, kind = b.kind, prog = b.prog, queue = b.queue, auto = b.auto, on = b.on ~= false })
+end
+
 function handlers.eco(msg)
 	state.eco = msg
 	MapView.setProgress(msg.prog)
+	refreshFactory()
 	local n = me()
 	UI.setEconomy(msg, if n then n.troops else 0, MapView.fmt)
 end
@@ -379,6 +408,19 @@ MapView.onTap = function(x, y, sx, sy)
 		action:FireServer("spawn", x, y)
 	elseif state.phase == "game" then
 		if not UI.buildSel then
+			-- with nothing selected, a factory under the finger wins over units parked next to it
+			local bid = if next(MapView.selected) == nil then MapView.buildingAt(sx, sy) else nil
+			if bid then
+				local b = MapView.buildingRecord(bid)
+				local def = Config.BUILD[b.kind]
+				if def.unit then
+					UI.showFactory({ id = bid, kind = b.kind, prog = b.prog, queue = b.queue, auto = b.auto, on = b.on ~= false })
+				else
+					UI.hideFactory()
+					UI.toast(def.name .. ": " .. def.desc)
+				end
+				return
+			end
 			local unit = MapView.unitAt(sx, sy)
 			if unit then
 				MapView.selected[unit] = if MapView.selected[unit] then nil else true
@@ -389,6 +431,10 @@ MapView.onTap = function(x, y, sx, sy)
 			if #ids > 0 then
 				action:FireServer("move", ids, x, y)
 				MapView.marker(x + 0.5, y + 0.5)
+				return
+			end
+			if UI.factoryId then
+				UI.hideFactory()
 				return
 			end
 		end

@@ -338,6 +338,79 @@ local function canAfford(n, cost): boolean
 	return true
 end
 
+local function missingText(n, cost): string
+	local missing = {}
+	for _, k in Config.RES_ORDER do
+		local need = cost[k]
+		local have = if k == "pop" then n.troops else n.res[k]
+		if need and have and have < need then
+			table.insert(missing, math.ceil(need - have) .. " " .. Config.RES_OF[k])
+		end
+	end
+	return "Не хватает: " .. table.concat(missing, ", ")
+end
+
+local function payCost(n, cost, sign: number)
+	for k, v in cost do
+		if k == "pop" then
+			n.troops -= v * sign
+		else
+			n.res[k] -= v * sign
+		end
+	end
+end
+
+-- a player's own factory, or nil
+function Match:factoryOf(player: Player, id: number)
+	local n = self.humans[player]
+	local b = self.buildings[id]
+	if not n or not b or b.n ~= n or self.phase ~= "game" or not Config.BUILD[b.kind].unit then
+		return nil, nil
+	end
+	return n, b
+end
+
+-- orders one unit from a factory; it is paid now and refunded if cancelled
+function Match:queueUnit(player: Player, id: number)
+	local n, b = self:factoryOf(player, id)
+	if not n then
+		return
+	end
+	local def = Config.BUILD[b.kind]
+	if b.queue >= Config.MAX_QUEUE then
+		self:toast(n, "Очередь полная: не больше " .. Config.MAX_QUEUE .. " юнитов.", true)
+		return
+	end
+	if not canAfford(n, def.ucost) then
+		self:toast(n, missingText(n, def.ucost), true)
+		return
+	end
+	payCost(n, def.ucost, 1)
+	b.queue += 1
+	self:sendEconomy()
+end
+
+function Match:cancelUnit(player: Player, id: number)
+	local n, b = self:factoryOf(player, id)
+	if not n or b.queue <= 0 then
+		return
+	end
+	payCost(n, Config.BUILD[b.kind].ucost, -1)
+	b.queue -= 1
+	if b.queue == 0 and not b.auto then
+		b.prog = 0
+	end
+	self:sendEconomy()
+end
+
+function Match:setAuto(player: Player, id: number, on: boolean)
+	local n, b = self:factoryOf(player, id)
+	if n then
+		b.auto = on
+		self:sendEconomy()
+	end
+end
+
 function Match:build(player: Player, kind: string, x: number, y: number)
 	local n = self.humans[player]
 	local def = Config.BUILD[kind]
@@ -354,14 +427,7 @@ function Match:build(player: Player, kind: string, x: number, y: number)
 		return
 	end
 	if not canAfford(n, def.cost) then
-		local missing = {}
-		for _, k in Config.RES_ORDER do
-			local need = def.cost[k]
-			if need and n.res[k] and n.res[k] < need then
-				table.insert(missing, math.ceil(need - n.res[k]) .. " " .. Config.RES_OF[k])
-			end
-		end
-		self:toast(n, "Не хватает: " .. table.concat(missing, ", "), true)
+		self:toast(n, missingText(n, def.cost), true)
 		return
 	end
 	if not self:addBuilding(n, kind, x, y) then
@@ -378,8 +444,10 @@ function Match:build(player: Player, kind: string, x: number, y: number)
 	elseif kind == "rig" then
 		extra = if dep == 3 then ": на нефти, ×5" else " (нефти тут мало, ищи чёрные пятна)"
 	end
-	if def.power > 0 and n.energy.supply < n.energy.need + def.power then
-		extra ..= ". Нужна энергия: поставь электростанцию"
+	if def.unit then
+		extra ..= ". Нажми на неё на карте, чтобы заказать войска"
+	elseif def.power > 0 and n.energy.supply < n.energy.need + def.power then
+		extra ..= ". Энергии мало: поставь электростанцию"
 	end
 	self:toast(n, "Построено: " .. def.name .. extra)
 end
@@ -413,9 +481,12 @@ function Match:addBuilding(n, kind: string, x: number, y: number): boolean
 		hp = hp,
 		maxHp = hp,
 		isBuilding = true,
-		prog = if n.isHuman then 0.6 else self.rng:NextNumber() * 0.5,
+		prog = if n.isHuman then 0 else self.rng:NextNumber() * 0.5,
 		on = true,
 		blocked = false,
+		queue = 0,
+		auto = false,
+		paid = false,
 	}
 	self.buildings[b.id] = b
 	if kind == "city" then
@@ -445,7 +516,8 @@ function Match:spawnUnit(n, kind: string, x: number, y: number): boolean
 	end
 	local def = Config.UNITS[kind]
 	if kind ~= "plane" then
-		local lx, ly = Path.nearestLand(x + self.rng:NextNumber() * 2 - 1, y + self.rng:NextNumber() * 2 - 1, 3)
+		-- new units wait just below their factory, so they don't cover it
+		local lx, ly = Path.nearestLand(x + self.rng:NextNumber() * 2 - 1, y + 1.5 + self.rng:NextNumber(), 3)
 		if lx then
 			x, y = lx + 0.5, ly + 0.5
 		end
@@ -931,7 +1003,7 @@ end
 function Match:tickEconomy(dt: number)
 	local world = self.world
 	for _, n in self.humans do
-		local supply, need = 0, 0
+		local supply, need = Config.CAPITAL_POWER, 0
 		for _, b in self.buildings do
 			if b.n == n then
 				if b.kind == "power" then
@@ -950,7 +1022,8 @@ function Match:tickEconomy(dt: number)
 		end
 		n.energy.supply = supply
 		n.energy.need = need
-		n.eff = if need > 0 then math.min(1, supply / need) else 1
+		local floor = Config.LOW_POWER_SPEED
+		n.eff = if need > 0 then floor + (1 - floor) * math.min(1, supply / need) else 1
 	end
 	for _, b in self.buildings do
 		local n = b.n
@@ -999,25 +1072,31 @@ function Match:tickEconomy(dt: number)
 				b.on = false
 			end
 		elseif def.unit then
-			b.on = eff > 0
-			b.prog = math.min(1, b.prog + dt * eff / def.every)
-			if b.prog >= 1 then
-				if n.unitTotal >= Config.MAX_UNITS_PER_NATION then
-					b.blocked = true
-				elseif canAfford(n, def.ucost) then
-					for k, v in def.ucost do
-						if k == "pop" then
-							n.troops -= v
-							flow.pop -= v
-						else
-							gain(k, -v)
-						end
-					end
-					self:spawnUnit(n, def.unit, b.x + 0.5, b.y + 0.5)
-					b.prog = 0
-					b.blocked = false
+			-- queued units are paid when ordered; in auto mode each unit is paid when it starts
+			b.on = n.energy.supply >= n.energy.need
+			b.blocked = false
+			if b.queue == 0 and b.auto and not b.paid then
+				if canAfford(n, def.ucost) then
+					payCost(n, def.ucost, 1)
+					b.paid = true
 				else
 					b.blocked = true
+				end
+			end
+			if b.queue > 0 or b.paid then
+				if n.unitTotal >= Config.MAX_UNITS_PER_NATION then
+					b.blocked = true
+				else
+					b.prog = math.min(1, b.prog + dt * eff / def.every)
+					if b.prog >= 1 then
+						self:spawnUnit(n, def.unit, b.x + 0.5, b.y + 0.5)
+						b.prog = 0
+						if b.queue > 0 then
+							b.queue -= 1
+						else
+							b.paid = false
+						end
+					end
 				end
 			end
 		end
@@ -1040,8 +1119,10 @@ function Match:sendEconomy()
 		for _, b in self.buildings do
 			if b.n == n then
 				table.insert(prog, b.id)
-				table.insert(prog, if b.blocked then -b.prog else b.prog)
+				table.insert(prog, if b.blocked then -math.max(b.prog, 0.001) else b.prog)
 				table.insert(prog, if b.on then 1 else 0)
+				table.insert(prog, b.queue or 0)
+				table.insert(prog, if b.auto then 1 else 0)
 			end
 		end
 		self:sendTo(player, {

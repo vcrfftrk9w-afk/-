@@ -24,15 +24,15 @@ def curl(args):
     return json.loads(out)
 
 
-def upload(path, name):
+def upload(path, name, asset_type='Decal', mime='image/png'):
     request = {
-        'assetType': 'Decal',
+        'assetType': asset_type,
         'displayName': f'Terra Forge {name}',
         'description': 'Terra Forge game art',
         'creationContext': {'creator': {'userId': USER_ID}},
     }
     op = curl(['-X', 'POST', f'{API}/assets', '-F', f'request={json.dumps(request)};type=application/json',
-               '-F', f'fileContent=@{path};type=image/png'])
+               '-F', f'fileContent=@{path};type={mime}'])
     if 'operationId' not in op:
         raise RuntimeError(f'upload failed: {op}')
     for _ in range(60):

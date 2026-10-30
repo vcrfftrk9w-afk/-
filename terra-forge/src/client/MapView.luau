@@ -1,7 +1,6 @@
--- The battlefield seen from above, in 2D: the painted map, buildings and units as sprites,
--- shots and explosions, the camera (drag to move, pinch or wheel to zoom), taps and the
--- minimap. Positions are in tiles. Everything on the board is placed in board-relative
--- scale, so moving or zooming the camera only changes the board frame itself.
+-- The battlefield seen from above, in 2D: the painted map, buildings and units as sprites with
+-- their animations, the camera (drag, pinch, wheel, keys, screen edges), taps, selection boxes
+-- and the minimap. Positions are in tiles; see Board. Shots and explosions are in Effects.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
@@ -10,6 +9,9 @@ local Config = require(Shared.Config)
 local Map = require(Shared.Map)
 local Motion = require(Shared.Motion)
 local Art = require(script.Parent.Art)
+local Board = require(script.Parent.Board)
+local Effects = require(script.Parent.Effects)
+local Sfx = require(script.Parent.Sfx)
 local Sprites = require(script.Parent.Sprites)
 local Theme = require(script.Parent.Theme)
 
@@ -24,9 +26,11 @@ MapView.selected = {}
 MapView.spectator = false
 MapView.onTap = nil -- (tileX, tileY, screenX, screenY)
 MapView.onAltTap = nil -- right mouse button: (tileX, tileY)
+MapView.onBox = nil -- a selection box was drawn: (x0, y0, x1, y1) in tiles
+MapView.boxArmed = false -- on touch screens, the next drag draws a selection box
 
--- drawing order on the board
-local Z = { ground = 1, mark = 2, building = 3, unit = 4, shot = 5, boom = 6, air = 7, label = 8, top = 9 }
+local Z = Board.Z
+local at, span = Board.at, Board.span
 
 local NEUTRAL = Color3.fromRGB(150, 158, 172)
 local SELECT = Color3.fromRGB(120, 255, 150)
@@ -35,7 +39,7 @@ local HP_BACK = Color3.fromRGB(14, 17, 22)
 -- turret sprites of the buildings that shoot; when the picture has its gun drawn in,
 -- the whole building turns to aim instead
 local BUILDING_GUN = { tower = "tower_gun", aa = "aa_gun" }
--- how each shooter's shot looks
+-- how each shooter's shot looks, and sounds
 local SHOT_LOOK = {
 	infantry = "bullet", scout = "bullet", fighter = "bullet", cc = "bullet",
 	tank = "cannon", tower = "cannon",
@@ -43,6 +47,16 @@ local SHOT_LOOK = {
 	artillery = "shell",
 	aa = "flak",
 }
+local SHOT_SOUND = {
+	infantry = "rifle", scout = "mg", fighter = "mg", cc = "mg",
+	tank = "cannon", tower = "tower",
+	rocket = "rocket", gunship = "rocket",
+	artillery = "artillery",
+	aa = "flak",
+}
+-- soldiers walk with a little sway; tracked and wheeled vehicles leave prints on the ground
+local WALKERS = { infantry = true, rocket = true }
+local TRACKED = { tank = 0.4, artillery = 0.4, scout = 0.28 } -- kind -> how dark the prints are
 
 local gui, view, board
 local buildings = {} -- id -> record
@@ -58,15 +72,6 @@ local glide = nil -- the camera moves smoothly to { x, y }
 
 local function now(): number
 	return workspace:GetServerTimeNow()
-end
-
--- board position and size of something, in tiles
-local function at(x: number, y: number): UDim2
-	return UDim2.fromScale(x / W, y / H)
-end
-
-local function span(w: number, h: number): UDim2
-	return UDim2.fromScale(w / W, h / H)
 end
 
 -- shortest turn from angle a towards b, at most step degrees
@@ -486,19 +491,24 @@ end
 
 ---------------------------------------------------------------- buildings
 
+-- a building under construction rises from the ground: the finished part is shown above a
+-- faint plan of the whole, with a bright line where the work is going on
 local function refreshBuilding(rec)
 	local building = rec.built < 1
-	local fade = if building then 0.45 else 0
-	rec.base.ImageTransparency = fade
-	rec.tint.ImageTransparency = fade
-	if rec.gun then
-		rec.gun.ImageTransparency = fade
-		rec.gunTint.ImageTransparency = fade
+	local k = math.clamp(rec.built, 0.02, 1)
+	rec.clip.ClipsDescendants = building
+	rec.clip.Size = UDim2.fromScale(1, if building then k else 1)
+	for _, img in { rec.base, rec.tint } do
+		img.Size = UDim2.fromScale(1, if building then 1 / k else 1)
 	end
-	local k = math.clamp(rec.hp / math.max(rec.maxHp, 1), 0, 1)
-	rec.hpBar.Visible = k < 0.999
-	rec.hpFill.Size = UDim2.fromScale(k, 1)
-	rec.hpFill.BackgroundColor3 = hpColor(k)
+	rec.plan.Visible = building
+	rec.planTint.Visible = building
+	rec.line.Visible = building
+	rec.line.Position = UDim2.fromScale(0.5, 1 - k)
+	local hp = math.clamp(rec.hp / math.max(rec.maxHp, 1), 0, 1)
+	rec.hpBar.Visible = hp < 0.999
+	rec.hpFill.Size = UDim2.fromScale(hp, 1)
+	rec.hpFill.BackgroundColor3 = hpColor(hp)
 	if building then
 		rec.workBar.Visible = true
 		rec.workFill.Size = UDim2.fromScale(rec.built, 1)
@@ -515,7 +525,7 @@ end
 function MapView.addBuilding(info)
 	local rec = buildings[info.id]
 	if rec then
-		rec.hp, rec.maxHp, rec.built = info.hp, info.maxHp, info.built
+		rec.hp, rec.maxHp, rec.built = info.hp, info.maxHp, math.max(rec.built, info.built)
 		refreshBuilding(rec)
 		return
 	end
@@ -527,6 +537,7 @@ function MapView.addBuilding(info)
 	rec = {
 		id = info.id,
 		kind = info.kind,
+		def = def,
 		owner = info.owner,
 		x = info.x,
 		y = info.y,
@@ -542,11 +553,40 @@ function MapView.addBuilding(info)
 		gunAngle = 180,
 	}
 	local color = teamColor(info.owner)
-	rec.frame = make("Frame", { BackgroundTransparency = 1, Position = at(rec.x, rec.y), Size = span(size, size), ZIndex = Z.building, Parent = board })
-	rec.base, rec.tint = spritePair(rec.frame, def.icon, color, 1, 1)
+	rec.frame = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = at(rec.cx, rec.cy),
+		Size = span(size, size),
+		ZIndex = Z.building,
+		Parent = board,
+	})
+	rec.plan, rec.planTint = spritePair(rec.frame, def.icon, color, 1, 1)
+	rec.plan.ImageTransparency, rec.planTint.ImageTransparency = 0.8, 0.7
+	rec.clip = make("Frame", {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+		Parent = rec.frame,
+	})
+	rec.base, rec.tint = spritePair(rec.clip, def.icon, color, 1, 1)
+	for _, img in { rec.base, rec.tint } do
+		img.AnchorPoint = Vector2.new(0.5, 1)
+		img.Position = UDim2.fromScale(0.5, 1)
+	end
+	rec.line = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.new(0.9, 0, 0, 2),
+		BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.6),
+		BorderSizePixel = 0,
+		ZIndex = 5,
+		Parent = rec.frame,
+	})
 	local gun = BUILDING_GUN[info.kind]
 	if gun and Sprites.has(gun) then
-		rec.gun, rec.gunTint = spritePair(rec.frame, gun, color, 3, 0.85)
+		rec.gun, rec.gunTint = spritePair(rec.frame, gun, color, 4, 0.85)
 		rec.gun.Rotation, rec.gunTint.Rotation = rec.gunAngle, rec.gunAngle
 	elseif gun then
 		rec.spin = true
@@ -556,6 +596,12 @@ function MapView.addBuilding(info)
 	rec.workBar, rec.workFill = makeBar(rec.frame, UDim2.new(0.5, 0, 1, -8), Vector2.new(0.5, 1), 6)
 	buildings[rec.id] = rec
 	refreshBuilding(rec)
+	if rec.built < 1 and not MapView.loading then
+		Sfx.at("build", rec.cx, rec.cy)
+		for i = 1, 3 do
+			Effects.dust(rec.cx + (math.random() - 0.5) * size, rec.cy + size * 0.4, size * 0.5)
+		end
+	end
 	if buildKind then
 		refreshHelpers()
 	end
@@ -577,6 +623,11 @@ function MapView.finishBuilding(id: number)
 	if rec then
 		rec.built = 1
 		refreshBuilding(rec)
+		Effects.pop(rec.frame, rec.size, rec.size)
+		Effects.dust(rec.cx, rec.cy + rec.size * 0.3, rec.size * 0.9)
+		if rec.owner == MapView.myId then
+			Sfx.play("built")
+		end
 	end
 end
 
@@ -718,6 +769,9 @@ function MapView.addUnit(info)
 	u.x, u.y = x, y
 	u.frame.Position = at(x, y)
 	refreshUnit(u)
+	if u.owner == MapView.myId and not MapView.loading then
+		Sfx.play("ready")
+	end
 end
 
 function MapView.removeUnit(id: number)
@@ -780,6 +834,20 @@ function MapView.ownUnitsOnScreen(): { number }
 	return ids
 end
 
+-- ids of the player's units inside a box, corners in tiles
+function MapView.unitsInBox(x0: number, y0: number, x1: number, y1: number): { number }
+	local ids = {}
+	for id, u in units do
+		if u.owner == MapView.myId then
+			local r = (u.def.size or 1.5) * 0.3
+			if u.x + r >= x0 and u.x - r <= x1 and u.y + r >= y0 and u.y - r <= y1 then
+				table.insert(ids, id)
+			end
+		end
+	end
+	return ids
+end
+
 -- the player's unit under a screen point, or nil
 function MapView.unitAt(sx: number, sy: number): number?
 	local x, y = MapView.screenToWorld(sx, sy)
@@ -817,6 +885,29 @@ function MapView.thingAt(sx: number, sy: number): (string?, number?)
 	return nil, nil
 end
 
+local function approach(v: number, target: number, step: number): number
+	if v < target then
+		return math.min(target, v + step)
+	end
+	return math.max(target, v - step)
+end
+
+-- a sprite and its team layer turned, nudged off centre and stretched together
+local function pose(a: ImageLabel, b: ImageLabel, rot: number, ox: number, oy: number, sx: number, sy: number)
+	a.Rotation, b.Rotation = rot, rot
+	local pos = UDim2.fromScale(0.5 + ox, 0.5 + oy)
+	a.Position, b.Position = pos, pos
+	local size = UDim2.fromScale(sx, sy)
+	a.Size, b.Size = size, size
+end
+
+-- how far a gun is pushed back by its last shot, along angle (degrees): x, y as a share of the sprite
+local function recoil(o, angle: number, clock: number, strength: number): (number, number)
+	local k = math.clamp(1 - (clock - (o.recoilAt or -1)) / 0.15, 0, 1) * strength
+	local a = math.rad(angle)
+	return -math.sin(a) * k, math.cos(a) * k
+end
+
 local function updateUnits(dt: number)
 	local t = now()
 	local clock = os.clock()
@@ -824,189 +915,115 @@ local function updateUnits(dt: number)
 	for _, u in units do
 		local x, y = Motion.position(u, t)
 		local dx, dy = x - u.x, y - u.y
+		local moved = math.sqrt(dx * dx + dy * dy)
 		u.x, u.y = x, y
 		local onScreen = math.abs(x - cam.x) <= hw + 3 and math.abs(y - cam.y) <= hh + 3
 		u.frame.Visible = onScreen
-		if dx * dx + dy * dy > 1e-7 then
+		if moved > 3e-4 then
 			u.want = math.deg(math.atan2(dx, -dy))
 		end
 		if not onScreen then
 			continue
 		end
 		u.frame.Position = at(x, y)
+		local moving = moved > 1e-4
 		local aiming = u.aimUntil ~= nil and u.aimUntil > clock
 		-- soldiers turn to shoot; vehicles turn their turret
 		local want = u.want or u.heading
 		if aiming and not u.gun and not u.air then
 			want = u.aim
 		end
-		local quick = u.kind == "infantry" or u.kind == "rocket"
-		u.heading = turn(u.heading, want, (if quick then 720 else 240) * dt)
-		u.body.Rotation, u.bodyTint.Rotation = u.heading, u.heading
+		local before = u.heading
+		u.heading = turn(u.heading, want, (if WALKERS[u.kind] then 720 else 240) * dt)
+		local rot, ox, oy, sx, sy = u.heading, 0, 0, 1, 1
+		if WALKERS[u.kind] then
+			-- steps: a sway from side to side and a little bounce, in time with the distance walked
+			u.walk = approach(u.walk or 0, if moving then 1 else 0, dt * 8)
+			u.stride = (u.stride or 0) + moved / 0.4 * math.pi
+			local swing = math.sin(u.stride) * u.walk
+			rot += swing * 9
+			local side = math.rad(u.heading)
+			ox, oy = math.cos(side) * swing * 0.03, math.sin(side) * swing * 0.03
+			sx = 1 + math.abs(swing) * 0.05
+			sy = sx
+		elseif TRACKED[u.kind] then
+			if moving then
+				-- the engine shakes the hull a little; tracks and wheels leave prints, and dust on sand
+				ox, oy = (math.random() - 0.5) * 0.012, (math.random() - 0.5) * 0.012
+				local size = u.def.size or 1.5
+				u.printDist = (u.printDist or 0) + moved
+				if u.printDist >= size * 0.34 then
+					u.printDist = 0
+					Effects.tracks(x, y, u.heading, size * 0.95, TRACKED[u.kind])
+				end
+				u.dustDist = (u.dustDist or 0) + moved
+				if u.dustDist >= 0.9 then
+					u.dustDist = 0
+					local tx, ty = math.floor(x), math.floor(y)
+					local ground = if Map.inBounds(tx, ty) then Map.kind(ty * W + tx) else Map.GRASS
+					if (ground == Map.SAND or ground == Map.DIRT) and not Effects.busy() then
+						local back = math.rad(u.heading)
+						Effects.dust(x - math.sin(back) * size * 0.45, y + math.cos(back) * size * 0.45, size * 0.7)
+					end
+				end
+			end
+		elseif u.air then
+			if u.kind == "gunship" then
+				-- hovering: the helicopter breathes up and down
+				local bob = 1 + math.sin(clock * 3 + u.id) * 0.03
+				sx, sy = bob, bob
+			else
+				-- jets lean into turns, so they look narrower while turning
+				local rate = ((u.heading - before + 180) % 360 - 180) / math.max(dt, 1e-3)
+				u.bank = approach(u.bank or 0, math.clamp(math.abs(rate) / 100, 0, 1), dt * 4)
+				sx = 1 - 0.3 * u.bank
+			end
+		end
+		if not u.gun then
+			local rx, ry = recoil(u, u.heading, clock, 0.04)
+			ox += rx
+			oy += ry
+		end
+		pose(u.body, u.bodyTint, rot, ox, oy, sx, sy)
 		if u.shadow then
-			u.shadow.Rotation, u.shadowTint.Rotation = u.heading, u.heading
+			pose(u.shadow, u.shadowTint, rot, 0.28, 0.5, sx * 0.8, sy * 0.8)
 		end
 		if u.gun then
 			u.gunAngle = turn(u.gunAngle, if aiming then u.aim else u.heading, 300 * dt)
-			u.gun.Rotation, u.gunTint.Rotation = u.gunAngle, u.gunAngle
+			local rx, ry = recoil(u, u.gunAngle, clock, 0.08)
+			pose(u.gun, u.gunTint, u.gunAngle, ox + rx, oy + ry, 1, 1)
 		end
 		if u.rotor then
 			u.rotor.Rotation = (u.rotor.Rotation + dt * 1080) % 360
 		end
 	end
 	for _, b in buildings do
+		if b.built < 1 then
+			-- everyone sees buildings rise at the building speed; the owner also gets exact progress
+			b.built = math.min(0.99, b.built + dt / b.def.time)
+			refreshBuilding(b)
+		end
 		if b.gun or b.spin then
 			local want = if b.aimUntil and b.aimUntil > clock then b.aim else b.gunAngle
 			b.gunAngle = turn(b.gunAngle, want, 200 * dt)
-			local turret = if b.gun then b.gun else b.base
-			local turretTint = if b.gun then b.gunTint else b.tint
-			turret.Rotation, turretTint.Rotation = b.gunAngle, b.gunAngle
+			local rx, ry = recoil(b, b.gunAngle, clock, 0.05)
+			if b.gun then
+				pose(b.gun, b.gunTint, b.gunAngle, rx, ry, 0.85, 0.85)
+			else
+				b.base.Rotation, b.tint.Rotation = b.gunAngle, b.gunAngle
+				local pos = UDim2.fromScale(0.5 + rx, 1 + ry)
+				b.base.Position, b.tint.Position = pos, pos
+			end
 		end
 	end
 end
 
 ---------------------------------------------------------------- shots and explosions
 
-local effects = {} -- running: { t0, life, step(k), finish() }
-local pending = {} -- shots waiting for their moment: { at, fn }
-local linePool, imagePool = {}, {}
-local scorches = {}
-
-local function addEffect(life: number, step, finish)
-	table.insert(effects, { t0 = os.clock(), life = life, step = step, finish = finish })
-	step(0)
-end
-
-local function takeLine(color: Color3, z: number): Frame
-	local f = table.remove(linePool)
-	if not f then
-		f = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, Parent = board })
-	end
-	f.BackgroundColor3 = color
-	f.BackgroundTransparency = 0
-	f.ZIndex = z
-	f.Visible = true
-	return f
-end
-
-local function takeImage(name: string, z: number): ImageLabel
-	local img = table.remove(imagePool)
-	if not img then
-		img = make("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, Parent = board })
-	end
-	Sprites.set(img, name, "base")
-	img.ImageColor3 = Color3.new(1, 1, 1)
-	img.ImageTransparency = 0
-	img.ZIndex = z
-	img.Visible = true
-	return img
-end
-
-local function release(obj: GuiObject, pool)
-	obj.Visible = false
-	table.insert(pool, obj)
-end
-
-local function placeLine(f: Frame, x1: number, y1: number, x2: number, y2: number, px: number)
-	local dx, dy = x2 - x1, y2 - y1
-	f.Position = at((x1 + x2) / 2, (y1 + y2) / 2)
-	f.Size = UDim2.new(math.sqrt(dx * dx + dy * dy) / W, 0, 0, px)
-	f.Rotation = math.deg(math.atan2(dy, dx))
-end
-
-local function explosion(x: number, y: number, size: number, life: number, tint: Color3?)
-	if #effects > 160 then
-		return
-	end
-	local img = takeImage("explosion", Z.boom)
-	img.Position = at(x, y)
-	img.Rotation = math.random(0, 359)
-	if tint then
-		img.ImageColor3 = tint
-	end
-	addEffect(life, function(k)
-		local s = size * (0.4 + 0.8 * math.sqrt(k))
-		img.Size = span(s, s)
-		img.ImageTransparency = k * k
-	end, function()
-		release(img, imagePool)
-	end)
-end
-
-local function scorch(x: number, y: number, size: number)
-	local rec
-	if #scorches >= 24 then
-		rec = table.remove(scorches, 1)
-	else
-		local img = make("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, ZIndex = Z.mark, Parent = board })
-		Sprites.set(img, "scorch", "base")
-		rec = { img = img }
-	end
-	rec.t0 = os.clock()
-	rec.img.Position = at(x, y)
-	rec.img.Size = span(size, size)
-	rec.img.Rotation = math.random(0, 359)
-	rec.img.ImageTransparency = 0.1
-	rec.img.Visible = true
-	table.insert(scorches, rec)
-end
-
-local function tracer(x1: number, y1: number, x2: number, y2: number, color: Color3, px: number, life: number)
-	if #effects > 160 then
-		return
-	end
-	local f = takeLine(color, Z.shot)
-	placeLine(f, x1, y1, x2, y2, px)
-	addEffect(life, function(k)
-		f.BackgroundTransparency = k
-	end, function()
-		release(f, linePool)
-	end)
-end
-
--- a rocket or shell flying from (x1, y1) to (x2, y2), then onHit
-local function projectile(x1: number, y1: number, x2: number, y2: number, color: Color3, px: number, len: number, travel: number, onHit)
-	if #effects > 160 then
-		return
-	end
-	local f = takeLine(color, Z.shot)
-	local dx, dy = x2 - x1, y2 - y1
-	f.Size = UDim2.new(len / W, 0, 0, px)
-	f.Rotation = math.deg(math.atan2(dy, dx))
-	addEffect(travel, function(k)
-		f.Position = at(x1 + dx * k, y1 + dy * k)
-	end, function()
-		release(f, linePool)
-		onHit()
-	end)
-end
-
-local function shotEffect(look: string, x1: number, y1: number, x2: number, y2: number)
-	if look == "cannon" then
-		explosion(x1, y1, 0.6, 0.12)
-		tracer(x1, y1, x2, y2, Color3.fromRGB(255, 205, 100), 3, 0.1)
-		explosion(x2, y2, 0.9, 0.3)
-	elseif look == "rocket" then
-		projectile(x1, y1, x2, y2, Color3.fromRGB(255, 160, 60), 3, 0.55, 0.25, function()
-			explosion(x2, y2, 1, 0.35)
-		end)
-	elseif look == "shell" then
-		explosion(x1, y1, 0.8, 0.15)
-		projectile(x1, y1, x2, y2, Color3.fromRGB(255, 225, 140), 4, 0.3, 0.55, function()
-			explosion(x2, y2, 1.5, 0.45)
-		end)
-	elseif look == "flak" then
-		tracer(x1, y1, x2, y2, Color3.fromRGB(220, 232, 255), 2, 0.08)
-		explosion(x2, y2, 0.9, 0.4, Color3.fromRGB(190, 190, 200))
-	else
-		tracer(x1, y1, x2, y2, Color3.fromRGB(255, 240, 170), 2, 0.07)
-	end
-end
-
 -- who fired a shot that started at (x, y): a shooting building there, or the nearest unit in range
 local function shooterAt(x: number, y: number, x2: number, y2: number)
 	for _, b in buildings do
-		if Config.BUILD[b.kind].dps and math.abs(b.cx - x) < 0.3 and math.abs(b.cy - y) < 0.3 then
+		if b.def.dps and math.abs(b.cx - x) < 0.3 and math.abs(b.cy - y) < 0.3 then
 			return b
 		end
 	end
@@ -1027,90 +1044,63 @@ function MapView.shots(list)
 	for i = 1, #list - 3, 4 do
 		local x1, y1, x2, y2 = list[i], list[i + 1], list[i + 2], list[i + 3]
 		local shooter = shooterAt(x1, y1, x2, y2)
-		local look = if shooter then SHOT_LOOK[shooter.kind] or "bullet" else "bullet"
+		local kind = if shooter then shooter.kind else "infantry"
 		if shooter then
 			shooter.aim = math.deg(math.atan2(x2 - x1, -(y2 - y1)))
 			shooter.aimUntil = clock + 1.6
 		end
-		local delay = math.random() * Config.NET_RATE
-		table.insert(pending, {
-			at = clock + delay,
-			fn = function()
+		-- the shots of the last moment are spread over it, so they do not all flash at once
+		Effects.later(math.random() * Config.NET_RATE, function()
+			if shooter then
+				shooter.recoilAt = os.clock()
 				-- moving shooters have moved on a little: start from where they are drawn now
-				if shooter and shooter.path and shooter.frame.Parent then
+				if shooter.path and shooter.frame.Parent then
 					x1, y1 = shooter.x, shooter.y
 				end
-				shotEffect(look, x1, y1, x2, y2)
-			end,
-		})
+			end
+			Effects.shot(SHOT_LOOK[kind] or "bullet", x1, y1, x2, y2)
+			Sfx.at(SHOT_SOUND[kind] or "rifle", x1, y1)
+		end)
 	end
 end
 
 function MapView.boom(x: number, y: number, big: boolean)
-	if big then
-		explosion(x, y, 2.8, 0.7)
-		table.insert(pending, { at = os.clock() + 0.12, fn = function()
-			explosion(x + 0.7, y - 0.4, 1.6, 0.5)
-		end })
-		table.insert(pending, { at = os.clock() + 0.22, fn = function()
-			explosion(x - 0.6, y + 0.5, 1.4, 0.5)
-		end })
-		scorch(x, y, 3)
-	else
-		explosion(x, y, 1.4, 0.45)
-		scorch(x, y, 1.2)
-	end
+	Effects.boom(x, y, big)
+	Sfx.at(if big then "bigboom" else "boom", x, y)
 end
 
 -- a ring that shrinks where an order was given
-function MapView.marker(x: number, y: number, color: Color3?)
-	local f = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = at(x, y), BackgroundTransparency = 1, ZIndex = Z.top, Parent = board })
-	local r = ring(f, color or SELECT, 2.5, Z.top)
-	local stroke: any = r:FindFirstChildOfClass("UIStroke")
-	addEffect(0.55, function(k)
-		local s = 1.9 - 1.3 * k
-		f.Size = span(s, s)
-		stroke.Transparency = k
-	end, function()
-		f:Destroy()
-	end)
+function MapView.marker(x: number, y: number, color: Color3?, size: number?)
+	Effects.marker(x, y, color or SELECT, size)
 end
 
-local function updateEffects()
+-- build mode: the free pools pulse; and buildings going up make work sounds now and then
+local hammerAcc = 0
+local function updateWork(dt: number)
 	local clock = os.clock()
-	for i = #pending, 1, -1 do
-		local p = pending[i]
-		if clock >= p.at then
-			pending[i] = pending[#pending]
-			pending[#pending] = nil
-			p.fn()
-		end
-	end
-	for i = #effects, 1, -1 do
-		local e = effects[i]
-		local k = (clock - e.t0) / e.life
-		if k >= 1 then
-			effects[i] = effects[#effects]
-			effects[#effects] = nil
-			e.finish()
-		else
-			e.step(k)
-		end
-	end
-	for i = #scorches, 1, -1 do
-		local s = scorches[i]
-		local k = math.clamp((clock - s.t0 - 20) / 15, 0, 1)
-		s.img.ImageTransparency = 0.1 + 0.9 * k
-		if k >= 1 then
-			s.img:Destroy()
-			table.remove(scorches, i)
-		end
-	end
 	for _, h in helpers do
 		if h.pulse then
 			local s = 2.6 + 0.35 * math.sin(clock * 5)
 			h.frame.Size = span(s, s)
 		end
+	end
+	hammerAcc -= dt
+	if hammerAcc > 0 then
+		return
+	end
+	hammerAcc = 0.35 + math.random() * 0.5
+	local hw, hh = halfView()
+	local site = nil
+	for _, b in buildings do
+		if b.built < 1 and math.abs(b.cx - cam.x) <= hw and math.abs(b.cy - cam.y) <= hh and (not site or math.random() < 0.5) then
+			site = b
+		end
+	end
+	if site then
+		local px = site.cx + (math.random() - 0.5) * site.size * 0.8
+		local py = site.cy + (math.random() - 0.5) * site.size * 0.8
+		Sfx.at("hammer", px, py)
+		Effects.dust(px, py, 0.6)
 	end
 end
 
@@ -1190,10 +1180,50 @@ end
 
 ---------------------------------------------------------------- input
 
+local boxFrame -- the selection box while it is drawn
+local gesture = nil -- the finger or button being dragged: { start, last, moved, button, box, touch, pinch }
+local focused = true -- edge scrolling only while the game window has focus
+
+local MB1, MB2, MB3 = Enum.UserInputType.MouseButton1, Enum.UserInputType.MouseButton2, Enum.UserInputType.MouseButton3
+local TOUCH, MOVE = Enum.UserInputType.Touch, Enum.UserInputType.MouseMovement
+
+local function showBox(a: Vector2, b: Vector2)
+	local o = view.AbsolutePosition
+	boxFrame.Position = UDim2.fromOffset(math.min(a.X, b.X) - o.X, math.min(a.Y, b.Y) - o.Y)
+	boxFrame.Size = UDim2.fromOffset(math.abs(a.X - b.X), math.abs(a.Y - b.Y))
+	boxFrame.Visible = true
+end
+
+local function finishBox(a: Vector2, b: Vector2)
+	boxFrame.Visible = false
+	if MapView.onBox then
+		local x0, y0 = MapView.screenToWorld(math.min(a.X, b.X), math.min(a.Y, b.Y))
+		local x1, y1 = MapView.screenToWorld(math.max(a.X, b.X), math.max(a.Y, b.Y))
+		MapView.onBox(x0, y0, x1, y1)
+	end
+end
+
+local function tapAt(p: Vector2, alt: boolean)
+	local x, y = MapView.screenToWorld(p.X, p.Y)
+	local tx, ty = math.floor(x), math.floor(y)
+	if not Map.inBounds(tx, ty) then
+		return
+	end
+	if alt then
+		if MapView.onAltTap then
+			MapView.onAltTap(tx, ty, p.X, p.Y)
+		end
+	elseif MapView.onTap then
+		MapView.onTap(tx, ty, p.X, p.Y)
+	end
+end
+
+-- mouse: left click selects and commands, left drag draws a box, right click commands,
+-- right or middle drag and the wheel move the camera. Touch: tap, drag to move the camera
+-- (or draw a box when armed), pinch to zoom.
 local function setupInput()
 	local touches = {}
 	local touchCount = 0
-	local gesture = nil
 
 	local function point(input: InputObject): Vector2
 		return Vector2.new(input.Position.X, input.Position.Y)
@@ -1203,17 +1233,9 @@ local function setupInput()
 		if processed or mode ~= "play" then
 			return
 		end
-		if input.UserInputType == Enum.UserInputType.MouseButton2 then
-			if MapView.onAltTap then
-				local x, y = MapView.screenToWorld(input.Position.X, input.Position.Y)
-				if Map.inBounds(math.floor(x), math.floor(y)) then
-					MapView.onAltTap(math.floor(x), math.floor(y))
-				end
-			end
-			return
-		end
-		local isTouch = input.UserInputType == Enum.UserInputType.Touch
-		if not isTouch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+		local t = input.UserInputType
+		local isTouch = t == TOUCH
+		if not isTouch and t ~= MB1 and t ~= MB2 and t ~= MB3 then
 			return
 		end
 		glide = nil
@@ -1221,33 +1243,41 @@ local function setupInput()
 		if isTouch then
 			touches[input] = p
 			touchCount += 1
-		end
-		if touchCount <= 1 then
-			gesture = { start = p, last = p, moved = false }
+			if touchCount > 1 then
+				-- a second finger: pinch, never a tap or a box
+				if gesture then
+					gesture.moved = true
+					gesture.box = false
+					gesture.pinch = nil
+				end
+				boxFrame.Visible = false
+				return
+			end
 		elseif gesture then
-			gesture.moved = true
-			gesture.pinch = nil
+			return
 		end
+		gesture = { start = p, last = p, moved = false, button = t, touch = isTouch, box = t == MB1 or (isTouch and MapView.boxArmed) }
 	end)
 
 	UserInputService.InputChanged:Connect(function(input, processed)
 		if mode ~= "play" then
 			return
 		end
-		if input.UserInputType == Enum.UserInputType.MouseWheel then
+		local t = input.UserInputType
+		if t == Enum.UserInputType.MouseWheel then
 			if not processed then
 				zoomAround(input.Position.X, input.Position.Y, if input.Position.Z > 0 then 1.2 else 1 / 1.2)
 			end
 			return
 		end
-		if input.UserInputType == Enum.UserInputType.MouseMovement and buildKind and not gesture then
+		if t == MOVE and buildKind and not gesture then
 			local x, y = MapView.screenToWorld(input.Position.X, input.Position.Y)
 			showGhost(x, y)
 		end
 		if not gesture then
 			return
 		end
-		if input.UserInputType == Enum.UserInputType.Touch then
+		if t == TOUCH then
 			if not touches[input] then
 				return
 			end
@@ -1270,48 +1300,107 @@ local function setupInput()
 				gesture.pinch = { dist = dist, mid = mid }
 				return
 			end
-		elseif input.UserInputType ~= Enum.UserInputType.MouseMovement then
+		elseif t ~= MOVE or gesture.touch then
 			return
 		end
 		local p = point(input)
-		if not gesture.moved and (p - gesture.start).Magnitude > 10 then
+		if not gesture.moved and (p - gesture.start).Magnitude > 8 then
 			gesture.moved = true
 		end
 		if gesture.moved then
-			panBy(p.X - gesture.last.X, p.Y - gesture.last.Y)
+			if gesture.box then
+				showBox(gesture.start, p)
+			else
+				panBy(p.X - gesture.last.X, p.Y - gesture.last.Y)
+			end
 		end
 		gesture.last = p
 	end)
 
 	UserInputService.InputEnded:Connect(function(input)
-		local isTouch = input.UserInputType == Enum.UserInputType.Touch
-		if not isTouch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then
-			return
-		end
-		if isTouch then
+		local t = input.UserInputType
+		if t == TOUCH then
 			if not touches[input] then
 				return
 			end
 			touches[input] = nil
 			touchCount = math.max(0, touchCount - 1)
-		end
-		if gesture and touchCount == 0 then
-			if not gesture.moved and mode == "play" and MapView.onTap then
-				local p = point(input)
-				local x, y = MapView.screenToWorld(p.X, p.Y)
-				local tx, ty = math.floor(x), math.floor(y)
-				if Map.inBounds(tx, ty) then
-					MapView.onTap(tx, ty, p.X, p.Y)
+			if touchCount > 0 then
+				-- back to one finger after a pinch: keep moving the camera with it
+				if gesture then
+					for _, v in touches do
+						gesture.last = v
+					end
+					gesture.pinch = nil
 				end
+				return
 			end
-			gesture = nil
-		elseif gesture and touchCount == 1 then
-			for _, v in touches do
-				gesture.last = v
-			end
-			gesture.pinch = nil
+		elseif not gesture or gesture.touch or t ~= gesture.button then
+			return
+		end
+		local g = gesture
+		gesture = nil
+		boxFrame.Visible = false
+		if not g or mode ~= "play" then
+			return
+		end
+		local p = point(input)
+		if g.box and g.moved then
+			finishBox(g.start, p)
+		elseif not g.moved then
+			tapAt(p, g.button == MB2)
 		end
 	end)
+
+	UserInputService.WindowFocused:Connect(function()
+		focused = true
+	end)
+	UserInputService.WindowFocusReleased:Connect(function()
+		focused = false
+	end)
+end
+
+-- the camera follows the keys (WASD, arrows) and the mouse at the edge of the screen
+local function keyPan(dt: number)
+	if UserInputService:GetFocusedTextBox() then
+		return
+	end
+	local mx, my = 0, 0
+	local function down(a: Enum.KeyCode, b: Enum.KeyCode): boolean
+		return UserInputService:IsKeyDown(a) or UserInputService:IsKeyDown(b)
+	end
+	if down(Enum.KeyCode.A, Enum.KeyCode.Left) then
+		mx -= 1
+	end
+	if down(Enum.KeyCode.D, Enum.KeyCode.Right) then
+		mx += 1
+	end
+	if down(Enum.KeyCode.W, Enum.KeyCode.Up) then
+		my -= 1
+	end
+	if down(Enum.KeyCode.S, Enum.KeyCode.Down) then
+		my += 1
+	end
+	if focused and not gesture and UserInputService.MouseEnabled and UserInputService:GetLastInputType() == MOVE then
+		local m = UserInputService:GetMouseLocation()
+		local vp = workspace.CurrentCamera.ViewportSize
+		local edge = 6
+		if m.X <= edge then
+			mx -= 1
+		elseif m.X >= vp.X - edge then
+			mx += 1
+		end
+		if m.Y <= edge then
+			my -= 1
+		elseif m.Y >= vp.Y - edge then
+			my += 1
+		end
+	end
+	if mx ~= 0 or my ~= 0 then
+		glide = nil
+		cam.x += mx * 900 * dt / cam.ppt
+		cam.y += my * 900 * dt / cam.ppt
+	end
 end
 
 ---------------------------------------------------------------- setup and state
@@ -1337,14 +1426,27 @@ function MapView.init(playerGui: PlayerGui)
 		BorderSizePixel = 0,
 		Parent = view,
 	})
+	Board.frame = board
 	groundPictures(board, Z.ground)
 	ghost = make("Frame", { BackgroundTransparency = 0.7, Visible = false, ZIndex = Z.top, Parent = board }, {
 		make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2 }),
 	})
+	boxFrame = make("Frame", {
+		BackgroundColor3 = SELECT,
+		BackgroundTransparency = 0.88,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 20,
+		Parent = view,
+	}, { make("UIStroke", { Color = SELECT, Thickness = 1.5 }) })
 	gui.Parent = playerGui
 	cam.ppt = viewSize().Y / 20
 	applyCam()
 	view:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyCam)
+	Sfx.view = function()
+		local hw, hh = halfView()
+		return cam.x, cam.y, math.max(hw, hh)
+	end
 	setupInput()
 end
 
@@ -1358,25 +1460,18 @@ function MapView.clear()
 	for _, tag in labels do
 		tag:Destroy()
 	end
-	for _, s in scorches do
-		s.img:Destroy()
-	end
-	-- finishing a rocket starts its explosion, which then goes into the new list and ends by itself
-	local old = effects
-	effects = {}
-	for _, e in old do
-		e.finish()
-	end
-	buildings, units, labels, scorches, pending = {}, {}, {}, {}, {}
+	Effects.clear()
+	buildings, units, labels = {}, {}, {}
 	clearHelpers()
 	table.clear(MapView.selected)
 	MapView.nations = {}
 	MapView.myId = 0
 end
 
--- the whole match state, sent when the player joins or starts playing
+-- the whole match state, sent when the player joins or starts playing; it makes no sounds
 function MapView.load(s)
 	MapView.clear()
+	MapView.loading = true
 	MapView.myId = s.you
 	for _, n in s.nations do
 		MapView.upsertNation(n)
@@ -1387,6 +1482,7 @@ function MapView.load(s)
 	for _, u in s.units do
 		MapView.addUnit(u)
 	end
+	MapView.loading = false
 end
 
 function MapView.setPhase(_phase: string) end
@@ -1394,6 +1490,10 @@ function MapView.setPhase(_phase: string) end
 -- "menu": the battle drifts slowly behind the menu; "play": the player moves the camera
 function MapView.setMode(m: string)
 	mode = m
+	gesture = nil
+	if boxFrame then
+		boxFrame.Visible = false
+	end
 	if m == "play" then
 		cam.ppt = playZoom()
 	else
@@ -1419,30 +1519,12 @@ function MapView.update(dt: number)
 				glide = nil
 			end
 		end
-		if not UserInputService:GetFocusedTextBox() then
-			local mx, my = 0, 0
-			if UserInputService:IsKeyDown(Enum.KeyCode.A) or UserInputService:IsKeyDown(Enum.KeyCode.Left) then
-				mx -= 1
-			end
-			if UserInputService:IsKeyDown(Enum.KeyCode.D) or UserInputService:IsKeyDown(Enum.KeyCode.Right) then
-				mx += 1
-			end
-			if UserInputService:IsKeyDown(Enum.KeyCode.W) or UserInputService:IsKeyDown(Enum.KeyCode.Up) then
-				my -= 1
-			end
-			if UserInputService:IsKeyDown(Enum.KeyCode.S) or UserInputService:IsKeyDown(Enum.KeyCode.Down) then
-				my += 1
-			end
-			if mx ~= 0 or my ~= 0 then
-				glide = nil
-				cam.x += mx * 900 * dt / cam.ppt
-				cam.y += my * 900 * dt / cam.ppt
-			end
-		end
+		keyPan(dt)
 	end
 	applyCam()
 	updateUnits(dt)
-	updateEffects()
+	updateWork(dt)
+	Effects.update()
 	miniAcc += dt
 	if miniAcc >= 0.25 then
 		miniAcc = 0

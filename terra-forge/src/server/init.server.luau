@@ -89,7 +89,24 @@ end
 -- simple flood protection: at most 25 actions per player per second
 local budget = {}
 
-local function onAction(player: Player, kind, a, b, c)
+-- the unit ids of an order: at most 80 numbers
+local function idList(a): { number }?
+	if typeof(a) ~= "table" then
+		return nil
+	end
+	local ids = {}
+	for i, id in a do
+		if typeof(i) ~= "number" or i > 80 then
+			break
+		end
+		if isNumber(id) then
+			table.insert(ids, id)
+		end
+	end
+	return ids
+end
+
+local function onAction(player: Player, kind, a, b, c, d, e)
 	if typeof(kind) ~= "string" then
 		return
 	end
@@ -113,17 +130,16 @@ local function onAction(player: Player, kind, a, b, c)
 		return
 	elseif kind == "build" and typeof(a) == "string" and Config.BUILD[a] and isNumber(b) and isNumber(c) then
 		match:build(player, a, b, c)
-	elseif kind == "move" and typeof(a) == "table" and isNumber(b) and isNumber(c) then
-		local ids = {}
-		for i, id in a do
-			if typeof(i) ~= "number" or i > 80 then
-				break
-			end
-			if isNumber(id) then
-				table.insert(ids, id)
-			end
+	elseif kind == "order" and isNumber(b) and isNumber(c) and typeof(d) == "string" and (e == nil or isNumber(e)) then
+		local ids = idList(a)
+		if ids then
+			match:command(player, ids, d, b, c, e)
 		end
-		match:move(player, ids, b, c)
+	elseif kind == "move" and isNumber(b) and isNumber(c) then
+		local ids = idList(a)
+		if ids then
+			match:command(player, ids, "move", b, c, nil)
+		end
 	elseif kind == "queue" and isNumber(a) and typeof(b) == "string" and Config.UNITS[b] then
 		match:queueUnit(player, a, b)
 	elseif kind == "cancel" and isNumber(a) then
@@ -137,8 +153,8 @@ local function onAction(player: Player, kind, a, b, c)
 	end
 end
 
-action.OnServerEvent:Connect(function(player: Player, kind, a, b, c)
-	safe("действие " .. tostring(kind), onAction, player, kind, a, b, c)
+action.OnServerEvent:Connect(function(player: Player, kind, a, b, c, d, e)
+	safe("действие " .. tostring(kind), onAction, player, kind, a, b, c, d, e)
 end)
 
 Players.PlayerAdded:Connect(function(player)

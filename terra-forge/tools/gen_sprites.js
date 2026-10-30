@@ -185,11 +185,23 @@ const ROOT = path.dirname(__dirname);
       P.fill(P.round(30.5, 2, 3, 60, 1.5), 'rgba(40,44,50,0.75)', null);
       P.fill(P.circle(32, 32, 3), P.C.metal);
     });
+    // a soft fireball: hot white core, orange body, edges fading out
     u('explosion', 1, P => {
-      const blobs = [[32, 32, 20], [22, 26, 11], [42, 25, 12], [40, 41, 11], [24, 41, 10]];
-      for (const [x, y, r] of blobs) P.fill(P.circle(x, y, r), () => P.rgrad(x, y, r, '#fff6c0', '#ff8a1c'), null);
-      for (const [x, y, r] of blobs) P.fill(P.circle(x, y, r * 0.55), 'rgba(255,255,220,0.8)', null);
-      P.fill(P.circle(32, 32, 24), 'rgba(80,40,20,0)', 'rgba(60,40,30,0.35)', 3);
+      const blobs = [[32, 32, 26], [20, 25, 15], [44, 24, 16], [42, 43, 15], [21, 42, 14]];
+      for (const [x, y, r] of blobs) P.fill(P.circle(x, y, r), () => P.rgrad(x, y, r, 'rgba(255,210,90,0.95)', 'rgba(230,80,10,0)'), null);
+      for (const [x, y, r] of blobs) P.fill(P.circle(x, y, r * 0.6), () => P.rgrad(x, y, r * 0.6, 'rgba(255,255,235,0.95)', 'rgba(255,190,70,0)'), null);
+    });
+    // a soft puff in light grey: tinted in game as dust (brown) or smoke (dark grey)
+    u('dust', 1, P => {
+      const blobs = [[32, 32, 24], [22, 28, 14], [42, 28, 15], [38, 42, 14], [24, 40, 13]];
+      for (const [x, y, r] of blobs) P.fill(P.circle(x, y, r), () => P.rgrad(x, y, r, 'rgba(235,235,235,0.75)', 'rgba(235,235,235,0)'), null);
+    });
+    // prints of two tracks, a short stretch of them; laid down behind tanks
+    u('tracks', 1, P => {
+      for (const x of [14, 42]) {
+        P.fill(P.rect(x, 20, 8, 24), 'rgba(40,32,24,0.45)', null);
+        for (let y = 22; y < 44; y += 4) P.fill(P.rect(x, y, 8, 1.5), 'rgba(20,16,12,0.35)', null);
+      }
     });
     u('scorch', 1, P => {
       P.fill(P.ellipse(32, 32, 22, 17), 'rgba(20,16,12,0.55)', null);
@@ -296,7 +308,8 @@ const ROOT = path.dirname(__dirname);
     for (const [name, spr] of Object.entries(SPR)) {
       const px = spr.size === 1 ? SMALL : BIG;
       let cx, cy;
-      if (px === SMALL) { cx = xs; cy = ys; xs += SMALL; if (xs >= ATLAS) { xs = 0; ys += SMALL; } }
+      // after two rows, small cells continue below the buildings
+      if (px === SMALL) { cx = xs; cy = ys; xs += SMALL; if (xs >= ATLAS) { xs = 0; ys = ys + SMALL === 2 * SMALL ? 3 * BIG : ys + SMALL; } }
       else { cx = xb; cy = yb; xb += BIG; if (xb >= ATLAS) { xb = 0; yb += BIG; } }
       const unit = px / (spr.size === 1 ? 64 : 128);
       const render = (pass) => {

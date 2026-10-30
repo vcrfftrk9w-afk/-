@@ -5,6 +5,7 @@ local TweenService = game:GetService("TweenService")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
 local Theme = require(script.Parent.Theme)
+local Sfx = require(script.Parent.Sfx)
 local Sprites = require(script.Parent.Sprites)
 
 local make = Theme.make
@@ -21,6 +22,7 @@ UI.onQueue = nil
 UI.onCancel = nil
 UI.onAuto = nil
 UI.onRally = nil
+UI.onCommand = nil -- army panel: "screen", "box", "amove", "stop", "hold"
 UI.onBase = nil
 UI.onBuildSelect = nil
 UI.factoryId = nil
@@ -65,7 +67,10 @@ local function iconButton(name: string, parent: Instance, onClick)
 		Theme.stroke(),
 	})
 	icon(name, 24, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Parent = b })
-	b.Activated:Connect(onClick)
+	b.Activated:Connect(function()
+		Sfx.play("click")
+		onClick()
+	end)
 	return b
 end
 
@@ -103,6 +108,7 @@ local function moltenButton(text: string, parent: Instance, onClick, iconName: s
 		Parent = row,
 	})
 	b.Activated:Connect(function()
+		Sfx.play("click")
 		onClick()
 	end)
 	b.MouseButton1Down:Connect(function()
@@ -141,7 +147,7 @@ local function rescale()
 		refs.logoBox.Position = if refs.side.Visible then UDim2.new(0.42, 0, 0.36, 0) else UDim2.new(0.5, 0, 0.36, 0)
 	end
 	if refs.buildScroll then
-		local avail = w - 2 * 16 - 210 - 60 - 24
+		local avail = w - 2 * 16 - 250 - 60 - 24
 		refs.buildScroll.Size = UDim2.fromOffset(math.clamp(avail, 220, 572), 98)
 	end
 end
@@ -159,7 +165,7 @@ local function buildMenu(player: Player)
 		Parent = menu,
 	}, { Theme.list(Enum.FillDirection.Horizontal, 8, nil, Enum.VerticalAlignment.Center) })
 	iconButton("help", topLeft, function()
-		UI.toast("1. Поставь экстракторы на светящиеся месторождения — это деньги. 2. Построй казарму и завод бронетехники. 3. Нажми на завод и заказывай войска. 4. Выбери войска и нажми на карту: они поедут туда и будут стрелять сами. Разрушь командные центры врагов.", false, 9)
+		UI.toast("Экстракторы на светящихся месторождениях дают деньги. Построй казарму и завод, нажми на завод и заказывай войска. Выбери войска (нажми на них или протяни рамку) и нажми на карту или на врага. Компьютер: ЛКМ — выбор, протяни ЛКМ — рамка, ПКМ — приказ, F — атака с ходу, X — стоп, H — держать, Ctrl+1–9 — запомнить группу, 1–9 — выбрать её, WASD или край экрана — камера, пробел — к базе.", false, 14)
 	end)
 	iconButton("shield", topLeft, function()
 		UI.openArsenal()
@@ -589,7 +595,7 @@ local function buildPlay()
 	refs.hudBottom = hudBottom
 
 	-- army: select units by kind, then tap the map to send them
-	local armyPanel = Theme.panel({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -12), Size = UDim2.fromOffset(210, 98), Parent = hudBottom })
+	local armyPanel = Theme.panel({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -12), Size = UDim2.fromOffset(250, 132), Parent = hudBottom })
 	Theme.pad(10, 8).Parent = armyPanel
 	Theme.label({ Text = "Армия", Size = UDim2.new(1, -40, 0, 16), TextSize = 14, FontFace = font(Enum.FontWeight.ExtraBold), Parent = armyPanel })
 	local clear = make("TextButton", {
@@ -628,13 +634,41 @@ local function buildPlay()
 			count = Theme.label({ Text = "0", Position = UDim2.fromOffset(25, 0), Size = UDim2.new(1, -27, 1, 0), TextSize = 12, FontFace = font(Enum.FontWeight.ExtraBold), Parent = b })
 		end
 		b.Activated:Connect(function()
+			Sfx.play("click")
 			if UI.onSelectKind then
 				UI.onSelectKind(k)
 			end
 		end)
 		refs.armyBtns[k] = { button = b, count = count, stroke = b:FindFirstChildOfClass("UIStroke") }
 	end
-	refs.armyInfo = Theme.label({ Text = "Нажми на юнит или кнопку", Position = UDim2.fromOffset(0, 58), Size = UDim2.new(1, 0, 0, 24), TextSize = 11.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, Parent = armyPanel })
+	-- commands: everyone on screen, box selection (for touch screens), attack-move, stop, hold
+	local cmds = make("Frame", { Position = UDim2.fromOffset(0, 56), Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, Parent = armyPanel }, {
+		make("UIGridLayout", { CellSize = UDim2.new(0.2, -4, 1, 0), CellPadding = UDim2.fromOffset(5, 0), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	refs.cmdBtns = {}
+	for i, c in { { "screen", "Экран" }, { "box", "Рамка" }, { "amove", "Атака" }, { "stop", "Стоп" }, { "hold", "Держ." } } do
+		local b = make("TextButton", {
+			Text = c[2],
+			AutoButtonColor = true,
+			FontFace = font(Enum.FontWeight.Bold),
+			TextSize = 11,
+			TextColor3 = C.ink,
+			BackgroundColor3 = C.panelHi,
+			LayoutOrder = i,
+			Parent = cmds,
+		}, {
+			Theme.corner(8),
+			make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+		})
+		b.Activated:Connect(function()
+			Sfx.play("click")
+			if UI.onCommand then
+				UI.onCommand(c[1])
+			end
+		end)
+		refs.cmdBtns[c[1]] = b
+	end
+	refs.armyInfo = Theme.label({ Text = "Нажми на юнит или кнопку", Position = UDim2.fromOffset(0, 88), Size = UDim2.new(1, 0, 0, 28), TextSize = 11.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, Parent = armyPanel })
 
 	local buildScroll = make("ScrollingFrame", {
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -847,6 +881,9 @@ local function buildToast()
 end
 
 function UI.toast(text: string, warn: boolean?, seconds: number?)
+	if warn then
+		Sfx.play("error")
+	end
 	toastToken += 1
 	local my = toastToken
 	refs.toastText.Text = text
@@ -1048,8 +1085,18 @@ function UI.setLeaderboard(rows)
 	end
 end
 
--- counts / selected: units of each group the player has and has selected
-function UI.setArmy(counts, selected)
+-- a command waiting for a tap on the map: its button is lit
+function UI.setArmed(name: string, on: boolean)
+	local b = refs.cmdBtns[name]
+	if b then
+		b:FindFirstChildOfClass("UIStroke").Transparency = if on then 0 else 1
+		b.BackgroundColor3 = if on then Color3.fromRGB(70, 42, 18) else C.panelHi
+		b.TextColor3 = if on then C.moltenHi else C.ink
+	end
+end
+
+-- counts / selected: units of each group the player has and has selected; info: what the selection is
+function UI.setArmy(counts, selected, info: string?)
 	local total, all = 0, 0
 	for _, g in GROUP_ORDER do
 		local b = refs.armyBtns[g]
@@ -1061,7 +1108,7 @@ function UI.setArmy(counts, selected)
 	end
 	refs.armyBtns.all.stroke.Transparency = if total > 0 and total == all then 0 else 1
 	refs.armyClear.Visible = total > 0
-	refs.armyInfo.Text = if total > 0 then string.format("Выбрано %d · нажми на карту, куда идти", total) else "Нажми на юнит или кнопку"
+	refs.armyInfo.Text = if total > 0 then info or string.format("Выбрано %d · нажми на карту, куда идти", total) else "Нажми на юнит, протяни рамку или выбери группу"
 	refs.armyInfo.TextColor3 = if total > 0 then Color3.fromRGB(120, 255, 170) else C.muted
 end
 

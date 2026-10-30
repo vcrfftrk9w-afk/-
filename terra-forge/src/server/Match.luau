@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
 local Map = require(Shared.Map)
 local Motion = require(Shared.Motion)
+local Orders = require(script.Parent.Orders)
 local Path = require(script.Parent.Path)
 
 local W, H = Map.W, Map.H
@@ -90,6 +91,8 @@ function Match.new(event: RemoteEvent)
 	self.ecoAcc = 0
 	self.secAcc = 0
 	self.botAcc = 0
+	self.orderAcc = 0
+	self.grid = {}
 	self.shots = {}
 	self.hpDirty = {}
 	self.bhpDirty = {}
@@ -523,6 +526,15 @@ function Match:orderUnit(u, tx: number, ty: number, maxNodes: number)
 	self:send({ t = "unit", u = unitInfo(u) })
 end
 
+-- stops a unit where it is now
+function Match:halt(u)
+	local t = now()
+	local x, y = Motion.position(u, t)
+	u.path = { x, y }
+	u.t0 = t
+	self:send({ t = "unit", u = unitInfo(u) })
+end
+
 -- sends several units to (tx, ty); they spread out around it and share the first route
 function Match:orderGroup(list, tx: number, ty: number)
 	tx, ty = Path.inMap(math.floor(tx) + 0.5, math.floor(ty) + 0.5)
@@ -561,10 +573,11 @@ function Match:orderGroup(list, tx: number, ty: number)
 	end
 end
 
--- a player's move order for several units
-function Match:move(player: Player, ids, tx: number, ty: number)
+-- a player's order for several of their units: kind is move, amove (attack-move), attack, stop
+-- or hold; for attack, targetRef is a unit id, or minus a building id
+function Match:command(player: Player, ids, kind: string, tx: number, ty: number, targetRef: number?)
 	local n = self.humans[player]
-	if not n or self.phase ~= "game" or not n.alive then
+	if not n or self.phase ~= "game" or not n.alive or not Orders.KINDS[kind] then
 		return
 	end
 	local list = {}
@@ -577,9 +590,22 @@ function Match:move(player: Player, ids, tx: number, ty: number)
 			end
 		end
 	end
-	if #list > 0 then
-		self:orderGroup(list, tx, ty)
+	if #list == 0 then
+		return
 	end
+	local target = nil
+	if kind == "attack" then
+		if targetRef and targetRef > 0 then
+			target = self.units[targetRef]
+		elseif targetRef and targetRef < 0 then
+			target = self.buildings[-targetRef]
+		end
+		if not target or target.n == n or not Orders.alive(self, target) then
+			kind = "move"
+			target = nil
+		end
+	end
+	Orders.give(self, list, kind, tx, ty, target)
 end
 
 ---------------------------------------------------------------- bots
@@ -668,7 +694,7 @@ function Match:botThink(n, dt: number)
 	local idle = {}
 	local t = now()
 	for _, u in self.units do
-		if u.n == n then
+		if u.n == n and not u.order then
 			local _, _, arrived = Motion.position(u, t)
 			if arrived and t - u.orderedAt > 3 then
 				table.insert(idle, u)
@@ -676,7 +702,7 @@ function Match:botThink(n, dt: number)
 		end
 	end
 	if threat and #idle > 0 then
-		self:orderGroup(idle, threat.px, threat.py)
+		Orders.give(self, idle, "amove", threat.px, threat.py)
 		return
 	end
 	bot.wave -= dt
@@ -693,16 +719,55 @@ function Match:botThink(n, dt: number)
 		end
 		if target then
 			local goal = self:enemyNear(n, target.cc.px, target.cc.py, 30) or target.cc
-			self:orderGroup(idle, goal.px, goal.py)
+			Orders.give(self, idle, "amove", goal.px, goal.py)
 		end
 	end
 end
 
 ---------------------------------------------------------------- combat
 
+-- the closest enemy of owner within range of (sx, sy), on the grid of the last combat tick;
+-- ground / air: which kinds of targets count
+function Match:findTarget(sx: number, sy: number, range: number, owner, ground: boolean, air: boolean)
+	local grid = self.grid
+	local best, bestD = nil, range * range
+	local c0x = math.clamp(math.floor((sx - range - 2) / CELL), 0, COLS - 1)
+	local c1x = math.clamp(math.floor((sx + range + 2) / CELL), 0, COLS - 1)
+	local c0y = math.clamp(math.floor((sy - range - 2) / CELL), 0, ROWS - 1)
+	local c1y = math.clamp(math.floor((sy + range + 2) / CELL), 0, ROWS - 1)
+	for cy = c0y, c1y do
+		for cx = c0x, c1x do
+			local cell = grid[cy * COLS + cx]
+			if cell then
+				for _, o in cell do
+					if o.n ~= owner and o.hp > 0 and ((o.air and air) or (not o.air and ground)) then
+						-- buildings are big: measure to their edge
+						local reach = if o.isBuilding then o.size * 0.5 else 0
+						local d = math.max(0, math.sqrt((o.px - sx) ^ 2 + (o.py - sy) ^ 2) - reach) ^ 2
+						if d <= bestD then
+							bestD = d
+							best = o
+						end
+					end
+				end
+			end
+		end
+	end
+	return best
+end
+
+-- tells a player that their base is under attack, at most every 25 seconds
+function Match:alert(n, x: number, y: number, t: number)
+	if n.isHuman and n.player and t - (n.alertAt or -100) > 25 then
+		n.alertAt = t
+		self:sendTo(n.player, { t = "alert", x = x, y = y })
+	end
+end
+
 function Match:tickCombat(dt: number)
 	local t = now()
 	local grid = {}
+	self.grid = grid
 	local function insert(o)
 		local cx = math.clamp(math.floor(o.px / CELL), 0, COLS - 1)
 		local cy = math.clamp(math.floor(o.py / CELL), 0, ROWS - 1)
@@ -723,33 +788,6 @@ function Match:tickCombat(dt: number)
 		insert(b)
 	end
 
-	local function findTarget(sx: number, sy: number, range: number, owner, ground: boolean, air: boolean)
-		local best, bestD = nil, range * range
-		local c0x = math.clamp(math.floor((sx - range - 2) / CELL), 0, COLS - 1)
-		local c1x = math.clamp(math.floor((sx + range + 2) / CELL), 0, COLS - 1)
-		local c0y = math.clamp(math.floor((sy - range - 2) / CELL), 0, ROWS - 1)
-		local c1y = math.clamp(math.floor((sy + range + 2) / CELL), 0, ROWS - 1)
-		for cy = c0y, c1y do
-			for cx = c0x, c1x do
-				local cell = grid[cy * COLS + cx]
-				if cell then
-					for _, o in cell do
-						if o.n ~= owner and o.hp > 0 and ((o.air and air) or (not o.air and ground)) then
-							-- buildings are big: measure to their edge
-							local reach = if o.isBuilding then o.size * 0.5 else 0
-							local d = math.max(0, math.sqrt((o.px - sx) ^ 2 + (o.py - sy) ^ 2) - reach) ^ 2
-							if d <= bestD then
-								bestD = d
-								best = o
-							end
-						end
-					end
-				end
-			end
-		end
-		return best
-	end
-
 	local function fire(attacker, kind: string, dps: number, range: number, hitsAir: number, groundToo: boolean, vsBuildings: number)
 		local target = attacker.target
 		if target then
@@ -760,7 +798,7 @@ function Match:tickCombat(dt: number)
 			end
 		end
 		if not target then
-			target = findTarget(attacker.px, attacker.py, range, attacker.n, groundToo, hitsAir > 0)
+			target = self:findTarget(attacker.px, attacker.py, range, attacker.n, groundToo, hitsAir > 0)
 			attacker.target = target
 		end
 		if not target then
@@ -778,6 +816,7 @@ function Match:tickCombat(dt: number)
 		target.hp -= dps * dt * mult
 		if target.isBuilding then
 			self.bhpDirty[target] = true
+			self:alert(target.n, target.px, target.py, t)
 		else
 			self.hpDirty[target] = true
 		end
@@ -1043,6 +1082,11 @@ function Match:step(dt: number)
 		end
 		if steps >= 3 then
 			self.tickAcc = 0
+		end
+		self.orderAcc += dt
+		if self.orderAcc >= 0.25 then
+			self.orderAcc = 0
+			Orders.step(self, now())
 		end
 		self.botAcc += dt
 		if self.botAcc >= 1 then

@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -74,6 +75,7 @@ local Config = require(Shared.Config)
 local Map = require(Shared.Map)
 local Art = require(script.Art)
 local MapView = require(script.MapView)
+local Sfx = require(script.Sfx)
 local UI = require(script.Ui)
 
 local remotes = ReplicatedStorage:WaitForChild("TerraForgeRemotes")
@@ -110,6 +112,8 @@ local state = {
 	eco = nil,
 	defeated = false,
 	rallyFor = nil,
+	amove = false, -- attack-move is armed: the next tap on the map gives it
+	groups = {}, -- number key -> unit ids
 }
 
 local function me()
@@ -121,6 +125,10 @@ local function goMenu()
 	state.spectator = false
 	state.defeated = false
 	state.rallyFor = nil
+	state.amove = false
+	MapView.boxArmed = false
+	UI.setArmed("amove", false)
+	UI.setArmed("box", false)
 	MapView.setMode("menu")
 	UI.showMenu()
 end
@@ -202,6 +210,9 @@ function handlers.phase(msg)
 		UI.setPhase("ended", state.spectator)
 		UI.results(msg, MapView.myId)
 		MapView.setBuild(nil)
+		if not state.spectator then
+			Sfx.play(if msg.winner ~= 0 and msg.winner == MapView.myId then "win" else "lose")
+		end
 	end
 end
 
@@ -234,6 +245,40 @@ for g, group in UI.GROUPS do
 	end
 end
 
+local ORDER_TEXT = { move = "едут", amove = "атака с ходу", attack = "атакуют цель", stop = "стоят", hold = "держат позицию" }
+
+-- one line about the selected units: what they are, their health, guns and current order
+local function selectionInfo(): string?
+	local kinds, count, hp, maxHp, order = {}, 0, 0, 0, nil
+	for id in MapView.selected do
+		local u = MapView.unitRecord(id)
+		if u then
+			count += 1
+			kinds[u.kind] = (kinds[u.kind] or 0) + 1
+			hp += u.hp
+			maxHp += u.maxHp
+			order = order or u.orderText
+		end
+	end
+	if count == 0 then
+		return nil
+	end
+	local health = math.floor(hp / math.max(maxHp, 1) * 100 + 0.5)
+	local tail = if order then " · " .. order else ""
+	local only = next(kinds)
+	if next(kinds, only) == nil then
+		local def = Config.UNITS[only]
+		return string.format("%s ×%d · здоровье %d%% · урон %d/с · дальность %g · скорость %g%s", def.title, count, health, def.dps, def.range, def.speed, tail)
+	end
+	local parts = {}
+	for _, kind in Config.UNIT_ORDER do
+		if kinds[kind] then
+			table.insert(parts, Config.UNITS[kind].title .. " " .. kinds[kind])
+		end
+	end
+	return string.format("%s · здоровье %d%%%s", table.concat(parts, ", "), health, tail)
+end
+
 local function refreshArmy()
 	MapView.refreshSelection()
 	local counts = { inf = 0, veh = 0, air = 0 }
@@ -248,7 +293,7 @@ local function refreshArmy()
 			end
 		end
 	end
-	UI.setArmy(counts, selected)
+	UI.setArmy(counts, selected, selectionInfo())
 end
 
 local function selectedIds(): { number }
@@ -257,6 +302,31 @@ local function selectedIds(): { number }
 		table.insert(ids, id)
 	end
 	return ids
+end
+
+local function shiftHeld(): boolean
+	return UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+end
+
+-- with a mouse a click picks one unit (Shift adds); on a touch screen a tap adds or removes
+local function viaMouse(): boolean
+	local t = UserInputService:GetLastInputType()
+	return t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.MouseButton2 or t == Enum.UserInputType.MouseMovement
+end
+
+local function select(ids: { number }, add: boolean)
+	if not add then
+		table.clear(MapView.selected)
+	end
+	for _, id in ids do
+		MapView.selected[id] = true
+	end
+	refreshArmy()
+end
+
+local function setAmove(on: boolean)
+	state.amove = on
+	UI.setArmed("amove", on)
 end
 
 UI.onSelectKind = function(group)
@@ -285,6 +355,7 @@ end
 
 UI.onClearSelection = function()
 	table.clear(MapView.selected)
+	setAmove(false)
 	refreshArmy()
 end
 
@@ -385,8 +456,18 @@ function handlers.toast(msg)
 	end
 end
 
+-- the base is under attack: a siren, a warning and a red ring where it happens
+function handlers.alert(msg)
+	if state.screen == "play" and not state.spectator then
+		Sfx.play("alarm")
+		UI.toast("База атакована! Кнопка с командным центром наверху вернёт к ней.", true, 4)
+		MapView.marker(msg.x, msg.y, Color3.fromRGB(255, 80, 70), 5)
+	end
+end
+
 function handlers.defeat()
 	state.defeated = true
+	Sfx.play("lose")
 	if state.screen == "play" then
 		MapView.setBuild(nil)
 		UI.hideFactory()
@@ -439,9 +520,62 @@ local function ownerName(owner: number): string
 	return if n then n.name else "?"
 end
 
-local function moveSelected(x: number, y: number)
-	action:FireServer("move", selectedIds(), x, y)
-	MapView.marker(x + 0.5, y + 0.5)
+local function canCommand(): boolean
+	return state.screen == "play" and not state.spectator and not state.defeated and state.phase == "game"
+end
+
+-- an order for the selected units; targetRef = enemy unit id, or minus a building id
+local function sendOrder(kind: string, x: number, y: number, targetRef: number?): boolean
+	local ids = selectedIds()
+	if #ids == 0 then
+		return false
+	end
+	action:FireServer("order", ids, x, y, kind, targetRef)
+	for _, id in ids do
+		local u = MapView.unitRecord(id)
+		if u then
+			u.orderText = ORDER_TEXT[kind]
+		end
+	end
+	Sfx.play("order")
+	refreshArmy()
+	return true
+end
+
+local RED = Color3.fromRGB(255, 80, 70)
+local ORANGE = Color3.fromRGB(255, 170, 60)
+
+-- the enemy under a screen point, as an order target, and its middle
+local function enemyAt(sx: number, sy: number): (number?, number?, number?)
+	local what, id = MapView.thingAt(sx, sy)
+	if what == "unit" and id then
+		local u = MapView.unitRecord(id)
+		if u and u.owner ~= MapView.myId then
+			return id, u.x, u.y
+		end
+	elseif what == "building" and id then
+		local b = MapView.buildingRecord(id)
+		if b and b.owner ~= MapView.myId then
+			return -id, b.cx, b.cy
+		end
+	end
+	return nil, nil, nil
+end
+
+-- the selected units attack what is under the finger, or go to the tile (fighting on the way if armed)
+local function command(x: number, y: number, sx: number, sy: number)
+	local ref, ex, ey = enemyAt(sx, sy)
+	if ref and ex and ey then
+		sendOrder("attack", ex, ey, ref)
+		MapView.marker(ex, ey, RED)
+	elseif state.amove then
+		sendOrder("amove", x + 0.5, y + 0.5)
+		MapView.marker(x + 0.5, y + 0.5, ORANGE)
+	else
+		sendOrder("move", x + 0.5, y + 0.5)
+		MapView.marker(x + 0.5, y + 0.5)
+	end
+	setAmove(false)
 end
 
 local function tryBuild(kind: string, x: number, y: number)
@@ -462,12 +596,13 @@ local function tryBuild(kind: string, x: number, y: number)
 end
 
 MapView.onTap = function(x, y, sx, sy)
-	if state.spectator or state.defeated or state.phase ~= "game" then
+	if not canCommand() then
 		return
 	end
 	if state.rallyFor then
 		action:FireServer("rally", state.rallyFor, x, y)
 		MapView.marker(x + 0.5, y + 0.5, Color3.fromRGB(255, 210, 90))
+		Sfx.play("order")
 		state.rallyFor = nil
 		return
 	end
@@ -476,6 +611,10 @@ MapView.onTap = function(x, y, sx, sy)
 		return
 	end
 	local hasSelection = next(MapView.selected) ~= nil
+	if hasSelection and (state.amove or enemyAt(sx, sy)) then
+		command(x, y, sx, sy)
+		return
+	end
 	-- with nothing selected, a building under the finger wins over units parked next to it
 	if not hasSelection then
 		local bid = MapView.buildingAt(sx, sy)
@@ -487,6 +626,7 @@ MapView.onTap = function(x, y, sx, sy)
 			elseif def.units then
 				local info = factoryInfo(bid)
 				if info then
+					Sfx.play("click")
 					UI.showFactory(info)
 				end
 			else
@@ -498,12 +638,17 @@ MapView.onTap = function(x, y, sx, sy)
 	end
 	local unit = MapView.unitAt(sx, sy)
 	if unit then
-		MapView.selected[unit] = if MapView.selected[unit] then nil else true
-		refreshArmy()
+		if viaMouse() and not shiftHeld() then
+			select({ unit }, false)
+		else
+			MapView.selected[unit] = if MapView.selected[unit] then nil else true
+			refreshArmy()
+		end
+		Sfx.play("click")
 		return
 	end
 	if hasSelection then
-		moveSelected(x, y)
+		command(x, y, sx, sy)
 		return
 	end
 	if UI.factoryId then
@@ -517,9 +662,9 @@ MapView.onTap = function(x, y, sx, sy)
 	end
 end
 
--- right mouse button: cancel building, or send the selected units
-MapView.onAltTap = function(x, y)
-	if state.spectator or state.defeated or state.phase ~= "game" then
+-- right mouse button: cancel building or the rally point, or command the selected units
+MapView.onAltTap = function(x, y, sx, sy)
+	if not canCommand() then
 		return
 	end
 	if UI.buildSel then
@@ -527,9 +672,104 @@ MapView.onAltTap = function(x, y)
 	elseif state.rallyFor then
 		state.rallyFor = nil
 	elseif next(MapView.selected) ~= nil then
-		moveSelected(x, y)
+		command(x, y, sx, sy)
 	end
 end
+
+-- a selection box: the player's units inside it (Shift adds to the selection)
+MapView.onBox = function(x0, y0, x1, y1)
+	MapView.boxArmed = false
+	UI.setArmed("box", false)
+	if not canCommand() then
+		return
+	end
+	local ids = MapView.unitsInBox(x0, y0, x1, y1)
+	select(ids, shiftHeld())
+	if #ids > 0 then
+		Sfx.play("click")
+	end
+end
+
+UI.onCommand = function(name)
+	if not canCommand() then
+		return
+	end
+	local hasSelection = next(MapView.selected) ~= nil
+	if name == "screen" then
+		select(MapView.ownUnitsOnScreen(), false)
+	elseif name == "box" then
+		MapView.boxArmed = not MapView.boxArmed
+		UI.setArmed("box", MapView.boxArmed)
+		if MapView.boxArmed then
+			UI.toast("Проведи пальцем рамку вокруг своих войск.")
+		end
+	elseif not hasSelection then
+		UI.toast("Сначала выбери войска.", true)
+	elseif name == "amove" then
+		setAmove(not state.amove)
+		if state.amove then
+			UI.toast("Нажми на карту: войска пойдут туда и будут бить всех врагов по пути.")
+		end
+	elseif name == "stop" or name == "hold" then
+		sendOrder(name, 0, 0)
+	end
+end
+
+-- keys: F attack-move, X stop, H hold, Space to the base, Backspace drops the selection,
+-- Ctrl + 1-9 remembers a group, 1-9 picks it (twice quickly: the camera goes there)
+local DIGITS = {
+	[Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2, [Enum.KeyCode.Three] = 3,
+	[Enum.KeyCode.Four] = 4, [Enum.KeyCode.Five] = 5, [Enum.KeyCode.Six] = 6,
+	[Enum.KeyCode.Seven] = 7, [Enum.KeyCode.Eight] = 8, [Enum.KeyCode.Nine] = 9,
+}
+local lastGroup, lastGroupAt = 0, 0
+
+local function onKey(input: InputObject)
+	local key = input.KeyCode
+	local ctrl = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+	if key == Enum.KeyCode.Space then
+		UI.onBase()
+	elseif key == Enum.KeyCode.Backspace then
+		UI.selectBuild(nil)
+		UI.onClearSelection()
+	elseif key == Enum.KeyCode.F then
+		UI.onCommand("amove")
+	elseif key == Enum.KeyCode.X then
+		UI.onCommand("stop")
+	elseif key == Enum.KeyCode.H then
+		UI.onCommand("hold")
+	elseif DIGITS[key] then
+		local g = DIGITS[key]
+		if ctrl then
+			state.groups[g] = selectedIds()
+			UI.toast(string.format("Группа %d: %d юнитов. Нажми %d, чтобы выбрать её.", g, #state.groups[g], g))
+			return
+		end
+		local ids = {}
+		local sx, sy = 0, 0
+		for _, id in state.groups[g] or {} do
+			local u = MapView.unitRecord(id)
+			if u then
+				table.insert(ids, id)
+				sx += u.x
+				sy += u.y
+			end
+		end
+		state.groups[g] = ids
+		select(ids, shiftHeld())
+		if #ids > 0 and lastGroup == g and os.clock() - lastGroupAt < 0.4 then
+			MapView.focusOn(sx / #ids, sy / #ids)
+		end
+		lastGroup, lastGroupAt = g, os.clock()
+	end
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed or input.UserInputType ~= Enum.UserInputType.Keyboard or not canCommand() then
+		return
+	end
+	safe("клавиша", onKey, input)
+end)
 
 ---------------------------------------------------------------- per frame
 
@@ -538,8 +778,8 @@ do
 	MapView.onTap = function(x, y, sx, sy)
 		safe("нажатие", onTap, x, y, sx, sy)
 	end
-	MapView.onAltTap = function(x, y)
-		safe("нажатие", onAltTap, x, y)
+	MapView.onAltTap = function(x, y, sx, sy)
+		safe("нажатие", onAltTap, x, y, sx, sy)
 	end
 end
 

@@ -1,4 +1,4 @@
--- The match screen: the player's card, money and units at the top, the leaderboard, the army
+-- The match screen: the player's card, metal, energy and army at the top, the leaderboard, the army
 -- panel and the build bar at the bottom, zoom buttons, the minimap frame, building tips, the
 -- banner (spectator, results, defeat) and big announcements. Part of the interface; Ui puts
 -- it together.
@@ -21,7 +21,7 @@ local Hud = {}
 
 -- unit kinds grouped for the army panel: infantry, vehicles, aircraft
 local GROUPS = {
-	inf = { kinds = { "infantry", "rocket" }, icon = "infantry", title = "Пехота" },
+	inf = { kinds = { "infantry", "rocket", "engineer" }, icon = "infantry", title = "Пехота" },
 	veh = { kinds = { "scout", "tank", "artillery" }, icon = "tank", title = "Техника" },
 	air = { kinds = { "fighter", "gunship" }, icon = "fighter", title = "Авиация" },
 }
@@ -94,7 +94,8 @@ function Hud.build(context, play: Instance)
 	Theme.list(Enum.FillDirection.Horizontal, 4, nil, Enum.VerticalAlignment.Center).Parent = res
 	refs.res = {
 		pop = Widgets.resChip(res, "pop", 1, ctx.color),
-		money = Widgets.resChip(res, "money", 2, ctx.color),
+		metal = Widgets.resChip(res, "metal", 2, ctx.color),
+		energy = Widgets.resChip(res, "energy", 3, ctx.color),
 	}
 
 	local right = make("Frame", {
@@ -255,17 +256,18 @@ function Hud.build(context, play: Instance)
 		}, { Theme.corner(12), make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }) })
 		local img = icon(def.icon, 38, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), color = ctx.color, Parent = b })
 		Theme.label({
-			Text = def.name,
+			Text = def.short or def.name,
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.new(0.5, 0, 0, 43),
 			Size = UDim2.new(1, -4, 0, 24),
-			TextSize = 11,
+			-- long names shrink to fit narrow buttons
+			TextScaled = true,
 			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextYAlignment = Enum.TextYAlignment.Center,
 			FontFace = font(Enum.FontWeight.Bold),
 			Parent = b,
-		})
+		}, { make("UITextSizeConstraint", { MaxTextSize = 11 }) })
 		local row, costLabel = Widgets.costRow(def.cost, b, 11)
 		row.AnchorPoint = Vector2.new(0.5, 1)
 		row.Position = UDim2.new(0.5, 0, 1, -4)
@@ -354,13 +356,20 @@ function Hud.build(context, play: Instance)
 	refs.announce = announce
 end
 
--- the build bar sits between the army panel on the left and the zoom buttons on the right;
--- w = width of the interface in its own units
+-- the build bar sits between the army panel on the left and the zoom buttons on the right, and
+-- its buttons narrow down a little on small screens so all of them fit (the bar scrolls if
+-- they still do not); w = width of the interface in its own units
 function Hud.layout(w: number)
 	if refs.buildScroll then
 		local left, right = 16 + 250 + 8, 16 + 44 + 8
-		refs.buildScroll.Size = UDim2.fromOffset(math.clamp(w - left - right, 220, 650), 98)
-		refs.buildScroll.Position = UDim2.new(0, left + (w - left - right) / 2, 1, -12)
+		local avail = w - left - right
+		local n = #Config.BUILD_ORDER
+		local bw = math.clamp(math.floor((avail - 12 - (n - 1) * 6) / n), 56, 74)
+		for _, b in refs.buildBtns do
+			b.button.Size = UDim2.fromOffset(bw, 86)
+		end
+		refs.buildScroll.Size = UDim2.fromOffset(math.max(220, math.min(n * bw + (n - 1) * 6 + 12, avail)), 98)
+		refs.buildScroll.Position = UDim2.new(0, left + avail / 2, 1, -12)
 	end
 end
 
@@ -459,12 +468,20 @@ function Hud.announce(title: string, sub: string)
 end
 
 function Hud.setEconomy(eco)
-	refs.res.pop.value.Text = string.format("%d/%d", eco.units or 0, Config.MAX_UNITS_PER_NATION)
-	refs.res.pop.rate.Text = "юниты"
-	refs.res.pop.rate.TextColor3 = C.muted
-	refs.res.money.value.Text = tostring(eco.money) .. " $"
-	refs.res.money.rate.Text = string.format("+%d/с", math.floor(eco.income + 0.5))
-	refs.res.money.rate.TextColor3 = C.ok
+	local pop = eco.pop or 0
+	refs.res.pop.value.Text = string.format("%d/%d", pop, Config.ARMY_LIMIT)
+	refs.res.pop.rate.Text = "армия"
+	refs.res.pop.rate.TextColor3 = if pop >= Config.ARMY_LIMIT then C.bad else C.muted
+	refs.res.metal.value.Text = tostring(eco.money)
+	refs.res.metal.rate.Text = string.format("+%d/с", math.floor(eco.income + 0.5))
+	refs.res.metal.rate.TextColor3 = C.ok
+	-- energy: used / made; red while the base uses more than it makes
+	local made, used = eco.energy or 0, eco.energyUsed or 0
+	local short = used > made
+	refs.res.energy.value.Text = string.format("%d/%d", used, made)
+	refs.res.energy.value.TextColor3 = if short then C.bad else C.ink
+	refs.res.energy.rate.Text = if short then "мало энергии" else "энергия"
+	refs.res.energy.rate.TextColor3 = if short then C.bad else C.muted
 	for g, group in GROUPS do
 		local total = 0
 		for _, kind in group.kinds do
@@ -564,7 +581,13 @@ function Hud.showTip(k: string?)
 	else
 		refs.tipOut.Visible = false
 	end
-	refs.tipCost.Text = string.format("Цена: %d $ · стройка %d с", d.cost, d.time)
+	local energy = ""
+	if d.energy and d.energy > 0 then
+		energy = string.format(" · энергия +%d", d.energy)
+	elseif d.energy and d.energy < 0 then
+		energy = string.format(" · энергия −%d", -d.energy)
+	end
+	refs.tipCost.Text = string.format("Цена: %d металла · стройка %d с%s", d.cost, d.time, energy)
 	refs.tipHint.Visible = ctx.UI.buildSel == k
 	refs.tip.Visible = true
 end

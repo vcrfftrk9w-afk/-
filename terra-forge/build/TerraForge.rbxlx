@@ -47,9 +47,15 @@ Config.MATCH_SECONDS = 20 * 60
 Config.RESULT_SECONDS = 12
 Config.MAX_QUEUE = 10
 
--- money: the command centre pays a base income, extractors and fabricators add more
+-- metal (kept as `money` in the code): the command centre gives a base income, extractors and
+-- fabricators add more; everything is paid in metal
 Config.START_MONEY = 1500
 Config.BASE_INCOME = 8
+-- energy is not stored: buildings make it or use it all the time. When a base uses more than it
+-- makes, its factories, fabricators, towers and repair stations work slower, down to this share
+Config.MIN_POWER = 0.3
+-- the army limit: every unit takes some places in it (pop), whatever the base has built
+Config.ARMY_LIMIT = 100
 -- new buildings must stand this close (tiles, centre to centre) to one of your buildings
 Config.BUILD_RADIUS = 12
 
@@ -61,8 +67,9 @@ Config.BOT_NAMES = {
 }
 
 -- the command centre is placed at the start; the rest are built by players.
--- size = footprint in tiles; cost in money, time in seconds; vision in tiles (fog of war)
-Config.BUILD_ORDER = { "extractor", "fabricator", "barracks", "tankf", "air", "radar", "tower", "aa" }
+-- size = footprint in tiles; cost in metal, time in seconds; vision in tiles (fog of war);
+-- energy = made (+) or used (-) once built
+Config.BUILD_ORDER = { "extractor", "power", "fabricator", "barracks", "tankf", "air", "repair", "radar", "tower", "aa" }
 Config.BUILD = {
 	cc = {
 		name = "Командный центр",
@@ -73,6 +80,7 @@ Config.BUILD = {
 		range = 5,
 		hitsAir = 0.5,
 		vision = 9,
+		energy = 10,
 		desc = "Сердце базы. Если его уничтожат, ты проиграл.",
 	},
 	extractor = {
@@ -85,7 +93,19 @@ Config.BUILD = {
 		income = 6,
 		onPool = true,
 		vision = 5,
-		desc = "Добывает деньги: +6 $/с. Ставится только на месторождение — светящуюся воронку.",
+		desc = "Добывает металл: +6 в секунду. Ставится только на месторождение — светящуюся воронку.",
+	},
+	power = {
+		name = "Электростанция",
+		short = "Электро-\nстанция", -- for the narrow build button
+		icon = "power",
+		size = 2,
+		cost = 250,
+		time = 10,
+		hp = 450,
+		vision = 5,
+		energy = 12,
+		desc = "Даёт +12 энергии. Энергия нужна заводам, башням, радару и ремонту: если её мало, они работают медленнее.",
 	},
 	fabricator = {
 		name = "Фабрикатор",
@@ -96,7 +116,8 @@ Config.BUILD = {
 		hp = 600,
 		income = 5,
 		vision = 5,
-		desc = "Производит деньги где угодно на базе: +5 $/с.",
+		energy = -6,
+		desc = "Делает металл где угодно на базе: +5 в секунду. Берёт много энергии.",
 	},
 	barracks = {
 		name = "Казарма",
@@ -105,12 +126,14 @@ Config.BUILD = {
 		cost = 250,
 		time = 8,
 		hp = 500,
-		units = { "infantry", "rocket" },
+		units = { "infantry", "rocket", "engineer" },
 		vision = 6,
-		desc = "Обучает пехоту и ракетчиков. Нажми на неё, чтобы заказать.",
+		energy = -2,
+		desc = "Обучает пехоту, ракетчиков и инженеров. Нажми на неё, чтобы заказать.",
 	},
 	tankf = {
 		name = "Завод бронетехники",
+		short = "Завод\nтехники",
 		icon = "tankf",
 		size = 3,
 		cost = 600,
@@ -118,6 +141,7 @@ Config.BUILD = {
 		hp = 900,
 		units = { "scout", "tank", "artillery" },
 		vision = 6,
+		energy = -4,
 		desc = "Собирает броневики, танки и артиллерию. Нажми на него, чтобы заказать.",
 	},
 	air = {
@@ -129,7 +153,21 @@ Config.BUILD = {
 		hp = 700,
 		units = { "fighter", "gunship" },
 		vision = 7,
+		energy = -5,
 		desc = "Выпускает истребители и вертолёты. Нажми на него, чтобы заказать.",
+	},
+	repair = {
+		name = "Ремонтная станция",
+		icon = "repair",
+		size = 2,
+		cost = 400,
+		time = 10,
+		hp = 550,
+		vision = 6,
+		energy = -4,
+		heal = 10, -- health per second for each own unit within healRange
+		healRange = 4,
+		desc = "Чинит твои войска рядом с собой: +10 здоровья в секунду каждому.",
 	},
 	radar = {
 		name = "Радар",
@@ -139,8 +177,9 @@ Config.BUILD = {
 		time = 10,
 		hp = 400,
 		vision = 10,
+		energy = -4,
 		radar = 32, -- enemy units this close show on the minimap, even in the fog
-		desc = "Показывает на мини-карте вражеские войска в радиусе 32 клеток, даже в тумане войны.",
+		desc = "Показывает на мини-карте вражеские войска в радиусе 32 клеток, даже в тумане войны. Без энергии не работает.",
 	},
 	tower = {
 		name = "Пушечная башня",
@@ -153,6 +192,7 @@ Config.BUILD = {
 		range = 6,
 		hitsAir = 0,
 		vision = 8,
+		energy = -3,
 		desc = "Сама стреляет по вражеской пехоте и технике в радиусе 6 клеток.",
 	},
 	aa = {
@@ -167,46 +207,53 @@ Config.BUILD = {
 		hitsAir = 1,
 		airOnly = true,
 		vision = 9,
+		energy = -3,
 		desc = "Сбивает вражескую авиацию в радиусе 8 клеток.",
 	},
 }
 
 -- hp, damage per second, range and vision in tiles; hitsAir = damage multiplier against aircraft;
--- size = sprite size in tiles; gun = turret sprite, if the unit has one
-Config.UNIT_ORDER = { "infantry", "rocket", "scout", "tank", "artillery", "fighter", "gunship" }
+-- size = sprite size in tiles; gun = turret sprite, if the unit has one; pop = places in the army
+-- limit; repairs = health per second an engineer gives a building within range
+Config.UNIT_ORDER = { "infantry", "rocket", "engineer", "scout", "tank", "artillery", "fighter", "gunship" }
 Config.UNITS = {
 	infantry = {
-		title = "Пехота", name = "пехота", icon = "infantry", cost = 60, time = 4, size = 1.8,
+		title = "Пехота", name = "пехота", icon = "infantry", cost = 60, time = 4, size = 1.8, pop = 1,
 		hp = 60, dps = 7, range = 2, speed = 1.7, vision = 6, hitsAir = 0.25, power = 0.03,
 		desc = "Дешёвая. Может стрелять по авиации.",
 	},
 	rocket = {
-		title = "Ракетчик", name = "ракетчик", icon = "rocket", cost = 110, time = 6, size = 1.8,
+		title = "Ракетчик", name = "ракетчик", icon = "rocket", cost = 110, time = 6, size = 1.8, pop = 1,
 		hp = 55, dps = 9, range = 3, speed = 1.5, vision = 6, hitsAir = 0.8, power = 0.04,
 		desc = "Сильно бьёт по технике и авиации, слаб против пехоты.",
 	},
+	engineer = {
+		title = "Инженер", name = "инженер", icon = "engineer", cost = 90, time = 5, size = 1.3, pop = 1,
+		hp = 60, dps = 0, range = 3, speed = 1.8, vision = 6, hitsAir = 0, hitsGround = false, repairs = 15, power = 0.02,
+		desc = "Чинит постройки рядом с собой и ускоряет стройку. Не стреляет.",
+	},
 	scout = {
-		title = "Броневик", name = "броневик", icon = "scout", gun = "scout_gun", cost = 180, time = 6, size = 1.5,
+		title = "Броневик", name = "броневик", icon = "scout", gun = "scout_gun", cost = 180, time = 6, size = 1.5, pop = 2,
 		hp = 130, dps = 10, range = 2.5, speed = 3.4, vision = 10, hitsAir = 0.2, power = 0.05,
 		desc = "Быстрый и зоркий. Хорош для разведки.",
 	},
 	tank = {
-		title = "Танк", name = "танк", icon = "tank", gun = "tank_gun", cost = 320, time = 9, size = 1.7,
+		title = "Танк", name = "танк", icon = "tank", gun = "tank_gun", cost = 320, time = 9, size = 1.7, pop = 3,
 		hp = 260, dps = 18, range = 3, speed = 2.3, vision = 7, hitsAir = 0, power = 0.08,
 		desc = "Крепкая броня, силён против пехоты. По авиации не стреляет.",
 	},
 	artillery = {
-		title = "Артиллерия", name = "артиллерия", icon = "artillery", gun = "artillery_gun", cost = 380, time = 11, size = 1.7,
+		title = "Артиллерия", name = "артиллерия", icon = "artillery", gun = "artillery_gun", cost = 380, time = 11, size = 1.7, pop = 3,
 		hp = 110, dps = 22, range = 7, speed = 1.4, vision = 8, hitsAir = 0, power = 0.06, vsBuildings = 1.6,
 		desc = "Бьёт издалека, особенно по постройкам. Береги от танков.",
 	},
 	fighter = {
-		title = "Истребитель", name = "истребитель", icon = "fighter", cost = 400, time = 10, size = 1.8,
+		title = "Истребитель", name = "истребитель", icon = "fighter", cost = 400, time = 10, size = 1.8, pop = 3,
 		hp = 90, dps = 16, range = 3.5, speed = 6.5, vision = 11, hitsAir = 1, hitsGround = false, air = true, power = 0.04,
 		desc = "Охотится только за вражеской авиацией.",
 	},
 	gunship = {
-		title = "Вертолёт", name = "вертолёт", icon = "gunship", cost = 480, time = 12, size = 1.8,
+		title = "Вертолёт", name = "вертолёт", icon = "gunship", cost = 480, time = 12, size = 1.8, pop = 4,
 		hp = 140, dps = 15, range = 3, speed = 4.5, vision = 9, hitsAir = 0, air = true, power = 0.06,
 		desc = "Летает где угодно и бьёт по наземным войскам и постройкам.",
 	},
@@ -218,8 +265,7 @@ Config.VS = {
 	scout = { infantry = 1.4, rocket = 1.3 },
 	tank = { infantry = 1.6, rocket = 1.3 },
 }
-Config.MAX_UNITS = 240
-Config.MAX_UNITS_PER_NATION = 60
+Config.MAX_UNITS = 240 -- all bases together, to keep the server fast
 
 return Config
 ]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">Map</string><ProtectedString name="Source"><![CDATA[-- The skirmish map: ground kinds per tile, resource pools and the four base spots.
@@ -633,7 +679,8 @@ local Orders = require(script.Parent.Orders)
 
 local Bots = {}
 
-local BOT_PLAN = { "extractor", "barracks", "extractor", "tankf", "extractor", "tower", "air", "extractor", "tower", "aa", "fabricator", "tankf", "extractor", "tower" }
+-- power plants keep up with the energy the rest of the plan uses
+local BOT_PLAN = { "extractor", "barracks", "extractor", "tankf", "power", "extractor", "tower", "air", "power", "extractor", "tower", "aa", "power", "fabricator", "tankf", "power", "extractor", "tower" }
 
 local function now(): number
 	return workspace:GetServerTimeNow()
@@ -711,12 +758,20 @@ function Bots:botThink(n, dt: number)
 		end
 		bot.step += 1
 	end
-	-- factories keep producing while there is money left over for building
+	-- factories keep producing fighting units while there is metal left over for building
 	for _, b in self.buildings do
 		local bd = Config.BUILD[b.kind]
 		if b.n == n and bd.units then
 			if n.money > 350 then
-				b.auto = b.auto or bd.units[self.rng:NextInteger(1, #bd.units)]
+				if not b.auto then
+					local fighters = {}
+					for _, kind in bd.units do
+						if Config.UNITS[kind].dps > 0 then
+							table.insert(fighters, kind)
+						end
+					end
+					b.auto = fighters[self.rng:NextInteger(1, #fighters)]
+				end
 			elseif not b.autoPaid then
 				b.auto = nil
 			end
@@ -882,12 +937,16 @@ function Combat:tickCombat(dt: number)
 
 	for _, u in self.units do
 		local def = Config.UNITS[u.kind]
-		fire(u, u.kind, def.dps, def.range, def.hitsAir, def.hitsGround ~= false, def.vsBuildings or 1)
+		if def.dps > 0 then
+			fire(u, u.kind, def.dps, def.range, def.hitsAir, def.hitsGround ~= false, def.vsBuildings or 1)
+		end
 	end
 	for _, b in self.buildings do
 		local def = Config.BUILD[b.kind]
 		if def.dps and b.n.alive and b.built >= 1 then
-			fire(b, b.kind, def.dps, def.range, def.hitsAir, not def.airOnly, 1)
+			-- towers short of energy fire slower; the command centre has its own
+			local dps = if def.energy and def.energy < 0 then def.dps * b.n.supply else def.dps
+			fire(b, b.kind, dps, def.range, def.hitsAir, not def.airOnly, 1)
 		end
 	end
 
@@ -907,8 +966,9 @@ function Combat:tickCombat(dt: number)
 end
 
 return Combat
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">Economy</string><ProtectedString name="Source"><![CDATA[-- The economy of a skirmish: income, construction, factory queues and production, and what
--- each base is worth. These are methods of Match (Match.luau adds them); self is the match.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">Economy</string><ProtectedString name="Source"><![CDATA[-- The economy of a skirmish: metal income, energy, construction, factory queues and production,
+-- repairs, and what each base is worth. These are methods of Match (Match.luau adds them);
+-- self is the match. Metal is kept in n.money.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -917,7 +977,7 @@ local Map = require(Shared.Map)
 local Economy = {}
 
 function Economy:lackText(n, cost: number): string
-	return "Не хватает денег: нужно ещё " .. math.ceil(cost - n.money) .. " $"
+	return "Не хватает металла: нужно ещё " .. math.ceil(cost - n.money)
 end
 
 ---------------------------------------------------------------- factories
@@ -959,7 +1019,7 @@ function Economy:queueUnit(player: Player, id: number, kind: string)
 	self:sendEconomy()
 end
 
--- removes the last ordered unit and returns its money
+-- removes the last ordered unit and returns its metal
 function Economy:cancelUnit(player: Player, id: number)
 	local n, b = self:factoryOf(player, id)
 	if not n or #b.queue == 0 then
@@ -998,17 +1058,63 @@ function Economy:setRally(player: Player, id: number, x: number, y: number)
 	self:toast(n, "Точка сбора поставлена: новые юниты поедут туда.")
 end
 
----------------------------------------------------------------- income and production
+---------------------------------------------------------------- energy, income and production
+
+-- how much energy each base makes and uses, and the share of its needs that is met (supply):
+-- buildings that use energy work at that share of their speed
+function Economy:tickEnergy()
+	for _, n in self.seats do
+		n.energy, n.energyUsed = 0, 0
+	end
+	for _, b in self.buildings do
+		local e = Config.BUILD[b.kind].energy
+		if e and b.built >= 1 then
+			if e > 0 then
+				b.n.energy += e
+			else
+				b.n.energyUsed -= e
+			end
+		end
+	end
+	for _, n in self.seats do
+		n.supply = if n.energyUsed <= n.energy then 1 else math.max(Config.MIN_POWER, n.energy / n.energyUsed)
+	end
+end
+
+-- the share of its normal speed a building works at: those using energy depend on the supply
+local function speedOf(b): number
+	local e = Config.BUILD[b.kind].energy
+	return if e and e < 0 then b.n.supply else 1
+end
+
+-- own buildings under construction that engineers stand next to: building -> engineers
+function Economy:engineerHelp()
+	local help = {}
+	for _, u in self.units do
+		local def = Config.UNITS[u.kind]
+		if def.repairs then
+			for _, b in self.buildings do
+				if b.n == u.n and b.built < 1 and math.sqrt((b.px - u.px) ^ 2 + (b.py - u.py) ^ 2) - b.size * 0.5 <= def.range then
+					help[b] = (help[b] or 0) + 1
+				end
+			end
+		end
+	end
+	return help
+end
 
 function Economy:tickEconomy(dt: number)
+	self:tickEnergy()
 	for _, n in self.seats do
 		n.income = if n.alive and n.cc then Config.BASE_INCOME else 0
 	end
+	local help = self:engineerHelp()
 	for _, b in self.buildings do
 		local n = b.n
 		local def = Config.BUILD[b.kind]
 		if b.built < 1 then
-			b.built = math.min(1, b.built + dt / def.time)
+			-- each engineer next to the site adds the normal speed again, up to three times faster
+			b.built = math.min(1, b.built + dt * (1 + math.min(2, help[b] or 0)) / def.time)
 			if b.built >= 1 then
 				self:send({ t = "bdone", id = b.id })
 				self:toast(n, "Достроено: " .. def.name)
@@ -1016,13 +1122,13 @@ function Economy:tickEconomy(dt: number)
 			continue
 		end
 		if def.income then
-			n.income += def.income
+			n.income += def.income * speedOf(b)
 		end
 		if not def.units then
 			continue
 		end
 		-- queued units are paid when ordered; in auto mode each unit is paid when it starts
-		b.blocked = false
+		b.blocked = nil
 		local current = b.queue[1]
 		if not current and b.auto then
 			if not b.autoPaid then
@@ -1031,16 +1137,16 @@ function Economy:tickEconomy(dt: number)
 					n.money -= cost
 					b.autoPaid = b.auto
 				else
-					b.blocked = true
+					b.blocked = "metal"
 				end
 			end
 			current = b.autoPaid
 		end
 		if current then
-			if n.unitTotal >= Config.MAX_UNITS_PER_NATION then
-				b.blocked = true
+			if n.pop + Config.UNITS[current].pop > Config.ARMY_LIMIT then
+				b.blocked = "army"
 			else
-				b.prog = math.min(1, b.prog + dt / Config.UNITS[current].time)
+				b.prog = math.min(1, b.prog + dt * speedOf(b) / Config.UNITS[current].time)
 				if b.prog >= 1 then
 					self:spawnUnit(n, current, b.px, b.py + b.size / 2 + 0.8, b.rally)
 					b.prog = 0
@@ -1060,6 +1166,41 @@ function Economy:tickEconomy(dt: number)
 	end
 end
 
+-- repair stations mend the owner's units around them; engineers mend the most damaged own
+-- building within their reach
+function Economy:tickRepair(dt: number)
+	for _, b in self.buildings do
+		local def = Config.BUILD[b.kind]
+		if def.heal and b.built >= 1 then
+			local r2 = def.healRange * def.healRange
+			local amount = def.heal * speedOf(b) * dt
+			for _, u in self.units do
+				if u.n == b.n and u.hp < u.maxHp and (u.px - b.px) ^ 2 + (u.py - b.py) ^ 2 <= r2 then
+					u.hp = math.min(u.maxHp, u.hp + amount)
+					self.hpDirty[u] = true
+				end
+			end
+		end
+	end
+	for _, u in self.units do
+		local def = Config.UNITS[u.kind]
+		if def.repairs then
+			local best, worst = nil, 1
+			for _, b in self.buildings do
+				if b.n == u.n and b.built >= 1 and b.hp < b.maxHp and b.hp / b.maxHp < worst then
+					if math.sqrt((b.px - u.px) ^ 2 + (b.py - u.py) ^ 2) - b.size * 0.5 <= def.range then
+						best, worst = b, b.hp / b.maxHp
+					end
+				end
+			end
+			if best then
+				best.hp = math.min(best.maxHp, best.hp + def.repairs * dt)
+				self.bhpDirty[best] = true
+			end
+		end
+	end
+end
+
 function Economy:sendEconomy()
 	for player, n in self.humans do
 		local list = {}
@@ -1068,6 +1209,7 @@ function Economy:sendEconomy()
 				table.insert(list, {
 					id = b.id,
 					p = if b.blocked then -math.max(b.prog, 0.001) else b.prog,
+					w = b.blocked, -- what a stopped factory waits for: "metal" or "army"
 					built = b.built,
 					q = b.queue,
 					auto = b.auto or "",
@@ -1078,7 +1220,10 @@ function Economy:sendEconomy()
 			t = "eco",
 			money = math.floor(n.money),
 			income = n.income,
+			energy = n.energy,
+			energyUsed = n.energyUsed,
 			army = n.army,
+			pop = n.pop,
 			units = n.unitTotal,
 			list = list,
 		})
@@ -1228,8 +1373,12 @@ function Match.new(event: RemoteEvent)
 			alive = true,
 			money = Config.START_MONEY,
 			income = 0,
+			energy = 0,
+			energyUsed = 0,
+			supply = 1,
 			army = {},
 			unitTotal = 0,
+			pop = 0,
 			bot = self:newBot(),
 		}
 		self.nations[i] = n
@@ -1496,12 +1645,13 @@ end
 
 ---------------------------------------------------------------- units
 
--- creates a unit next to (x, y); returns the unit, or nil when a limit is reached
+-- creates a unit next to (x, y); returns the unit, or nil when the army limit or the server's
+-- unit limit is reached
 function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
-	if self.unitCount >= Config.MAX_UNITS or n.unitTotal >= Config.MAX_UNITS_PER_NATION then
+	local def = Config.UNITS[kind]
+	if self.unitCount >= Config.MAX_UNITS or n.pop + def.pop > Config.ARMY_LIMIT then
 		return nil
 	end
-	local def = Config.UNITS[kind]
 	if not def.air then
 		local lx, ly = Path.nearestLand(x + self.rng:NextNumber() * 2 - 1, y + self.rng:NextNumber(), 4)
 		if lx then
@@ -1531,6 +1681,7 @@ function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
 	end
 	n.army[kind] = (n.army[kind] or 0) + 1
 	n.unitTotal += 1
+	n.pop += def.pop
 	self.units[u.id] = u
 	if rally then
 		local a, r = self.rng:NextNumber() * math.pi * 2, self.rng:NextNumber() * 1.5
@@ -1548,6 +1699,7 @@ function Match:removeUnit(u)
 		self.unitCount -= 1
 		u.n.army[u.kind] = math.max(0, (u.n.army[u.kind] or 1) - 1)
 		u.n.unitTotal = math.max(0, u.n.unitTotal - 1)
+		u.n.pop = math.max(0, u.n.pop - Config.UNITS[u.kind].pop)
 		self:send({ t = "ugone", id = u.id })
 	end
 end
@@ -1757,6 +1909,7 @@ function Match:step(dt: number)
 			self.tickAcc -= Config.TICK
 			steps += 1
 			self:tickEconomy(Config.TICK)
+			self:tickRepair(Config.TICK)
 			self:tickCombat(Config.TICK)
 		end
 		if steps >= 3 then
@@ -2174,7 +2327,7 @@ function Path.inMap(x: number, y: number): (number, number)
 end
 
 return Path
-]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX00000026"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000025"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000024"><Properties><string name="Name">TerraForgeClient</string><ProtectedString name="Source"><![CDATA[-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
+]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX00000027"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000026"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000025"><Properties><string name="Name">TerraForgeClient</string><ProtectedString name="Source"><![CDATA[-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -2290,6 +2443,8 @@ local state = {
 	rallyFor = nil,
 	amove = false, -- attack-move is armed: the next tap on the map gives it
 	groups = {}, -- number key -> unit ids
+	shortOfEnergy = false, -- the base uses more energy than it makes
+	armyFull = false, -- a factory waits because the army limit is reached
 }
 
 local function me()
@@ -2339,7 +2494,7 @@ local function enterPlay(spectator: boolean)
 		UI.announce("БОЙ НАЧАЛСЯ", "Строй базу и разгроми врагов")
 		task.delay(2.6, function()
 			if state.screen == "play" and not state.spectator then
-				UI.toast("Выбери внизу «Экстрактор» и нажми на светящееся месторождение рядом с базой — это деньги. Потом построй казарму и завод бронетехники.", false, 8)
+				UI.toast("Выбери внизу «Экстрактор» и нажми на светящееся месторождение рядом с базой — это металл. Потом построй казарму и завод бронетехники, а когда энергии станет мало — электростанцию.", false, 8)
 			end
 		end)
 	end
@@ -2445,6 +2600,9 @@ local function selectionInfo(): string?
 	local only = next(kinds)
 	if next(kinds, only) == nil then
 		local def = Config.UNITS[only]
+		if def.repairs then
+			return string.format("%s ×%d · здоровье %d%% · ремонт %d/с · скорость %g%s", def.title, count, health, def.repairs, def.speed, tail)
+		end
 		return string.format("%s ×%d · здоровье %d%% · урон %d/с · дальность %g · скорость %g%s", def.title, count, health, def.dps, def.range, def.speed, tail)
 	end
 	local parts = {}
@@ -2597,7 +2755,7 @@ local function factoryInfo(id: number)
 	if not b then
 		return nil
 	end
-	return { id = id, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto }
+	return { id = id, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto, wait = b.wait, slow = state.shortOfEnergy }
 end
 
 local function refreshFactory()
@@ -2617,6 +2775,23 @@ function handlers.eco(msg)
 	state.eco = msg
 	MapView.setProgress(msg.list)
 	UI.setEconomy(msg)
+	-- say once when the base runs short of energy, and when the army limit stops a factory
+	local short = (msg.energyUsed or 0) > (msg.energy or 0)
+	if short and not state.shortOfEnergy and state.screen == "play" and not state.spectator then
+		UI.toast("Не хватает энергии: заводы, башни и ремонт работают медленнее, радар не видит. Построй электростанцию.", true, 5)
+	end
+	state.shortOfEnergy = short
+	MapView.setPowered(not short)
+	local full = false
+	for _, e in msg.list do
+		if e.w == "army" then
+			full = true
+		end
+	end
+	if full and not state.armyFull and state.screen == "play" and not state.spectator then
+		UI.toast(string.format("Армия полная: %d из %d мест. Новые юниты выйдут, когда места освободятся.", msg.pop or 0, Config.ARMY_LIMIT), true, 5)
+	end
+	state.armyFull = full
 	refreshFactory()
 end
 
@@ -2774,7 +2949,7 @@ local function tryBuild(kind: string, x: number, y: number)
 	local cost = Config.BUILD[kind].cost
 	local money = if state.eco then state.eco.money else 0
 	if money < cost then
-		UI.toast("Не хватает денег: нужно ещё " .. math.ceil(cost - money) .. " $", true)
+		UI.toast("Не хватает металла: нужно ещё " .. math.ceil(cost - money), true)
 		return
 	end
 	action:FireServer("build", kind, x, y)
@@ -3290,7 +3465,115 @@ function Camera.init(viewFrame: Frame, boardFrame: Frame)
 end
 
 return Camera
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">Effects</string><ProtectedString name="Source"><![CDATA[-- Short-lived pictures on the battlefield: shots, rockets, explosions, smoke and dust, and marks
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">Drawn</string><ProtectedString name="Source"><![CDATA[-- Pictures drawn with interface shapes for the buildings and units that have no painted sprite
+-- yet: the radar, the power plant, the repair station and the engineer. A drawing fills its
+-- parent; it returns its holder and the parts the map animates, and can be recoloured for a
+-- team. Once a painted sprite with the same name is in the sprite sheet, the map uses that.
+local Theme = require(script.Parent.Theme)
+
+local make = Theme.make
+
+local Drawn = {}
+
+local PAD = Color3.fromRGB(54, 60, 68)
+local DARK = Color3.fromRGB(32, 36, 42)
+
+local function holderIn(parent: Instance, anchorBottom: boolean): Frame
+	return make("Frame", {
+		AnchorPoint = if anchorBottom then Vector2.new(0.5, 1) else Vector2.new(0.5, 0.5),
+		Position = if anchorBottom then UDim2.fromScale(0.5, 1) else UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ZIndex = 1,
+		Parent = parent,
+	})
+end
+
+-- a shape centred at (x, y) of its parent, w x h of it; round = corner radius as a share
+local function shape(parent: Instance, x: number, y: number, w: number, h: number, color: Color3, z: number, round: number, stroke: Color3?, thickness: number?)
+	local children = { Theme.corner(nil, round) }
+	if stroke then
+		table.insert(children, make("UIStroke", { Color = stroke, Thickness = thickness or 1 }))
+	end
+	return make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(x, y),
+		Size = UDim2.fromScale(w, h),
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		ZIndex = z,
+		Parent = parent,
+	}, children)
+end
+
+-- a building's drawing, anchored at the bottom so it can rise while being built:
+-- holder, { spin = part to turn, pulse = part to blink, recolor = fn(Color3) }, or nil
+function Drawn.building(kind: string, parent: Instance, color: Color3)
+	local h = holderIn(parent, true)
+	local pad
+	local parts = {}
+	if kind == "radar" then
+		pad = shape(h, 0.5, 0.5, 0.84, 0.84, Color3.fromRGB(58, 64, 72), 1, 1, color, 2.5)
+		shape(h, 0.5, 0.5, 0.34, 0.34, Color3.fromRGB(98, 106, 116), 2, 1)
+		parts.spin = shape(h, 0.5, 0.5, 0.18, 0.76, Color3.fromRGB(216, 222, 230), 3, 0.5, DARK, 1)
+	elseif kind == "power" then
+		pad = shape(h, 0.5, 0.5, 0.9, 0.9, PAD, 1, 0.18, color, 2.5)
+		-- two cooling towers and the generator hall with a bolt on it
+		for _, x in { 0.3, 0.7 } do
+			shape(h, x, 0.32, 0.36, 0.36, Color3.fromRGB(156, 162, 170), 2, 1, DARK, 1)
+			shape(h, x, 0.32, 0.2, 0.2, Color3.fromRGB(88, 94, 102), 3, 1)
+		end
+		shape(h, 0.5, 0.72, 0.66, 0.28, Color3.fromRGB(78, 84, 94), 2, 0.3, DARK, 1)
+		parts.pulse = make("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.72),
+			Size = UDim2.fromScale(0.3, 0.3),
+			BackgroundTransparency = 1,
+			Text = "⚡",
+			TextScaled = true,
+			ZIndex = 4,
+			Parent = h,
+		})
+	elseif kind == "repair" then
+		pad = shape(h, 0.5, 0.5, 0.9, 0.9, PAD, 1, 0.18, color, 2.5)
+		shape(h, 0.5, 0.5, 0.68, 0.68, Color3.fromRGB(72, 78, 88), 2, 1, Color3.fromRGB(196, 202, 210), 1.5)
+		local cross = holderIn(h, false)
+		cross.ZIndex = 3
+		shape(cross, 0.5, 0.5, 0.14, 0.46, Color3.fromRGB(120, 232, 140), 3, 0.3)
+		shape(cross, 0.5, 0.5, 0.46, 0.14, Color3.fromRGB(120, 232, 140), 3, 0.3)
+		parts.pulse = cross
+	else
+		h:Destroy()
+		return nil, nil
+	end
+	parts.recolor = function(c: Color3)
+		local stroke: any = pad:FindFirstChildOfClass("UIStroke")
+		stroke.Color = c
+	end
+	return h, parts
+end
+
+-- a unit's drawing, facing up like the sprites: holder, { recolor = fn(Color3) }, or nil
+function Drawn.unit(kind: string, parent: Instance, color: Color3)
+	if kind ~= "engineer" then
+		return nil, nil
+	end
+	local h = holderIn(parent, false)
+	h.ZIndex = 2
+	-- seen from above: shoulders in the team colour, a yellow hard hat and a wrench
+	local body = shape(h, 0.5, 0.58, 0.56, 0.34, color, 2, 0.5, DARK, 1)
+	shape(h, 0.5, 0.46, 0.34, 0.34, Color3.fromRGB(242, 196, 46), 3, 1, DARK, 1)
+	local wrench = shape(h, 0.82, 0.42, 0.1, 0.4, Color3.fromRGB(196, 202, 210), 3, 0.5, DARK, 1)
+	wrench.Rotation = 20
+	return h, {
+		recolor = function(c: Color3)
+			body.BackgroundColor3 = c
+		end,
+	}
+end
+
+return Drawn
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000017"><Properties><string name="Name">Effects</string><ProtectedString name="Source"><![CDATA[-- Short-lived pictures on the battlefield: shots, rockets, explosions, smoke and dust, and marks
 -- left on the ground (scorch, track prints). Objects are reused from pools, and the number of
 -- running effects is capped so a big battle stays smooth.
 local Board = require(script.Parent.Board)
@@ -3612,7 +3895,7 @@ function Effects.clear()
 end
 
 return Effects
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000017"><Properties><string name="Name">Factory</string><ProtectedString name="Source"><![CDATA[-- The factory panel: a row per unit kind the factory makes («+1» orders one, «Авто» repeats
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000018"><Properties><string name="Name">Factory</string><ProtectedString name="Source"><![CDATA[-- The factory panel: a row per unit kind the factory makes («+1» orders one, «Авто» repeats
 -- it), the current order with its progress, the queue, «Отменить последний» and the rally
 -- point. Part of the interface; Ui puts it together.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -3697,7 +3980,7 @@ local function factoryRow(kind: string, order: number)
 	local img = icon(u.icon, 46, { Position = UDim2.fromOffset(6, 6), ZIndex = 10, color = ctx.color, Parent = row })
 	Theme.label({ Text = u.title, Position = UDim2.fromOffset(58, 6), Size = UDim2.new(1, -200, 0, 20), TextSize = 15, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 10, Parent = row })
 	local info = Theme.label({
-		Text = string.format("%d $ · %d с · здоровье %d", u.cost, u.time, u.hp),
+		Text = string.format("%d 🔩 · %d с · здоровье %d", u.cost, u.time, u.hp),
 		Position = UDim2.fromOffset(58, 27),
 		Size = UDim2.new(1, -200, 0, 16),
 		TextSize = 12,
@@ -3744,7 +4027,8 @@ local function factoryRow(kind: string, order: number)
 	return { kind = kind, row = row, stroke = stroke, icon = img, info = info, queued = queued, auto = auto }
 end
 
--- info: { id, kind, prog, built, queue = { unit kinds }, auto = kind or "" }
+-- info: { id, kind, prog, built, queue = { unit kinds }, auto = kind or "", wait = what a
+-- stopped factory waits for ("metal" or "army"), slow = the base is short of energy }
 function Factory.show(info)
 	local UI = ctx.UI
 	local def = Config.BUILD[info.kind]
@@ -3788,18 +4072,21 @@ function Factory.show(info)
 		refs.facBar.BackgroundColor3 = Color3.fromRGB(90, 170, 255)
 		refs.facQueue.Text = if #queue > 0 then "В очереди: " .. #queue else "Очередь пустая"
 	elseif current then
-		refs.facSub.Text = "Нажми «+1», чтобы заказать. Юнит появится у постройки."
+		refs.facSub.Text = if info.slow then "Мало энергии: завод работает медленнее. Построй электростанцию." else "Нажми «+1», чтобы заказать. Юнит появится у постройки."
 		refs.facBar.Size = UDim2.fromScale(p, 1)
 		refs.facBar.BackgroundColor3 = if (info.prog or 0) < 0 then C.bad else C.molten
-		local waiting = (info.prog or 0) < 0
-		refs.facQueue.Text = string.format("Сейчас: %s — %s", Config.UNITS[current].title, if waiting then "ждёт денег" else math.floor(p * 100) .. "%")
+		local state = math.floor(p * 100) .. "%"
+		if (info.prog or 0) < 0 then
+			state = if info.wait == "army" then "ждёт: армия полная" else "ждёт металла"
+		end
+		refs.facQueue.Text = string.format("Сейчас: %s — %s", Config.UNITS[current].title, state)
 			.. (if #queue > 1 then string.format(" · ещё в очереди: %d", #queue - 1) else "")
 	else
 		refs.facSub.Text = "Нажми «+1», чтобы заказать. Юнит появится у постройки."
 		refs.facBar.Size = UDim2.fromScale(0, 1)
 		refs.facQueue.Text = "Очередь пустая"
 	end
-	refs.facNote.Text = "«Авто» выпускает выбранный юнит по кругу, пока хватает денег. «Точка сбора»: нажми её, потом место на карте."
+	refs.facNote.Text = "«Авто» выпускает выбранный юнит по кругу, пока хватает металла. «Точка сбора»: нажми её, потом место на карте."
 	refs.tip.Visible = false
 	refs.fac.Visible = true
 end
@@ -3810,7 +4097,7 @@ function Factory.hide()
 end
 
 return Factory
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000018"><Properties><string name="Name">Fog</string><ProtectedString name="Source"><![CDATA[-- Fog of war. The player sees around their units and buildings; ground they have seen before
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000019"><Properties><string name="Name">Fog</string><ProtectedString name="Source"><![CDATA[-- Fog of war. The player sees around their units and buildings; ground they have seen before
 -- stays dimmed, ground never seen is dark. Enemy units show only where the player sees them;
 -- enemy buildings stay on the map once found. A finished radar shows enemy units around it on
 -- the minimap, and the first enemy to come into sight after a quiet while is announced.
@@ -3838,6 +4125,7 @@ local QUIET = 25 -- seconds without enemies in sight before a new sighting is an
 
 local Fog = {}
 Fog.on = false
+Fog.powered = true -- radars work only while the base makes enough energy
 Fog.onSpotted = nil -- (x, y): an enemy came into sight after a quiet while
 
 local vis = buffer.create(W * H) -- 1 where the player sees now
@@ -3915,6 +4203,9 @@ end
 
 -- true if one of the player's radars covers (x, y)
 function Fog.radarSees(x: number, y: number): boolean
+	if not Fog.powered then
+		return false
+	end
 	for _, r in radars do
 		if (x - r.x) ^ 2 + (y - r.y) ^ 2 <= r.r * r.r then
 			return true
@@ -4099,7 +4390,7 @@ function Fog.update(dt: number)
 end
 
 return Fog
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000019"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- The match screen: the player's card, money and units at the top, the leaderboard, the army
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001A"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- The match screen: the player's card, metal, energy and army at the top, the leaderboard, the army
 -- panel and the build bar at the bottom, zoom buttons, the minimap frame, building tips, the
 -- banner (spectator, results, defeat) and big announcements. Part of the interface; Ui puts
 -- it together.
@@ -4122,7 +4413,7 @@ local Hud = {}
 
 -- unit kinds grouped for the army panel: infantry, vehicles, aircraft
 local GROUPS = {
-	inf = { kinds = { "infantry", "rocket" }, icon = "infantry", title = "Пехота" },
+	inf = { kinds = { "infantry", "rocket", "engineer" }, icon = "infantry", title = "Пехота" },
 	veh = { kinds = { "scout", "tank", "artillery" }, icon = "tank", title = "Техника" },
 	air = { kinds = { "fighter", "gunship" }, icon = "fighter", title = "Авиация" },
 }
@@ -4195,7 +4486,8 @@ function Hud.build(context, play: Instance)
 	Theme.list(Enum.FillDirection.Horizontal, 4, nil, Enum.VerticalAlignment.Center).Parent = res
 	refs.res = {
 		pop = Widgets.resChip(res, "pop", 1, ctx.color),
-		money = Widgets.resChip(res, "money", 2, ctx.color),
+		metal = Widgets.resChip(res, "metal", 2, ctx.color),
+		energy = Widgets.resChip(res, "energy", 3, ctx.color),
 	}
 
 	local right = make("Frame", {
@@ -4356,17 +4648,18 @@ function Hud.build(context, play: Instance)
 		}, { Theme.corner(12), make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }) })
 		local img = icon(def.icon, 38, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), color = ctx.color, Parent = b })
 		Theme.label({
-			Text = def.name,
+			Text = def.short or def.name,
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.new(0.5, 0, 0, 43),
 			Size = UDim2.new(1, -4, 0, 24),
-			TextSize = 11,
+			-- long names shrink to fit narrow buttons
+			TextScaled = true,
 			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextYAlignment = Enum.TextYAlignment.Center,
 			FontFace = font(Enum.FontWeight.Bold),
 			Parent = b,
-		})
+		}, { make("UITextSizeConstraint", { MaxTextSize = 11 }) })
 		local row, costLabel = Widgets.costRow(def.cost, b, 11)
 		row.AnchorPoint = Vector2.new(0.5, 1)
 		row.Position = UDim2.new(0.5, 0, 1, -4)
@@ -4455,13 +4748,20 @@ function Hud.build(context, play: Instance)
 	refs.announce = announce
 end
 
--- the build bar sits between the army panel on the left and the zoom buttons on the right;
--- w = width of the interface in its own units
+-- the build bar sits between the army panel on the left and the zoom buttons on the right, and
+-- its buttons narrow down a little on small screens so all of them fit (the bar scrolls if
+-- they still do not); w = width of the interface in its own units
 function Hud.layout(w: number)
 	if refs.buildScroll then
 		local left, right = 16 + 250 + 8, 16 + 44 + 8
-		refs.buildScroll.Size = UDim2.fromOffset(math.clamp(w - left - right, 220, 650), 98)
-		refs.buildScroll.Position = UDim2.new(0, left + (w - left - right) / 2, 1, -12)
+		local avail = w - left - right
+		local n = #Config.BUILD_ORDER
+		local bw = math.clamp(math.floor((avail - 12 - (n - 1) * 6) / n), 56, 74)
+		for _, b in refs.buildBtns do
+			b.button.Size = UDim2.fromOffset(bw, 86)
+		end
+		refs.buildScroll.Size = UDim2.fromOffset(math.max(220, math.min(n * bw + (n - 1) * 6 + 12, avail)), 98)
+		refs.buildScroll.Position = UDim2.new(0, left + avail / 2, 1, -12)
 	end
 end
 
@@ -4560,12 +4860,20 @@ function Hud.announce(title: string, sub: string)
 end
 
 function Hud.setEconomy(eco)
-	refs.res.pop.value.Text = string.format("%d/%d", eco.units or 0, Config.MAX_UNITS_PER_NATION)
-	refs.res.pop.rate.Text = "юниты"
-	refs.res.pop.rate.TextColor3 = C.muted
-	refs.res.money.value.Text = tostring(eco.money) .. " $"
-	refs.res.money.rate.Text = string.format("+%d/с", math.floor(eco.income + 0.5))
-	refs.res.money.rate.TextColor3 = C.ok
+	local pop = eco.pop or 0
+	refs.res.pop.value.Text = string.format("%d/%d", pop, Config.ARMY_LIMIT)
+	refs.res.pop.rate.Text = "армия"
+	refs.res.pop.rate.TextColor3 = if pop >= Config.ARMY_LIMIT then C.bad else C.muted
+	refs.res.metal.value.Text = tostring(eco.money)
+	refs.res.metal.rate.Text = string.format("+%d/с", math.floor(eco.income + 0.5))
+	refs.res.metal.rate.TextColor3 = C.ok
+	-- energy: used / made; red while the base uses more than it makes
+	local made, used = eco.energy or 0, eco.energyUsed or 0
+	local short = used > made
+	refs.res.energy.value.Text = string.format("%d/%d", used, made)
+	refs.res.energy.value.TextColor3 = if short then C.bad else C.ink
+	refs.res.energy.rate.Text = if short then "мало энергии" else "энергия"
+	refs.res.energy.rate.TextColor3 = if short then C.bad else C.muted
 	for g, group in GROUPS do
 		local total = 0
 		for _, kind in group.kinds do
@@ -4665,13 +4973,19 @@ function Hud.showTip(k: string?)
 	else
 		refs.tipOut.Visible = false
 	end
-	refs.tipCost.Text = string.format("Цена: %d $ · стройка %d с", d.cost, d.time)
+	local energy = ""
+	if d.energy and d.energy > 0 then
+		energy = string.format(" · энергия +%d", d.energy)
+	elseif d.energy and d.energy < 0 then
+		energy = string.format(" · энергия −%d", -d.energy)
+	end
+	refs.tipCost.Text = string.format("Цена: %d металла · стройка %d с%s", d.cost, d.time, energy)
 	refs.tipHint.Visible = ctx.UI.buildSel == k
 	refs.tip.Visible = true
 end
 
 return Hud
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001A"><Properties><string name="Name">Input</string><ProtectedString name="Source"><![CDATA[-- Pointer input on the battlefield. Mouse: left click selects and commands, left drag draws a
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001B"><Properties><string name="Name">Input</string><ProtectedString name="Source"><![CDATA[-- Pointer input on the battlefield. Mouse: left click selects and commands, left drag draws a
 -- selection box, right click commands, right or middle drag and the wheel move the camera.
 -- Touch: tap, drag to move the camera (or draw a box when armed), pinch to zoom.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -4883,10 +5197,11 @@ function Input.init(viewFrame: Frame, handlers)
 end
 
 return Input
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001B"><Properties><string name="Name">MapView</string><ProtectedString name="Source"><![CDATA[-- The battlefield seen from above, in 2D: the painted map, buildings and units as sprites with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001C"><Properties><string name="Name">MapView</string><ProtectedString name="Source"><![CDATA[-- The battlefield seen from above, in 2D: the painted map, buildings and units as sprites with
 -- their animations, shots, and what is under a tap. Positions are in tiles; see Board. The
 -- camera, minimap, pointer input, build mode and fog of war are in Camera, Minimap, Input,
--- Placement and Fog; shots and explosions are drawn by Effects.
+-- Placement and Fog; shots and explosions are drawn by Effects, and the buildings and units
+-- without a painted sprite by Drawn.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
@@ -4895,6 +5210,7 @@ local Map = require(Shared.Map)
 local Motion = require(Shared.Motion)
 local Board = require(script.Parent.Board)
 local Camera = require(script.Parent.Camera)
+local Drawn = require(script.Parent.Drawn)
 local Effects = require(script.Parent.Effects)
 local Fog = require(script.Parent.Fog)
 local Input = require(script.Parent.Input)
@@ -4945,7 +5261,7 @@ local SHOT_SOUND = {
 	aa = "flak",
 }
 -- soldiers walk with a little sway; tracked and wheeled vehicles leave prints on the ground
-local WALKERS = { infantry = true, rocket = true }
+local WALKERS = { infantry = true, rocket = true, engineer = true }
 local TRACKED = { tank = 0.4, artillery = 0.4, scout = 0.28 } -- kind -> how dark the prints are
 
 local gui, view, board
@@ -5007,6 +5323,11 @@ function MapView.revealAll()
 	Fog.enable(false)
 end
 
+-- radars need energy: on = the player's base makes enough
+function MapView.setPowered(on: boolean)
+	Fog.powered = on
+end
+
 ---------------------------------------------------------------- sprites
 
 -- a sprite and its team-colour layer, centred in parent, rotated together by the caller
@@ -5026,44 +5347,6 @@ local function spritePair(parent: Instance, name: string, color: Color3, z: numb
 	local tint = make("ImageLabel", props)
 	Sprites.set(tint, name, "team")
 	return base, tint
-end
-
--- a building without a picture (the radar): a round pad in the team colour with a dish that
--- turns; returns the holder, which rises like a picture while it is built, and the dish
-local function station(parent: Instance, color: Color3)
-	local holder = make("Frame", {
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.fromScale(0.5, 1),
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		ZIndex = 1,
-		Parent = parent,
-	})
-	make("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.84, 0.84),
-		BackgroundColor3 = Color3.fromRGB(58, 64, 72),
-		ZIndex = 1,
-		Parent = holder,
-	}, { Theme.corner(nil, 1), make("UIStroke", { Color = color, Thickness = 2.5 }) })
-	make("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.34, 0.34),
-		BackgroundColor3 = Color3.fromRGB(98, 106, 116),
-		ZIndex = 2,
-		Parent = holder,
-	}, { Theme.corner(nil, 1) })
-	local dish = make("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.18, 0.76),
-		BackgroundColor3 = Color3.fromRGB(216, 222, 230),
-		ZIndex = 3,
-		Parent = holder,
-	}, { Theme.corner(nil, 0.5), make("UIStroke", { Color = Color3.fromRGB(40, 44, 50), Thickness = 1 }) })
-	return holder, dish
 end
 
 local function makeBar(parent: Instance, pos: UDim2, anchor: Vector2, z: number)
@@ -5148,11 +5431,18 @@ function MapView.upsertNation(info)
 		for _, rec in buildings do
 			if rec.owner == n.id then
 				rec.tint.ImageColor3 = n.color3
+				if rec.parts then
+					rec.parts.recolor(n.color3)
+				end
 			end
 		end
 		for _, u in units do
 			if u.owner == n.id then
-				u.bodyTint.ImageColor3 = n.color3
+				if u.recolor then
+					u.recolor(n.color3)
+				else
+					u.bodyTint.ImageColor3 = n.color3
+				end
 			end
 		end
 	end
@@ -5275,7 +5565,7 @@ function MapView.addBuilding(info)
 		img.Position = UDim2.fromScale(0.5, 1)
 	end
 	if not Sprites.has(def.icon) then
-		rec.art, rec.dish = station(rec.clip, color)
+		rec.art, rec.parts = Drawn.building(info.kind, rec.clip, color)
 	end
 	rec.line = make("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -5341,6 +5631,7 @@ function MapView.setProgress(list)
 		local rec = buildings[e.id]
 		if rec then
 			rec.prog = e.p
+			rec.wait = e.w
 			rec.built = math.max(rec.built, e.built)
 			rec.queue = e.q
 			rec.auto = e.auto
@@ -5349,11 +5640,24 @@ function MapView.setProgress(list)
 	end
 end
 
+-- something getting its health back (repairs) shows a small green puff now and then
+local HEAL = Color3.fromRGB(120, 255, 150)
+local function healPuff(rec, x: number, y: number, spread: number)
+	local clock = os.clock()
+	if clock - (rec.healAt or 0) > 0.6 and Fog.sees(x, y) and not Effects.busy() then
+		rec.healAt = clock
+		Effects.puff(x + (math.random() - 0.5) * spread, y + (math.random() - 0.5) * spread, 0.8, 0.8, HEAL, Z.smoke, 0.3)
+	end
+end
+
 -- list = flat: building id, hp, ...
 function MapView.setBuildingHp(list)
 	for i = 1, #list - 1, 2 do
 		local rec = buildings[list[i]]
 		if rec then
+			if list[i + 1] > rec.hp and rec.built >= 1 then
+				healPuff(rec, rec.cx, rec.cy, rec.size * 0.6)
+			end
 			rec.hp = list[i + 1]
 			refreshBuilding(rec)
 		end
@@ -5452,7 +5756,16 @@ function MapView.addUnit(info)
 		u.shadowTint = make("ImageLabel", props)
 		Sprites.set(u.shadowTint, def.icon, "team")
 	end
-	u.body, u.bodyTint = spritePair(u.frame, def.icon, color, 2, 1)
+	local art, drawnParts = nil, nil
+	if not Sprites.has(def.icon) then
+		art, drawnParts = Drawn.unit(info.kind, u.frame, color)
+	end
+	if art then
+		u.body, u.bodyTint = art, art
+		u.recolor = drawnParts.recolor
+	else
+		u.body, u.bodyTint = spritePair(u.frame, def.icon, color, 2, 1)
+	end
 	if def.gun and Sprites.has(def.gun) then
 		u.gun, u.gunTint = spritePair(u.frame, def.gun, color, 4, 1)
 	end
@@ -5492,6 +5805,9 @@ function MapView.setUnitHp(list)
 	for i = 1, #list - 1, 2 do
 		local u = units[list[i]]
 		if u then
+			if list[i + 1] > u.hp then
+				healPuff(u, u.x, u.y, 0.6)
+			end
 			u.hp = list[i + 1]
 			refreshUnit(u)
 		end
@@ -5708,8 +6024,16 @@ local function updateUnits(dt: number)
 			b.built = math.min(0.99, b.built + dt / b.def.time)
 			refreshBuilding(b)
 		end
-		if b.dish then
-			b.dish.Rotation = (b.dish.Rotation + dt * 80) % 360
+		local parts = b.parts
+		if parts and b.built >= 1 then
+			if parts.spin then
+				parts.spin.Rotation = (parts.spin.Rotation + dt * 80) % 360
+			end
+			if parts.pulse then
+				-- the bolt and the cross beat gently: the bolt is a third of the pad, the cross fills it
+				local s = (if parts.pulse:IsA("TextLabel") then 0.3 else 1) * (1 + 0.08 * math.sin(clock * 4 + b.id))
+				parts.pulse.Size = UDim2.fromScale(s, s)
+			end
 		end
 		if b.gun or b.spin then
 			local want = if b.aimUntil and b.aimUntil > clock then b.aim else b.gunAngle
@@ -5953,7 +6277,7 @@ function MapView.update(dt: number)
 end
 
 return MapView
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001C"><Properties><string name="Name">Menu</string><ProtectedString name="Source"><![CDATA[-- The main menu (player chip, logo, side cards, modes and the play button) and the arsenal
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001D"><Properties><string name="Name">Menu</string><ProtectedString name="Source"><![CDATA[-- The main menu (player chip, logo, side cards, modes and the play button) and the arsenal
 -- sheet with every unit kind. Part of the interface; Ui puts it together.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -5985,7 +6309,7 @@ function Menu.build(context, root: Instance, player: Player): Frame
 		Parent = menu,
 	}, { Theme.list(Enum.FillDirection.Horizontal, 8, nil, Enum.VerticalAlignment.Center) })
 	iconButton("help", topLeft, function()
-		UI.toast("Экстракторы на светящихся месторождениях дают деньги. Построй казарму и завод, нажми на завод и заказывай войска. Выбери войска (нажми на них или протяни рамку) и нажми на карту или на врага. Компьютер: ЛКМ — выбор, протяни ЛКМ — рамка, ПКМ — приказ, F — атака с ходу, X — стоп, H — держать, Ctrl+1–9 — запомнить группу, 1–9 — выбрать её, WASD или край экрана — камера, пробел — к базе.", false, 14)
+		UI.toast("Экстракторы на светящихся месторождениях дают металл, электростанции — энергию для заводов и башен. Построй казарму и завод, нажми на завод и заказывай войска. Армия ограничена: сверху видно, сколько мест занято. Инженеры чинят постройки, ремонтная станция — войска. Выбери войска (нажми на них или протяни рамку) и нажми на карту или на врага. Компьютер: ЛКМ — выбор, протяни ЛКМ — рамка, ПКМ — приказ, F — атака с ходу, X — стоп, H — держать, Ctrl+1–9 — запомнить группу, 1–9 — выбрать её, WASD или край экрана — камера, пробел — к базе.", false, 14)
 	end)
 	iconButton("shield", topLeft, function()
 		Menu.openArsenal()
@@ -6085,7 +6409,7 @@ function Menu.build(context, root: Instance, player: Player): Frame
 		Parent = refs.side,
 	}, { Theme.corner(16), Theme.stroke(), Theme.pad(14, 12), Theme.list(Enum.FillDirection.Vertical, 4) })
 	Theme.label({ Text = "АРСЕНАЛ", Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 1, Parent = ars })
-	Theme.label({ Text = "7 видов войск: пехота, техника и авиация.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.Medium), LayoutOrder = 2, Parent = ars })
+	Theme.label({ Text = "8 видов войск: пехота, техника, авиация и инженеры.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.Medium), LayoutOrder = 2, Parent = ars })
 	local row = make("Frame", { Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, LayoutOrder = 3, Parent = ars }, { Theme.list(Enum.FillDirection.Horizontal, 6) })
 	for _, k in { "infantry", "tank", "artillery", "gunship" } do
 		local cell = make("Frame", { Size = UDim2.fromOffset(52, 44), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.95, Parent = row }, { Theme.corner(10) })
@@ -6103,7 +6427,7 @@ function Menu.build(context, root: Instance, player: Player): Frame
 		Parent = refs.side,
 	}, { Theme.corner(16), Theme.stroke(), Theme.pad(14, 12), Theme.list(Enum.FillDirection.Vertical, 6) })
 	Theme.label({ Text = "КАК ИГРАТЬ", Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 0, Parent = how })
-	for i, s in { "Ставь экстракторы на светящиеся месторождения — это деньги", "Строй казарму, завод бронетехники и аэродром", "Нажми на завод и заказывай войска", "Выбери войска и нажми на карту. Разрушь командные центры врагов" } do
+	for i, s in { "Ставь экстракторы на светящиеся месторождения — это металл", "Строй электростанции, казарму, завод бронетехники и аэродром", "Нажми на завод и заказывай войска", "Выбери войска и нажми на карту. Разрушь командные центры врагов" } do
 		local line = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = i, Parent = how }, {
 			Theme.list(Enum.FillDirection.Horizontal, 8),
 		})
@@ -6247,7 +6571,7 @@ function Menu.buildArsenal(root: Instance)
 		Theme.label({ Text = u.title, Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), LayoutOrder = 2, ZIndex = 22, Parent = card })
 		Theme.label({ Text = u.desc, Size = UDim2.new(1, 0, 0, 52), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextSize = 12.5, TextColor3 = Color3.fromRGB(200, 209, 223), FontFace = font(Enum.FontWeight.SemiBold), LayoutOrder = 3, ZIndex = 22, Parent = card })
 		Theme.label({
-			Text = string.format("%d $ · здоровье %d · урон %d", u.cost, u.hp, u.dps),
+			Text = if u.repairs then string.format("%d 🔩 · здоровье %d · ремонт %d", u.cost, u.hp, u.repairs) else string.format("%d 🔩 · здоровье %d · урон %d", u.cost, u.hp, u.dps),
 			Size = UDim2.new(1, 0, 0, 16),
 			TextSize = 11.5,
 			TextColor3 = C.moltenHi,
@@ -6294,7 +6618,7 @@ function Menu.setLobby(info)
 end
 
 return Menu
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001D"><Properties><string name="Name">Minimap</string><ProtectedString name="Source"><![CDATA[-- The minimap: the whole battlefield in a corner, with a dot for every building and unit and a
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001E"><Properties><string name="Name">Minimap</string><ProtectedString name="Source"><![CDATA[-- The minimap: the whole battlefield in a corner, with a dot for every building and unit and a
 -- frame for what the camera sees. Tap or drag on it to move the camera there.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -6389,7 +6713,7 @@ function Minimap.update(buildings, units, colorOf: (number) -> Color3, buildingS
 end
 
 return Minimap
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001E"><Properties><string name="Name">Placement</string><ProtectedString name="Source"><![CDATA[-- Build mode on the map: the server's placement rules, an outline of the chosen building under
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001F"><Properties><string name="Name">Placement</string><ProtectedString name="Source"><![CDATA[-- Build mode on the map: the server's placement rules, an outline of the chosen building under
 -- the pointer (green if it fits, red if not), and helpers that show where it can go: rings
 -- around the free pools for extractors, the base zones for the rest.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6576,7 +6900,7 @@ function Placement.init(boardFrame: Frame, records, mine: () -> number)
 end
 
 return Placement
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001F"><Properties><string name="Name">Sfx</string><ProtectedString name="Source"><![CDATA[-- Sound effects. All clips are cut from one audio asset (shared/SoundData) with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Sfx</string><ProtectedString name="Source"><![CDATA[-- Sound effects. All clips are cut from one audio asset (shared/SoundData) with
 -- Sound.PlaybackRegion. Battle sounds get quieter away from the middle of the screen and are
 -- skipped when far off screen, when the same clip just played, or when many are playing.
 local ContentProvider = game:GetService("ContentProvider")
@@ -6672,7 +6996,7 @@ function Sfx.at(name: string, x: number, y: number)
 end
 
 return Sfx
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Unit and building pictures come from one sprite sheet (atlas) plus a matching sheet with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Unit and building pictures come from one sprite sheet (atlas) plus a matching sheet with
 -- the team-coloured parts in grey, which is tinted with ImageColor3. One pair of images
 -- serves every team. Other icons are text symbols.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6700,7 +7024,11 @@ end
 
 -- other icons as text symbols, with their colour
 local GLYPHS = {
-	money = { "$", Color3.fromRGB(255, 194, 61) },
+	metal = { "🔩" },
+	energy = { "⚡" },
+	power = { "⚡" },
+	repair = { "🔧" },
+	engineer = { "👷" },
 	flag = { "🚩" },
 	trophy = { "🏆" },
 	exit = { "⏏", Color3.fromRGB(238, 242, 248) },
@@ -6805,7 +7133,7 @@ function Sprites.setTransparency(label: GuiObject, value: number)
 end
 
 return Sprites
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Colours, fonts and small helpers for building UI in code.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Colours, fonts and small helpers for building UI in code.
 local Theme = {}
 
 Theme.C = {
@@ -6945,7 +7273,7 @@ function Theme.hex(h: string): Color3
 end
 
 return Theme
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[-- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[-- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
 -- This module is the interface the game script talks to; the parts are built in Menu (main
 -- menu and arsenal), Hud (the match screen) and Factory (the factory panel), from Widgets.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7150,7 +7478,7 @@ function UI.artError()
 end
 
 return UI
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Widgets</string><ProtectedString name="Source"><![CDATA[-- Small pieces the menu and the match screen are built from: icons, round icon buttons, the
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">Widgets</string><ProtectedString name="Source"><![CDATA[-- Small pieces the menu and the match screen are built from: icons, round icon buttons, the
 -- orange main buttons, avatars, resource chips and prices.
 local TweenService = game:GetService("TweenService")
 
@@ -7277,12 +7605,12 @@ function Widgets.resChip(parent: Instance, key: string, order: number, color: st
 	return { value = value, rate = rate, icon = img }
 end
 
--- a price: a coin and the amount
+-- a price: the metal icon and the amount
 function Widgets.costRow(cost: number, parent: Instance, size: number)
 	local row = make("Frame", { AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), BackgroundTransparency = 1, Parent = parent }, {
 		Theme.list(Enum.FillDirection.Horizontal, 3, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center),
 	})
-	Widgets.icon("money", size + 1, { LayoutOrder = 1, Parent = row })
+	Widgets.icon("metal", size + 1, { LayoutOrder = 1, Parent = row })
 	local label = Theme.label({ Text = tostring(cost), AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), TextSize = size + 1, FontFace = font(Enum.FontWeight.Bold), TextColor3 = Color3.fromRGB(255, 226, 150), LayoutOrder = 2, Parent = row })
 	return row, label
 end

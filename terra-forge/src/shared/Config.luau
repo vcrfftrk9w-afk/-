@@ -9,9 +9,15 @@ Config.MATCH_SECONDS = 20 * 60
 Config.RESULT_SECONDS = 12
 Config.MAX_QUEUE = 10
 
--- money: the command centre pays a base income, extractors and fabricators add more
+-- metal (kept as `money` in the code): the command centre gives a base income, extractors and
+-- fabricators add more; everything is paid in metal
 Config.START_MONEY = 1500
 Config.BASE_INCOME = 8
+-- energy is not stored: buildings make it or use it all the time. When a base uses more than it
+-- makes, its factories, fabricators, towers and repair stations work slower, down to this share
+Config.MIN_POWER = 0.3
+-- the army limit: every unit takes some places in it (pop), whatever the base has built
+Config.ARMY_LIMIT = 100
 -- new buildings must stand this close (tiles, centre to centre) to one of your buildings
 Config.BUILD_RADIUS = 12
 
@@ -23,8 +29,9 @@ Config.BOT_NAMES = {
 }
 
 -- the command centre is placed at the start; the rest are built by players.
--- size = footprint in tiles; cost in money, time in seconds; vision in tiles (fog of war)
-Config.BUILD_ORDER = { "extractor", "fabricator", "barracks", "tankf", "air", "radar", "tower", "aa" }
+-- size = footprint in tiles; cost in metal, time in seconds; vision in tiles (fog of war);
+-- energy = made (+) or used (-) once built
+Config.BUILD_ORDER = { "extractor", "power", "fabricator", "barracks", "tankf", "air", "repair", "radar", "tower", "aa" }
 Config.BUILD = {
 	cc = {
 		name = "Командный центр",
@@ -35,6 +42,7 @@ Config.BUILD = {
 		range = 5,
 		hitsAir = 0.5,
 		vision = 9,
+		energy = 10,
 		desc = "Сердце базы. Если его уничтожат, ты проиграл.",
 	},
 	extractor = {
@@ -47,7 +55,19 @@ Config.BUILD = {
 		income = 6,
 		onPool = true,
 		vision = 5,
-		desc = "Добывает деньги: +6 $/с. Ставится только на месторождение — светящуюся воронку.",
+		desc = "Добывает металл: +6 в секунду. Ставится только на месторождение — светящуюся воронку.",
+	},
+	power = {
+		name = "Электростанция",
+		short = "Электро-\nстанция", -- for the narrow build button
+		icon = "power",
+		size = 2,
+		cost = 250,
+		time = 10,
+		hp = 450,
+		vision = 5,
+		energy = 12,
+		desc = "Даёт +12 энергии. Энергия нужна заводам, башням, радару и ремонту: если её мало, они работают медленнее.",
 	},
 	fabricator = {
 		name = "Фабрикатор",
@@ -58,7 +78,8 @@ Config.BUILD = {
 		hp = 600,
 		income = 5,
 		vision = 5,
-		desc = "Производит деньги где угодно на базе: +5 $/с.",
+		energy = -6,
+		desc = "Делает металл где угодно на базе: +5 в секунду. Берёт много энергии.",
 	},
 	barracks = {
 		name = "Казарма",
@@ -67,12 +88,14 @@ Config.BUILD = {
 		cost = 250,
 		time = 8,
 		hp = 500,
-		units = { "infantry", "rocket" },
+		units = { "infantry", "rocket", "engineer" },
 		vision = 6,
-		desc = "Обучает пехоту и ракетчиков. Нажми на неё, чтобы заказать.",
+		energy = -2,
+		desc = "Обучает пехоту, ракетчиков и инженеров. Нажми на неё, чтобы заказать.",
 	},
 	tankf = {
 		name = "Завод бронетехники",
+		short = "Завод\nтехники",
 		icon = "tankf",
 		size = 3,
 		cost = 600,
@@ -80,6 +103,7 @@ Config.BUILD = {
 		hp = 900,
 		units = { "scout", "tank", "artillery" },
 		vision = 6,
+		energy = -4,
 		desc = "Собирает броневики, танки и артиллерию. Нажми на него, чтобы заказать.",
 	},
 	air = {
@@ -91,7 +115,21 @@ Config.BUILD = {
 		hp = 700,
 		units = { "fighter", "gunship" },
 		vision = 7,
+		energy = -5,
 		desc = "Выпускает истребители и вертолёты. Нажми на него, чтобы заказать.",
+	},
+	repair = {
+		name = "Ремонтная станция",
+		icon = "repair",
+		size = 2,
+		cost = 400,
+		time = 10,
+		hp = 550,
+		vision = 6,
+		energy = -4,
+		heal = 10, -- health per second for each own unit within healRange
+		healRange = 4,
+		desc = "Чинит твои войска рядом с собой: +10 здоровья в секунду каждому.",
 	},
 	radar = {
 		name = "Радар",
@@ -101,8 +139,9 @@ Config.BUILD = {
 		time = 10,
 		hp = 400,
 		vision = 10,
+		energy = -4,
 		radar = 32, -- enemy units this close show on the minimap, even in the fog
-		desc = "Показывает на мини-карте вражеские войска в радиусе 32 клеток, даже в тумане войны.",
+		desc = "Показывает на мини-карте вражеские войска в радиусе 32 клеток, даже в тумане войны. Без энергии не работает.",
 	},
 	tower = {
 		name = "Пушечная башня",
@@ -115,6 +154,7 @@ Config.BUILD = {
 		range = 6,
 		hitsAir = 0,
 		vision = 8,
+		energy = -3,
 		desc = "Сама стреляет по вражеской пехоте и технике в радиусе 6 клеток.",
 	},
 	aa = {
@@ -129,46 +169,53 @@ Config.BUILD = {
 		hitsAir = 1,
 		airOnly = true,
 		vision = 9,
+		energy = -3,
 		desc = "Сбивает вражескую авиацию в радиусе 8 клеток.",
 	},
 }
 
 -- hp, damage per second, range and vision in tiles; hitsAir = damage multiplier against aircraft;
--- size = sprite size in tiles; gun = turret sprite, if the unit has one
-Config.UNIT_ORDER = { "infantry", "rocket", "scout", "tank", "artillery", "fighter", "gunship" }
+-- size = sprite size in tiles; gun = turret sprite, if the unit has one; pop = places in the army
+-- limit; repairs = health per second an engineer gives a building within range
+Config.UNIT_ORDER = { "infantry", "rocket", "engineer", "scout", "tank", "artillery", "fighter", "gunship" }
 Config.UNITS = {
 	infantry = {
-		title = "Пехота", name = "пехота", icon = "infantry", cost = 60, time = 4, size = 1.8,
+		title = "Пехота", name = "пехота", icon = "infantry", cost = 60, time = 4, size = 1.8, pop = 1,
 		hp = 60, dps = 7, range = 2, speed = 1.7, vision = 6, hitsAir = 0.25, power = 0.03,
 		desc = "Дешёвая. Может стрелять по авиации.",
 	},
 	rocket = {
-		title = "Ракетчик", name = "ракетчик", icon = "rocket", cost = 110, time = 6, size = 1.8,
+		title = "Ракетчик", name = "ракетчик", icon = "rocket", cost = 110, time = 6, size = 1.8, pop = 1,
 		hp = 55, dps = 9, range = 3, speed = 1.5, vision = 6, hitsAir = 0.8, power = 0.04,
 		desc = "Сильно бьёт по технике и авиации, слаб против пехоты.",
 	},
+	engineer = {
+		title = "Инженер", name = "инженер", icon = "engineer", cost = 90, time = 5, size = 1.3, pop = 1,
+		hp = 60, dps = 0, range = 3, speed = 1.8, vision = 6, hitsAir = 0, hitsGround = false, repairs = 15, power = 0.02,
+		desc = "Чинит постройки рядом с собой и ускоряет стройку. Не стреляет.",
+	},
 	scout = {
-		title = "Броневик", name = "броневик", icon = "scout", gun = "scout_gun", cost = 180, time = 6, size = 1.5,
+		title = "Броневик", name = "броневик", icon = "scout", gun = "scout_gun", cost = 180, time = 6, size = 1.5, pop = 2,
 		hp = 130, dps = 10, range = 2.5, speed = 3.4, vision = 10, hitsAir = 0.2, power = 0.05,
 		desc = "Быстрый и зоркий. Хорош для разведки.",
 	},
 	tank = {
-		title = "Танк", name = "танк", icon = "tank", gun = "tank_gun", cost = 320, time = 9, size = 1.7,
+		title = "Танк", name = "танк", icon = "tank", gun = "tank_gun", cost = 320, time = 9, size = 1.7, pop = 3,
 		hp = 260, dps = 18, range = 3, speed = 2.3, vision = 7, hitsAir = 0, power = 0.08,
 		desc = "Крепкая броня, силён против пехоты. По авиации не стреляет.",
 	},
 	artillery = {
-		title = "Артиллерия", name = "артиллерия", icon = "artillery", gun = "artillery_gun", cost = 380, time = 11, size = 1.7,
+		title = "Артиллерия", name = "артиллерия", icon = "artillery", gun = "artillery_gun", cost = 380, time = 11, size = 1.7, pop = 3,
 		hp = 110, dps = 22, range = 7, speed = 1.4, vision = 8, hitsAir = 0, power = 0.06, vsBuildings = 1.6,
 		desc = "Бьёт издалека, особенно по постройкам. Береги от танков.",
 	},
 	fighter = {
-		title = "Истребитель", name = "истребитель", icon = "fighter", cost = 400, time = 10, size = 1.8,
+		title = "Истребитель", name = "истребитель", icon = "fighter", cost = 400, time = 10, size = 1.8, pop = 3,
 		hp = 90, dps = 16, range = 3.5, speed = 6.5, vision = 11, hitsAir = 1, hitsGround = false, air = true, power = 0.04,
 		desc = "Охотится только за вражеской авиацией.",
 	},
 	gunship = {
-		title = "Вертолёт", name = "вертолёт", icon = "gunship", cost = 480, time = 12, size = 1.8,
+		title = "Вертолёт", name = "вертолёт", icon = "gunship", cost = 480, time = 12, size = 1.8, pop = 4,
 		hp = 140, dps = 15, range = 3, speed = 4.5, vision = 9, hitsAir = 0, air = true, power = 0.06,
 		desc = "Летает где угодно и бьёт по наземным войскам и постройкам.",
 	},
@@ -180,7 +227,6 @@ Config.VS = {
 	scout = { infantry = 1.4, rocket = 1.3 },
 	tank = { infantry = 1.6, rocket = 1.3 },
 }
-Config.MAX_UNITS = 240
-Config.MAX_UNITS_PER_NATION = 60
+Config.MAX_UNITS = 240 -- all bases together, to keep the server fast
 
 return Config

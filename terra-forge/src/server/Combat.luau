@@ -122,12 +122,16 @@ function Combat:tickCombat(dt: number)
 
 	for _, u in self.units do
 		local def = Config.UNITS[u.kind]
-		fire(u, u.kind, def.dps, def.range, def.hitsAir, def.hitsGround ~= false, def.vsBuildings or 1)
+		if def.dps > 0 then
+			fire(u, u.kind, def.dps, def.range, def.hitsAir, def.hitsGround ~= false, def.vsBuildings or 1)
+		end
 	end
 	for _, b in self.buildings do
 		local def = Config.BUILD[b.kind]
 		if def.dps and b.n.alive and b.built >= 1 then
-			fire(b, b.kind, def.dps, def.range, def.hitsAir, not def.airOnly, 1)
+			-- towers short of energy fire slower; the command centre has its own
+			local dps = if def.energy and def.energy < 0 then def.dps * b.n.supply else def.dps
+			fire(b, b.kind, dps, def.range, def.hitsAir, not def.airOnly, 1)
 		end
 	end
 

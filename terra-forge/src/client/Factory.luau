@@ -83,7 +83,7 @@ local function factoryRow(kind: string, order: number)
 	local img = icon(u.icon, 46, { Position = UDim2.fromOffset(6, 6), ZIndex = 10, color = ctx.color, Parent = row })
 	Theme.label({ Text = u.title, Position = UDim2.fromOffset(58, 6), Size = UDim2.new(1, -200, 0, 20), TextSize = 15, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 10, Parent = row })
 	local info = Theme.label({
-		Text = string.format("%d $ · %d с · здоровье %d", u.cost, u.time, u.hp),
+		Text = string.format("%d 🔩 · %d с · здоровье %d", u.cost, u.time, u.hp),
 		Position = UDim2.fromOffset(58, 27),
 		Size = UDim2.new(1, -200, 0, 16),
 		TextSize = 12,
@@ -130,7 +130,8 @@ local function factoryRow(kind: string, order: number)
 	return { kind = kind, row = row, stroke = stroke, icon = img, info = info, queued = queued, auto = auto }
 end
 
--- info: { id, kind, prog, built, queue = { unit kinds }, auto = kind or "" }
+-- info: { id, kind, prog, built, queue = { unit kinds }, auto = kind or "", wait = what a
+-- stopped factory waits for ("metal" or "army"), slow = the base is short of energy }
 function Factory.show(info)
 	local UI = ctx.UI
 	local def = Config.BUILD[info.kind]
@@ -174,18 +175,21 @@ function Factory.show(info)
 		refs.facBar.BackgroundColor3 = Color3.fromRGB(90, 170, 255)
 		refs.facQueue.Text = if #queue > 0 then "В очереди: " .. #queue else "Очередь пустая"
 	elseif current then
-		refs.facSub.Text = "Нажми «+1», чтобы заказать. Юнит появится у постройки."
+		refs.facSub.Text = if info.slow then "Мало энергии: завод работает медленнее. Построй электростанцию." else "Нажми «+1», чтобы заказать. Юнит появится у постройки."
 		refs.facBar.Size = UDim2.fromScale(p, 1)
 		refs.facBar.BackgroundColor3 = if (info.prog or 0) < 0 then C.bad else C.molten
-		local waiting = (info.prog or 0) < 0
-		refs.facQueue.Text = string.format("Сейчас: %s — %s", Config.UNITS[current].title, if waiting then "ждёт денег" else math.floor(p * 100) .. "%")
+		local state = math.floor(p * 100) .. "%"
+		if (info.prog or 0) < 0 then
+			state = if info.wait == "army" then "ждёт: армия полная" else "ждёт металла"
+		end
+		refs.facQueue.Text = string.format("Сейчас: %s — %s", Config.UNITS[current].title, state)
 			.. (if #queue > 1 then string.format(" · ещё в очереди: %d", #queue - 1) else "")
 	else
 		refs.facSub.Text = "Нажми «+1», чтобы заказать. Юнит появится у постройки."
 		refs.facBar.Size = UDim2.fromScale(0, 1)
 		refs.facQueue.Text = "Очередь пустая"
 	end
-	refs.facNote.Text = "«Авто» выпускает выбранный юнит по кругу, пока хватает денег. «Точка сбора»: нажми её, потом место на карте."
+	refs.facNote.Text = "«Авто» выпускает выбранный юнит по кругу, пока хватает металла. «Точка сбора»: нажми её, потом место на карте."
 	refs.tip.Visible = false
 	refs.fac.Visible = true
 end

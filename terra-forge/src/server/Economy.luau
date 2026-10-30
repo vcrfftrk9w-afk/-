@@ -1,5 +1,6 @@
--- The economy of a skirmish: income, construction, factory queues and production, and what
--- each base is worth. These are methods of Match (Match.luau adds them); self is the match.
+-- The economy of a skirmish: metal income, energy, construction, factory queues and production,
+-- repairs, and what each base is worth. These are methods of Match (Match.luau adds them);
+-- self is the match. Metal is kept in n.money.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -8,7 +9,7 @@ local Map = require(Shared.Map)
 local Economy = {}
 
 function Economy:lackText(n, cost: number): string
-	return "Не хватает денег: нужно ещё " .. math.ceil(cost - n.money) .. " $"
+	return "Не хватает металла: нужно ещё " .. math.ceil(cost - n.money)
 end
 
 ---------------------------------------------------------------- factories
@@ -50,7 +51,7 @@ function Economy:queueUnit(player: Player, id: number, kind: string)
 	self:sendEconomy()
 end
 
--- removes the last ordered unit and returns its money
+-- removes the last ordered unit and returns its metal
 function Economy:cancelUnit(player: Player, id: number)
 	local n, b = self:factoryOf(player, id)
 	if not n or #b.queue == 0 then
@@ -89,17 +90,63 @@ function Economy:setRally(player: Player, id: number, x: number, y: number)
 	self:toast(n, "Точка сбора поставлена: новые юниты поедут туда.")
 end
 
----------------------------------------------------------------- income and production
+---------------------------------------------------------------- energy, income and production
+
+-- how much energy each base makes and uses, and the share of its needs that is met (supply):
+-- buildings that use energy work at that share of their speed
+function Economy:tickEnergy()
+	for _, n in self.seats do
+		n.energy, n.energyUsed = 0, 0
+	end
+	for _, b in self.buildings do
+		local e = Config.BUILD[b.kind].energy
+		if e and b.built >= 1 then
+			if e > 0 then
+				b.n.energy += e
+			else
+				b.n.energyUsed -= e
+			end
+		end
+	end
+	for _, n in self.seats do
+		n.supply = if n.energyUsed <= n.energy then 1 else math.max(Config.MIN_POWER, n.energy / n.energyUsed)
+	end
+end
+
+-- the share of its normal speed a building works at: those using energy depend on the supply
+local function speedOf(b): number
+	local e = Config.BUILD[b.kind].energy
+	return if e and e < 0 then b.n.supply else 1
+end
+
+-- own buildings under construction that engineers stand next to: building -> engineers
+function Economy:engineerHelp()
+	local help = {}
+	for _, u in self.units do
+		local def = Config.UNITS[u.kind]
+		if def.repairs then
+			for _, b in self.buildings do
+				if b.n == u.n and b.built < 1 and math.sqrt((b.px - u.px) ^ 2 + (b.py - u.py) ^ 2) - b.size * 0.5 <= def.range then
+					help[b] = (help[b] or 0) + 1
+				end
+			end
+		end
+	end
+	return help
+end
 
 function Economy:tickEconomy(dt: number)
+	self:tickEnergy()
 	for _, n in self.seats do
 		n.income = if n.alive and n.cc then Config.BASE_INCOME else 0
 	end
+	local help = self:engineerHelp()
 	for _, b in self.buildings do
 		local n = b.n
 		local def = Config.BUILD[b.kind]
 		if b.built < 1 then
-			b.built = math.min(1, b.built + dt / def.time)
+			-- each engineer next to the site adds the normal speed again, up to three times faster
+			b.built = math.min(1, b.built + dt * (1 + math.min(2, help[b] or 0)) / def.time)
 			if b.built >= 1 then
 				self:send({ t = "bdone", id = b.id })
 				self:toast(n, "Достроено: " .. def.name)
@@ -107,13 +154,13 @@ function Economy:tickEconomy(dt: number)
 			continue
 		end
 		if def.income then
-			n.income += def.income
+			n.income += def.income * speedOf(b)
 		end
 		if not def.units then
 			continue
 		end
 		-- queued units are paid when ordered; in auto mode each unit is paid when it starts
-		b.blocked = false
+		b.blocked = nil
 		local current = b.queue[1]
 		if not current and b.auto then
 			if not b.autoPaid then
@@ -122,16 +169,16 @@ function Economy:tickEconomy(dt: number)
 					n.money -= cost
 					b.autoPaid = b.auto
 				else
-					b.blocked = true
+					b.blocked = "metal"
 				end
 			end
 			current = b.autoPaid
 		end
 		if current then
-			if n.unitTotal >= Config.MAX_UNITS_PER_NATION then
-				b.blocked = true
+			if n.pop + Config.UNITS[current].pop > Config.ARMY_LIMIT then
+				b.blocked = "army"
 			else
-				b.prog = math.min(1, b.prog + dt / Config.UNITS[current].time)
+				b.prog = math.min(1, b.prog + dt * speedOf(b) / Config.UNITS[current].time)
 				if b.prog >= 1 then
 					self:spawnUnit(n, current, b.px, b.py + b.size / 2 + 0.8, b.rally)
 					b.prog = 0
@@ -151,6 +198,41 @@ function Economy:tickEconomy(dt: number)
 	end
 end
 
+-- repair stations mend the owner's units around them; engineers mend the most damaged own
+-- building within their reach
+function Economy:tickRepair(dt: number)
+	for _, b in self.buildings do
+		local def = Config.BUILD[b.kind]
+		if def.heal and b.built >= 1 then
+			local r2 = def.healRange * def.healRange
+			local amount = def.heal * speedOf(b) * dt
+			for _, u in self.units do
+				if u.n == b.n and u.hp < u.maxHp and (u.px - b.px) ^ 2 + (u.py - b.py) ^ 2 <= r2 then
+					u.hp = math.min(u.maxHp, u.hp + amount)
+					self.hpDirty[u] = true
+				end
+			end
+		end
+	end
+	for _, u in self.units do
+		local def = Config.UNITS[u.kind]
+		if def.repairs then
+			local best, worst = nil, 1
+			for _, b in self.buildings do
+				if b.n == u.n and b.built >= 1 and b.hp < b.maxHp and b.hp / b.maxHp < worst then
+					if math.sqrt((b.px - u.px) ^ 2 + (b.py - u.py) ^ 2) - b.size * 0.5 <= def.range then
+						best, worst = b, b.hp / b.maxHp
+					end
+				end
+			end
+			if best then
+				best.hp = math.min(best.maxHp, best.hp + def.repairs * dt)
+				self.bhpDirty[best] = true
+			end
+		end
+	end
+end
+
 function Economy:sendEconomy()
 	for player, n in self.humans do
 		local list = {}
@@ -159,6 +241,7 @@ function Economy:sendEconomy()
 				table.insert(list, {
 					id = b.id,
 					p = if b.blocked then -math.max(b.prog, 0.001) else b.prog,
+					w = b.blocked, -- what a stopped factory waits for: "metal" or "army"
 					built = b.built,
 					q = b.queue,
 					auto = b.auto or "",
@@ -169,7 +252,10 @@ function Economy:sendEconomy()
 			t = "eco",
 			money = math.floor(n.money),
 			income = n.income,
+			energy = n.energy,
+			energyUsed = n.energyUsed,
 			army = n.army,
+			pop = n.pop,
 			units = n.unitTotal,
 			list = list,
 		})

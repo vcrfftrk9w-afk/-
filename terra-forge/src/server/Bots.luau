@@ -10,7 +10,8 @@ local Orders = require(script.Parent.Orders)
 
 local Bots = {}
 
-local BOT_PLAN = { "extractor", "barracks", "extractor", "tankf", "extractor", "tower", "air", "extractor", "tower", "aa", "fabricator", "tankf", "extractor", "tower" }
+-- power plants keep up with the energy the rest of the plan uses
+local BOT_PLAN = { "extractor", "barracks", "extractor", "tankf", "power", "extractor", "tower", "air", "power", "extractor", "tower", "aa", "power", "fabricator", "tankf", "power", "extractor", "tower" }
 
 local function now(): number
 	return workspace:GetServerTimeNow()
@@ -88,12 +89,20 @@ function Bots:botThink(n, dt: number)
 		end
 		bot.step += 1
 	end
-	-- factories keep producing while there is money left over for building
+	-- factories keep producing fighting units while there is metal left over for building
 	for _, b in self.buildings do
 		local bd = Config.BUILD[b.kind]
 		if b.n == n and bd.units then
 			if n.money > 350 then
-				b.auto = b.auto or bd.units[self.rng:NextInteger(1, #bd.units)]
+				if not b.auto then
+					local fighters = {}
+					for _, kind in bd.units do
+						if Config.UNITS[kind].dps > 0 then
+							table.insert(fighters, kind)
+						end
+					end
+					b.auto = fighters[self.rng:NextInteger(1, #fighters)]
+				end
 			elseif not b.autoPaid then
 				b.auto = nil
 			end

@@ -1,7 +1,8 @@
 -- The battlefield seen from above, in 2D: the painted map, buildings and units as sprites with
 -- their animations, shots, and what is under a tap. Positions are in tiles; see Board. The
 -- camera, minimap, pointer input, build mode and fog of war are in Camera, Minimap, Input,
--- Placement and Fog; shots and explosions are drawn by Effects.
+-- Placement and Fog; shots and explosions are drawn by Effects, and the buildings and units
+-- without a painted sprite by Drawn.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
@@ -10,6 +11,7 @@ local Map = require(Shared.Map)
 local Motion = require(Shared.Motion)
 local Board = require(script.Parent.Board)
 local Camera = require(script.Parent.Camera)
+local Drawn = require(script.Parent.Drawn)
 local Effects = require(script.Parent.Effects)
 local Fog = require(script.Parent.Fog)
 local Input = require(script.Parent.Input)
@@ -60,7 +62,7 @@ local SHOT_SOUND = {
 	aa = "flak",
 }
 -- soldiers walk with a little sway; tracked and wheeled vehicles leave prints on the ground
-local WALKERS = { infantry = true, rocket = true }
+local WALKERS = { infantry = true, rocket = true, engineer = true }
 local TRACKED = { tank = 0.4, artillery = 0.4, scout = 0.28 } -- kind -> how dark the prints are
 
 local gui, view, board
@@ -122,6 +124,11 @@ function MapView.revealAll()
 	Fog.enable(false)
 end
 
+-- radars need energy: on = the player's base makes enough
+function MapView.setPowered(on: boolean)
+	Fog.powered = on
+end
+
 ---------------------------------------------------------------- sprites
 
 -- a sprite and its team-colour layer, centred in parent, rotated together by the caller
@@ -141,44 +148,6 @@ local function spritePair(parent: Instance, name: string, color: Color3, z: numb
 	local tint = make("ImageLabel", props)
 	Sprites.set(tint, name, "team")
 	return base, tint
-end
-
--- a building without a picture (the radar): a round pad in the team colour with a dish that
--- turns; returns the holder, which rises like a picture while it is built, and the dish
-local function station(parent: Instance, color: Color3)
-	local holder = make("Frame", {
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.fromScale(0.5, 1),
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		ZIndex = 1,
-		Parent = parent,
-	})
-	make("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.84, 0.84),
-		BackgroundColor3 = Color3.fromRGB(58, 64, 72),
-		ZIndex = 1,
-		Parent = holder,
-	}, { Theme.corner(nil, 1), make("UIStroke", { Color = color, Thickness = 2.5 }) })
-	make("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.34, 0.34),
-		BackgroundColor3 = Color3.fromRGB(98, 106, 116),
-		ZIndex = 2,
-		Parent = holder,
-	}, { Theme.corner(nil, 1) })
-	local dish = make("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.18, 0.76),
-		BackgroundColor3 = Color3.fromRGB(216, 222, 230),
-		ZIndex = 3,
-		Parent = holder,
-	}, { Theme.corner(nil, 0.5), make("UIStroke", { Color = Color3.fromRGB(40, 44, 50), Thickness = 1 }) })
-	return holder, dish
 end
 
 local function makeBar(parent: Instance, pos: UDim2, anchor: Vector2, z: number)
@@ -263,11 +232,18 @@ function MapView.upsertNation(info)
 		for _, rec in buildings do
 			if rec.owner == n.id then
 				rec.tint.ImageColor3 = n.color3
+				if rec.parts then
+					rec.parts.recolor(n.color3)
+				end
 			end
 		end
 		for _, u in units do
 			if u.owner == n.id then
-				u.bodyTint.ImageColor3 = n.color3
+				if u.recolor then
+					u.recolor(n.color3)
+				else
+					u.bodyTint.ImageColor3 = n.color3
+				end
 			end
 		end
 	end
@@ -390,7 +366,7 @@ function MapView.addBuilding(info)
 		img.Position = UDim2.fromScale(0.5, 1)
 	end
 	if not Sprites.has(def.icon) then
-		rec.art, rec.dish = station(rec.clip, color)
+		rec.art, rec.parts = Drawn.building(info.kind, rec.clip, color)
 	end
 	rec.line = make("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -456,6 +432,7 @@ function MapView.setProgress(list)
 		local rec = buildings[e.id]
 		if rec then
 			rec.prog = e.p
+			rec.wait = e.w
 			rec.built = math.max(rec.built, e.built)
 			rec.queue = e.q
 			rec.auto = e.auto
@@ -464,11 +441,24 @@ function MapView.setProgress(list)
 	end
 end
 
+-- something getting its health back (repairs) shows a small green puff now and then
+local HEAL = Color3.fromRGB(120, 255, 150)
+local function healPuff(rec, x: number, y: number, spread: number)
+	local clock = os.clock()
+	if clock - (rec.healAt or 0) > 0.6 and Fog.sees(x, y) and not Effects.busy() then
+		rec.healAt = clock
+		Effects.puff(x + (math.random() - 0.5) * spread, y + (math.random() - 0.5) * spread, 0.8, 0.8, HEAL, Z.smoke, 0.3)
+	end
+end
+
 -- list = flat: building id, hp, ...
 function MapView.setBuildingHp(list)
 	for i = 1, #list - 1, 2 do
 		local rec = buildings[list[i]]
 		if rec then
+			if list[i + 1] > rec.hp and rec.built >= 1 then
+				healPuff(rec, rec.cx, rec.cy, rec.size * 0.6)
+			end
 			rec.hp = list[i + 1]
 			refreshBuilding(rec)
 		end
@@ -567,7 +557,16 @@ function MapView.addUnit(info)
 		u.shadowTint = make("ImageLabel", props)
 		Sprites.set(u.shadowTint, def.icon, "team")
 	end
-	u.body, u.bodyTint = spritePair(u.frame, def.icon, color, 2, 1)
+	local art, drawnParts = nil, nil
+	if not Sprites.has(def.icon) then
+		art, drawnParts = Drawn.unit(info.kind, u.frame, color)
+	end
+	if art then
+		u.body, u.bodyTint = art, art
+		u.recolor = drawnParts.recolor
+	else
+		u.body, u.bodyTint = spritePair(u.frame, def.icon, color, 2, 1)
+	end
 	if def.gun and Sprites.has(def.gun) then
 		u.gun, u.gunTint = spritePair(u.frame, def.gun, color, 4, 1)
 	end
@@ -607,6 +606,9 @@ function MapView.setUnitHp(list)
 	for i = 1, #list - 1, 2 do
 		local u = units[list[i]]
 		if u then
+			if list[i + 1] > u.hp then
+				healPuff(u, u.x, u.y, 0.6)
+			end
 			u.hp = list[i + 1]
 			refreshUnit(u)
 		end
@@ -823,8 +825,16 @@ local function updateUnits(dt: number)
 			b.built = math.min(0.99, b.built + dt / b.def.time)
 			refreshBuilding(b)
 		end
-		if b.dish then
-			b.dish.Rotation = (b.dish.Rotation + dt * 80) % 360
+		local parts = b.parts
+		if parts and b.built >= 1 then
+			if parts.spin then
+				parts.spin.Rotation = (parts.spin.Rotation + dt * 80) % 360
+			end
+			if parts.pulse then
+				-- the bolt and the cross beat gently: the bolt is a third of the pad, the cross fills it
+				local s = (if parts.pulse:IsA("TextLabel") then 0.3 else 1) * (1 + 0.08 * math.sin(clock * 4 + b.id))
+				parts.pulse.Size = UDim2.fromScale(s, s)
+			end
 		end
 		if b.gun or b.spin then
 			local want = if b.aimUntil and b.aimUntil > clock then b.aim else b.gunAngle

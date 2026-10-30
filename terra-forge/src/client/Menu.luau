@@ -30,7 +30,7 @@ function Menu.build(context, root: Instance, player: Player): Frame
 		Parent = menu,
 	}, { Theme.list(Enum.FillDirection.Horizontal, 8, nil, Enum.VerticalAlignment.Center) })
 	iconButton("help", topLeft, function()
-		UI.toast("Экстракторы на светящихся месторождениях дают деньги. Построй казарму и завод, нажми на завод и заказывай войска. Выбери войска (нажми на них или протяни рамку) и нажми на карту или на врага. Компьютер: ЛКМ — выбор, протяни ЛКМ — рамка, ПКМ — приказ, F — атака с ходу, X — стоп, H — держать, Ctrl+1–9 — запомнить группу, 1–9 — выбрать её, WASD или край экрана — камера, пробел — к базе.", false, 14)
+		UI.toast("Экстракторы на светящихся месторождениях дают металл, электростанции — энергию для заводов и башен. Построй казарму и завод, нажми на завод и заказывай войска. Армия ограничена: сверху видно, сколько мест занято. Инженеры чинят постройки, ремонтная станция — войска. Выбери войска (нажми на них или протяни рамку) и нажми на карту или на врага. Компьютер: ЛКМ — выбор, протяни ЛКМ — рамка, ПКМ — приказ, F — атака с ходу, X — стоп, H — держать, Ctrl+1–9 — запомнить группу, 1–9 — выбрать её, WASD или край экрана — камера, пробел — к базе.", false, 14)
 	end)
 	iconButton("shield", topLeft, function()
 		Menu.openArsenal()
@@ -130,7 +130,7 @@ function Menu.build(context, root: Instance, player: Player): Frame
 		Parent = refs.side,
 	}, { Theme.corner(16), Theme.stroke(), Theme.pad(14, 12), Theme.list(Enum.FillDirection.Vertical, 4) })
 	Theme.label({ Text = "АРСЕНАЛ", Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 1, Parent = ars })
-	Theme.label({ Text = "7 видов войск: пехота, техника и авиация.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.Medium), LayoutOrder = 2, Parent = ars })
+	Theme.label({ Text = "8 видов войск: пехота, техника, авиация и инженеры.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.Medium), LayoutOrder = 2, Parent = ars })
 	local row = make("Frame", { Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, LayoutOrder = 3, Parent = ars }, { Theme.list(Enum.FillDirection.Horizontal, 6) })
 	for _, k in { "infantry", "tank", "artillery", "gunship" } do
 		local cell = make("Frame", { Size = UDim2.fromOffset(52, 44), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.95, Parent = row }, { Theme.corner(10) })
@@ -148,7 +148,7 @@ function Menu.build(context, root: Instance, player: Player): Frame
 		Parent = refs.side,
 	}, { Theme.corner(16), Theme.stroke(), Theme.pad(14, 12), Theme.list(Enum.FillDirection.Vertical, 6) })
 	Theme.label({ Text = "КАК ИГРАТЬ", Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 0, Parent = how })
-	for i, s in { "Ставь экстракторы на светящиеся месторождения — это деньги", "Строй казарму, завод бронетехники и аэродром", "Нажми на завод и заказывай войска", "Выбери войска и нажми на карту. Разрушь командные центры врагов" } do
+	for i, s in { "Ставь экстракторы на светящиеся месторождения — это металл", "Строй электростанции, казарму, завод бронетехники и аэродром", "Нажми на завод и заказывай войска", "Выбери войска и нажми на карту. Разрушь командные центры врагов" } do
 		local line = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = i, Parent = how }, {
 			Theme.list(Enum.FillDirection.Horizontal, 8),
 		})
@@ -292,7 +292,7 @@ function Menu.buildArsenal(root: Instance)
 		Theme.label({ Text = u.title, Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), LayoutOrder = 2, ZIndex = 22, Parent = card })
 		Theme.label({ Text = u.desc, Size = UDim2.new(1, 0, 0, 52), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextSize = 12.5, TextColor3 = Color3.fromRGB(200, 209, 223), FontFace = font(Enum.FontWeight.SemiBold), LayoutOrder = 3, ZIndex = 22, Parent = card })
 		Theme.label({
-			Text = string.format("%d $ · здоровье %d · урон %d", u.cost, u.hp, u.dps),
+			Text = if u.repairs then string.format("%d 🔩 · здоровье %d · ремонт %d", u.cost, u.hp, u.repairs) else string.format("%d 🔩 · здоровье %d · урон %d", u.cost, u.hp, u.dps),
 			Size = UDim2.new(1, 0, 0, 16),
 			TextSize = 11.5,
 			TextColor3 = C.moltenHi,

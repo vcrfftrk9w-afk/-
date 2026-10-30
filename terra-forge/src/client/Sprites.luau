@@ -26,7 +26,11 @@ end
 
 -- other icons as text symbols, with their colour
 local GLYPHS = {
-	money = { "$", Color3.fromRGB(255, 194, 61) },
+	metal = { "🔩" },
+	energy = { "⚡" },
+	power = { "⚡" },
+	repair = { "🔧" },
+	engineer = { "👷" },
 	flag = { "🚩" },
 	trophy = { "🏆" },
 	exit = { "⏏", Color3.fromRGB(238, 242, 248) },

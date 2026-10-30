@@ -26,6 +26,7 @@ local QUIET = 25 -- seconds without enemies in sight before a new sighting is an
 
 local Fog = {}
 Fog.on = false
+Fog.powered = true -- radars work only while the base makes enough energy
 Fog.onSpotted = nil -- (x, y): an enemy came into sight after a quiet while
 
 local vis = buffer.create(W * H) -- 1 where the player sees now
@@ -103,6 +104,9 @@ end
 
 -- true if one of the player's radars covers (x, y)
 function Fog.radarSees(x: number, y: number): boolean
+	if not Fog.powered then
+		return false
+	end
 	for _, r in radars do
 		if (x - r.x) ^ 2 + (y - r.y) ^ 2 <= r.r * r.r then
 			return true

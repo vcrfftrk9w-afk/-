@@ -110,8 +110,12 @@ function Match.new(event: RemoteEvent)
 			alive = true,
 			money = Config.START_MONEY,
 			income = 0,
+			energy = 0,
+			energyUsed = 0,
+			supply = 1,
 			army = {},
 			unitTotal = 0,
+			pop = 0,
 			bot = self:newBot(),
 		}
 		self.nations[i] = n
@@ -378,12 +382,13 @@ end
 
 ---------------------------------------------------------------- units
 
--- creates a unit next to (x, y); returns the unit, or nil when a limit is reached
+-- creates a unit next to (x, y); returns the unit, or nil when the army limit or the server's
+-- unit limit is reached
 function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
-	if self.unitCount >= Config.MAX_UNITS or n.unitTotal >= Config.MAX_UNITS_PER_NATION then
+	local def = Config.UNITS[kind]
+	if self.unitCount >= Config.MAX_UNITS or n.pop + def.pop > Config.ARMY_LIMIT then
 		return nil
 	end
-	local def = Config.UNITS[kind]
 	if not def.air then
 		local lx, ly = Path.nearestLand(x + self.rng:NextNumber() * 2 - 1, y + self.rng:NextNumber(), 4)
 		if lx then
@@ -413,6 +418,7 @@ function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
 	end
 	n.army[kind] = (n.army[kind] or 0) + 1
 	n.unitTotal += 1
+	n.pop += def.pop
 	self.units[u.id] = u
 	if rally then
 		local a, r = self.rng:NextNumber() * math.pi * 2, self.rng:NextNumber() * 1.5
@@ -430,6 +436,7 @@ function Match:removeUnit(u)
 		self.unitCount -= 1
 		u.n.army[u.kind] = math.max(0, (u.n.army[u.kind] or 1) - 1)
 		u.n.unitTotal = math.max(0, u.n.unitTotal - 1)
+		u.n.pop = math.max(0, u.n.pop - Config.UNITS[u.kind].pop)
 		self:send({ t = "ugone", id = u.id })
 	end
 end
@@ -639,6 +646,7 @@ function Match:step(dt: number)
 			self.tickAcc -= Config.TICK
 			steps += 1
 			self:tickEconomy(Config.TICK)
+			self:tickRepair(Config.TICK)
 			self:tickCombat(Config.TICK)
 		end
 		if steps >= 3 then

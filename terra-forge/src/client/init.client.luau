@@ -114,6 +114,8 @@ local state = {
 	rallyFor = nil,
 	amove = false, -- attack-move is armed: the next tap on the map gives it
 	groups = {}, -- number key -> unit ids
+	shortOfEnergy = false, -- the base uses more energy than it makes
+	armyFull = false, -- a factory waits because the army limit is reached
 }
 
 local function me()
@@ -163,7 +165,7 @@ local function enterPlay(spectator: boolean)
 		UI.announce("БОЙ НАЧАЛСЯ", "Строй базу и разгроми врагов")
 		task.delay(2.6, function()
 			if state.screen == "play" and not state.spectator then
-				UI.toast("Выбери внизу «Экстрактор» и нажми на светящееся месторождение рядом с базой — это деньги. Потом построй казарму и завод бронетехники.", false, 8)
+				UI.toast("Выбери внизу «Экстрактор» и нажми на светящееся месторождение рядом с базой — это металл. Потом построй казарму и завод бронетехники, а когда энергии станет мало — электростанцию.", false, 8)
 			end
 		end)
 	end
@@ -269,6 +271,9 @@ local function selectionInfo(): string?
 	local only = next(kinds)
 	if next(kinds, only) == nil then
 		local def = Config.UNITS[only]
+		if def.repairs then
+			return string.format("%s ×%d · здоровье %d%% · ремонт %d/с · скорость %g%s", def.title, count, health, def.repairs, def.speed, tail)
+		end
 		return string.format("%s ×%d · здоровье %d%% · урон %d/с · дальность %g · скорость %g%s", def.title, count, health, def.dps, def.range, def.speed, tail)
 	end
 	local parts = {}
@@ -421,7 +426,7 @@ local function factoryInfo(id: number)
 	if not b then
 		return nil
 	end
-	return { id = id, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto }
+	return { id = id, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto, wait = b.wait, slow = state.shortOfEnergy }
 end
 
 local function refreshFactory()
@@ -441,6 +446,23 @@ function handlers.eco(msg)
 	state.eco = msg
 	MapView.setProgress(msg.list)
 	UI.setEconomy(msg)
+	-- say once when the base runs short of energy, and when the army limit stops a factory
+	local short = (msg.energyUsed or 0) > (msg.energy or 0)
+	if short and not state.shortOfEnergy and state.screen == "play" and not state.spectator then
+		UI.toast("Не хватает энергии: заводы, башни и ремонт работают медленнее, радар не видит. Построй электростанцию.", true, 5)
+	end
+	state.shortOfEnergy = short
+	MapView.setPowered(not short)
+	local full = false
+	for _, e in msg.list do
+		if e.w == "army" then
+			full = true
+		end
+	end
+	if full and not state.armyFull and state.screen == "play" and not state.spectator then
+		UI.toast(string.format("Армия полная: %d из %d мест. Новые юниты выйдут, когда места освободятся.", msg.pop or 0, Config.ARMY_LIMIT), true, 5)
+	end
+	state.armyFull = full
 	refreshFactory()
 end
 
@@ -598,7 +620,7 @@ local function tryBuild(kind: string, x: number, y: number)
 	local cost = Config.BUILD[kind].cost
 	local money = if state.eco then state.eco.money else 0
 	if money < cost then
-		UI.toast("Не хватает денег: нужно ещё " .. math.ceil(cost - money) .. " $", true)
+		UI.toast("Не хватает металла: нужно ещё " .. math.ceil(cost - money), true)
 		return
 	end
 	action:FireServer("build", kind, x, y)

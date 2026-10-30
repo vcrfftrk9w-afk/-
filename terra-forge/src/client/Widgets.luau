@@ -125,12 +125,12 @@ function Widgets.resChip(parent: Instance, key: string, order: number, color: st
 	return { value = value, rate = rate, icon = img }
 end
 
--- a price: a coin and the amount
+-- a price: the metal icon and the amount
 function Widgets.costRow(cost: number, parent: Instance, size: number)
 	local row = make("Frame", { AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), BackgroundTransparency = 1, Parent = parent }, {
 		Theme.list(Enum.FillDirection.Horizontal, 3, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center),
 	})
-	Widgets.icon("money", size + 1, { LayoutOrder = 1, Parent = row })
+	Widgets.icon("metal", size + 1, { LayoutOrder = 1, Parent = row })
 	local label = Theme.label({ Text = tostring(cost), AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), TextSize = size + 1, FontFace = font(Enum.FontWeight.Bold), TextColor3 = Color3.fromRGB(255, 226, 150), LayoutOrder = 2, Parent = row })
 	return row, label
 end

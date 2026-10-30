@@ -715,7 +715,8 @@ function Match.new(event: RemoteEvent)
 			income = 0,
 			army = {},
 			unitTotal = 0,
-			bot = { think = self.rng:NextNumber() * 2, wave = 80 + self.rng:NextNumber() * 40, step = 1 },
+			-- the first wave waits 3.5-4.5 minutes, so a new player has time to set up a defence
+			bot = { think = self.rng:NextNumber() * 2, wave = 210 + self.rng:NextNumber() * 60, step = 1 },
 		}
 		self.nations[i] = n
 		table.insert(self.seats, n)
@@ -4980,7 +4981,7 @@ local GLYPHS = {
 	exit = { "⏏", Color3.fromRGB(238, 242, 248) },
 	plus = { "+", Color3.fromRGB(238, 242, 248) },
 	minus = { "−", Color3.fromRGB(238, 242, 248) },
-	close = { "✕", Color3.fromRGB(238, 242, 248) },
+	close = { "×", Color3.fromRGB(238, 242, 248) },
 	help = { "?", Color3.fromRGB(238, 242, 248) },
 	play = { "▶", Color3.fromRGB(43, 18, 3) },
 	shield = { "🛡" },
@@ -5367,8 +5368,10 @@ local function rescale()
 		refs.logoBox.Position = if refs.side.Visible then UDim2.new(0.42, 0, 0.36, 0) else UDim2.new(0.5, 0, 0.36, 0)
 	end
 	if refs.buildScroll then
-		local avail = w - 2 * 16 - 250 - 60 - 24
-		refs.buildScroll.Size = UDim2.fromOffset(math.clamp(avail, 220, 572), 98)
+		-- the build bar sits between the army panel on the left and the zoom buttons on the right
+		local left, right = 16 + 250 + 8, 16 + 44 + 8
+		refs.buildScroll.Size = UDim2.fromOffset(math.clamp(w - left - right, 220, 572), 98)
+		refs.buildScroll.Position = UDim2.new(0, left + (w - left - right) / 2, 1, -12)
 	end
 end
 

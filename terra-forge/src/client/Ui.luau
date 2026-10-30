@@ -147,8 +147,10 @@ local function rescale()
 		refs.logoBox.Position = if refs.side.Visible then UDim2.new(0.42, 0, 0.36, 0) else UDim2.new(0.5, 0, 0.36, 0)
 	end
 	if refs.buildScroll then
-		local avail = w - 2 * 16 - 250 - 60 - 24
-		refs.buildScroll.Size = UDim2.fromOffset(math.clamp(avail, 220, 572), 98)
+		-- the build bar sits between the army panel on the left and the zoom buttons on the right
+		local left, right = 16 + 250 + 8, 16 + 44 + 8
+		refs.buildScroll.Size = UDim2.fromOffset(math.clamp(w - left - right, 220, 572), 98)
+		refs.buildScroll.Position = UDim2.new(0, left + (w - left - right) / 2, 1, -12)
 	end
 end
 

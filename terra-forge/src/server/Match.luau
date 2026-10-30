@@ -111,7 +111,8 @@ function Match.new(event: RemoteEvent)
 			income = 0,
 			army = {},
 			unitTotal = 0,
-			bot = { think = self.rng:NextNumber() * 2, wave = 80 + self.rng:NextNumber() * 40, step = 1 },
+			-- the first wave waits 3.5-4.5 minutes, so a new player has time to set up a defence
+			bot = { think = self.rng:NextNumber() * 2, wave = 210 + self.rng:NextNumber() * 60, step = 1 },
 		}
 		self.nations[i] = n
 		table.insert(self.seats, n)

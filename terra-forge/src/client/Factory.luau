@@ -131,10 +131,12 @@ local function factoryRow(kind: string, order: number)
 end
 
 -- info: { id, kind, prog, built, queue = { unit kinds }, auto = kind or "", wait = what a
--- stopped factory waits for ("metal" or "army"), slow = the base is short of energy }
+-- stopped factory waits for ("metal" or "army"), slow = the base is short of energy,
+-- done = finished research { [tech id] = true } }
 function Factory.show(info)
 	local UI = ctx.UI
 	local def = Config.BUILD[info.kind]
+	UI.hideResearch()
 	UI.factoryId = info.id
 	UI.selectBuild(nil)
 	if refs.facKind ~= info.kind then
@@ -156,15 +158,21 @@ function Factory.show(info)
 		counts[kind] = (counts[kind] or 0) + 1
 	end
 	local money = refs.money or 0
+	local done = info.done or {}
 	for _, r in refs.facRowList do
 		local u = Config.UNITS[r.kind]
 		local n = counts[r.kind] or 0
-		r.queued.Text = if n > 0 then "в очереди: " .. n elseif auto == r.kind then "выпускается по кругу" else ""
+		local locked = u.needs ~= nil and not done[u.needs]
+		r.queued.Text = if locked then "🔒 нужно изучить: " .. Config.TECH[u.needs].name
+			elseif n > 0 then "в очереди: " .. n
+			elseif auto == r.kind then "выпускается по кругу"
+			else ""
 		r.stroke.Transparency = if auto == r.kind then 0 else 1
 		r.auto.BackgroundColor3 = if auto == r.kind then Color3.fromRGB(70, 42, 18) else C.panel
 		r.auto.TextColor3 = if auto == r.kind then C.moltenHi else C.ink
-		r.info.TextColor3 = if money < u.cost then C.bad else Color3.fromRGB(198, 207, 221)
+		r.info.TextColor3 = if money < u.cost or locked then C.bad else Color3.fromRGB(198, 207, 221)
 		Sprites.apply(r.icon, u.icon, ctx.color)
+		Sprites.setTransparency(r.icon, if locked then 0.55 else 0)
 	end
 	local built = info.built or 1
 	local p = math.abs(info.prog or 0)

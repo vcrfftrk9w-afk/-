@@ -49,21 +49,21 @@ local BUILDING_GUN = { tower = "tower_gun", aa = "aa_gun" }
 -- how each shooter's shot looks, and sounds
 local SHOT_LOOK = {
 	infantry = "bullet", scout = "bullet", fighter = "bullet", cc = "bullet",
-	tank = "cannon", tower = "cannon",
+	tank = "cannon", heavy = "cannon", tower = "cannon",
 	rocket = "rocket", gunship = "rocket",
 	artillery = "shell",
 	aa = "flak",
 }
 local SHOT_SOUND = {
 	infantry = "rifle", scout = "mg", fighter = "mg", cc = "mg",
-	tank = "cannon", tower = "tower",
+	tank = "cannon", heavy = "cannon", tower = "tower",
 	rocket = "rocket", gunship = "rocket",
 	artillery = "artillery",
 	aa = "flak",
 }
 -- soldiers walk with a little sway; tracked and wheeled vehicles leave prints on the ground
 local WALKERS = { infantry = true, rocket = true, engineer = true }
-local TRACKED = { tank = 0.4, artillery = 0.4, scout = 0.28 } -- kind -> how dark the prints are
+local TRACKED = { tank = 0.4, heavy = 0.5, artillery = 0.4, scout = 0.28 } -- kind -> how dark the prints are
 
 local gui, view, board
 local buildings = {} -- id -> record
@@ -433,6 +433,7 @@ function MapView.setProgress(list)
 		if rec then
 			rec.prog = e.p
 			rec.wait = e.w
+			rec.research = e.r
 			rec.built = math.max(rec.built, e.built)
 			rec.queue = e.q
 			rec.auto = e.auto
@@ -831,8 +832,8 @@ local function updateUnits(dt: number)
 				parts.spin.Rotation = (parts.spin.Rotation + dt * 80) % 360
 			end
 			if parts.pulse then
-				-- the bolt and the cross beat gently: the bolt is a third of the pad, the cross fills it
-				local s = (if parts.pulse:IsA("TextLabel") then 0.3 else 1) * (1 + 0.08 * math.sin(clock * 4 + b.id))
+				-- the bolt, the cross and the light beat gently around their own size
+				local s = parts.pulseScale * (1 + 0.08 * math.sin(clock * 4 + b.id))
 				parts.pulse.Size = UDim2.fromScale(s, s)
 			end
 		end

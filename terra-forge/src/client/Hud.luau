@@ -22,7 +22,7 @@ local Hud = {}
 -- unit kinds grouped for the army panel: infantry, vehicles, aircraft
 local GROUPS = {
 	inf = { kinds = { "infantry", "rocket", "engineer" }, icon = "infantry", title = "Пехота" },
-	veh = { kinds = { "scout", "tank", "artillery" }, icon = "tank", title = "Техника" },
+	veh = { kinds = { "scout", "tank", "heavy", "artillery" }, icon = "tank", title = "Техника" },
 	air = { kinds = { "fighter", "gunship" }, icon = "fighter", title = "Авиация" },
 }
 local GROUP_ORDER = { "inf", "veh", "air" }
@@ -364,7 +364,7 @@ function Hud.layout(w: number)
 		local left, right = 16 + 250 + 8, 16 + 44 + 8
 		local avail = w - left - right
 		local n = #Config.BUILD_ORDER
-		local bw = math.clamp(math.floor((avail - 12 - (n - 1) * 6) / n), 56, 74)
+		local bw = math.clamp(math.floor((avail - 12 - (n - 1) * 6) / n), 50, 74)
 		for _, b in refs.buildBtns do
 			b.button.Size = UDim2.fromOffset(bw, 86)
 		end
@@ -379,6 +379,7 @@ function Hud.setPhase(phase: string, spectator: boolean)
 	local inGame = phase == "game" and not spectator
 	if not inGame then
 		ctx.UI.hideFactory()
+		ctx.UI.hideResearch()
 	end
 	refs.hudTop.Visible = inGame
 	refs.hudBottom.Visible = inGame
@@ -553,6 +554,7 @@ function Hud.selectBuild(k: string?)
 	end
 	if k and refs.fac then
 		UI.hideFactory()
+		UI.hideResearch()
 	end
 	for key, b in refs.buildBtns do
 		local on = key == k
@@ -564,7 +566,7 @@ function Hud.selectBuild(k: string?)
 end
 
 function Hud.showTip(k: string?)
-	if not k or not refs.hudBottom.Visible or refs.fac.Visible then
+	if not k or not refs.hudBottom.Visible or refs.fac.Visible or refs.lab.Visible then
 		refs.tip.Visible = false
 		return
 	end

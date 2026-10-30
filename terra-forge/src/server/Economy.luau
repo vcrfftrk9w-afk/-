@@ -1,6 +1,6 @@
 -- The economy of a skirmish: metal income, energy, construction, factory queues and production,
--- repairs, and what each base is worth. These are methods of Match (Match.luau adds them);
--- self is the match. Metal is kept in n.money.
+-- research, repairs, and what each base is worth. These are methods of Match (Match.luau adds
+-- them); self is the match. Metal is kept in n.money, finished research in n.tech.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -28,10 +28,20 @@ local function makes(b, kind: string): boolean
 	return table.find(Config.BUILD[b.kind].units, kind) ~= nil
 end
 
+-- some units can only be ordered after research; tells the player which
+function Economy:unitLocked(n, kind: string): boolean
+	local needs = Config.UNITS[kind].needs
+	if needs and not n.tech[needs] then
+		self:toast(n, "Сначала изучи в исследовательском центре: " .. Config.TECH[needs].name, true)
+		return true
+	end
+	return false
+end
+
 -- orders one unit from a factory; it is paid now and refunded if cancelled
 function Economy:queueUnit(player: Player, id: number, kind: string)
 	local n, b = self:factoryOf(player, id)
-	if not n or not makes(b, kind) then
+	if not n or not makes(b, kind) or self:unitLocked(n, kind) then
 		return
 	end
 	local cost = Config.UNITS[kind].cost
@@ -68,7 +78,7 @@ end
 -- kind = unit to repeat while the queue is empty, or "" to switch it off
 function Economy:setAuto(player: Player, id: number, kind: string)
 	local n, b = self:factoryOf(player, id)
-	if not n or (kind ~= "" and not makes(b, kind)) then
+	if not n or (kind ~= "" and (not makes(b, kind) or self:unitLocked(n, kind))) then
 		return
 	end
 	if b.autoPaid and b.autoPaid ~= kind and #b.queue == 0 then
@@ -88,6 +98,80 @@ function Economy:setRally(player: Player, id: number, x: number, y: number)
 	end
 	b.rally = { x = math.floor(x) + 0.5, y = math.floor(y) + 0.5 }
 	self:toast(n, "Точка сбора поставлена: новые юниты поедут туда.")
+end
+
+---------------------------------------------------------------- research
+
+-- a player's own research centre, or nil
+function Economy:labOf(player: Player, id: number)
+	local n = self.humans[player]
+	local b = self.buildings[id]
+	if not n or not b or b.n ~= n or self.phase ~= "game" or not Config.BUILD[b.kind].research then
+		return nil, nil
+	end
+	return n, b
+end
+
+-- why a base cannot start this study now, or nil
+function Economy:researchBlock(n, id: string): string?
+	local t = Config.TECH[id]
+	if n.tech[id] then
+		return "Уже изучено: " .. t.name
+	end
+	if t.needs and not n.tech[t.needs] then
+		return "Сначала изучи: " .. Config.TECH[t.needs].name
+	end
+	for _, b in self.buildings do
+		if b.n == n and b.research == id then
+			return "Уже изучается: " .. t.name
+		end
+	end
+	if n.money < t.cost then
+		return self:lackText(n, t.cost)
+	end
+	return nil
+end
+
+function Economy:beginResearch(n, b, id: string)
+	n.money -= Config.TECH[id].cost
+	b.research = id
+	b.prog = 0
+end
+
+-- starts a study in a research centre; it is paid now and refunded if stopped
+function Economy:startResearch(player: Player, labId: number, id: string)
+	local n, b = self:labOf(player, labId)
+	if not n then
+		return
+	end
+	if b.built < 1 then
+		self:toast(n, "Исследовательский центр ещё строится.", true)
+		return
+	end
+	if b.research then
+		self:toast(n, "Центр уже занят: " .. Config.TECH[b.research].name .. ". Дождись или останови.", true)
+		return
+	end
+	local why = self:researchBlock(n, id)
+	if why then
+		self:toast(n, why, true)
+		return
+	end
+	self:beginResearch(n, b, id)
+	self:toast(n, "Изучается: " .. Config.TECH[id].name .. " (" .. Config.TECH[id].time .. " с)")
+	self:sendEconomy()
+end
+
+-- stops the study and returns its metal
+function Economy:stopResearch(player: Player, labId: number)
+	local n, b = self:labOf(player, labId)
+	if not n or not b.research then
+		return
+	end
+	n.money += Config.TECH[b.research].cost
+	b.research = nil
+	b.prog = 0
+	self:sendEconomy()
 end
 
 ---------------------------------------------------------------- energy, income and production
@@ -139,6 +223,8 @@ function Economy:tickEconomy(dt: number)
 	self:tickEnergy()
 	for _, n in self.seats do
 		n.income = if n.alive and n.cc then Config.BASE_INCOME else 0
+		-- what finished research gives: Combat reads armor and damage too
+		n.armor, n.damage, n.production = Config.techBonus(n.tech)
 	end
 	local help = self:engineerHelp()
 	for _, b in self.buildings do
@@ -155,6 +241,17 @@ function Economy:tickEconomy(dt: number)
 		end
 		if def.income then
 			n.income += def.income * speedOf(b)
+		end
+		if b.research then
+			local t = Config.TECH[b.research]
+			b.prog = math.min(1, b.prog + dt * speedOf(b) / t.time)
+			if b.prog >= 1 then
+				n.tech[b.research] = true
+				self:toast(n, "Изучено: " .. t.name .. ". " .. t.desc)
+				b.research = nil
+				b.prog = 0
+			end
+			continue
 		end
 		if not def.units then
 			continue
@@ -178,7 +275,7 @@ function Economy:tickEconomy(dt: number)
 			if n.pop + Config.UNITS[current].pop > Config.ARMY_LIMIT then
 				b.blocked = "army"
 			else
-				b.prog = math.min(1, b.prog + dt * speedOf(b) / Config.UNITS[current].time)
+				b.prog = math.min(1, b.prog + dt * speedOf(b) * (1 + n.production) / Config.UNITS[current].time)
 				if b.prog >= 1 then
 					self:spawnUnit(n, current, b.px, b.py + b.size / 2 + 0.8, b.rally)
 					b.prog = 0
@@ -242,11 +339,16 @@ function Economy:sendEconomy()
 					id = b.id,
 					p = if b.blocked then -math.max(b.prog, 0.001) else b.prog,
 					w = b.blocked, -- what a stopped factory waits for: "metal" or "army"
+					r = b.research, -- what a research centre studies
 					built = b.built,
 					q = b.queue,
 					auto = b.auto or "",
 				})
 			end
+		end
+		local tech = {}
+		for id in n.tech do
+			table.insert(tech, id)
 		end
 		self:sendTo(player, {
 			t = "eco",
@@ -257,6 +359,7 @@ function Economy:sendEconomy()
 			army = n.army,
 			pop = n.pop,
 			units = n.unitTotal,
+			tech = tech,
 			list = list,
 		})
 	end

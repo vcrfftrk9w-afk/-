@@ -43,7 +43,9 @@ local GLYPHS = {
 	radar = { "📡" },
 	lock = { "🔒" },
 	globe = { "🌍" },
-	swords = { "⚔", Color3.fromRGB(238, 242, 248) },
+	swords = { "⚔️" },
+	gear = { "⚙️" },
+	lab = { "🔬" },
 }
 
 function Sprites.has(name: string): boolean

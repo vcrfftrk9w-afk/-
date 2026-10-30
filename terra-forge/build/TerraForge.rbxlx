@@ -69,7 +69,7 @@ Config.BOT_NAMES = {
 -- the command centre is placed at the start; the rest are built by players.
 -- size = footprint in tiles; cost in metal, time in seconds; vision in tiles (fog of war);
 -- energy = made (+) or used (-) once built
-Config.BUILD_ORDER = { "extractor", "power", "fabricator", "barracks", "tankf", "air", "repair", "radar", "tower", "aa" }
+Config.BUILD_ORDER = { "extractor", "power", "fabricator", "barracks", "tankf", "air", "lab", "repair", "radar", "tower", "aa" }
 Config.BUILD = {
 	cc = {
 		name = "Командный центр",
@@ -139,7 +139,7 @@ Config.BUILD = {
 		cost = 600,
 		time = 12,
 		hp = 900,
-		units = { "scout", "tank", "artillery" },
+		units = { "scout", "tank", "artillery", "heavy" },
 		vision = 6,
 		energy = -4,
 		desc = "Собирает броневики, танки и артиллерию. Нажми на него, чтобы заказать.",
@@ -155,6 +155,19 @@ Config.BUILD = {
 		vision = 7,
 		energy = -5,
 		desc = "Выпускает истребители и вертолёты. Нажми на него, чтобы заказать.",
+	},
+	lab = {
+		name = "Исследовательский центр",
+		short = "Исследо-\nвания",
+		icon = "lab",
+		size = 2,
+		cost = 500,
+		time = 15,
+		hp = 550,
+		vision = 6,
+		energy = -5,
+		research = true, -- studies the technologies of Config.TECH
+		desc = "Изучает технологии: броню, орудия, конвейер и тяжёлый танк. Нажми на него, чтобы выбрать.",
 	},
 	repair = {
 		name = "Ремонтная станция",
@@ -214,8 +227,9 @@ Config.BUILD = {
 
 -- hp, damage per second, range and vision in tiles; hitsAir = damage multiplier against aircraft;
 -- size = sprite size in tiles; gun = turret sprite, if the unit has one; pop = places in the army
--- limit; repairs = health per second an engineer gives a building within range
-Config.UNIT_ORDER = { "infantry", "rocket", "engineer", "scout", "tank", "artillery", "fighter", "gunship" }
+-- limit; repairs = health per second an engineer gives a building within range; needs = the
+-- research that must be done before the unit can be ordered
+Config.UNIT_ORDER = { "infantry", "rocket", "engineer", "scout", "tank", "heavy", "artillery", "fighter", "gunship" }
 Config.UNITS = {
 	infantry = {
 		title = "Пехота", name = "пехота", icon = "infantry", cost = 60, time = 4, size = 1.8, pop = 1,
@@ -242,6 +256,12 @@ Config.UNITS = {
 		hp = 260, dps = 18, range = 3, speed = 2.3, vision = 7, hitsAir = 0, power = 0.08,
 		desc = "Крепкая броня, силён против пехоты. По авиации не стреляет.",
 	},
+	heavy = {
+		-- no picture of its own yet: the tank's, drawn bigger
+		title = "Тяжёлый танк", name = "тяжёлый танк", icon = "tank", gun = "tank_gun", cost = 600, time = 14, size = 2.3, pop = 5,
+		hp = 560, dps = 30, range = 3.5, speed = 1.6, vision = 7, hitsAir = 0, power = 0.12, needs = "heavy",
+		desc = "Медленный, но очень крепкий и бьёт сильно. Нужно исследование.",
+	},
 	artillery = {
 		title = "Артиллерия", name = "артиллерия", icon = "artillery", gun = "artillery_gun", cost = 380, time = 11, size = 1.7, pop = 3,
 		hp = 110, dps = 22, range = 7, speed = 1.4, vision = 8, hitsAir = 0, power = 0.06, vsBuildings = 1.6,
@@ -260,12 +280,41 @@ Config.UNITS = {
 }
 -- extra damage multipliers: attacker kind -> target kind
 Config.VS = {
-	infantry = { tank = 0.5, scout = 0.7 },
-	rocket = { tank = 1.8, scout = 1.5, infantry = 0.6 },
+	infantry = { tank = 0.5, heavy = 0.4, scout = 0.7 },
+	rocket = { tank = 1.8, heavy = 1.8, scout = 1.5, infantry = 0.6 },
 	scout = { infantry = 1.4, rocket = 1.3 },
 	tank = { infantry = 1.6, rocket = 1.3 },
+	heavy = { infantry = 1.5, rocket = 1.2 },
 }
 Config.MAX_UNITS = 240 -- all bases together, to keep the server fast
+
+-- research at the research centre: one study at a time in each centre, paid when it starts and
+-- slower when energy is short. armor = share of the damage own units no longer take, damage =
+-- share added to the damage of own units and towers, production = share added to the speed of
+-- factories, unlocks = a unit that can be ordered once done; needs = research done before
+Config.TECH_ORDER = { "armor1", "weapons1", "assembly", "armor2", "weapons2", "heavy" }
+Config.TECH = {
+	armor1 = { name = "Броня I", icon = "shield", cost = 400, time = 30, armor = 0.15, desc = "Твои войска получают на 15% меньше урона." },
+	weapons1 = { name = "Орудия I", icon = "swords", cost = 400, time = 30, damage = 0.15, desc = "Войска и башни бьют на 15% сильнее." },
+	assembly = { name = "Конвейер", icon = "gear", cost = 500, time = 35, production = 0.3, desc = "Заводы выпускают войска на 30% быстрее." },
+	armor2 = { name = "Броня II", icon = "shield", cost = 700, time = 45, armor = 0.15, needs = "armor1", desc = "Ещё −15% урона: всего −30%." },
+	weapons2 = { name = "Орудия II", icon = "swords", cost = 700, time = 45, damage = 0.15, needs = "weapons1", desc = "Ещё +15% урона: всего +30%." },
+	heavy = { name = "Тяжёлый танк", icon = "tank", cost = 600, time = 40, unlocks = "heavy", needs = "armor1", desc = "Завод бронетехники сможет собирать тяжёлые танки." },
+}
+
+-- what a base's finished research adds up to: armor, damage and production shares
+function Config.techBonus(done: { [string]: boolean }?): (number, number, number)
+	local armor, damage, production = 0, 0, 0
+	for id in done or {} do
+		local t = Config.TECH[id]
+		if t then
+			armor += t.armor or 0
+			damage += t.damage or 0
+			production += t.production or 0
+		end
+	end
+	return armor, damage, production
+end
 
 return Config
 ]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">Map</string><ProtectedString name="Source"><![CDATA[-- The skirmish map: ground kinds per tile, resource pools and the four base spots.
@@ -605,6 +654,10 @@ local function onAction(player: Player, kind, a, b, c, d, e)
 		end
 	elseif kind == "queue" and isNumber(a) and typeof(b) == "string" and Config.UNITS[b] then
 		match:queueUnit(player, a, b)
+	elseif kind == "research" and isNumber(a) and typeof(b) == "string" and Config.TECH[b] then
+		match:startResearch(player, a, b)
+	elseif kind == "stopresearch" and isNumber(a) then
+		match:stopResearch(player, a)
 	elseif kind == "cancel" and isNumber(a) then
 		match:cancelUnit(player, a)
 	elseif kind == "auto" and isNumber(a) and typeof(b) == "string" and (b == "" or Config.UNITS[b]) then
@@ -680,7 +733,7 @@ local Orders = require(script.Parent.Orders)
 local Bots = {}
 
 -- power plants keep up with the energy the rest of the plan uses
-local BOT_PLAN = { "extractor", "barracks", "extractor", "tankf", "power", "extractor", "tower", "air", "power", "extractor", "tower", "aa", "power", "fabricator", "tankf", "power", "extractor", "tower" }
+local BOT_PLAN = { "extractor", "barracks", "extractor", "tankf", "power", "extractor", "tower", "air", "power", "lab", "extractor", "tower", "aa", "power", "fabricator", "tankf", "power", "extractor", "tower" }
 
 local function now(): number
 	return workspace:GetServerTimeNow()
@@ -766,7 +819,8 @@ function Bots:botThink(n, dt: number)
 				if not b.auto then
 					local fighters = {}
 					for _, kind in bd.units do
-						if Config.UNITS[kind].dps > 0 then
+						local ud = Config.UNITS[kind]
+						if ud.dps > 0 and (not ud.needs or n.tech[ud.needs]) then
 							table.insert(fighters, kind)
 						end
 					end
@@ -774,6 +828,17 @@ function Bots:botThink(n, dt: number)
 				end
 			elseif not b.autoPaid then
 				b.auto = nil
+			end
+		end
+	end
+	-- a finished research centre studies the next technology when there is metal to spare
+	for _, b in self.buildings do
+		if b.n == n and Config.BUILD[b.kind].research and b.built >= 1 and not b.research then
+			for _, id in Config.TECH_ORDER do
+				if n.money >= Config.TECH[id].cost + 400 and not self:researchBlock(n, id) then
+					self:beginResearch(n, b, id)
+					break
+				end
 			end
 		end
 	end
@@ -919,7 +984,12 @@ function Combat:tickCombat(dt: number)
 			local vs = Config.VS[kind]
 			mult = if vs and vs[target.kind] then vs[target.kind] else 1
 		end
-		target.hp -= dps * dt * mult
+		-- research: the attacker's weapons hit harder, the target unit's armor takes some off
+		local hit = dps * dt * mult * (1 + attacker.n.damage)
+		if not target.isBuilding then
+			hit *= 1 - target.n.armor
+		end
+		target.hp -= hit
 		if target.isBuilding then
 			self.bhpDirty[target] = true
 			self:alert(target.n, target.px, target.py, t)
@@ -967,8 +1037,8 @@ end
 
 return Combat
 ]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">Economy</string><ProtectedString name="Source"><![CDATA[-- The economy of a skirmish: metal income, energy, construction, factory queues and production,
--- repairs, and what each base is worth. These are methods of Match (Match.luau adds them);
--- self is the match. Metal is kept in n.money.
+-- research, repairs, and what each base is worth. These are methods of Match (Match.luau adds
+-- them); self is the match. Metal is kept in n.money, finished research in n.tech.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -996,10 +1066,20 @@ local function makes(b, kind: string): boolean
 	return table.find(Config.BUILD[b.kind].units, kind) ~= nil
 end
 
+-- some units can only be ordered after research; tells the player which
+function Economy:unitLocked(n, kind: string): boolean
+	local needs = Config.UNITS[kind].needs
+	if needs and not n.tech[needs] then
+		self:toast(n, "Сначала изучи в исследовательском центре: " .. Config.TECH[needs].name, true)
+		return true
+	end
+	return false
+end
+
 -- orders one unit from a factory; it is paid now and refunded if cancelled
 function Economy:queueUnit(player: Player, id: number, kind: string)
 	local n, b = self:factoryOf(player, id)
-	if not n or not makes(b, kind) then
+	if not n or not makes(b, kind) or self:unitLocked(n, kind) then
 		return
 	end
 	local cost = Config.UNITS[kind].cost
@@ -1036,7 +1116,7 @@ end
 -- kind = unit to repeat while the queue is empty, or "" to switch it off
 function Economy:setAuto(player: Player, id: number, kind: string)
 	local n, b = self:factoryOf(player, id)
-	if not n or (kind ~= "" and not makes(b, kind)) then
+	if not n or (kind ~= "" and (not makes(b, kind) or self:unitLocked(n, kind))) then
 		return
 	end
 	if b.autoPaid and b.autoPaid ~= kind and #b.queue == 0 then
@@ -1056,6 +1136,80 @@ function Economy:setRally(player: Player, id: number, x: number, y: number)
 	end
 	b.rally = { x = math.floor(x) + 0.5, y = math.floor(y) + 0.5 }
 	self:toast(n, "Точка сбора поставлена: новые юниты поедут туда.")
+end
+
+---------------------------------------------------------------- research
+
+-- a player's own research centre, or nil
+function Economy:labOf(player: Player, id: number)
+	local n = self.humans[player]
+	local b = self.buildings[id]
+	if not n or not b or b.n ~= n or self.phase ~= "game" or not Config.BUILD[b.kind].research then
+		return nil, nil
+	end
+	return n, b
+end
+
+-- why a base cannot start this study now, or nil
+function Economy:researchBlock(n, id: string): string?
+	local t = Config.TECH[id]
+	if n.tech[id] then
+		return "Уже изучено: " .. t.name
+	end
+	if t.needs and not n.tech[t.needs] then
+		return "Сначала изучи: " .. Config.TECH[t.needs].name
+	end
+	for _, b in self.buildings do
+		if b.n == n and b.research == id then
+			return "Уже изучается: " .. t.name
+		end
+	end
+	if n.money < t.cost then
+		return self:lackText(n, t.cost)
+	end
+	return nil
+end
+
+function Economy:beginResearch(n, b, id: string)
+	n.money -= Config.TECH[id].cost
+	b.research = id
+	b.prog = 0
+end
+
+-- starts a study in a research centre; it is paid now and refunded if stopped
+function Economy:startResearch(player: Player, labId: number, id: string)
+	local n, b = self:labOf(player, labId)
+	if not n then
+		return
+	end
+	if b.built < 1 then
+		self:toast(n, "Исследовательский центр ещё строится.", true)
+		return
+	end
+	if b.research then
+		self:toast(n, "Центр уже занят: " .. Config.TECH[b.research].name .. ". Дождись или останови.", true)
+		return
+	end
+	local why = self:researchBlock(n, id)
+	if why then
+		self:toast(n, why, true)
+		return
+	end
+	self:beginResearch(n, b, id)
+	self:toast(n, "Изучается: " .. Config.TECH[id].name .. " (" .. Config.TECH[id].time .. " с)")
+	self:sendEconomy()
+end
+
+-- stops the study and returns its metal
+function Economy:stopResearch(player: Player, labId: number)
+	local n, b = self:labOf(player, labId)
+	if not n or not b.research then
+		return
+	end
+	n.money += Config.TECH[b.research].cost
+	b.research = nil
+	b.prog = 0
+	self:sendEconomy()
 end
 
 ---------------------------------------------------------------- energy, income and production
@@ -1107,6 +1261,8 @@ function Economy:tickEconomy(dt: number)
 	self:tickEnergy()
 	for _, n in self.seats do
 		n.income = if n.alive and n.cc then Config.BASE_INCOME else 0
+		-- what finished research gives: Combat reads armor and damage too
+		n.armor, n.damage, n.production = Config.techBonus(n.tech)
 	end
 	local help = self:engineerHelp()
 	for _, b in self.buildings do
@@ -1123,6 +1279,17 @@ function Economy:tickEconomy(dt: number)
 		end
 		if def.income then
 			n.income += def.income * speedOf(b)
+		end
+		if b.research then
+			local t = Config.TECH[b.research]
+			b.prog = math.min(1, b.prog + dt * speedOf(b) / t.time)
+			if b.prog >= 1 then
+				n.tech[b.research] = true
+				self:toast(n, "Изучено: " .. t.name .. ". " .. t.desc)
+				b.research = nil
+				b.prog = 0
+			end
+			continue
 		end
 		if not def.units then
 			continue
@@ -1146,7 +1313,7 @@ function Economy:tickEconomy(dt: number)
 			if n.pop + Config.UNITS[current].pop > Config.ARMY_LIMIT then
 				b.blocked = "army"
 			else
-				b.prog = math.min(1, b.prog + dt * speedOf(b) / Config.UNITS[current].time)
+				b.prog = math.min(1, b.prog + dt * speedOf(b) * (1 + n.production) / Config.UNITS[current].time)
 				if b.prog >= 1 then
 					self:spawnUnit(n, current, b.px, b.py + b.size / 2 + 0.8, b.rally)
 					b.prog = 0
@@ -1210,11 +1377,16 @@ function Economy:sendEconomy()
 					id = b.id,
 					p = if b.blocked then -math.max(b.prog, 0.001) else b.prog,
 					w = b.blocked, -- what a stopped factory waits for: "metal" or "army"
+					r = b.research, -- what a research centre studies
 					built = b.built,
 					q = b.queue,
 					auto = b.auto or "",
 				})
 			end
+		end
+		local tech = {}
+		for id in n.tech do
+			table.insert(tech, id)
 		end
 		self:sendTo(player, {
 			t = "eco",
@@ -1225,6 +1397,7 @@ function Economy:sendEconomy()
 			army = n.army,
 			pop = n.pop,
 			units = n.unitTotal,
+			tech = tech,
 			list = list,
 		})
 	end
@@ -1379,6 +1552,10 @@ function Match.new(event: RemoteEvent)
 			army = {},
 			unitTotal = 0,
 			pop = 0,
+			tech = {}, -- finished research: id -> true
+			armor = 0,
+			damage = 0,
+			production = 0,
 			bot = self:newBot(),
 		}
 		self.nations[i] = n
@@ -2327,7 +2504,7 @@ function Path.inMap(x: number, y: number): (number, number)
 end
 
 return Path
-]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX00000027"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000026"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000025"><Properties><string name="Name">TerraForgeClient</string><ProtectedString name="Source"><![CDATA[-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
+]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX00000028"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000027"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000026"><Properties><string name="Name">TerraForgeClient</string><ProtectedString name="Source"><![CDATA[-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -2557,6 +2734,9 @@ function handlers.bgone(msg)
 	if UI.factoryId == msg.id then
 		UI.hideFactory()
 	end
+	if UI.researchId == msg.id then
+		UI.hideResearch()
+	end
 end
 
 function handlers.unit(msg)
@@ -2750,12 +2930,21 @@ function handlers.bhp(msg)
 	MapView.setBuildingHp(msg.s)
 end
 
+-- the research the player's base has finished: { [tech id] = true }
+local function researchDone(): { [string]: boolean }
+	local done = {}
+	for _, id in (state.eco and state.eco.tech) or {} do
+		done[id] = true
+	end
+	return done
+end
+
 local function factoryInfo(id: number)
 	local b = MapView.buildingRecord(id)
 	if not b then
 		return nil
 	end
-	return { id = id, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto, wait = b.wait, slow = state.shortOfEnergy }
+	return { id = id, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto, wait = b.wait, slow = state.shortOfEnergy, done = researchDone() }
 end
 
 local function refreshFactory()
@@ -2769,6 +2958,36 @@ local function refreshFactory()
 	else
 		UI.hideFactory()
 	end
+end
+
+local function researchInfo(id: number)
+	local b = MapView.buildingRecord(id)
+	if not b then
+		return nil
+	end
+	local money = if state.eco then state.eco.money else 0
+	return { id = id, built = b.built, research = b.research, prog = b.prog, done = researchDone(), money = money, slow = state.shortOfEnergy }
+end
+
+local function refreshResearch()
+	local id = UI.researchId
+	if not id then
+		return
+	end
+	local info = researchInfo(id)
+	if info then
+		UI.showResearch(info)
+	else
+		UI.hideResearch()
+	end
+end
+
+UI.onResearch = function(id, tech)
+	action:FireServer("research", id, tech)
+end
+
+UI.onStopResearch = function(id)
+	action:FireServer("stopresearch", id)
 end
 
 function handlers.eco(msg)
@@ -2793,12 +3012,16 @@ function handlers.eco(msg)
 	end
 	state.armyFull = full
 	refreshFactory()
+	refreshResearch()
 end
 
 function handlers.bdone(msg)
 	MapView.finishBuilding(msg.id)
 	if UI.factoryId == msg.id then
 		refreshFactory()
+	end
+	if UI.researchId == msg.id then
+		refreshResearch()
 	end
 end
 
@@ -2824,6 +3047,7 @@ function handlers.defeat()
 		MapView.setBuild(nil)
 		MapView.revealAll()
 		UI.hideFactory()
+		UI.hideResearch()
 		UI.defeat()
 	end
 end
@@ -2990,8 +3214,15 @@ MapView.onTap = function(x, y, sx, sy)
 					Sfx.play("click")
 					UI.showFactory(info)
 				end
+			elseif def.research then
+				local info = researchInfo(bid)
+				if info then
+					Sfx.play("click")
+					UI.showResearch(info)
+				end
 			else
 				UI.hideFactory()
+				UI.hideResearch()
 				UI.toast(def.name .. ": " .. def.desc)
 			end
 			return
@@ -3012,8 +3243,9 @@ MapView.onTap = function(x, y, sx, sy)
 		command(x, y, sx, sy)
 		return
 	end
-	if UI.factoryId then
+	if UI.factoryId or UI.researchId then
 		UI.hideFactory()
+		UI.hideResearch()
 		return
 	end
 	local what, id = MapView.thingAt(sx, sy)
@@ -3466,7 +3698,8 @@ end
 
 return Camera
 ]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">Drawn</string><ProtectedString name="Source"><![CDATA[-- Pictures drawn with interface shapes for the buildings and units that have no painted sprite
--- yet: the radar, the power plant, the repair station and the engineer. A drawing fills its
+-- yet: the radar, the power plant, the repair station, the research centre and the engineer.
+-- A drawing fills its
 -- parent; it returns its holder and the parts the map animates, and can be recoloured for a
 -- team. Once a painted sprite with the same name is in the sprite sheet, the map uses that.
 local Theme = require(script.Parent.Theme)
@@ -3506,8 +3739,9 @@ local function shape(parent: Instance, x: number, y: number, w: number, h: numbe
 	}, children)
 end
 
--- a building's drawing, anchored at the bottom so it can rise while being built:
--- holder, { spin = part to turn, pulse = part to blink, recolor = fn(Color3) }, or nil
+-- a building's drawing, anchored at the bottom so it can rise while being built: holder,
+-- { spin = part to turn, pulse = part that beats, pulseScale = its size, recolor = fn(Color3) },
+-- or nil
 function Drawn.building(kind: string, parent: Instance, color: Color3)
 	local h = holderIn(parent, true)
 	local pad
@@ -3534,6 +3768,7 @@ function Drawn.building(kind: string, parent: Instance, color: Color3)
 			ZIndex = 4,
 			Parent = h,
 		})
+		parts.pulseScale = 0.3
 	elseif kind == "repair" then
 		pad = shape(h, 0.5, 0.5, 0.9, 0.9, PAD, 1, 0.18, color, 2.5)
 		shape(h, 0.5, 0.5, 0.68, 0.68, Color3.fromRGB(72, 78, 88), 2, 1, Color3.fromRGB(196, 202, 210), 1.5)
@@ -3542,6 +3777,14 @@ function Drawn.building(kind: string, parent: Instance, color: Color3)
 		shape(cross, 0.5, 0.5, 0.14, 0.46, Color3.fromRGB(120, 232, 140), 3, 0.3)
 		shape(cross, 0.5, 0.5, 0.46, 0.14, Color3.fromRGB(120, 232, 140), 3, 0.3)
 		parts.pulse = cross
+		parts.pulseScale = 1
+	elseif kind == "lab" then
+		pad = shape(h, 0.5, 0.5, 0.9, 0.9, PAD, 1, 0.18, color, 2.5)
+		-- a glass dome with a highlight, and a light inside that beats while the centre works
+		shape(h, 0.5, 0.5, 0.7, 0.7, Color3.fromRGB(118, 164, 204), 2, 1, Color3.fromRGB(210, 226, 240), 1.5)
+		shape(h, 0.38, 0.36, 0.22, 0.14, Color3.fromRGB(214, 232, 246), 3, 1)
+		parts.pulse = shape(h, 0.5, 0.56, 0.2, 0.2, Color3.fromRGB(120, 255, 230), 4, 1, DARK, 1)
+		parts.pulseScale = 0.2
 	else
 		h:Destroy()
 		return nil, nil
@@ -4028,10 +4271,12 @@ local function factoryRow(kind: string, order: number)
 end
 
 -- info: { id, kind, prog, built, queue = { unit kinds }, auto = kind or "", wait = what a
--- stopped factory waits for ("metal" or "army"), slow = the base is short of energy }
+-- stopped factory waits for ("metal" or "army"), slow = the base is short of energy,
+-- done = finished research { [tech id] = true } }
 function Factory.show(info)
 	local UI = ctx.UI
 	local def = Config.BUILD[info.kind]
+	UI.hideResearch()
 	UI.factoryId = info.id
 	UI.selectBuild(nil)
 	if refs.facKind ~= info.kind then
@@ -4053,15 +4298,21 @@ function Factory.show(info)
 		counts[kind] = (counts[kind] or 0) + 1
 	end
 	local money = refs.money or 0
+	local done = info.done or {}
 	for _, r in refs.facRowList do
 		local u = Config.UNITS[r.kind]
 		local n = counts[r.kind] or 0
-		r.queued.Text = if n > 0 then "в очереди: " .. n elseif auto == r.kind then "выпускается по кругу" else ""
+		local locked = u.needs ~= nil and not done[u.needs]
+		r.queued.Text = if locked then "🔒 нужно изучить: " .. Config.TECH[u.needs].name
+			elseif n > 0 then "в очереди: " .. n
+			elseif auto == r.kind then "выпускается по кругу"
+			else ""
 		r.stroke.Transparency = if auto == r.kind then 0 else 1
 		r.auto.BackgroundColor3 = if auto == r.kind then Color3.fromRGB(70, 42, 18) else C.panel
 		r.auto.TextColor3 = if auto == r.kind then C.moltenHi else C.ink
-		r.info.TextColor3 = if money < u.cost then C.bad else Color3.fromRGB(198, 207, 221)
+		r.info.TextColor3 = if money < u.cost or locked then C.bad else Color3.fromRGB(198, 207, 221)
 		Sprites.apply(r.icon, u.icon, ctx.color)
+		Sprites.setTransparency(r.icon, if locked then 0.55 else 0)
 	end
 	local built = info.built or 1
 	local p = math.abs(info.prog or 0)
@@ -4414,7 +4665,7 @@ local Hud = {}
 -- unit kinds grouped for the army panel: infantry, vehicles, aircraft
 local GROUPS = {
 	inf = { kinds = { "infantry", "rocket", "engineer" }, icon = "infantry", title = "Пехота" },
-	veh = { kinds = { "scout", "tank", "artillery" }, icon = "tank", title = "Техника" },
+	veh = { kinds = { "scout", "tank", "heavy", "artillery" }, icon = "tank", title = "Техника" },
 	air = { kinds = { "fighter", "gunship" }, icon = "fighter", title = "Авиация" },
 }
 local GROUP_ORDER = { "inf", "veh", "air" }
@@ -4756,7 +5007,7 @@ function Hud.layout(w: number)
 		local left, right = 16 + 250 + 8, 16 + 44 + 8
 		local avail = w - left - right
 		local n = #Config.BUILD_ORDER
-		local bw = math.clamp(math.floor((avail - 12 - (n - 1) * 6) / n), 56, 74)
+		local bw = math.clamp(math.floor((avail - 12 - (n - 1) * 6) / n), 50, 74)
 		for _, b in refs.buildBtns do
 			b.button.Size = UDim2.fromOffset(bw, 86)
 		end
@@ -4771,6 +5022,7 @@ function Hud.setPhase(phase: string, spectator: boolean)
 	local inGame = phase == "game" and not spectator
 	if not inGame then
 		ctx.UI.hideFactory()
+		ctx.UI.hideResearch()
 	end
 	refs.hudTop.Visible = inGame
 	refs.hudBottom.Visible = inGame
@@ -4945,6 +5197,7 @@ function Hud.selectBuild(k: string?)
 	end
 	if k and refs.fac then
 		UI.hideFactory()
+		UI.hideResearch()
 	end
 	for key, b in refs.buildBtns do
 		local on = key == k
@@ -4956,7 +5209,7 @@ function Hud.selectBuild(k: string?)
 end
 
 function Hud.showTip(k: string?)
-	if not k or not refs.hudBottom.Visible or refs.fac.Visible then
+	if not k or not refs.hudBottom.Visible or refs.fac.Visible or refs.lab.Visible then
 		refs.tip.Visible = false
 		return
 	end
@@ -5248,21 +5501,21 @@ local BUILDING_GUN = { tower = "tower_gun", aa = "aa_gun" }
 -- how each shooter's shot looks, and sounds
 local SHOT_LOOK = {
 	infantry = "bullet", scout = "bullet", fighter = "bullet", cc = "bullet",
-	tank = "cannon", tower = "cannon",
+	tank = "cannon", heavy = "cannon", tower = "cannon",
 	rocket = "rocket", gunship = "rocket",
 	artillery = "shell",
 	aa = "flak",
 }
 local SHOT_SOUND = {
 	infantry = "rifle", scout = "mg", fighter = "mg", cc = "mg",
-	tank = "cannon", tower = "tower",
+	tank = "cannon", heavy = "cannon", tower = "tower",
 	rocket = "rocket", gunship = "rocket",
 	artillery = "artillery",
 	aa = "flak",
 }
 -- soldiers walk with a little sway; tracked and wheeled vehicles leave prints on the ground
 local WALKERS = { infantry = true, rocket = true, engineer = true }
-local TRACKED = { tank = 0.4, artillery = 0.4, scout = 0.28 } -- kind -> how dark the prints are
+local TRACKED = { tank = 0.4, heavy = 0.5, artillery = 0.4, scout = 0.28 } -- kind -> how dark the prints are
 
 local gui, view, board
 local buildings = {} -- id -> record
@@ -5632,6 +5885,7 @@ function MapView.setProgress(list)
 		if rec then
 			rec.prog = e.p
 			rec.wait = e.w
+			rec.research = e.r
 			rec.built = math.max(rec.built, e.built)
 			rec.queue = e.q
 			rec.auto = e.auto
@@ -6030,8 +6284,8 @@ local function updateUnits(dt: number)
 				parts.spin.Rotation = (parts.spin.Rotation + dt * 80) % 360
 			end
 			if parts.pulse then
-				-- the bolt and the cross beat gently: the bolt is a third of the pad, the cross fills it
-				local s = (if parts.pulse:IsA("TextLabel") then 0.3 else 1) * (1 + 0.08 * math.sin(clock * 4 + b.id))
+				-- the bolt, the cross and the light beat gently around their own size
+				local s = parts.pulseScale * (1 + 0.08 * math.sin(clock * 4 + b.id))
 				parts.pulse.Size = UDim2.fromScale(s, s)
 			end
 		end
@@ -6409,7 +6663,7 @@ function Menu.build(context, root: Instance, player: Player): Frame
 		Parent = refs.side,
 	}, { Theme.corner(16), Theme.stroke(), Theme.pad(14, 12), Theme.list(Enum.FillDirection.Vertical, 4) })
 	Theme.label({ Text = "АРСЕНАЛ", Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 1, Parent = ars })
-	Theme.label({ Text = "8 видов войск: пехота, техника, авиация и инженеры.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.Medium), LayoutOrder = 2, Parent = ars })
+	Theme.label({ Text = "9 видов войск: пехота, техника, авиация и инженеры.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.Medium), LayoutOrder = 2, Parent = ars })
 	local row = make("Frame", { Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, LayoutOrder = 3, Parent = ars }, { Theme.list(Enum.FillDirection.Horizontal, 6) })
 	for _, k in { "infantry", "tank", "artillery", "gunship" } do
 		local cell = make("Frame", { Size = UDim2.fromOffset(52, 44), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.95, Parent = row }, { Theme.corner(10) })
@@ -6900,7 +7154,201 @@ function Placement.init(boardFrame: Frame, records, mine: () -> number)
 end
 
 return Placement
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Sfx</string><ProtectedString name="Source"><![CDATA[-- Sound effects. All clips are cut from one audio asset (shared/SoundData) with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Research</string><ProtectedString name="Source"><![CDATA[-- The research panel of a research centre: every technology with what it does and its price,
+-- the one being studied with its progress, and a button to stop it (the metal comes back).
+-- Part of the interface; Ui puts it together.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("TerraForge")
+local Config = require(Shared.Config)
+local Sfx = require(script.Parent.Sfx)
+local Theme = require(script.Parent.Theme)
+local Widgets = require(script.Parent.Widgets)
+
+local make = Theme.make
+local C = Theme.C
+local font = Theme.font
+
+local Research = {}
+
+-- ctx: { UI = the interface, refs = shared widget references, color = the player's team colour }
+local ctx, refs
+local rows = {} -- tech id -> { button, label, stroke }
+local current = nil -- the info shown, for the buttons
+
+function Research.build(context, play: Instance)
+	ctx, refs = context, context.refs
+	local UI = ctx.UI
+	local panel = Theme.panel({
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -120),
+		Size = UDim2.fromOffset(460, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = Color3.fromRGB(16, 21, 34),
+		BackgroundTransparency = 0.02,
+		Visible = false,
+		ZIndex = 8,
+		Parent = play,
+	})
+	Theme.pad(14, 12).Parent = panel
+	local close = Widgets.iconButton("close", panel, function()
+		Research.hide()
+	end)
+	close.AnchorPoint = Vector2.new(1, 0)
+	close.Position = UDim2.new(1, 0, 0, -2)
+	close.Size = UDim2.fromOffset(36, 36)
+	close.ZIndex = 10
+	local body = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, ZIndex = 9, Parent = panel }, {
+		Theme.list(Enum.FillDirection.Vertical, 6),
+	})
+	Theme.label({ Text = Config.BUILD.lab.name, Size = UDim2.new(1, -50, 0, 22), TextSize = 18, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 9, LayoutOrder = 1, Parent = body })
+	refs.labSub = Theme.label({ Text = "", Size = UDim2.new(1, -50, 0, 16), TextSize = 12.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 9, LayoutOrder = 2, Parent = body })
+	local list = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, ZIndex = 9, LayoutOrder = 3, Parent = body }, {
+		Theme.list(Enum.FillDirection.Vertical, 5),
+	})
+	for i, id in Config.TECH_ORDER do
+		local t = Config.TECH[id]
+		local row = make("Frame", { Size = UDim2.new(1, 0, 0, 48), BackgroundColor3 = C.panelHi, LayoutOrder = i, ZIndex = 9, Parent = list }, { Theme.corner(12) })
+		local stroke = make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = row })
+		Widgets.icon(t.icon, 30, { Position = UDim2.fromOffset(8, 9), ZIndex = 10, color = ctx.color, Parent = row })
+		Theme.label({ Text = t.name, Position = UDim2.fromOffset(46, 5), Size = UDim2.new(1, -170, 0, 18), TextSize = 14, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 10, Parent = row })
+		Theme.label({
+			Text = t.desc,
+			Position = UDim2.fromOffset(46, 23),
+			Size = UDim2.new(1, -170, 0, 22),
+			TextSize = 11.5,
+			TextWrapped = true,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextColor3 = Color3.fromRGB(198, 207, 221),
+			FontFace = font(Enum.FontWeight.SemiBold),
+			ZIndex = 10,
+			Parent = row,
+		})
+		local button = make("TextButton", {
+			Text = "",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -7, 0.5, 0),
+			Size = UDim2.fromOffset(112, 34),
+			AutoButtonColor = true,
+			BackgroundColor3 = C.panel,
+			ZIndex = 10,
+			Parent = row,
+		}, { Theme.corner(10) })
+		local label = Theme.label({
+			Text = "",
+			Size = UDim2.fromScale(1, 1),
+			TextScaled = true,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			FontFace = font(Enum.FontWeight.Bold),
+			ZIndex = 11,
+			Parent = button,
+		}, { make("UITextSizeConstraint", { MaxTextSize = 13 }), Theme.pad(6, 4) })
+		button.Activated:Connect(function()
+			local info = current
+			if not info or not UI.researchId then
+				return
+			end
+			if info.research or info.done[id] then
+				return
+			end
+			if t.needs and not info.done[t.needs] then
+				UI.toast("Сначала изучи: " .. Config.TECH[t.needs].name, true)
+				return
+			end
+			Sfx.play("click")
+			if UI.onResearch then
+				UI.onResearch(UI.researchId, id)
+			end
+		end)
+		rows[id] = { button = button, label = label, stroke = stroke }
+	end
+	local barBg = make("Frame", { Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.9, ZIndex = 9, LayoutOrder = 4, Parent = body }, { Theme.corner(nil, 1) })
+	refs.labBar = make("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = C.molten, ZIndex = 10, Parent = barBg }, { Theme.corner(nil, 1) })
+	local foot = make("Frame", { Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, ZIndex = 9, LayoutOrder = 5, Parent = body })
+	refs.labNow = Theme.label({ Text = "", Size = UDim2.new(1, -150, 1, 0), TextSize = 13, TextWrapped = true, FontFace = font(Enum.FontWeight.Bold), ZIndex = 9, Parent = foot })
+	local stop = make("TextButton", {
+		Text = "Остановить",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.fromOffset(140, 32),
+		AutoButtonColor = true,
+		FontFace = font(Enum.FontWeight.Bold),
+		TextSize = 13,
+		TextColor3 = C.ink,
+		BackgroundColor3 = C.panelHi,
+		Visible = false,
+		ZIndex = 10,
+		Parent = foot,
+	}, { Theme.corner(10) })
+	stop.Activated:Connect(function()
+		if UI.onStopResearch and UI.researchId then
+			Sfx.play("click")
+			UI.onStopResearch(UI.researchId)
+		end
+	end)
+	refs.labStop = stop
+	refs.lab = panel
+end
+
+-- info: { id, built, research = tech id being studied or nil, prog, done = { [tech id] = true },
+-- money, slow = the base is short of energy }
+function Research.show(info)
+	local UI = ctx.UI
+	current = info
+	UI.researchId = info.id
+	UI.selectBuild(nil)
+	UI.hideFactory()
+	local money = info.money or 0
+	for id, r in rows do
+		local t = Config.TECH[id]
+		local text, color, ink = string.format("Изучить · %d 🔩", t.cost), C.molten, C.moltenInk
+		if info.done[id] then
+			text, color, ink = "✓ Изучено", Color3.fromRGB(28, 70, 44), C.ok
+		elseif info.research == id then
+			text, color, ink = "Изучается…", Color3.fromRGB(70, 42, 18), C.moltenHi
+		elseif t.needs and not info.done[t.needs] then
+			text, color, ink = "🔒 " .. Config.TECH[t.needs].name, C.panel, C.muted
+		elseif info.research then
+			text, color, ink = "Центр занят", C.panel, C.muted
+		elseif money < t.cost then
+			ink = C.bad
+		end
+		r.label.Text = text
+		r.label.TextColor3 = ink
+		r.button.BackgroundColor3 = color
+		r.stroke.Transparency = if info.research == id then 0 else 1
+	end
+	local built = info.built or 1
+	if built < 1 then
+		refs.labSub.Text = string.format("Строится: %d%%. Изучать можно, когда достроят.", math.floor(built * 100))
+		refs.labBar.Size = UDim2.fromScale(built, 1)
+		refs.labBar.BackgroundColor3 = Color3.fromRGB(90, 170, 255)
+		refs.labNow.Text = ""
+		refs.labStop.Visible = false
+	elseif info.research then
+		refs.labSub.Text = if info.slow then "Мало энергии: исследование идёт медленнее." else "Изучается одна технология за раз."
+		refs.labBar.Size = UDim2.fromScale(math.clamp(info.prog or 0, 0, 1), 1)
+		refs.labBar.BackgroundColor3 = C.molten
+		refs.labNow.Text = string.format("Сейчас: %s — %d%%", Config.TECH[info.research].name, math.floor((info.prog or 0) * 100))
+		refs.labStop.Visible = true
+	else
+		refs.labSub.Text = "Изучается одна технология за раз. Цена платится сразу."
+		refs.labBar.Size = UDim2.fromScale(0, 1)
+		refs.labNow.Text = "Выбери, что изучать."
+		refs.labStop.Visible = false
+	end
+	refs.tip.Visible = false
+	refs.lab.Visible = true
+end
+
+function Research.hide()
+	current = nil
+	ctx.UI.researchId = nil
+	refs.lab.Visible = false
+end
+
+return Research
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Sfx</string><ProtectedString name="Source"><![CDATA[-- Sound effects. All clips are cut from one audio asset (shared/SoundData) with
 -- Sound.PlaybackRegion. Battle sounds get quieter away from the middle of the screen and are
 -- skipped when far off screen, when the same clip just played, or when many are playing.
 local ContentProvider = game:GetService("ContentProvider")
@@ -6996,7 +7444,7 @@ function Sfx.at(name: string, x: number, y: number)
 end
 
 return Sfx
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Unit and building pictures come from one sprite sheet (atlas) plus a matching sheet with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Unit and building pictures come from one sprite sheet (atlas) plus a matching sheet with
 -- the team-coloured parts in grey, which is tinted with ImageColor3. One pair of images
 -- serves every team. Other icons are text symbols.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7041,7 +7489,9 @@ local GLYPHS = {
 	radar = { "📡" },
 	lock = { "🔒" },
 	globe = { "🌍" },
-	swords = { "⚔", Color3.fromRGB(238, 242, 248) },
+	swords = { "⚔️" },
+	gear = { "⚙️" },
+	lab = { "🔬" },
 }
 
 function Sprites.has(name: string): boolean
@@ -7133,7 +7583,7 @@ function Sprites.setTransparency(label: GuiObject, value: number)
 end
 
 return Sprites
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Colours, fonts and small helpers for building UI in code.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Colours, fonts and small helpers for building UI in code.
 local Theme = {}
 
 Theme.C = {
@@ -7273,9 +7723,10 @@ function Theme.hex(h: string): Color3
 end
 
 return Theme
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[-- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[-- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
 -- This module is the interface the game script talks to; the parts are built in Menu (main
--- menu and arsenal), Hud (the match screen) and Factory (the factory panel), from Widgets.
+-- menu and arsenal), Hud (the match screen), Factory (the factory panel) and Research (the
+-- research panel), from Widgets.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
@@ -7283,6 +7734,7 @@ local Config = require(Shared.Config)
 local Factory = require(script.Parent.Factory)
 local Hud = require(script.Parent.Hud)
 local Menu = require(script.Parent.Menu)
+local Research = require(script.Parent.Research)
 local Sfx = require(script.Parent.Sfx)
 local Theme = require(script.Parent.Theme)
 local Widgets = require(script.Parent.Widgets)
@@ -7305,6 +7757,9 @@ UI.onCommand = nil -- army panel: "screen", "box", "amove", "stop", "hold"
 UI.onBase = nil
 UI.onBuildSelect = nil
 UI.factoryId = nil
+UI.onResearch = nil -- (research centre id, tech id)
+UI.onStopResearch = nil -- (research centre id)
+UI.researchId = nil -- the research centre whose panel is open
 UI.buildSel = nil
 UI.GROUPS = Hud.GROUPS
 
@@ -7332,6 +7787,8 @@ UI.selectBuild = Hud.selectBuild
 UI.showTip = Hud.showTip
 UI.showFactory = Factory.show
 UI.hideFactory = Factory.hide
+UI.showResearch = Research.show
+UI.hideResearch = Research.hide
 
 ---------------------------------------------------------------- scaling
 
@@ -7411,6 +7868,7 @@ function UI.init(playerGui: PlayerGui, player: Player)
 	play = make("Frame", { Name = "Play", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Parent = root })
 	Hud.build(ctx, play)
 	Factory.build(ctx, play)
+	Research.build(ctx, play)
 	Menu.buildArsenal(root)
 	buildToast()
 	refs.meName.Text = player.DisplayName
@@ -7424,6 +7882,8 @@ function UI.showMenu()
 	menu.Visible = true
 	play.Visible = false
 	UI.selectBuild(nil)
+	UI.hideFactory()
+	UI.hideResearch()
 end
 
 -- spectator: watch the match without HUD controls
@@ -7478,7 +7938,7 @@ function UI.artError()
 end
 
 return UI
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">Widgets</string><ProtectedString name="Source"><![CDATA[-- Small pieces the menu and the match screen are built from: icons, round icon buttons, the
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000025"><Properties><string name="Name">Widgets</string><ProtectedString name="Source"><![CDATA[-- Small pieces the menu and the match screen are built from: icons, round icon buttons, the
 -- orange main buttons, avatars, resource chips and prices.
 local TweenService = game:GetService("TweenService")
 

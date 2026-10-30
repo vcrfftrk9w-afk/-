@@ -1,5 +1,6 @@
 -- Pictures drawn with interface shapes for the buildings and units that have no painted sprite
--- yet: the radar, the power plant, the repair station and the engineer. A drawing fills its
+-- yet: the radar, the power plant, the repair station, the research centre and the engineer.
+-- A drawing fills its
 -- parent; it returns its holder and the parts the map animates, and can be recoloured for a
 -- team. Once a painted sprite with the same name is in the sprite sheet, the map uses that.
 local Theme = require(script.Parent.Theme)
@@ -39,8 +40,9 @@ local function shape(parent: Instance, x: number, y: number, w: number, h: numbe
 	}, children)
 end
 
--- a building's drawing, anchored at the bottom so it can rise while being built:
--- holder, { spin = part to turn, pulse = part to blink, recolor = fn(Color3) }, or nil
+-- a building's drawing, anchored at the bottom so it can rise while being built: holder,
+-- { spin = part to turn, pulse = part that beats, pulseScale = its size, recolor = fn(Color3) },
+-- or nil
 function Drawn.building(kind: string, parent: Instance, color: Color3)
 	local h = holderIn(parent, true)
 	local pad
@@ -67,6 +69,7 @@ function Drawn.building(kind: string, parent: Instance, color: Color3)
 			ZIndex = 4,
 			Parent = h,
 		})
+		parts.pulseScale = 0.3
 	elseif kind == "repair" then
 		pad = shape(h, 0.5, 0.5, 0.9, 0.9, PAD, 1, 0.18, color, 2.5)
 		shape(h, 0.5, 0.5, 0.68, 0.68, Color3.fromRGB(72, 78, 88), 2, 1, Color3.fromRGB(196, 202, 210), 1.5)
@@ -75,6 +78,14 @@ function Drawn.building(kind: string, parent: Instance, color: Color3)
 		shape(cross, 0.5, 0.5, 0.14, 0.46, Color3.fromRGB(120, 232, 140), 3, 0.3)
 		shape(cross, 0.5, 0.5, 0.46, 0.14, Color3.fromRGB(120, 232, 140), 3, 0.3)
 		parts.pulse = cross
+		parts.pulseScale = 1
+	elseif kind == "lab" then
+		pad = shape(h, 0.5, 0.5, 0.9, 0.9, PAD, 1, 0.18, color, 2.5)
+		-- a glass dome with a highlight, and a light inside that beats while the centre works
+		shape(h, 0.5, 0.5, 0.7, 0.7, Color3.fromRGB(118, 164, 204), 2, 1, Color3.fromRGB(210, 226, 240), 1.5)
+		shape(h, 0.38, 0.36, 0.22, 0.14, Color3.fromRGB(214, 232, 246), 3, 1)
+		parts.pulse = shape(h, 0.5, 0.56, 0.2, 0.2, Color3.fromRGB(120, 255, 230), 4, 1, DARK, 1)
+		parts.pulseScale = 0.2
 	else
 		h:Destroy()
 		return nil, nil

@@ -1,6 +1,7 @@
 -- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
 -- This module is the interface the game script talks to; the parts are built in Menu (main
--- menu and arsenal), Hud (the match screen) and Factory (the factory panel), from Widgets.
+-- menu and arsenal), Hud (the match screen), Factory (the factory panel) and Research (the
+-- research panel), from Widgets.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
@@ -8,6 +9,7 @@ local Config = require(Shared.Config)
 local Factory = require(script.Parent.Factory)
 local Hud = require(script.Parent.Hud)
 local Menu = require(script.Parent.Menu)
+local Research = require(script.Parent.Research)
 local Sfx = require(script.Parent.Sfx)
 local Theme = require(script.Parent.Theme)
 local Widgets = require(script.Parent.Widgets)
@@ -30,6 +32,9 @@ UI.onCommand = nil -- army panel: "screen", "box", "amove", "stop", "hold"
 UI.onBase = nil
 UI.onBuildSelect = nil
 UI.factoryId = nil
+UI.onResearch = nil -- (research centre id, tech id)
+UI.onStopResearch = nil -- (research centre id)
+UI.researchId = nil -- the research centre whose panel is open
 UI.buildSel = nil
 UI.GROUPS = Hud.GROUPS
 
@@ -57,6 +62,8 @@ UI.selectBuild = Hud.selectBuild
 UI.showTip = Hud.showTip
 UI.showFactory = Factory.show
 UI.hideFactory = Factory.hide
+UI.showResearch = Research.show
+UI.hideResearch = Research.hide
 
 ---------------------------------------------------------------- scaling
 
@@ -136,6 +143,7 @@ function UI.init(playerGui: PlayerGui, player: Player)
 	play = make("Frame", { Name = "Play", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Parent = root })
 	Hud.build(ctx, play)
 	Factory.build(ctx, play)
+	Research.build(ctx, play)
 	Menu.buildArsenal(root)
 	buildToast()
 	refs.meName.Text = player.DisplayName
@@ -149,6 +157,8 @@ function UI.showMenu()
 	menu.Visible = true
 	play.Visible = false
 	UI.selectBuild(nil)
+	UI.hideFactory()
+	UI.hideResearch()
 end
 
 -- spectator: watch the match without HUD controls

@@ -31,7 +31,7 @@ Config.BOT_NAMES = {
 -- the command centre is placed at the start; the rest are built by players.
 -- size = footprint in tiles; cost in metal, time in seconds; vision in tiles (fog of war);
 -- energy = made (+) or used (-) once built
-Config.BUILD_ORDER = { "extractor", "power", "fabricator", "barracks", "tankf", "air", "repair", "radar", "tower", "aa" }
+Config.BUILD_ORDER = { "extractor", "power", "fabricator", "barracks", "tankf", "air", "lab", "repair", "radar", "tower", "aa" }
 Config.BUILD = {
 	cc = {
 		name = "Командный центр",
@@ -101,7 +101,7 @@ Config.BUILD = {
 		cost = 600,
 		time = 12,
 		hp = 900,
-		units = { "scout", "tank", "artillery" },
+		units = { "scout", "tank", "artillery", "heavy" },
 		vision = 6,
 		energy = -4,
 		desc = "Собирает броневики, танки и артиллерию. Нажми на него, чтобы заказать.",
@@ -117,6 +117,19 @@ Config.BUILD = {
 		vision = 7,
 		energy = -5,
 		desc = "Выпускает истребители и вертолёты. Нажми на него, чтобы заказать.",
+	},
+	lab = {
+		name = "Исследовательский центр",
+		short = "Исследо-\nвания",
+		icon = "lab",
+		size = 2,
+		cost = 500,
+		time = 15,
+		hp = 550,
+		vision = 6,
+		energy = -5,
+		research = true, -- studies the technologies of Config.TECH
+		desc = "Изучает технологии: броню, орудия, конвейер и тяжёлый танк. Нажми на него, чтобы выбрать.",
 	},
 	repair = {
 		name = "Ремонтная станция",
@@ -176,8 +189,9 @@ Config.BUILD = {
 
 -- hp, damage per second, range and vision in tiles; hitsAir = damage multiplier against aircraft;
 -- size = sprite size in tiles; gun = turret sprite, if the unit has one; pop = places in the army
--- limit; repairs = health per second an engineer gives a building within range
-Config.UNIT_ORDER = { "infantry", "rocket", "engineer", "scout", "tank", "artillery", "fighter", "gunship" }
+-- limit; repairs = health per second an engineer gives a building within range; needs = the
+-- research that must be done before the unit can be ordered
+Config.UNIT_ORDER = { "infantry", "rocket", "engineer", "scout", "tank", "heavy", "artillery", "fighter", "gunship" }
 Config.UNITS = {
 	infantry = {
 		title = "Пехота", name = "пехота", icon = "infantry", cost = 60, time = 4, size = 1.8, pop = 1,
@@ -204,6 +218,12 @@ Config.UNITS = {
 		hp = 260, dps = 18, range = 3, speed = 2.3, vision = 7, hitsAir = 0, power = 0.08,
 		desc = "Крепкая броня, силён против пехоты. По авиации не стреляет.",
 	},
+	heavy = {
+		-- no picture of its own yet: the tank's, drawn bigger
+		title = "Тяжёлый танк", name = "тяжёлый танк", icon = "tank", gun = "tank_gun", cost = 600, time = 14, size = 2.3, pop = 5,
+		hp = 560, dps = 30, range = 3.5, speed = 1.6, vision = 7, hitsAir = 0, power = 0.12, needs = "heavy",
+		desc = "Медленный, но очень крепкий и бьёт сильно. Нужно исследование.",
+	},
 	artillery = {
 		title = "Артиллерия", name = "артиллерия", icon = "artillery", gun = "artillery_gun", cost = 380, time = 11, size = 1.7, pop = 3,
 		hp = 110, dps = 22, range = 7, speed = 1.4, vision = 8, hitsAir = 0, power = 0.06, vsBuildings = 1.6,
@@ -222,11 +242,40 @@ Config.UNITS = {
 }
 -- extra damage multipliers: attacker kind -> target kind
 Config.VS = {
-	infantry = { tank = 0.5, scout = 0.7 },
-	rocket = { tank = 1.8, scout = 1.5, infantry = 0.6 },
+	infantry = { tank = 0.5, heavy = 0.4, scout = 0.7 },
+	rocket = { tank = 1.8, heavy = 1.8, scout = 1.5, infantry = 0.6 },
 	scout = { infantry = 1.4, rocket = 1.3 },
 	tank = { infantry = 1.6, rocket = 1.3 },
+	heavy = { infantry = 1.5, rocket = 1.2 },
 }
 Config.MAX_UNITS = 240 -- all bases together, to keep the server fast
+
+-- research at the research centre: one study at a time in each centre, paid when it starts and
+-- slower when energy is short. armor = share of the damage own units no longer take, damage =
+-- share added to the damage of own units and towers, production = share added to the speed of
+-- factories, unlocks = a unit that can be ordered once done; needs = research done before
+Config.TECH_ORDER = { "armor1", "weapons1", "assembly", "armor2", "weapons2", "heavy" }
+Config.TECH = {
+	armor1 = { name = "Броня I", icon = "shield", cost = 400, time = 30, armor = 0.15, desc = "Твои войска получают на 15% меньше урона." },
+	weapons1 = { name = "Орудия I", icon = "swords", cost = 400, time = 30, damage = 0.15, desc = "Войска и башни бьют на 15% сильнее." },
+	assembly = { name = "Конвейер", icon = "gear", cost = 500, time = 35, production = 0.3, desc = "Заводы выпускают войска на 30% быстрее." },
+	armor2 = { name = "Броня II", icon = "shield", cost = 700, time = 45, armor = 0.15, needs = "armor1", desc = "Ещё −15% урона: всего −30%." },
+	weapons2 = { name = "Орудия II", icon = "swords", cost = 700, time = 45, damage = 0.15, needs = "weapons1", desc = "Ещё +15% урона: всего +30%." },
+	heavy = { name = "Тяжёлый танк", icon = "tank", cost = 600, time = 40, unlocks = "heavy", needs = "armor1", desc = "Завод бронетехники сможет собирать тяжёлые танки." },
+}
+
+-- what a base's finished research adds up to: armor, damage and production shares
+function Config.techBonus(done: { [string]: boolean }?): (number, number, number)
+	local armor, damage, production = 0, 0, 0
+	for id in done or {} do
+		local t = Config.TECH[id]
+		if t then
+			armor += t.armor or 0
+			damage += t.damage or 0
+			production += t.production or 0
+		end
+	end
+	return armor, damage, production
+end
 
 return Config

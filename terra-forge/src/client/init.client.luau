@@ -228,6 +228,9 @@ function handlers.bgone(msg)
 	if UI.factoryId == msg.id then
 		UI.hideFactory()
 	end
+	if UI.researchId == msg.id then
+		UI.hideResearch()
+	end
 end
 
 function handlers.unit(msg)
@@ -421,12 +424,21 @@ function handlers.bhp(msg)
 	MapView.setBuildingHp(msg.s)
 end
 
+-- the research the player's base has finished: { [tech id] = true }
+local function researchDone(): { [string]: boolean }
+	local done = {}
+	for _, id in (state.eco and state.eco.tech) or {} do
+		done[id] = true
+	end
+	return done
+end
+
 local function factoryInfo(id: number)
 	local b = MapView.buildingRecord(id)
 	if not b then
 		return nil
 	end
-	return { id = id, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto, wait = b.wait, slow = state.shortOfEnergy }
+	return { id = id, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto, wait = b.wait, slow = state.shortOfEnergy, done = researchDone() }
 end
 
 local function refreshFactory()
@@ -440,6 +452,36 @@ local function refreshFactory()
 	else
 		UI.hideFactory()
 	end
+end
+
+local function researchInfo(id: number)
+	local b = MapView.buildingRecord(id)
+	if not b then
+		return nil
+	end
+	local money = if state.eco then state.eco.money else 0
+	return { id = id, built = b.built, research = b.research, prog = b.prog, done = researchDone(), money = money, slow = state.shortOfEnergy }
+end
+
+local function refreshResearch()
+	local id = UI.researchId
+	if not id then
+		return
+	end
+	local info = researchInfo(id)
+	if info then
+		UI.showResearch(info)
+	else
+		UI.hideResearch()
+	end
+end
+
+UI.onResearch = function(id, tech)
+	action:FireServer("research", id, tech)
+end
+
+UI.onStopResearch = function(id)
+	action:FireServer("stopresearch", id)
 end
 
 function handlers.eco(msg)
@@ -464,12 +506,16 @@ function handlers.eco(msg)
 	end
 	state.armyFull = full
 	refreshFactory()
+	refreshResearch()
 end
 
 function handlers.bdone(msg)
 	MapView.finishBuilding(msg.id)
 	if UI.factoryId == msg.id then
 		refreshFactory()
+	end
+	if UI.researchId == msg.id then
+		refreshResearch()
 	end
 end
 
@@ -495,6 +541,7 @@ function handlers.defeat()
 		MapView.setBuild(nil)
 		MapView.revealAll()
 		UI.hideFactory()
+		UI.hideResearch()
 		UI.defeat()
 	end
 end
@@ -661,8 +708,15 @@ MapView.onTap = function(x, y, sx, sy)
 					Sfx.play("click")
 					UI.showFactory(info)
 				end
+			elseif def.research then
+				local info = researchInfo(bid)
+				if info then
+					Sfx.play("click")
+					UI.showResearch(info)
+				end
 			else
 				UI.hideFactory()
+				UI.hideResearch()
 				UI.toast(def.name .. ": " .. def.desc)
 			end
 			return
@@ -683,8 +737,9 @@ MapView.onTap = function(x, y, sx, sy)
 		command(x, y, sx, sy)
 		return
 	end
-	if UI.factoryId then
+	if UI.factoryId or UI.researchId then
 		UI.hideFactory()
+		UI.hideResearch()
 		return
 	end
 	local what, id = MapView.thingAt(sx, sy)

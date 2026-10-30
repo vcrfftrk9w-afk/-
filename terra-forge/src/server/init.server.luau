@@ -142,6 +142,10 @@ local function onAction(player: Player, kind, a, b, c, d, e)
 		end
 	elseif kind == "queue" and isNumber(a) and typeof(b) == "string" and Config.UNITS[b] then
 		match:queueUnit(player, a, b)
+	elseif kind == "research" and isNumber(a) and typeof(b) == "string" and Config.TECH[b] then
+		match:startResearch(player, a, b)
+	elseif kind == "stopresearch" and isNumber(a) then
+		match:stopResearch(player, a)
 	elseif kind == "cancel" and isNumber(a) then
 		match:cancelUnit(player, a)
 	elseif kind == "auto" and isNumber(a) and typeof(b) == "string" and (b == "" or Config.UNITS[b]) then

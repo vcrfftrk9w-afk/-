@@ -116,6 +116,10 @@ function Match.new(event: RemoteEvent)
 			army = {},
 			unitTotal = 0,
 			pop = 0,
+			tech = {}, -- finished research: id -> true
+			armor = 0,
+			damage = 0,
+			production = 0,
 			bot = self:newBot(),
 		}
 		self.nations[i] = n

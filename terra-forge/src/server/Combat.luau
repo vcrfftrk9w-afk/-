@@ -104,7 +104,12 @@ function Combat:tickCombat(dt: number)
 			local vs = Config.VS[kind]
 			mult = if vs and vs[target.kind] then vs[target.kind] else 1
 		end
-		target.hp -= dps * dt * mult
+		-- research: the attacker's weapons hit harder, the target unit's armor takes some off
+		local hit = dps * dt * mult * (1 + attacker.n.damage)
+		if not target.isBuilding then
+			hit *= 1 - target.n.armor
+		end
+		target.hp -= hit
 		if target.isBuilding then
 			self.bhpDirty[target] = true
 			self:alert(target.n, target.px, target.py, t)

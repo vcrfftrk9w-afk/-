@@ -11,7 +11,7 @@ local Orders = require(script.Parent.Orders)
 local Bots = {}
 
 -- power plants keep up with the energy the rest of the plan uses
-local BOT_PLAN = { "extractor", "barracks", "extractor", "tankf", "power", "extractor", "tower", "air", "power", "extractor", "tower", "aa", "power", "fabricator", "tankf", "power", "extractor", "tower" }
+local BOT_PLAN = { "extractor", "barracks", "extractor", "tankf", "power", "extractor", "tower", "air", "power", "lab", "extractor", "tower", "aa", "power", "fabricator", "tankf", "power", "extractor", "tower" }
 
 local function now(): number
 	return workspace:GetServerTimeNow()
@@ -97,7 +97,8 @@ function Bots:botThink(n, dt: number)
 				if not b.auto then
 					local fighters = {}
 					for _, kind in bd.units do
-						if Config.UNITS[kind].dps > 0 then
+						local ud = Config.UNITS[kind]
+						if ud.dps > 0 and (not ud.needs or n.tech[ud.needs]) then
 							table.insert(fighters, kind)
 						end
 					end
@@ -105,6 +106,17 @@ function Bots:botThink(n, dt: number)
 				end
 			elseif not b.autoPaid then
 				b.auto = nil
+			end
+		end
+	end
+	-- a finished research centre studies the next technology when there is metal to spare
+	for _, b in self.buildings do
+		if b.n == n and Config.BUILD[b.kind].research and b.built >= 1 and not b.research then
+			for _, id in Config.TECH_ORDER do
+				if n.money >= Config.TECH[id].cost + 400 and not self:researchBlock(n, id) then
+					self:beginResearch(n, b, id)
+					break
+				end
 			end
 		end
 	end

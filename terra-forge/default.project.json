@@ -1,0 +1,17 @@
+{
+  "name": "TerraForge",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "TerraForge": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "TerraForgeServer": { "$path": "src/server" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "TerraForgeClient": { "$path": "src/client" }
+      }
+    }
+  }
+}

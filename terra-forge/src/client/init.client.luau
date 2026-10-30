@@ -87,6 +87,7 @@ end
 
 safe("карта", MapView.init, playerGui)
 safe("интерфейс", UI.init, playerGui, player)
+safe("мини-карта", MapView.attachMinimap, UI.minimap)
 safe("меню", function()
 	MapView.setMode("menu")
 	UI.showMenu()
@@ -120,9 +121,7 @@ end
 local function focusCapital(seconds: number)
 	local n = me()
 	if n and n.cap then
-		local _, cw, ch = MapView.viewInfo()
-		local z = math.max(math.min(cw / Map.W, ch / Map.H) * 3.2, 8)
-		MapView.flyTo(n.cap.x + 0.5, n.cap.y + 0.5, z, seconds)
+		MapView.focusOn(n.cap.x + 0.5, n.cap.y + 0.5, seconds)
 	end
 end
 
@@ -138,10 +137,7 @@ local function enterPlay(spectator: boolean)
 	if n then
 		UI.setMyColor(n.color)
 	end
-	if state.phase == "spawn" then
-		-- leave room for the banner at the top
-		MapView.nudge(48)
-	elseif state.phase == "game" then
+	if state.phase == "game" then
 		focusCapital(0.8)
 	end
 end

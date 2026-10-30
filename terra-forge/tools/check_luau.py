@@ -19,6 +19,7 @@ GLOBALS = {
     'rawset', 'coroutine', 'debug', 'self', 'shared', 'tick', 'time', 'Rect', 'CFrame', 'BrickColor',
     # type names used in annotations
     'number', 'boolean', 'any', 'Player', 'PlayerGui', 'RemoteEvent', 'GuiObject', 'InputObject',
+    'Camera', 'Ray', 'Part', 'BasePart', 'MeshPart', 'Folder', 'Model', 'Instance',
 }
 EXPR_PREV = {
     '=', '(', ',', 'return', '{', '[', '..', '+', '-', '*', '/', '//', '%', '^', 'and', 'or', 'not',

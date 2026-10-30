@@ -732,6 +732,27 @@ local function buildPlay()
 		end
 	end)
 
+	-- minimap: the whole world; tap or drag on it to move the camera
+	local miniBack = make("Frame", {
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -16, 1, -118),
+		Size = UDim2.fromOffset(206, 100),
+		BackgroundColor3 = Color3.fromRGB(9, 13, 20),
+		BackgroundTransparency = 0.12,
+		Parent = play,
+	}, { Theme.corner(12), Theme.stroke() })
+	UI.minimap = make("TextButton", {
+		Name = "Minimap",
+		Text = "",
+		AutoButtonColor = false,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(196, 91),
+		BackgroundColor3 = C.ocean,
+		ClipsDescendants = true,
+		Parent = miniBack,
+	}, { Theme.corner(7) })
+
 	-- factory panel: a row per unit kind (+1 to order, «Авто» to repeat), queue, rally point
 	local fac = Theme.panel({
 		AnchorPoint = Vector2.new(0.5, 1),

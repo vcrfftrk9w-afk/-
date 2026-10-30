@@ -454,6 +454,12 @@ function Match:addBuilding(n, kind: string, x: number, y: number): boolean
 			return false
 		end
 	end
+	-- capitals stand on the map as buildings too
+	for _, other in self.world.nations do
+		if other.cap and math.abs(other.cap.x - x) <= 1 and math.abs(other.cap.y - y) <= 1 then
+			return false
+		end
+	end
 	self.nextBuildingId += 1
 	local def = Config.BUILD[kind]
 	local b = {

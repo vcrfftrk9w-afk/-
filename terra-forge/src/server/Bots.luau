@@ -1,6 +1,6 @@
 -- The bots that play the bases no player has taken: they build by a fixed plan, keep their
--- factories busy, defend their base and attack the nearest enemy in waves. These are methods
--- of Match (Match.luau adds them); self is the match.
+-- factories busy, defend their base, send small groups to take strategic points and attack the
+-- nearest enemy in waves. These are methods of Match (Match.luau adds them); self is the match.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -135,6 +135,31 @@ function Bots:botThink(n, dt: number)
 	if threat and #idle > 0 then
 		Orders.give(self, idle, "amove", threat.px, threat.py)
 		return
+	end
+	-- now and then a few idle ground units go to take the nearest strategic point that is not theirs
+	if t >= (bot.pointAt or 0) then
+		local best, bd = nil, math.huge
+		for _, p in self.points do
+			if p.owner ~= n then
+				local d = (p.x - n.cc.px) ^ 2 + (p.y - n.cc.py) ^ 2
+				if d < bd then
+					best, bd = p, d
+				end
+			end
+		end
+		local group = {}
+		for _, u in idle do
+			if not u.air and #group < 4 then
+				table.insert(group, u)
+			end
+		end
+		if best and #group >= 2 then
+			for _, u in group do
+				table.remove(idle, table.find(idle, u))
+			end
+			Orders.give(self, group, "amove", best.x, best.y)
+			bot.pointAt = t + 25
+		end
 	end
 	bot.wave -= dt
 	if bot.wave <= 0 and #idle >= 6 then

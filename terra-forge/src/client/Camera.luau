@@ -13,6 +13,10 @@ Camera.x, Camera.y, Camera.ppt = W / 2, H / 2, 24
 local view, board
 local glide = nil -- the camera moves smoothly to { x, y }
 
+-- while the player chooses where to land, the map fits between these screen heights (GUI
+-- coordinates): the bottom of the title and the top of the commander panel
+Camera.area = { top = -math.huge, bottom = math.huge }
+
 function Camera.viewSize(): Vector2
 	local s = view.AbsoluteSize
 	return Vector2.new(math.max(s.X, 1), math.max(s.Y, 1))
@@ -36,6 +40,13 @@ function Camera.onScreen(x: number, y: number, margin: number): boolean
 	return math.abs(x - Camera.x) <= hw + margin and math.abs(y - Camera.y) <= hh + margin
 end
 
+-- moves the board under the camera
+local function place()
+	local vs = Camera.viewSize()
+	board.Size = UDim2.fromOffset(W * Camera.ppt, H * Camera.ppt)
+	board.Position = UDim2.fromOffset(math.round(vs.X / 2 - Camera.x * Camera.ppt), math.round(vs.Y / 2 - Camera.y * Camera.ppt))
+end
+
 -- keeps the camera over the map and moves the board under it
 function Camera.apply()
 	local lo, hi = zoomLimits()
@@ -44,9 +55,7 @@ function Camera.apply()
 	local m = 3
 	Camera.x = if hw * 2 >= W + 2 * m then W / 2 else math.clamp(Camera.x, hw - m, W - hw + m)
 	Camera.y = if hh * 2 >= H + 2 * m then H / 2 else math.clamp(Camera.y, hh - m, H - hh + m)
-	local vs = Camera.viewSize()
-	board.Size = UDim2.fromOffset(W * Camera.ppt, H * Camera.ppt)
-	board.Position = UDim2.fromOffset(math.round(vs.X / 2 - Camera.x * Camera.ppt), math.round(vs.Y / 2 - Camera.y * Camera.ppt))
+	place()
 end
 
 -- tile coordinates under a screen point (GUI coordinates, as in InputObject.Position)
@@ -147,14 +156,26 @@ local function keyPan(dt: number, edges: boolean)
 	end
 end
 
--- "menu": the camera drifts slowly over the battle; "play": glides, keys and screen edges
--- (edges = false while something is dragged or the window is not focused)
+-- "menu": the camera drifts slowly over the battle; "landing": the whole map, still, while the
+-- player chooses a base; "play": glides, keys and screen edges (edges = false while something
+-- is dragged or the window is not focused)
 function Camera.update(dt: number, mode: string, edges: boolean)
 	if mode == "menu" then
 		local t = os.clock()
 		Camera.ppt = Camera.viewSize().Y / 22
 		Camera.x = W / 2 + math.sin(t * 0.045) * W * 0.3
 		Camera.y = H / 2 + math.sin(t * 0.031 + 1) * H * 0.25
+	elseif mode == "landing" then
+		-- the whole map, smaller than the usual limits allow so that the panels do not cover it
+		local vs = Camera.viewSize()
+		local o = view.AbsolutePosition
+		local top = math.clamp(Camera.area.top - o.Y, 0, vs.Y * 0.4)
+		local bottom = math.clamp(o.Y + vs.Y - Camera.area.bottom, 0, vs.Y * 0.4)
+		Camera.ppt = math.max(math.min(vs.X / (W + 4), (vs.Y - top - bottom) / (H + 2)), 1)
+		Camera.x, Camera.y = W / 2, H / 2 - (top - bottom) / 2 / Camera.ppt
+		glide = nil
+		place()
+		return
 	else
 		if glide then
 			local k = math.min(1, dt * 6)

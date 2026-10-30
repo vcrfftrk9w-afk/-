@@ -1,7 +1,7 @@
--- The match screen: the player's card, metal, energy and army at the top, the leaderboard, the army
--- panel and the build bar at the bottom, zoom buttons, the minimap frame, building tips, the
--- banner (spectator, results, defeat) and big announcements. Part of the interface; Ui puts
--- it together.
+-- The match screen: the player's card with their commander, army, metal, energy and strategic
+-- points at the top, the leaderboard, the army panel and the build bar at the bottom, zoom
+-- buttons, the minimap frame, building tips, the banner (spectator, results, defeat) and big
+-- announcements. Part of the interface; Ui puts it together.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
@@ -68,11 +68,17 @@ function Hud.build(context, play: Instance)
 	-- top HUD
 	local hudTop = make("Frame", { Name = "HudTop", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Parent = play })
 	refs.hudTop = hudTop
-	local me = Theme.panel({ Position = UDim2.fromOffset(16, 12), Size = UDim2.fromOffset(236, 62), Parent = hudTop })
+	local me = Theme.panel({ Position = UDim2.fromOffset(16, 12), Size = UDim2.fromOffset(268, 62), Parent = hudTop })
 	refs.meAvatar = Widgets.avatar(0, 46, { Position = UDim2.fromOffset(8, 8), Parent = me })
 	Theme.corner(12).Parent = refs.meAvatar
 	refs.meStroke = make("UIStroke", { Color = Theme.hex(ctx.color), Thickness = 2, Parent = refs.meAvatar })
-	refs.meName = Theme.label({ Text = "", Position = UDim2.fromOffset(62, 7), Size = UDim2.new(1, -70, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.ExtraBold), TextTruncate = Enum.TextTruncate.AtEnd, Parent = me })
+	-- the commander's badge on the corner of the avatar
+	refs.meBadge = make("Frame", { Position = UDim2.fromOffset(38, 38), Size = UDim2.fromOffset(22, 22), BackgroundColor3 = Color3.fromRGB(9, 13, 20), Visible = false, ZIndex = 2, Parent = me }, {
+		Theme.corner(nil, 1),
+		Theme.stroke(C.molten, 1.5, 0.2),
+	})
+	refs.meBadgeIcon = icon("gear", 15, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 2, Parent = refs.meBadge })
+	refs.meName = Theme.label({ Text = "", RichText = true, Position = UDim2.fromOffset(62, 7), Size = UDim2.new(1, -70, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.ExtraBold), TextTruncate = Enum.TextTruncate.AtEnd, Parent = me })
 	refs.meStats = Theme.label({ Text = "", Position = UDim2.fromOffset(62, 27), Size = UDim2.new(1, -70, 0, 14), TextSize = 12, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), Parent = me })
 	local army = make("Frame", { Position = UDim2.fromOffset(62, 42), Size = UDim2.new(1, -70, 0, 16), BackgroundTransparency = 1, Parent = me }, {
 		Theme.list(Enum.FillDirection.Horizontal, 3, nil, Enum.VerticalAlignment.Center),
@@ -98,6 +104,7 @@ function Hud.build(context, play: Instance)
 		pop = Widgets.resChip(res, "pop", 1, ctx.color),
 		metal = Widgets.resChip(res, "metal", 2, ctx.color),
 		energy = Widgets.resChip(res, "energy", 3, ctx.color),
+		points = Widgets.resChip(res, "flag", 4, ctx.color),
 	}
 
 	local right = make("Frame", {
@@ -415,6 +422,9 @@ function Hud.setMyColor(hex: string)
 	ctx.color = hex
 	refs.meStroke.Color = Theme.hex(hex)
 	Sprites.apply(refs.res.pop.icon, "pop", hex)
+	if refs.meCommander then
+		Sprites.apply(refs.meBadgeIcon, Config.COMMANDERS[refs.meCommander].icon, hex)
+	end
 	if refs.baseIcon then
 		Sprites.apply(refs.baseIcon, "castle", hex)
 	end
@@ -495,6 +505,11 @@ function Hud.setEconomy(eco)
 	refs.res.energy.value.TextColor3 = if short then C.bad else C.ink
 	refs.res.energy.rate.Text = if short then "мало энергии" else "энергия"
 	refs.res.energy.rate.TextColor3 = if short then C.bad else C.muted
+	-- strategic points: held / all; red while some of them are cut off from the base
+	local held, supplied = eco.points or 0, eco.supplied or 0
+	refs.res.points.value.Text = string.format("%d/%d", held, #Config.POINTS)
+	refs.res.points.rate.Text = if held > supplied then string.format("%d без снабжения", held - supplied) else "точки"
+	refs.res.points.rate.TextColor3 = if held > supplied then C.bad else C.muted
 	for g, group in GROUPS do
 		local total = 0
 		for _, kind in group.kinds do
@@ -512,6 +527,19 @@ end
 
 function Hud.setMe(text: string)
 	refs.meStats.Text = text
+end
+
+-- the player's commander: a badge on the avatar and its name after the player's
+function Hud.setCommander(id: string?)
+	local c = if id then Config.COMMANDERS[id] else nil
+	local name = string.gsub(refs.meDisplayName or "", "[&<>]", { ["&"] = "&amp;", ["<"] = "&lt;", [">"] = "&gt;" })
+	refs.meBadge.Visible = c ~= nil
+	if c then
+		Sprites.apply(refs.meBadgeIcon, c.icon, ctx.color)
+		name ..= ' <font size="12" color="#ffd27e">· ' .. c.name .. "</font>"
+	end
+	refs.meName.Text = name
+	refs.meCommander = id
 end
 
 -- rows: list of { place, name, color, value (text), isMe }

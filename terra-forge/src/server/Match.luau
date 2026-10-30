@@ -1,8 +1,9 @@
--- One skirmish: four bases on the map, each run by a player or a bot. Holds the bases,
--- buildings and units, places buildings, moves units, ends the match and sends clients
--- everything as batches of small messages through one RemoteEvent. A base is lost with its
--- command centre. The economy, combat and bots are methods of Match too, kept in their own
--- modules: Economy, Combat and Bots.
+-- One skirmish: four bases on the map, each run by a player or a bot and led by a commander.
+-- Holds the bases, buildings and units, lets players choose where to land, places buildings,
+-- moves units, ends the match and sends clients everything as batches of small messages through
+-- one RemoteEvent. A base is lost with its command centre. The economy, combat, bots and
+-- strategic points are methods of Match too, kept in their own modules: Economy, Combat, Bots
+-- and Points.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -16,7 +17,7 @@ local W = Map.W
 local Match = {}
 Match.__index = Match
 
-for _, part in { require(script.Parent.Economy), require(script.Parent.Combat), require(script.Parent.Bots) } do
+for _, part in { require(script.Parent.Economy), require(script.Parent.Combat), require(script.Parent.Bots), require(script.Parent.Points) } do
 	for name, method in part do
 		Match[name] = method
 	end
@@ -44,6 +45,7 @@ local function nationInfo(n)
 		userId = n.userId or 0,
 		cap = if n.cc then { n.cc.x + 1, n.cc.y + 1 } else nil,
 		alive = n.alive,
+		commander = n.commander,
 	}
 end
 
@@ -98,7 +100,10 @@ function Match.new(event: RemoteEvent)
 	self.shots = {}
 	self.hpDirty = {}
 	self.bhpDirty = {}
+	self.choosing = {} -- players choosing where to land: player -> deadline (server time)
+	self.pointsAcc = 0
 	self.done = false
+	self:setupPoints()
 	local names = shuffle(Config.BOT_NAMES, self.rng)
 	for i = 1, math.min(Config.SEATS, #Map.starts) do
 		local start = Map.starts[i]
@@ -121,6 +126,8 @@ function Match.new(event: RemoteEvent)
 			armor = 0,
 			damage = 0,
 			production = 0,
+			-- bots get a commander by chance; a player who takes the base chooses their own
+			commander = Config.COMMANDER_ORDER[self.rng:NextInteger(1, #Config.COMMANDER_ORDER)],
 			bot = self:newBot(),
 		}
 		self.nations[i] = n
@@ -149,7 +156,9 @@ function Match:toast(n, text: string, warn: boolean?)
 	end
 end
 
-function Match:snapshot(player: Player)
+-- the whole match for one player; choose = the free bases and the time to pick one, when the
+-- player is about to land
+function Match:snapshot(player: Player, choose)
 	local me = self.humans[player]
 	local nations, buildings, units = {}, {}, {}
 	for _, n in self.seats do
@@ -169,6 +178,9 @@ function Match:snapshot(player: Player)
 		nations = nations,
 		buildings = buildings,
 		units = units,
+		points = self:pointsInfo(),
+		pstate = self:pointsState(),
+		choose = choose,
 	}
 end
 
@@ -178,33 +190,95 @@ end
 
 ---------------------------------------------------------------- players
 
--- a player takes a bot's base while the match is young; later they watch
+-- the bases a player can still take: alive and run by a bot
+function Match:freeSeats(): { number }
+	local ids = {}
+	for _, n in self.seats do
+		if n.alive and not n.isHuman then
+			table.insert(ids, n.id)
+		end
+	end
+	return ids
+end
+
+-- a player who joins while the match is young chooses a base run by a bot and a commander
+-- (Match:land); later, or when every base is taken, they watch
 function Match:play(player: Player)
 	if self.humans[player] then
 		self:sendSnapshot(player)
 		return
 	end
 	if self.phase == "game" and self.joinTimer > 0 then
-		for _, n in self.seats do
-			if n.alive and not n.isHuman then
-				n.isHuman = true
-				n.player = player
-				n.name = player.DisplayName
-				n.userId = player.UserId
-				self.humans[player] = n
-				self:send({ t = "nation", n = nationInfo(n) })
-				self:sendSnapshot(player)
-				self:sendEconomy()
-				return
-			end
+		local free = self:freeSeats()
+		if #free > 0 then
+			self.choosing[player] = now() + Config.LANDING_SECONDS + 2
+			self:sendTo(player, self:snapshot(player, { seats = free, time = Config.LANDING_SECONDS }))
+			return
 		end
 	end
+	self.choosing[player] = nil
 	self:sendSnapshot(player)
 	self:sendTo(player, { t = "toast", text = "Все базы заняты. Смотри бой — следующий начнётся после него.", warn = false })
 end
 
+-- the player lands at the base they chose (another free one, if it was taken a moment ago)
+-- and leads it with their commander
+function Match:land(player: Player, seatId: number, commander: string)
+	if not self.choosing[player] then
+		return
+	end
+	self.choosing[player] = nil
+	if self.humans[player] then
+		return
+	end
+	local n = self.nations[seatId]
+	if not n or not n.alive or n.isHuman then
+		local free = self:freeSeats()
+		n = if #free > 0 then self.nations[free[1]] else nil
+	end
+	if not n or self.phase ~= "game" then
+		self:sendSnapshot(player)
+		self:sendTo(player, { t = "toast", text = "Все базы заняты. Смотри бой — следующий начнётся после него.", warn = false })
+		return
+	end
+	n.isHuman = true
+	n.player = player
+	n.name = player.DisplayName
+	n.userId = player.UserId
+	self.humans[player] = n
+	self:setCommander(n, if Config.COMMANDERS[commander] then commander else Config.COMMANDER_ORDER[1])
+	self:send({ t = "nation", n = nationInfo(n) })
+	self:sendSnapshot(player)
+	self:sendEconomy()
+end
+
+-- a new commander for a base: what is already built and fielded gets the new health bonuses
+function Match:setCommander(n, id: string)
+	local function rescale(o, old: number, new: number)
+		local share = o.hp / math.max(o.maxHp, 1)
+		o.maxHp = math.round(o.maxHp / (1 + old) * (1 + new))
+		o.hp = share * o.maxHp
+	end
+	local oldB, newB = Config.commander(n.commander, "buildingHp"), Config.commander(id, "buildingHp")
+	local oldU, newU = Config.commander(n.commander, "groundHp"), Config.commander(id, "groundHp")
+	n.commander = id
+	for _, b in self.buildings do
+		if b.n == n and oldB ~= newB then
+			rescale(b, oldB, newB)
+			self:send({ t = "building", b = buildingInfo(b) })
+		end
+	end
+	for _, u in self.units do
+		if u.n == n and not u.air and oldU ~= newU then
+			rescale(u, oldU, newU)
+			self:send({ t = "unit", u = unitInfo(u) })
+		end
+	end
+end
+
 -- the base goes back to a bot
 function Match:leave(player: Player)
+	self.choosing[player] = nil
 	local n = self.humans[player]
 	if not n then
 		return
@@ -247,10 +321,16 @@ function Match:groundOk(x: number, y: number, size: number): boolean
 	return true
 end
 
+-- near one of the base's buildings, or one of its supplied points
 function Match:nearBase(n, cx: number, cy: number): boolean
 	local r2 = Config.BUILD_RADIUS * Config.BUILD_RADIUS
 	for _, b in self.buildings do
 		if b.n == n and (b.px - cx) ^ 2 + (b.py - cy) ^ 2 <= r2 then
+			return true
+		end
+	end
+	for _, p in self.points do
+		if p.owner == n and p.supplied and (p.x - cx) ^ 2 + (p.y - cy) ^ 2 <= r2 then
 			return true
 		end
 	end
@@ -291,8 +371,13 @@ function Match:placeFor(n, kind: string, x: number, y: number): (number?, number
 			end
 		end
 	end
+	for _, p in self.points do
+		if (p.x - bx - size / 2) ^ 2 + (p.y - by - size / 2) ^ 2 < (Config.POINT_KEEP + size / 2) ^ 2 then
+			return nil, nil, "Тут стратегическая точка: строй рядом, а не на ней."
+		end
+	end
 	if not self:nearBase(n, bx + size / 2, by + size / 2) then
-		return nil, nil, "Строить можно только рядом со своей базой."
+		return nil, nil, "Строить можно только рядом со своей базой или снабжённой точкой."
 	end
 	return bx, by, nil
 end
@@ -321,6 +406,7 @@ end
 
 function Match:addBuilding(n, kind: string, x: number, y: number, ready: boolean)
 	local def = Config.BUILD[kind]
+	local hp = math.round(def.hp * (1 + Config.commander(n.commander, "buildingHp")))
 	self.nextBuildingId += 1
 	local b = {
 		id = self.nextBuildingId,
@@ -331,8 +417,8 @@ function Match:addBuilding(n, kind: string, x: number, y: number, ready: boolean
 		size = def.size,
 		px = x + def.size / 2,
 		py = y + def.size / 2,
-		hp = def.hp,
-		maxHp = def.hp,
+		hp = hp,
+		maxHp = hp,
 		isBuilding = true,
 		built = if ready then 1 else 0,
 		prog = 0,
@@ -359,10 +445,11 @@ function Match:removeBuilding(b)
 	end
 end
 
--- a base without its command centre is out: everything it has left falls
+-- a base without its command centre is out: everything it has left falls, its points too
 function Match:killNation(n)
 	n.alive = false
 	n.cc = nil
+	self:dropPoints(n)
 	for _, b in self.buildings do
 		if b.n == n then
 			self:send({ t = "boom", x = b.px, y = b.py, big = true })
@@ -400,6 +487,7 @@ function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
 			x, y = lx + 0.5, ly + 0.5
 		end
 	end
+	local hp = if def.air then def.hp else math.round(def.hp * (1 + Config.commander(n.commander, "groundHp")))
 	self.nextUnitId += 1
 	self.unitCount += 1
 	local u = {
@@ -407,8 +495,8 @@ function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
 		kind = kind,
 		air = def.air == true,
 		n = n,
-		hp = def.hp,
-		maxHp = def.hp,
+		hp = hp,
+		maxHp = hp,
 		speed = def.speed,
 		t0 = now(),
 		path = { x, y },
@@ -716,9 +804,19 @@ function Match:step(dt: number)
 			self:tickEconomy(Config.TICK)
 			self:tickRepair(Config.TICK)
 			self:tickCombat(Config.TICK)
+			self:tickPoints(Config.TICK, now())
 		end
 		if steps >= 3 then
 			self.tickAcc = 0
+		end
+		self.pointsAcc += dt
+		if self.pointsAcc >= 0.5 then
+			self.pointsAcc = 0
+			self:tickSupply()
+			if self.pointsDirty then
+				self.pointsDirty = false
+				self:send({ t = "points", s = self:pointsState() })
+			end
 		end
 		self.orderAcc += dt
 		if self.orderAcc >= 0.25 then
@@ -737,6 +835,15 @@ function Match:step(dt: number)
 		self.secAcc += dt
 		if self.secAcc >= 1 then
 			self.secAcc = 0
+			-- players who did not choose where to land in time land at a free base
+			local t = now()
+			for player, deadline in self.choosing do
+				if not player.Parent then
+					self.choosing[player] = nil
+				elseif t > deadline then
+					self:land(player, 0, Config.COMMANDER_ORDER[1])
+				end
+			end
 			self:checkEnd()
 			self:send({ t = "stats", s = self:statsArray(), phase = self.phase, timer = self.timer })
 		end

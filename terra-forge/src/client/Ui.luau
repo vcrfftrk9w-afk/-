@@ -1,13 +1,14 @@
 -- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
 -- This module is the interface the game script talks to; the parts are built in Menu (main
--- menu and arsenal), Hud (the match screen), Factory (the factory panel) and Research (the
--- research panel), from Widgets.
+-- menu and arsenal), Landing (choosing a base and a commander), Hud (the match screen), Factory
+-- (the factory panel) and Research (the research panel), from Widgets.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
 local Factory = require(script.Parent.Factory)
 local Hud = require(script.Parent.Hud)
+local Landing = require(script.Parent.Landing)
 local Menu = require(script.Parent.Menu)
 local Research = require(script.Parent.Research)
 local Sfx = require(script.Parent.Sfx)
@@ -37,6 +38,8 @@ UI.factoryId = nil
 UI.onResearch = nil -- (research centre id, tech id)
 UI.onStopResearch = nil -- (research centre id)
 UI.researchId = nil -- the research centre whose panel is open
+UI.onLandingCommander = nil -- a commander card was tapped: (commander id)
+UI.onLand = nil -- «ВЫСАДИТЬСЯ»
 UI.buildSel = nil
 UI.GROUPS = Hud.GROUPS
 
@@ -66,6 +69,10 @@ UI.showFactory = Factory.show
 UI.hideFactory = Factory.hide
 UI.showResearch = Research.show
 UI.hideResearch = Research.hide
+UI.setCommander = Hud.setCommander
+UI.setLandingChoice = Landing.setChoice
+UI.setLandingCountdown = Landing.setCountdown
+UI.landingArea = Landing.area
 
 -- the music buttons show whether the music plays
 function UI.setMusicOn(on: boolean)
@@ -156,8 +163,10 @@ function UI.init(playerGui: PlayerGui, player: Player)
 	Hud.build(ctx, play)
 	Factory.build(ctx, play)
 	Research.build(ctx, play)
+	Landing.build(ctx, root)
 	Menu.buildArsenal(root)
 	buildToast()
+	refs.meDisplayName = player.DisplayName
 	refs.meName.Text = player.DisplayName
 	refs.meAvatar.Image = if player.UserId > 0 then "rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150" else ""
 	gui.Parent = playerGui
@@ -168,6 +177,17 @@ end
 function UI.showMenu()
 	menu.Visible = true
 	play.Visible = false
+	Landing.hide()
+	UI.selectBuild(nil)
+	UI.hideFactory()
+	UI.hideResearch()
+end
+
+-- choosing where to land: only the map and the landing panels
+function UI.showLanding()
+	menu.Visible = false
+	play.Visible = false
+	Landing.show()
 	UI.selectBuild(nil)
 	UI.hideFactory()
 	UI.hideResearch()
@@ -177,6 +197,7 @@ end
 function UI.showPlay(phase: string, spectator: boolean)
 	menu.Visible = false
 	play.Visible = true
+	Landing.hide()
 	refs.announce.Visible = false
 	UI.setPhase(phase, spectator)
 end

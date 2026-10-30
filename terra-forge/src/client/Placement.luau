@@ -1,6 +1,7 @@
 -- Build mode on the map: the server's placement rules, an outline of the chosen building under
 -- the pointer (green if it fits, red if not), and helpers that show where it can go: rings
--- around the free pools for extractors, the base zones for the rest.
+-- around the free pools for extractors, the zones around the base and its supplied strategic
+-- points for the rest.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -18,6 +19,7 @@ Placement.kind = nil :: string? -- the building chosen in the build bar
 
 local board, ghost
 local buildings = {} -- the map's building records
+local points = {} -- the strategic point records
 local myId = function(): number
 	return 0
 end
@@ -36,11 +38,17 @@ local function areaFree(x: number, y: number, size: number): boolean
 	return true
 end
 
+-- near one of the player's buildings, or one of their supplied points
 local function nearMyBase(cx: number, cy: number): boolean
 	local r2 = Config.BUILD_RADIUS * Config.BUILD_RADIUS
 	local me = myId()
 	for _, b in buildings do
 		if b.owner == me and (b.cx - cx) ^ 2 + (b.cy - cy) ^ 2 <= r2 then
+			return true
+		end
+	end
+	for _, p in points do
+		if p.owner == me and p.supplied and (p.x - cx) ^ 2 + (p.y - cy) ^ 2 <= r2 then
 			return true
 		end
 	end
@@ -85,8 +93,13 @@ function Placement.placeFor(kind: string, x: number, y: number): (number?, numbe
 			end
 		end
 	end
+	for _, p in points do
+		if (p.x - bx - size / 2) ^ 2 + (p.y - by - size / 2) ^ 2 < (Config.POINT_KEEP + size / 2) ^ 2 then
+			return nil, nil, "Тут стратегическая точка: строй рядом, а не на ней."
+		end
+	end
 	if not nearMyBase(bx + size / 2, by + size / 2) then
-		return nil, nil, "Строить можно только рядом со своей базой."
+		return nil, nil, "Строить можно только рядом со своей базой или снабжённой точкой."
 	end
 	return bx, by, nil
 end
@@ -114,21 +127,31 @@ function Placement.refresh()
 			end
 		end
 	else
+		-- the zones around the player's buildings and supplied points
 		local r = Config.BUILD_RADIUS
 		local me = myId()
+		local centres = {}
 		for _, b in buildings do
 			if b.owner == me then
-				local f = make("Frame", {
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					Position = at(b.cx, b.cy),
-					Size = span(2 * r, 2 * r),
-					BackgroundColor3 = Color3.new(1, 1, 1),
-					BackgroundTransparency = 0.95,
-					ZIndex = Z.mark,
-					Parent = board,
-				}, { Theme.corner(nil, 1), make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1.5, Transparency = 0.55 }) })
-				table.insert(helpers, { frame = f })
+				table.insert(centres, { b.cx, b.cy })
 			end
+		end
+		for _, p in points do
+			if p.owner == me and p.supplied then
+				table.insert(centres, { p.x, p.y })
+			end
+		end
+		for _, c in centres do
+			local f = make("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = at(c[1], c[2]),
+				Size = span(2 * r, 2 * r),
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BackgroundTransparency = 0.95,
+				ZIndex = Z.mark,
+				Parent = board,
+			}, { Theme.corner(nil, 1), make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1.5, Transparency = 0.55 }) })
+			table.insert(helpers, { frame = f })
 		end
 	end
 end
@@ -175,10 +198,10 @@ function Placement.update()
 	end
 end
 
--- records: the map's building records (the table itself, kept up to date by the map);
--- mine() gives the player's base id
-function Placement.init(boardFrame: Frame, records, mine: () -> number)
-	board, buildings, myId = boardFrame, records, mine
+-- records, pointRecords: the map's building and strategic point records (the tables themselves,
+-- kept up to date by the map); mine() gives the player's base id
+function Placement.init(boardFrame: Frame, records, pointRecords, mine: () -> number)
+	board, buildings, points, myId = boardFrame, records, pointRecords, mine
 	ghost = make("Frame", { BackgroundTransparency = 0.7, Visible = false, ZIndex = Z.top, Parent = board }, {
 		make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2 }),
 	})

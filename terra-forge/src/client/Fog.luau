@@ -1,4 +1,4 @@
--- Fog of war. The player sees around their units and buildings; ground they have seen before
+-- Fog of war. The player sees around their units, buildings and strategic points; ground they have seen before
 -- stays dimmed, ground never seen is dark. Enemy units show only where the player sees them;
 -- enemy buildings stay on the map once found. A finished radar shows enemy units around it on
 -- the minimap, and the first enemy to come into sight after a quiet while is announced.
@@ -31,7 +31,7 @@ Fog.onSpotted = nil -- (x, y): an enemy came into sight after a quiet while
 
 local vis = buffer.create(W * H) -- 1 where the player sees now
 local known = buffer.create(W * H) -- 1 where the player has seen
-local buildings, units = {}, {}
+local buildings, units, points = {}, {}, {}
 local myId = function(): number
 	return 0
 end
@@ -157,6 +157,11 @@ local function refresh()
 			end
 		end
 	end
+	for _, p in points do
+		if p.owner == me then
+			reveal(p.x, p.y, Config.POINT_VISION)
+		end
+	end
 	for _, c in cells do
 		setTarget(c, clearness(c.x, c.y, CELL))
 	end
@@ -206,10 +211,10 @@ end
 
 ---------------------------------------------------------------- setup and state
 
--- board: the battlefield frame; buildingRecords, unitRecords: the map's records (the tables
--- themselves, kept up to date by the map); mine() gives the player's base id
-function Fog.init(board: Frame, buildingRecords, unitRecords, mine: () -> number)
-	buildings, units, myId = buildingRecords, unitRecords, mine
+-- board: the battlefield frame; buildingRecords, unitRecords, pointRecords: the map's records
+-- (the tables themselves, kept up to date by the map); mine() gives the player's base id
+function Fog.init(board: Frame, buildingRecords, unitRecords, pointRecords, mine: () -> number)
+	buildings, units, points, myId = buildingRecords, unitRecords, pointRecords, mine
 	local layer = make("Frame", { Name = "Fog", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = Board.Z.fog, Parent = board })
 	for cy = 0, CH - 1 do
 		for cx = 0, CW - 1 do

@@ -134,7 +134,12 @@ function Combat:tickCombat(dt: number)
 			mult = if vs and vs[target.kind] then vs[target.kind] else 1
 		end
 		-- research: the attacker's weapons hit harder, the target unit's armor takes some off
-		local hit = dps * dt * mult * (1 + attacker.n.damage)
+		-- the attacker's commander: towers, aircraft or ground units hit harder
+		local c = attacker.n.commander
+		local cmd = if attacker.isBuilding then Config.commander(c, "towerDamage")
+			elseif attacker.air then Config.commander(c, "airDamage")
+			else Config.commander(c, "groundDamage")
+		local hit = dps * dt * mult * (1 + attacker.n.damage) * (1 + cmd)
 		if not target.isBuilding then
 			hit *= 1 - target.n.armor
 		end
@@ -146,7 +151,7 @@ function Combat:tickCombat(dt: number)
 			self.hpDirty[target] = true
 		end
 		if splash and not target.air then
-			splashAround(attacker, target, dps * dt * (1 + attacker.n.damage) * SPLASH_SHARE, splash, vsBuildings)
+			splashAround(attacker, target, dps * dt * (1 + attacker.n.damage) * (1 + cmd) * SPLASH_SHARE, splash, vsBuildings)
 		end
 		if t - (attacker.shotAt or 0) > 0.7 and #self.shots < 240 then
 			attacker.shotAt = t

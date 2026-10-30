@@ -106,7 +106,7 @@ task.delay(30, function()
 end)
 
 local state = {
-	screen = "menu",
+	screen = "menu", -- "menu", "landing" (choosing a base and a commander) or "play"
 	phase = "none",
 	timer = 0,
 	spectator = false,
@@ -119,6 +119,8 @@ local state = {
 	groups = {}, -- number key -> unit ids
 	shortOfEnergy = false, -- the base uses more energy than it makes
 	armyFull = false, -- a factory waits because the army limit is reached
+	landing = nil, -- while choosing: { seats = bases offered, seat = the chosen one, ends = os.clock() deadline, sent }
+	commander = Config.COMMANDER_ORDER[1], -- the commander the player chose last
 }
 
 local function me()
@@ -127,6 +129,7 @@ end
 
 local function goMenu()
 	state.screen = "menu"
+	state.landing = nil
 	state.spectator = false
 	state.defeated = false
 	state.rallyFor = nil
@@ -154,6 +157,7 @@ end
 local function enterPlay(spectator: boolean)
 	local starting = state.screen ~= "play" or state.spectator
 	state.screen = "play"
+	state.landing = nil
 	state.spectator = spectator
 	state.rallyFor = nil
 	state.defeated = false
@@ -164,6 +168,7 @@ local function enterPlay(spectator: boolean)
 	local n = me()
 	if n then
 		UI.setMyColor(n.color)
+		UI.setCommander(n.commander)
 	end
 	if not goHome(true) then
 		MapView.focusOn(Map.W / 2, Map.H / 2, true)
@@ -175,6 +180,87 @@ local function enterPlay(spectator: boolean)
 				UI.toast("Выбери внизу «Экстрактор» и нажми на светящееся месторождение рядом с базой — это металл. Потом построй казарму и завод бронетехники, а когда энергии станет мало — электростанцию.", false, 8)
 			end
 		end)
+		task.delay(11, function()
+			if state.screen == "play" and not state.spectator then
+				UI.toast("Захватывай стратегические точки: приведи к кругу наземные войска. Точка, связанная с базой цепочкой твоих точек, снабжена — даёт металл, и рядом с ней можно строить.", false, 8)
+			end
+		end)
+	end
+end
+
+---------------------------------------------------------------- choosing where to land
+
+-- a base's name by its corner of the map: «Северо-запад», «Юго-восток»...
+local function seatName(id: number): string
+	local n = MapView.nations[id]
+	if not n or not n.cap then
+		return "?"
+	end
+	return (if n.cap.y < Map.H / 2 then "Северо" else "Юго") .. "-" .. (if n.cap.x < Map.W / 2 then "запад" else "восток")
+end
+
+local pickSeat
+
+-- marks the bases that are still free and shows what is chosen; a base taken by another player
+-- a moment ago gives way to the next free one
+local function showChoice()
+	local l = state.landing
+	local free = {}
+	for _, id in l.seats do
+		local n = MapView.nations[id]
+		if n and n.alive and not n.human then
+			table.insert(free, id)
+		end
+	end
+	if not table.find(free, l.seat) then
+		l.seat = free[1]
+	end
+	MapView.setLanding(free, l.seat, pickSeat)
+	UI.setLandingChoice(if l.seat then seatName(l.seat) else nil, state.commander)
+end
+
+pickSeat = function(id: number)
+	if state.landing and not state.landing.sent then
+		state.landing.seat = id
+		Sfx.play("click")
+		showChoice()
+	end
+end
+
+-- choose = { seats = the free bases, time = seconds to choose }
+local function enterLanding(choose)
+	state.screen = "landing"
+	state.landing = { seats = choose.seats, seat = nil, ends = os.clock() + choose.time, sent = false }
+	state.spectator = false
+	state.defeated = false
+	MapView.spectator = false
+	MapView.setMode("landing")
+	UI.showLanding()
+	Music.setMode("battle")
+	showChoice()
+	UI.setLandingCountdown(choose.time, false)
+end
+
+-- the player lands at the chosen base with the chosen commander; the server answers with the
+-- whole match, now with the player in it
+local function land()
+	local l = state.landing
+	if not l or l.sent then
+		return
+	end
+	l.sent = true
+	UI.setLandingCountdown(0, true)
+	action:FireServer("land", l.seat or 0, state.commander)
+end
+
+UI.onLand = function()
+	land()
+end
+
+UI.onLandingCommander = function(id)
+	if state.landing and not state.landing.sent then
+		state.commander = id
+		showChoice()
 	end
 end
 
@@ -184,11 +270,15 @@ function handlers.snapshot(msg)
 	MapView.load(msg)
 	state.phase = msg.phase
 	state.timer = msg.timer
+	-- the landing was turned down (the bases were taken a moment ago): the player watches
+	local refused = state.screen == "landing" and state.landing ~= nil and state.landing.sent
 	if msg.you ~= 0 then
 		enterPlay(false)
-	elseif state.wantPlay then
+	elseif msg.choose then
+		enterLanding(msg.choose)
+	elseif state.wantPlay or refused then
 		enterPlay(true)
-	elseif state.screen == "play" then
+	elseif state.screen ~= "menu" then
 		goMenu()
 		UI.toast("Начался новый бой. Нажми «ИГРАТЬ», чтобы зайти в него.")
 	end
@@ -199,7 +289,15 @@ function handlers.nation(msg)
 	MapView.upsertNation(msg.n)
 	if msg.n.id == MapView.myId then
 		UI.setMyColor(msg.n.color)
+		UI.setCommander(msg.n.commander)
 	end
+	if state.screen == "landing" and state.landing and not state.landing.sent then
+		showChoice()
+	end
+end
+
+function handlers.points(msg)
+	MapView.setPoints(msg.s)
 end
 
 function handlers.stats(msg)
@@ -547,7 +645,7 @@ function handlers.bdone(msg)
 end
 
 function handlers.toast(msg)
-	if state.screen == "play" or state.wantPlay then
+	if state.screen ~= "menu" or state.wantPlay then
 		UI.toast(msg.text, msg.warn)
 	end
 end
@@ -584,7 +682,7 @@ end
 function handlers.nomatch()
 	MapView.clear()
 	state.phase = "none"
-	if state.screen == "play" then
+	if state.screen ~= "menu" then
 		goMenu()
 	end
 end
@@ -872,7 +970,8 @@ UI.onCommand = function(name)
 end
 
 -- keys: F attack-move, X stop, H hold, T landing party, Space to the base, Backspace drops the
--- selection, Ctrl + 1-9 remembers a group, 1-9 picks it (twice quickly: the camera goes there)
+-- selection, Ctrl + 1-9 remembers a group, 1-9 picks it (twice quickly: the camera goes there);
+-- Enter lands while choosing a base
 local DIGITS = {
 	[Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2, [Enum.KeyCode.Three] = 3,
 	[Enum.KeyCode.Four] = 4, [Enum.KeyCode.Five] = 5, [Enum.KeyCode.Six] = 6,
@@ -923,10 +1022,14 @@ local function onKey(input: InputObject)
 end
 
 UserInputService.InputBegan:Connect(function(input, processed)
-	if processed or input.UserInputType ~= Enum.UserInputType.Keyboard or not canCommand() then
+	if processed or input.UserInputType ~= Enum.UserInputType.Keyboard then
 		return
 	end
-	safe("клавиша", onKey, input)
+	if state.screen == "landing" and input.KeyCode == Enum.KeyCode.Return then
+		safe("клавиша", land)
+	elseif canCommand() then
+		safe("клавиша", onKey, input)
+	end
 end)
 
 ---------------------------------------------------------------- per frame
@@ -943,6 +1046,18 @@ end
 
 local hudAcc = 0
 local function frame(dt: number)
+	local l = state.landing
+	if state.screen == "landing" and l then
+		-- the map stays between the landing panels; the player lands when the time is up
+		MapView.setLandingArea(UI.landingArea())
+		if not l.sent then
+			local left = math.max(0, math.ceil(l.ends - os.clock()))
+			UI.setLandingCountdown(left, false)
+			if left == 0 then
+				land()
+			end
+		end
+	end
 	MapView.update(dt)
 	if state.phase == "game" or state.phase == "ended" then
 		state.timer -= dt

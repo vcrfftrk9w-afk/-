@@ -1,5 +1,6 @@
--- The minimap: the whole battlefield in a corner, with a dot for every building and unit and a
--- frame for what the camera sees. Tap or drag on it to move the camera there.
+-- The minimap: the whole battlefield in a corner, with a dot for every building, unit and
+-- strategic point and a frame for what the camera sees. Tap or drag on it to move the camera
+-- there.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local Map = require(ReplicatedStorage:WaitForChild("TerraForge").Map)
@@ -66,14 +67,18 @@ local function dot(x: number, y: number, s: number, color: Color3)
 	d.Visible = true
 end
 
--- buildings and units: the map's records; colorOf(owner) gives a team's colour;
--- buildingShows / unitShows tell which ones the player may see
-function Minimap.update(buildings, units, colorOf: (number) -> Color3, buildingShows: (any) -> boolean, unitShows: (any) -> boolean)
+-- buildings, units and strategic points: the map's records; colorOf(owner) gives a team's
+-- colour; buildingShows / unitShows tell which ones the player may see
+function Minimap.update(buildings, units, points, colorOf: (number) -> Color3, buildingShows: (any) -> boolean, unitShows: (any) -> boolean)
 	if not mini or not mini.holder.Visible then
 		return
 	end
 	mini.used = 0
 	local px = mini.holder.AbsoluteSize.X / W
+	-- points: bigger squares, light grey while nobody holds them
+	for _, p in points do
+		dot(p.x, p.y, 6, if p.owner ~= 0 then colorOf(p.owner) else Color3.fromRGB(214, 220, 228))
+	end
 	for _, b in buildings do
 		if buildingShows(b) then
 			dot(b.cx, b.cy, math.max(3, b.size * px), colorOf(b.owner))

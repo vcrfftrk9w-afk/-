@@ -18,8 +18,56 @@ Config.BASE_INCOME = 8
 Config.MIN_POWER = 0.3
 -- the army limit: every unit takes some places in it (pop), whatever the base has built
 Config.ARMY_LIMIT = 100
--- new buildings must stand this close (tiles, centre to centre) to one of your buildings
+-- new buildings must stand this close (tiles, centre to centre) to one of your buildings, or to
+-- one of your supplied strategic points
 Config.BUILD_RADIUS = 12
+
+-- strategic points: ground units take one by standing within POINT_RADIUS of it alone, in
+-- CAPTURE_TIME seconds (faster with more units, slower when an enemy holds it). A point is
+-- supplied when it links to its owner's command centre through own points no further apart than
+-- SUPPLY_RANGE; a supplied point gives POINT_INCOME metal a second, vision and a place to build.
+-- Places are tile coordinates, mirrored like the map, so every base has the same chances.
+Config.POINTS = {
+	{ name = "Северный перевал", x = 56, y = 10 },
+	{ name = "Южный перевал", x = 56, y = 62 },
+	{ name = "Западное ущелье", x = 11, y = 36 },
+	{ name = "Восточное ущелье", x = 101, y = 36 },
+	{ name = "Северный берег", x = 56, y = 26 },
+	{ name = "Южный берег", x = 56, y = 46 },
+	{ name = "Северо-западная высота", x = 36, y = 20 },
+	{ name = "Северо-восточная высота", x = 76, y = 20 },
+	{ name = "Юго-западная высота", x = 36, y = 52 },
+	{ name = "Юго-восточная высота", x = 76, y = 52 },
+}
+Config.POINT_RADIUS = 3
+Config.POINT_KEEP = 1.5 -- no building closer than this (tiles, beyond its own half-size) to a point
+Config.CAPTURE_TIME = 12
+Config.POINT_INCOME = 3
+Config.POINT_VISION = 7
+Config.POINT_SCORE = 400 -- what a held point adds to its owner's strength
+Config.SUPPLY_RANGE = 30
+
+-- a player joining a match has this long to choose a free base and a commander
+Config.LANDING_SECONDS = 10
+
+-- commanders: each base has one, which adds its bonuses (shares) for the whole match. income =
+-- more metal, build = faster construction, groundDamage / groundHp = ground units, airProduction
+-- = faster airfields, airDamage = aircraft, towerDamage = buildings that shoot, buildingHp = all
+-- buildings, research = faster research, researchCost = cheaper research
+Config.COMMANDER_ORDER = { "industry", "assault", "aviation", "defense", "tech" }
+Config.COMMANDERS = {
+	industry = { name = "Промышленность", icon = "gear", income = 0.2, build = 0.25, desc = "+20% металла, постройки строятся на 25% быстрее." },
+	assault = { name = "Штурм", icon = "swords", groundDamage = 0.15, groundHp = 0.1, desc = "Наземные войска бьют на 15% сильнее и на 10% крепче." },
+	aviation = { name = "Авиация", icon = "fighter", airProduction = 0.4, airDamage = 0.15, desc = "Аэродромы работают на 40% быстрее, авиация бьёт на 15% сильнее." },
+	defense = { name = "Оборона", icon = "shield", towerDamage = 0.3, buildingHp = 0.25, desc = "Башни, ПВО и командный центр бьют на 30% сильнее, постройки на 25% крепче." },
+	tech = { name = "Технологии", icon = "lab", research = 0.5, researchCost = 0.25, desc = "Исследования на 50% быстрее и на 25% дешевле." },
+}
+
+-- a commander's bonus of one kind, as a share (0 when the commander has none)
+function Config.commander(id: string?, key: string): number
+	local c = if id then Config.COMMANDERS[id] else nil
+	return if c and c[key] then c[key] else 0
+end
 
 -- team colours by base: green, red, blue, yellow
 Config.SEAT_COLORS = { "#41b64f", "#e2453a", "#3f8fe2", "#e8c52c" }

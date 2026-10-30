@@ -56,8 +56,56 @@ Config.BASE_INCOME = 8
 Config.MIN_POWER = 0.3
 -- the army limit: every unit takes some places in it (pop), whatever the base has built
 Config.ARMY_LIMIT = 100
--- new buildings must stand this close (tiles, centre to centre) to one of your buildings
+-- new buildings must stand this close (tiles, centre to centre) to one of your buildings, or to
+-- one of your supplied strategic points
 Config.BUILD_RADIUS = 12
+
+-- strategic points: ground units take one by standing within POINT_RADIUS of it alone, in
+-- CAPTURE_TIME seconds (faster with more units, slower when an enemy holds it). A point is
+-- supplied when it links to its owner's command centre through own points no further apart than
+-- SUPPLY_RANGE; a supplied point gives POINT_INCOME metal a second, vision and a place to build.
+-- Places are tile coordinates, mirrored like the map, so every base has the same chances.
+Config.POINTS = {
+	{ name = "Северный перевал", x = 56, y = 10 },
+	{ name = "Южный перевал", x = 56, y = 62 },
+	{ name = "Западное ущелье", x = 11, y = 36 },
+	{ name = "Восточное ущелье", x = 101, y = 36 },
+	{ name = "Северный берег", x = 56, y = 26 },
+	{ name = "Южный берег", x = 56, y = 46 },
+	{ name = "Северо-западная высота", x = 36, y = 20 },
+	{ name = "Северо-восточная высота", x = 76, y = 20 },
+	{ name = "Юго-западная высота", x = 36, y = 52 },
+	{ name = "Юго-восточная высота", x = 76, y = 52 },
+}
+Config.POINT_RADIUS = 3
+Config.POINT_KEEP = 1.5 -- no building closer than this (tiles, beyond its own half-size) to a point
+Config.CAPTURE_TIME = 12
+Config.POINT_INCOME = 3
+Config.POINT_VISION = 7
+Config.POINT_SCORE = 400 -- what a held point adds to its owner's strength
+Config.SUPPLY_RANGE = 30
+
+-- a player joining a match has this long to choose a free base and a commander
+Config.LANDING_SECONDS = 10
+
+-- commanders: each base has one, which adds its bonuses (shares) for the whole match. income =
+-- more metal, build = faster construction, groundDamage / groundHp = ground units, airProduction
+-- = faster airfields, airDamage = aircraft, towerDamage = buildings that shoot, buildingHp = all
+-- buildings, research = faster research, researchCost = cheaper research
+Config.COMMANDER_ORDER = { "industry", "assault", "aviation", "defense", "tech" }
+Config.COMMANDERS = {
+	industry = { name = "Промышленность", icon = "gear", income = 0.2, build = 0.25, desc = "+20% металла, постройки строятся на 25% быстрее." },
+	assault = { name = "Штурм", icon = "swords", groundDamage = 0.15, groundHp = 0.1, desc = "Наземные войска бьют на 15% сильнее и на 10% крепче." },
+	aviation = { name = "Авиация", icon = "fighter", airProduction = 0.4, airDamage = 0.15, desc = "Аэродромы работают на 40% быстрее, авиация бьёт на 15% сильнее." },
+	defense = { name = "Оборона", icon = "shield", towerDamage = 0.3, buildingHp = 0.25, desc = "Башни, ПВО и командный центр бьют на 30% сильнее, постройки на 25% крепче." },
+	tech = { name = "Технологии", icon = "lab", research = 0.5, researchCost = 0.25, desc = "Исследования на 50% быстрее и на 25% дешевле." },
+}
+
+-- a commander's bonus of one kind, as a share (0 when the commander has none)
+function Config.commander(id: string?, key: string): number
+	local c = if id then Config.COMMANDERS[id] else nil
+	return if c and c[key] then c[key] else 0
+end
 
 -- team colours by base: green, red, blue, yellow
 Config.SEAT_COLORS = { "#41b64f", "#e2453a", "#3f8fe2", "#e8c52c" }
@@ -548,7 +596,7 @@ return {
 	aa = { 512, 512, 256 },
 	fabricator = { 768, 512, 256 },
 }
-]]></ProtectedString></Properties></Item></Item></Item><Item class="ServerScriptService" referent="RBX00000012"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX00000011"><Properties><string name="Name">TerraForgeServer</string><ProtectedString name="Source"><![CDATA[-- Terra Forge server: owns the running skirmish and relays player actions to it.
+]]></ProtectedString></Properties></Item></Item></Item><Item class="ServerScriptService" referent="RBX00000013"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX00000012"><Properties><string name="Name">TerraForgeServer</string><ProtectedString name="Source"><![CDATA[-- Terra Forge server: owns the running skirmish and relays player actions to it.
 local InsertService = game:GetService("InsertService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -692,6 +740,8 @@ local function onAction(player: Player, kind, a, b, c, d, e)
 		end
 	elseif kind == "queue" and isNumber(a) and typeof(b) == "string" and Config.UNITS[b] then
 		match:queueUnit(player, a, b)
+	elseif kind == "land" and isNumber(a) and typeof(b) == "string" then
+		match:land(player, a, b)
 	elseif kind == "research" and isNumber(a) and typeof(b) == "string" and Config.TECH[b] then
 		match:startResearch(player, a, b)
 	elseif kind == "stopresearch" and isNumber(a) then
@@ -759,8 +809,8 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 end)
 ]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">Bots</string><ProtectedString name="Source"><![CDATA[-- The bots that play the bases no player has taken: they build by a fixed plan, keep their
--- factories busy, defend their base and attack the nearest enemy in waves. These are methods
--- of Match (Match.luau adds them); self is the match.
+-- factories busy, defend their base, send small groups to take strategic points and attack the
+-- nearest enemy in waves. These are methods of Match (Match.luau adds them); self is the match.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -895,6 +945,31 @@ function Bots:botThink(n, dt: number)
 	if threat and #idle > 0 then
 		Orders.give(self, idle, "amove", threat.px, threat.py)
 		return
+	end
+	-- now and then a few idle ground units go to take the nearest strategic point that is not theirs
+	if t >= (bot.pointAt or 0) then
+		local best, bd = nil, math.huge
+		for _, p in self.points do
+			if p.owner ~= n then
+				local d = (p.x - n.cc.px) ^ 2 + (p.y - n.cc.py) ^ 2
+				if d < bd then
+					best, bd = p, d
+				end
+			end
+		end
+		local group = {}
+		for _, u in idle do
+			if not u.air and #group < 4 then
+				table.insert(group, u)
+			end
+		end
+		if best and #group >= 2 then
+			for _, u in group do
+				table.remove(idle, table.find(idle, u))
+			end
+			Orders.give(self, group, "amove", best.x, best.y)
+			bot.pointAt = t + 25
+		end
 	end
 	bot.wave -= dt
 	if bot.wave <= 0 and #idle >= 6 then
@@ -1052,7 +1127,12 @@ function Combat:tickCombat(dt: number)
 			mult = if vs and vs[target.kind] then vs[target.kind] else 1
 		end
 		-- research: the attacker's weapons hit harder, the target unit's armor takes some off
-		local hit = dps * dt * mult * (1 + attacker.n.damage)
+		-- the attacker's commander: towers, aircraft or ground units hit harder
+		local c = attacker.n.commander
+		local cmd = if attacker.isBuilding then Config.commander(c, "towerDamage")
+			elseif attacker.air then Config.commander(c, "airDamage")
+			else Config.commander(c, "groundDamage")
+		local hit = dps * dt * mult * (1 + attacker.n.damage) * (1 + cmd)
 		if not target.isBuilding then
 			hit *= 1 - target.n.armor
 		end
@@ -1064,7 +1144,7 @@ function Combat:tickCombat(dt: number)
 			self.hpDirty[target] = true
 		end
 		if splash and not target.air then
-			splashAround(attacker, target, dps * dt * (1 + attacker.n.damage) * SPLASH_SHARE, splash, vsBuildings)
+			splashAround(attacker, target, dps * dt * (1 + attacker.n.damage) * (1 + cmd) * SPLASH_SHARE, splash, vsBuildings)
 		end
 		if t - (attacker.shotAt or 0) > 0.7 and #self.shots < 240 then
 			attacker.shotAt = t
@@ -1107,8 +1187,9 @@ end
 
 return Combat
 ]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">Economy</string><ProtectedString name="Source"><![CDATA[-- The economy of a skirmish: metal income, energy, construction, factory queues and production,
--- research, repairs, and what each base is worth. These are methods of Match (Match.luau adds
--- them); self is the match. Metal is kept in n.money, finished research in n.tech.
+-- research, repairs, and what each base is worth, with the bonuses of each base's commander.
+-- These are methods of Match (Match.luau adds them); self is the match. Metal is kept in
+-- n.money, finished research in n.tech.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -1220,6 +1301,11 @@ function Economy:labOf(player: Player, id: number)
 	return n, b
 end
 
+-- what a study costs this base: the technology commander makes it cheaper
+function Economy:researchCost(n, id: string): number
+	return math.round(Config.TECH[id].cost * (1 - Config.commander(n.commander, "researchCost")))
+end
+
 -- why a base cannot start this study now, or nil
 function Economy:researchBlock(n, id: string): string?
 	local t = Config.TECH[id]
@@ -1234,14 +1320,16 @@ function Economy:researchBlock(n, id: string): string?
 			return "Уже изучается: " .. t.name
 		end
 	end
-	if n.money < t.cost then
-		return self:lackText(n, t.cost)
+	local cost = self:researchCost(n, id)
+	if n.money < cost then
+		return self:lackText(n, cost)
 	end
 	return nil
 end
 
 function Economy:beginResearch(n, b, id: string)
-	n.money -= Config.TECH[id].cost
+	b.researchPaid = self:researchCost(n, id)
+	n.money -= b.researchPaid
 	b.research = id
 	b.prog = 0
 end
@@ -1276,7 +1364,7 @@ function Economy:stopResearch(player: Player, labId: number)
 	if not n or not b.research then
 		return
 	end
-	n.money += Config.TECH[b.research].cost
+	n.money += b.researchPaid or Config.TECH[b.research].cost
 	b.research = nil
 	b.prog = 0
 	self:sendEconomy()
@@ -1339,8 +1427,10 @@ function Economy:tickEconomy(dt: number)
 		local n = b.n
 		local def = Config.BUILD[b.kind]
 		if b.built < 1 then
-			-- each engineer next to the site adds the normal speed again, up to three times faster
-			b.built = math.min(1, b.built + dt * (1 + math.min(2, help[b] or 0)) / def.time)
+			-- each engineer next to the site adds the normal speed again, up to three times faster;
+			-- the industry commander builds faster still
+			local speed = (1 + math.min(2, help[b] or 0)) * (1 + Config.commander(n.commander, "build"))
+			b.built = math.min(1, b.built + dt * speed / def.time)
 			if b.built >= 1 then
 				self:send({ t = "bdone", id = b.id })
 				self:toast(n, "Достроено: " .. def.name)
@@ -1352,7 +1442,7 @@ function Economy:tickEconomy(dt: number)
 		end
 		if b.research then
 			local t = Config.TECH[b.research]
-			b.prog = math.min(1, b.prog + dt * speedOf(b) / t.time)
+			b.prog = math.min(1, b.prog + dt * speedOf(b) * (1 + Config.commander(n.commander, "research")) / t.time)
 			if b.prog >= 1 then
 				n.tech[b.research] = true
 				self:toast(n, "Изучено: " .. t.name .. ". " .. t.desc)
@@ -1383,7 +1473,9 @@ function Economy:tickEconomy(dt: number)
 			if n.pop + Config.UNITS[current].pop > Config.ARMY_LIMIT then
 				b.blocked = "army"
 			else
-				b.prog = math.min(1, b.prog + dt * speedOf(b) * (1 + n.production) / Config.UNITS[current].time)
+				local ud = Config.UNITS[current]
+				local speed = speedOf(b) * (1 + n.production) * (1 + (if ud.air then Config.commander(n.commander, "airProduction") else 0))
+				b.prog = math.min(1, b.prog + dt * speed / ud.time)
 				if b.prog >= 1 then
 					self:spawnUnit(n, current, b.px, b.py + b.size / 2 + 0.8, b.rally)
 					b.prog = 0
@@ -1398,6 +1490,10 @@ function Economy:tickEconomy(dt: number)
 	end
 	for _, n in self.seats do
 		if n.alive then
+			-- supplied strategic points add metal, and the industry commander adds a share of it all
+			local _, supplied = self:pointsOf(n)
+			n.income += supplied * Config.POINT_INCOME
+			n.income *= 1 + Config.commander(n.commander, "income")
 			n.money += n.income * dt
 		end
 	end
@@ -1458,6 +1554,7 @@ function Economy:sendEconomy()
 		for id in n.tech do
 			table.insert(tech, id)
 		end
+		local held, supplied = self:pointsOf(n)
 		self:sendTo(player, {
 			t = "eco",
 			money = math.floor(n.money),
@@ -1468,6 +1565,8 @@ function Economy:sendEconomy()
 			pop = n.pop,
 			units = n.unitTotal,
 			tech = tech,
+			points = held,
+			supplied = supplied,
 			list = list,
 		})
 	end
@@ -1475,12 +1574,12 @@ end
 
 ---------------------------------------------------------------- strength
 
--- strength of a base: what its buildings and units are worth
+-- strength of a base: what its buildings, units and strategic points are worth
 function Economy:score(n): number
 	if not n.alive then
 		return 0
 	end
-	local s = 0
+	local s = (self:pointsOf(n)) * Config.POINT_SCORE
 	for _, b in self.buildings do
 		if b.n == n then
 			s += (Config.BUILD[b.kind].cost or 1000) * b.built
@@ -1507,11 +1606,12 @@ function Economy:statsArray()
 end
 
 return Economy
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000E"><Properties><string name="Name">Match</string><ProtectedString name="Source"><![CDATA[-- One skirmish: four bases on the map, each run by a player or a bot. Holds the bases,
--- buildings and units, places buildings, moves units, ends the match and sends clients
--- everything as batches of small messages through one RemoteEvent. A base is lost with its
--- command centre. The economy, combat and bots are methods of Match too, kept in their own
--- modules: Economy, Combat and Bots.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000E"><Properties><string name="Name">Match</string><ProtectedString name="Source"><![CDATA[-- One skirmish: four bases on the map, each run by a player or a bot and led by a commander.
+-- Holds the bases, buildings and units, lets players choose where to land, places buildings,
+-- moves units, ends the match and sends clients everything as batches of small messages through
+-- one RemoteEvent. A base is lost with its command centre. The economy, combat, bots and
+-- strategic points are methods of Match too, kept in their own modules: Economy, Combat, Bots
+-- and Points.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -1525,7 +1625,7 @@ local W = Map.W
 local Match = {}
 Match.__index = Match
 
-for _, part in { require(script.Parent.Economy), require(script.Parent.Combat), require(script.Parent.Bots) } do
+for _, part in { require(script.Parent.Economy), require(script.Parent.Combat), require(script.Parent.Bots), require(script.Parent.Points) } do
 	for name, method in part do
 		Match[name] = method
 	end
@@ -1553,6 +1653,7 @@ local function nationInfo(n)
 		userId = n.userId or 0,
 		cap = if n.cc then { n.cc.x + 1, n.cc.y + 1 } else nil,
 		alive = n.alive,
+		commander = n.commander,
 	}
 end
 
@@ -1607,7 +1708,10 @@ function Match.new(event: RemoteEvent)
 	self.shots = {}
 	self.hpDirty = {}
 	self.bhpDirty = {}
+	self.choosing = {} -- players choosing where to land: player -> deadline (server time)
+	self.pointsAcc = 0
 	self.done = false
+	self:setupPoints()
 	local names = shuffle(Config.BOT_NAMES, self.rng)
 	for i = 1, math.min(Config.SEATS, #Map.starts) do
 		local start = Map.starts[i]
@@ -1630,6 +1734,8 @@ function Match.new(event: RemoteEvent)
 			armor = 0,
 			damage = 0,
 			production = 0,
+			-- bots get a commander by chance; a player who takes the base chooses their own
+			commander = Config.COMMANDER_ORDER[self.rng:NextInteger(1, #Config.COMMANDER_ORDER)],
 			bot = self:newBot(),
 		}
 		self.nations[i] = n
@@ -1658,7 +1764,9 @@ function Match:toast(n, text: string, warn: boolean?)
 	end
 end
 
-function Match:snapshot(player: Player)
+-- the whole match for one player; choose = the free bases and the time to pick one, when the
+-- player is about to land
+function Match:snapshot(player: Player, choose)
 	local me = self.humans[player]
 	local nations, buildings, units = {}, {}, {}
 	for _, n in self.seats do
@@ -1678,6 +1786,9 @@ function Match:snapshot(player: Player)
 		nations = nations,
 		buildings = buildings,
 		units = units,
+		points = self:pointsInfo(),
+		pstate = self:pointsState(),
+		choose = choose,
 	}
 end
 
@@ -1687,33 +1798,95 @@ end
 
 ---------------------------------------------------------------- players
 
--- a player takes a bot's base while the match is young; later they watch
+-- the bases a player can still take: alive and run by a bot
+function Match:freeSeats(): { number }
+	local ids = {}
+	for _, n in self.seats do
+		if n.alive and not n.isHuman then
+			table.insert(ids, n.id)
+		end
+	end
+	return ids
+end
+
+-- a player who joins while the match is young chooses a base run by a bot and a commander
+-- (Match:land); later, or when every base is taken, they watch
 function Match:play(player: Player)
 	if self.humans[player] then
 		self:sendSnapshot(player)
 		return
 	end
 	if self.phase == "game" and self.joinTimer > 0 then
-		for _, n in self.seats do
-			if n.alive and not n.isHuman then
-				n.isHuman = true
-				n.player = player
-				n.name = player.DisplayName
-				n.userId = player.UserId
-				self.humans[player] = n
-				self:send({ t = "nation", n = nationInfo(n) })
-				self:sendSnapshot(player)
-				self:sendEconomy()
-				return
-			end
+		local free = self:freeSeats()
+		if #free > 0 then
+			self.choosing[player] = now() + Config.LANDING_SECONDS + 2
+			self:sendTo(player, self:snapshot(player, { seats = free, time = Config.LANDING_SECONDS }))
+			return
 		end
 	end
+	self.choosing[player] = nil
 	self:sendSnapshot(player)
 	self:sendTo(player, { t = "toast", text = "Все базы заняты. Смотри бой — следующий начнётся после него.", warn = false })
 end
 
+-- the player lands at the base they chose (another free one, if it was taken a moment ago)
+-- and leads it with their commander
+function Match:land(player: Player, seatId: number, commander: string)
+	if not self.choosing[player] then
+		return
+	end
+	self.choosing[player] = nil
+	if self.humans[player] then
+		return
+	end
+	local n = self.nations[seatId]
+	if not n or not n.alive or n.isHuman then
+		local free = self:freeSeats()
+		n = if #free > 0 then self.nations[free[1]] else nil
+	end
+	if not n or self.phase ~= "game" then
+		self:sendSnapshot(player)
+		self:sendTo(player, { t = "toast", text = "Все базы заняты. Смотри бой — следующий начнётся после него.", warn = false })
+		return
+	end
+	n.isHuman = true
+	n.player = player
+	n.name = player.DisplayName
+	n.userId = player.UserId
+	self.humans[player] = n
+	self:setCommander(n, if Config.COMMANDERS[commander] then commander else Config.COMMANDER_ORDER[1])
+	self:send({ t = "nation", n = nationInfo(n) })
+	self:sendSnapshot(player)
+	self:sendEconomy()
+end
+
+-- a new commander for a base: what is already built and fielded gets the new health bonuses
+function Match:setCommander(n, id: string)
+	local function rescale(o, old: number, new: number)
+		local share = o.hp / math.max(o.maxHp, 1)
+		o.maxHp = math.round(o.maxHp / (1 + old) * (1 + new))
+		o.hp = share * o.maxHp
+	end
+	local oldB, newB = Config.commander(n.commander, "buildingHp"), Config.commander(id, "buildingHp")
+	local oldU, newU = Config.commander(n.commander, "groundHp"), Config.commander(id, "groundHp")
+	n.commander = id
+	for _, b in self.buildings do
+		if b.n == n and oldB ~= newB then
+			rescale(b, oldB, newB)
+			self:send({ t = "building", b = buildingInfo(b) })
+		end
+	end
+	for _, u in self.units do
+		if u.n == n and not u.air and oldU ~= newU then
+			rescale(u, oldU, newU)
+			self:send({ t = "unit", u = unitInfo(u) })
+		end
+	end
+end
+
 -- the base goes back to a bot
 function Match:leave(player: Player)
+	self.choosing[player] = nil
 	local n = self.humans[player]
 	if not n then
 		return
@@ -1756,10 +1929,16 @@ function Match:groundOk(x: number, y: number, size: number): boolean
 	return true
 end
 
+-- near one of the base's buildings, or one of its supplied points
 function Match:nearBase(n, cx: number, cy: number): boolean
 	local r2 = Config.BUILD_RADIUS * Config.BUILD_RADIUS
 	for _, b in self.buildings do
 		if b.n == n and (b.px - cx) ^ 2 + (b.py - cy) ^ 2 <= r2 then
+			return true
+		end
+	end
+	for _, p in self.points do
+		if p.owner == n and p.supplied and (p.x - cx) ^ 2 + (p.y - cy) ^ 2 <= r2 then
 			return true
 		end
 	end
@@ -1800,8 +1979,13 @@ function Match:placeFor(n, kind: string, x: number, y: number): (number?, number
 			end
 		end
 	end
+	for _, p in self.points do
+		if (p.x - bx - size / 2) ^ 2 + (p.y - by - size / 2) ^ 2 < (Config.POINT_KEEP + size / 2) ^ 2 then
+			return nil, nil, "Тут стратегическая точка: строй рядом, а не на ней."
+		end
+	end
 	if not self:nearBase(n, bx + size / 2, by + size / 2) then
-		return nil, nil, "Строить можно только рядом со своей базой."
+		return nil, nil, "Строить можно только рядом со своей базой или снабжённой точкой."
 	end
 	return bx, by, nil
 end
@@ -1830,6 +2014,7 @@ end
 
 function Match:addBuilding(n, kind: string, x: number, y: number, ready: boolean)
 	local def = Config.BUILD[kind]
+	local hp = math.round(def.hp * (1 + Config.commander(n.commander, "buildingHp")))
 	self.nextBuildingId += 1
 	local b = {
 		id = self.nextBuildingId,
@@ -1840,8 +2025,8 @@ function Match:addBuilding(n, kind: string, x: number, y: number, ready: boolean
 		size = def.size,
 		px = x + def.size / 2,
 		py = y + def.size / 2,
-		hp = def.hp,
-		maxHp = def.hp,
+		hp = hp,
+		maxHp = hp,
 		isBuilding = true,
 		built = if ready then 1 else 0,
 		prog = 0,
@@ -1868,10 +2053,11 @@ function Match:removeBuilding(b)
 	end
 end
 
--- a base without its command centre is out: everything it has left falls
+-- a base without its command centre is out: everything it has left falls, its points too
 function Match:killNation(n)
 	n.alive = false
 	n.cc = nil
+	self:dropPoints(n)
 	for _, b in self.buildings do
 		if b.n == n then
 			self:send({ t = "boom", x = b.px, y = b.py, big = true })
@@ -1909,6 +2095,7 @@ function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
 			x, y = lx + 0.5, ly + 0.5
 		end
 	end
+	local hp = if def.air then def.hp else math.round(def.hp * (1 + Config.commander(n.commander, "groundHp")))
 	self.nextUnitId += 1
 	self.unitCount += 1
 	local u = {
@@ -1916,8 +2103,8 @@ function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
 		kind = kind,
 		air = def.air == true,
 		n = n,
-		hp = def.hp,
-		maxHp = def.hp,
+		hp = hp,
+		maxHp = hp,
 		speed = def.speed,
 		t0 = now(),
 		path = { x, y },
@@ -2225,9 +2412,19 @@ function Match:step(dt: number)
 			self:tickEconomy(Config.TICK)
 			self:tickRepair(Config.TICK)
 			self:tickCombat(Config.TICK)
+			self:tickPoints(Config.TICK, now())
 		end
 		if steps >= 3 then
 			self.tickAcc = 0
+		end
+		self.pointsAcc += dt
+		if self.pointsAcc >= 0.5 then
+			self.pointsAcc = 0
+			self:tickSupply()
+			if self.pointsDirty then
+				self.pointsDirty = false
+				self:send({ t = "points", s = self:pointsState() })
+			end
 		end
 		self.orderAcc += dt
 		if self.orderAcc >= 0.25 then
@@ -2246,6 +2443,15 @@ function Match:step(dt: number)
 		self.secAcc += dt
 		if self.secAcc >= 1 then
 			self.secAcc = 0
+			-- players who did not choose where to land in time land at a free base
+			local t = now()
+			for player, deadline in self.choosing do
+				if not player.Parent then
+					self.choosing[player] = nil
+				elseif t > deadline then
+					self:land(player, 0, Config.COMMANDER_ORDER[1])
+				end
+			end
 			self:checkEnd()
 			self:send({ t = "stats", s = self:statsArray(), phase = self.phase, timer = self.timer })
 		end
@@ -2725,7 +2931,202 @@ function Path.inMap(x: number, y: number): (number, number)
 end
 
 return Path
-]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX00000029"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000028"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000027"><Properties><string name="Name">TerraForgeClient</string><ProtectedString name="Source"><![CDATA[-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000011"><Properties><string name="Name">Points</string><ProtectedString name="Source"><![CDATA[-- Strategic points: neutral spots on the map that ground units capture by standing on them with
+-- no enemy around. A point gives its owner metal, vision and a place to build, but only while it
+-- is supplied: linked to the command centre through own points no further apart than
+-- Config.SUPPLY_RANGE, so the points a base holds form its front. These are methods of Match
+-- (Match.luau adds them); self is the match.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("TerraForge")
+local Config = require(Shared.Config)
+
+local Points = {}
+
+local FADE = 1 / 30 -- how fast an unfinished capture fades once nobody stands on the point
+local OWNED = 2 / 3 -- taking a point an enemy holds goes this much slower
+local WARN_GAP = 20 -- seconds between warnings that the enemy is taking a point
+
+-- capture speed (share a second) for this many units on the point: more units, up to twice as fast
+local function rate(count: number): number
+	return (1 + 0.5 * math.min(count - 1, 2)) / Config.CAPTURE_TIME
+end
+
+function Points:setupPoints()
+	self.points = {}
+	for i, p in Config.POINTS do
+		table.insert(self.points, {
+			id = i,
+			name = p.name,
+			x = p.x,
+			y = p.y,
+			owner = nil, -- the base holding it
+			cap = nil, -- the base taking it
+			k = 0, -- how far that capture has got, 0..1
+			contested = false,
+			supplied = false,
+			link = -1, -- what supplies it: 0 = the command centre, a point id, -1 = nothing
+			warnAt = -100,
+		})
+	end
+	self.pointsDirty = true
+end
+
+-- where the points are, for clients
+function Points:pointsInfo()
+	local list = {}
+	for _, p in self.points do
+		table.insert(list, { id = p.id, name = p.name, x = p.x, y = p.y })
+	end
+	return list
+end
+
+-- the state of every point, flat: id, owner (0 = none), capturer (0 = none), progress 0..100,
+-- flags (1 = contested, 2 = supplied), link
+function Points:pointsState()
+	local s = {}
+	for _, p in self.points do
+		table.insert(s, p.id)
+		table.insert(s, if p.owner then p.owner.id else 0)
+		table.insert(s, if p.cap then p.cap.id else 0)
+		table.insert(s, math.round(p.k * 100))
+		table.insert(s, (if p.contested then 1 else 0) + (if p.supplied then 2 else 0))
+		table.insert(s, p.link)
+	end
+	return s
+end
+
+-- how many points a base holds, and how many of them are supplied
+function Points:pointsOf(n): (number, number)
+	local held, supplied = 0, 0
+	for _, p in self.points do
+		if p.owner == n then
+			held += 1
+			if p.supplied then
+				supplied += 1
+			end
+		end
+	end
+	return held, supplied
+end
+
+-- a base that falls loses its points and its captures
+function Points:dropPoints(n)
+	for _, p in self.points do
+		if p.owner == n then
+			p.owner = nil
+		end
+		if p.cap == n then
+			p.cap, p.k = nil, 0
+		end
+	end
+	self.pointsDirty = true
+end
+
+-- ground units standing on a point, counted by base
+local function presence(self, p)
+	local counts, r2 = {}, Config.POINT_RADIUS ^ 2
+	for _, u in self.units do
+		if not u.air and u.hp > 0 and (u.px - p.x) ^ 2 + (u.py - p.y) ^ 2 <= r2 then
+			counts[u.n] = (counts[u.n] or 0) + 1
+		end
+	end
+	return counts
+end
+
+function Points:capturePoint(p, n)
+	local old = p.owner
+	p.owner, p.cap, p.k = n, nil, 0
+	self:toast(n, "Точка «" .. p.name .. "» захвачена. Пока она снабжается, она даёт металл и рядом можно строить.")
+	if old then
+		self:toast(old, "Потеряна точка «" .. p.name .. "»!", true)
+	end
+end
+
+function Points:tickPoints(dt: number, t: number)
+	for _, p in self.points do
+		local counts = presence(self, p)
+		local only, many = nil, false
+		for n in counts do
+			if only then
+				many = true
+			else
+				only = n
+			end
+		end
+		local owner, cap, k, contested = p.owner, p.cap, math.round(p.k * 100), p.contested
+		p.contested = many
+		if many then
+			-- a fight on the point: nothing moves until one side is left
+		elseif not only then
+			if p.cap then
+				p.k = math.max(0, p.k - FADE * dt)
+				if p.k <= 0 then
+					p.cap = nil
+				end
+			end
+		elseif only == p.owner then
+			-- the owner stands on it: an enemy's capture is pushed back
+			if p.cap then
+				p.k -= rate(counts[only]) * dt
+				if p.k <= 0 then
+					p.cap, p.k = nil, 0
+				end
+			end
+		elseif p.cap and p.cap ~= only then
+			-- someone else's capture is undone first
+			p.k -= rate(counts[only]) * dt
+			if p.k <= 0 then
+				p.cap, p.k = only, 0
+			end
+		else
+			p.cap = only
+			p.k += rate(counts[only]) * (if p.owner then OWNED else 1) * dt
+			if p.owner and t - p.warnAt > WARN_GAP then
+				p.warnAt = t
+				self:toast(p.owner, "Враг захватывает точку «" .. p.name .. "»!", true)
+			end
+			if p.k >= 1 then
+				self:capturePoint(p, only)
+			end
+		end
+		if owner ~= p.owner or cap ~= p.cap or k ~= math.round(p.k * 100) or contested ~= p.contested then
+			self.pointsDirty = true
+		end
+	end
+end
+
+-- which points are supplied: from each command centre, along the base's own points, each no
+-- further than SUPPLY_RANGE from the one before
+function Points:tickSupply()
+	local before = {}
+	for _, p in self.points do
+		before[p] = if p.supplied then p.link else -1
+		p.supplied, p.link = false, -1
+	end
+	local r2 = Config.SUPPLY_RANGE ^ 2
+	for _, n in self.seats do
+		if n.alive and n.cc then
+			local frontier = { { x = n.cc.px, y = n.cc.py, id = 0 } }
+			while #frontier > 0 do
+				local node = table.remove(frontier, 1)
+				for _, p in self.points do
+					if p.owner == n and not p.supplied and (p.x - node.x) ^ 2 + (p.y - node.y) ^ 2 <= r2 then
+						p.supplied, p.link = true, node.id
+						table.insert(frontier, { x = p.x, y = p.y, id = p.id })
+					end
+				end
+			end
+		end
+	end
+	for _, p in self.points do
+		if (if p.supplied then p.link else -1) ~= before[p] then
+			self.pointsDirty = true
+		end
+	end
+end
+
+return Points
+]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX0000002C"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX0000002B"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX0000002A"><Properties><string name="Name">TerraForgeClient</string><ProtectedString name="Source"><![CDATA[-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -2833,7 +3234,7 @@ task.delay(30, function()
 end)
 
 local state = {
-	screen = "menu",
+	screen = "menu", -- "menu", "landing" (choosing a base and a commander) or "play"
 	phase = "none",
 	timer = 0,
 	spectator = false,
@@ -2846,6 +3247,8 @@ local state = {
 	groups = {}, -- number key -> unit ids
 	shortOfEnergy = false, -- the base uses more energy than it makes
 	armyFull = false, -- a factory waits because the army limit is reached
+	landing = nil, -- while choosing: { seats = bases offered, seat = the chosen one, ends = os.clock() deadline, sent }
+	commander = Config.COMMANDER_ORDER[1], -- the commander the player chose last
 }
 
 local function me()
@@ -2854,6 +3257,7 @@ end
 
 local function goMenu()
 	state.screen = "menu"
+	state.landing = nil
 	state.spectator = false
 	state.defeated = false
 	state.rallyFor = nil
@@ -2881,6 +3285,7 @@ end
 local function enterPlay(spectator: boolean)
 	local starting = state.screen ~= "play" or state.spectator
 	state.screen = "play"
+	state.landing = nil
 	state.spectator = spectator
 	state.rallyFor = nil
 	state.defeated = false
@@ -2891,6 +3296,7 @@ local function enterPlay(spectator: boolean)
 	local n = me()
 	if n then
 		UI.setMyColor(n.color)
+		UI.setCommander(n.commander)
 	end
 	if not goHome(true) then
 		MapView.focusOn(Map.W / 2, Map.H / 2, true)
@@ -2902,6 +3308,87 @@ local function enterPlay(spectator: boolean)
 				UI.toast("Выбери внизу «Экстрактор» и нажми на светящееся месторождение рядом с базой — это металл. Потом построй казарму и завод бронетехники, а когда энергии станет мало — электростанцию.", false, 8)
 			end
 		end)
+		task.delay(11, function()
+			if state.screen == "play" and not state.spectator then
+				UI.toast("Захватывай стратегические точки: приведи к кругу наземные войска. Точка, связанная с базой цепочкой твоих точек, снабжена — даёт металл, и рядом с ней можно строить.", false, 8)
+			end
+		end)
+	end
+end
+
+---------------------------------------------------------------- choosing where to land
+
+-- a base's name by its corner of the map: «Северо-запад», «Юго-восток»...
+local function seatName(id: number): string
+	local n = MapView.nations[id]
+	if not n or not n.cap then
+		return "?"
+	end
+	return (if n.cap.y < Map.H / 2 then "Северо" else "Юго") .. "-" .. (if n.cap.x < Map.W / 2 then "запад" else "восток")
+end
+
+local pickSeat
+
+-- marks the bases that are still free and shows what is chosen; a base taken by another player
+-- a moment ago gives way to the next free one
+local function showChoice()
+	local l = state.landing
+	local free = {}
+	for _, id in l.seats do
+		local n = MapView.nations[id]
+		if n and n.alive and not n.human then
+			table.insert(free, id)
+		end
+	end
+	if not table.find(free, l.seat) then
+		l.seat = free[1]
+	end
+	MapView.setLanding(free, l.seat, pickSeat)
+	UI.setLandingChoice(if l.seat then seatName(l.seat) else nil, state.commander)
+end
+
+pickSeat = function(id: number)
+	if state.landing and not state.landing.sent then
+		state.landing.seat = id
+		Sfx.play("click")
+		showChoice()
+	end
+end
+
+-- choose = { seats = the free bases, time = seconds to choose }
+local function enterLanding(choose)
+	state.screen = "landing"
+	state.landing = { seats = choose.seats, seat = nil, ends = os.clock() + choose.time, sent = false }
+	state.spectator = false
+	state.defeated = false
+	MapView.spectator = false
+	MapView.setMode("landing")
+	UI.showLanding()
+	Music.setMode("battle")
+	showChoice()
+	UI.setLandingCountdown(choose.time, false)
+end
+
+-- the player lands at the chosen base with the chosen commander; the server answers with the
+-- whole match, now with the player in it
+local function land()
+	local l = state.landing
+	if not l or l.sent then
+		return
+	end
+	l.sent = true
+	UI.setLandingCountdown(0, true)
+	action:FireServer("land", l.seat or 0, state.commander)
+end
+
+UI.onLand = function()
+	land()
+end
+
+UI.onLandingCommander = function(id)
+	if state.landing and not state.landing.sent then
+		state.commander = id
+		showChoice()
 	end
 end
 
@@ -2911,11 +3398,15 @@ function handlers.snapshot(msg)
 	MapView.load(msg)
 	state.phase = msg.phase
 	state.timer = msg.timer
+	-- the landing was turned down (the bases were taken a moment ago): the player watches
+	local refused = state.screen == "landing" and state.landing ~= nil and state.landing.sent
 	if msg.you ~= 0 then
 		enterPlay(false)
-	elseif state.wantPlay then
+	elseif msg.choose then
+		enterLanding(msg.choose)
+	elseif state.wantPlay or refused then
 		enterPlay(true)
-	elseif state.screen == "play" then
+	elseif state.screen ~= "menu" then
 		goMenu()
 		UI.toast("Начался новый бой. Нажми «ИГРАТЬ», чтобы зайти в него.")
 	end
@@ -2926,7 +3417,15 @@ function handlers.nation(msg)
 	MapView.upsertNation(msg.n)
 	if msg.n.id == MapView.myId then
 		UI.setMyColor(msg.n.color)
+		UI.setCommander(msg.n.commander)
 	end
+	if state.screen == "landing" and state.landing and not state.landing.sent then
+		showChoice()
+	end
+end
+
+function handlers.points(msg)
+	MapView.setPoints(msg.s)
 end
 
 function handlers.stats(msg)
@@ -3274,7 +3773,7 @@ function handlers.bdone(msg)
 end
 
 function handlers.toast(msg)
-	if state.screen == "play" or state.wantPlay then
+	if state.screen ~= "menu" or state.wantPlay then
 		UI.toast(msg.text, msg.warn)
 	end
 end
@@ -3311,7 +3810,7 @@ end
 function handlers.nomatch()
 	MapView.clear()
 	state.phase = "none"
-	if state.screen == "play" then
+	if state.screen ~= "menu" then
 		goMenu()
 	end
 end
@@ -3599,7 +4098,8 @@ UI.onCommand = function(name)
 end
 
 -- keys: F attack-move, X stop, H hold, T landing party, Space to the base, Backspace drops the
--- selection, Ctrl + 1-9 remembers a group, 1-9 picks it (twice quickly: the camera goes there)
+-- selection, Ctrl + 1-9 remembers a group, 1-9 picks it (twice quickly: the camera goes there);
+-- Enter lands while choosing a base
 local DIGITS = {
 	[Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2, [Enum.KeyCode.Three] = 3,
 	[Enum.KeyCode.Four] = 4, [Enum.KeyCode.Five] = 5, [Enum.KeyCode.Six] = 6,
@@ -3650,10 +4150,14 @@ local function onKey(input: InputObject)
 end
 
 UserInputService.InputBegan:Connect(function(input, processed)
-	if processed or input.UserInputType ~= Enum.UserInputType.Keyboard or not canCommand() then
+	if processed or input.UserInputType ~= Enum.UserInputType.Keyboard then
 		return
 	end
-	safe("клавиша", onKey, input)
+	if state.screen == "landing" and input.KeyCode == Enum.KeyCode.Return then
+		safe("клавиша", land)
+	elseif canCommand() then
+		safe("клавиша", onKey, input)
+	end
 end)
 
 ---------------------------------------------------------------- per frame
@@ -3670,6 +4174,18 @@ end
 
 local hudAcc = 0
 local function frame(dt: number)
+	local l = state.landing
+	if state.screen == "landing" and l then
+		-- the map stays between the landing panels; the player lands when the time is up
+		MapView.setLandingArea(UI.landingArea())
+		if not l.sent then
+			local left = math.max(0, math.ceil(l.ends - os.clock()))
+			UI.setLandingCountdown(left, false)
+			if left == 0 then
+				land()
+			end
+		end
+	end
 	MapView.update(dt)
 	if state.phase == "game" or state.phase == "ended" then
 		state.timer -= dt
@@ -3723,7 +4239,7 @@ end
 RunService.RenderStepped:Connect(function(dt)
 	safe("кадр", frame, dt)
 end)
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000013"><Properties><string name="Name">Art</string><ProtectedString name="Source"><![CDATA[-- Image ids of the game pictures. The server finds them inside the uploaded decals and puts
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000014"><Properties><string name="Name">Art</string><ProtectedString name="Source"><![CDATA[-- Image ids of the game pictures. The server finds them inside the uploaded decals and puts
 -- them on ReplicatedStorage.TerraForgeArt as attributes, by name (see shared/MapArt).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -3751,7 +4267,7 @@ function Art.watch(name: string, fn: (string) -> ())
 end
 
 return Art
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000014"><Properties><string name="Name">Board</string><ProtectedString name="Source"><![CDATA[-- The board: the frame the battlefield is drawn on, and how tile positions map onto it.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000015"><Properties><string name="Name">Board</string><ProtectedString name="Source"><![CDATA[-- The board: the frame the battlefield is drawn on, and how tile positions map onto it.
 -- Everything on the board is placed in board-relative scale, so moving or zooming the camera
 -- only changes the board frame itself.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -3810,7 +4326,7 @@ function Board.ring(parent: Instance, color: Color3, thickness: number, z: numbe
 end
 
 return Board
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000015"><Properties><string name="Name">Camera</string><ProtectedString name="Source"><![CDATA[-- The camera over the board: where it looks (x, y in tiles) and how close (ppt = pixels per
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">Camera</string><ProtectedString name="Source"><![CDATA[-- The camera over the board: where it looks (x, y in tiles) and how close (ppt = pixels per
 -- tile). It moves by dragging, pinching, the wheel, keys and the screen edges, glides to points,
 -- and drifts slowly over the battle behind the menu.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -3824,6 +4340,10 @@ Camera.x, Camera.y, Camera.ppt = W / 2, H / 2, 24
 
 local view, board
 local glide = nil -- the camera moves smoothly to { x, y }
+
+-- while the player chooses where to land, the map fits between these screen heights (GUI
+-- coordinates): the bottom of the title and the top of the commander panel
+Camera.area = { top = -math.huge, bottom = math.huge }
 
 function Camera.viewSize(): Vector2
 	local s = view.AbsoluteSize
@@ -3848,6 +4368,13 @@ function Camera.onScreen(x: number, y: number, margin: number): boolean
 	return math.abs(x - Camera.x) <= hw + margin and math.abs(y - Camera.y) <= hh + margin
 end
 
+-- moves the board under the camera
+local function place()
+	local vs = Camera.viewSize()
+	board.Size = UDim2.fromOffset(W * Camera.ppt, H * Camera.ppt)
+	board.Position = UDim2.fromOffset(math.round(vs.X / 2 - Camera.x * Camera.ppt), math.round(vs.Y / 2 - Camera.y * Camera.ppt))
+end
+
 -- keeps the camera over the map and moves the board under it
 function Camera.apply()
 	local lo, hi = zoomLimits()
@@ -3856,9 +4383,7 @@ function Camera.apply()
 	local m = 3
 	Camera.x = if hw * 2 >= W + 2 * m then W / 2 else math.clamp(Camera.x, hw - m, W - hw + m)
 	Camera.y = if hh * 2 >= H + 2 * m then H / 2 else math.clamp(Camera.y, hh - m, H - hh + m)
-	local vs = Camera.viewSize()
-	board.Size = UDim2.fromOffset(W * Camera.ppt, H * Camera.ppt)
-	board.Position = UDim2.fromOffset(math.round(vs.X / 2 - Camera.x * Camera.ppt), math.round(vs.Y / 2 - Camera.y * Camera.ppt))
+	place()
 end
 
 -- tile coordinates under a screen point (GUI coordinates, as in InputObject.Position)
@@ -3959,14 +4484,26 @@ local function keyPan(dt: number, edges: boolean)
 	end
 end
 
--- "menu": the camera drifts slowly over the battle; "play": glides, keys and screen edges
--- (edges = false while something is dragged or the window is not focused)
+-- "menu": the camera drifts slowly over the battle; "landing": the whole map, still, while the
+-- player chooses a base; "play": glides, keys and screen edges (edges = false while something
+-- is dragged or the window is not focused)
 function Camera.update(dt: number, mode: string, edges: boolean)
 	if mode == "menu" then
 		local t = os.clock()
 		Camera.ppt = Camera.viewSize().Y / 22
 		Camera.x = W / 2 + math.sin(t * 0.045) * W * 0.3
 		Camera.y = H / 2 + math.sin(t * 0.031 + 1) * H * 0.25
+	elseif mode == "landing" then
+		-- the whole map, smaller than the usual limits allow so that the panels do not cover it
+		local vs = Camera.viewSize()
+		local o = view.AbsolutePosition
+		local top = math.clamp(Camera.area.top - o.Y, 0, vs.Y * 0.4)
+		local bottom = math.clamp(o.Y + vs.Y - Camera.area.bottom, 0, vs.Y * 0.4)
+		Camera.ppt = math.max(math.min(vs.X / (W + 4), (vs.Y - top - bottom) / (H + 2)), 1)
+		Camera.x, Camera.y = W / 2, H / 2 - (top - bottom) / 2 / Camera.ppt
+		glide = nil
+		place()
+		return
 	else
 		if glide then
 			local k = math.min(1, dt * 6)
@@ -3989,7 +4526,7 @@ function Camera.init(viewFrame: Frame, boardFrame: Frame)
 end
 
 return Camera
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">Drawn</string><ProtectedString name="Source"><![CDATA[-- Pictures drawn with interface shapes for the buildings and units that have no painted sprite
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000017"><Properties><string name="Name">Drawn</string><ProtectedString name="Source"><![CDATA[-- Pictures drawn with interface shapes for the buildings and units that have no painted sprite
 -- yet: the radar, the power plant, the repair station and the research centre; the engineer,
 -- the sniper, the MLRS, the AA vehicle, the bomber, the transport and the drone. A drawing
 -- fills its parent; it returns its holder and the parts the map animates, and can be
@@ -4225,7 +4762,7 @@ function Drawn.unit(kind: string, parent: Instance, color: Color3, shadow: boole
 end
 
 return Drawn
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000017"><Properties><string name="Name">Effects</string><ProtectedString name="Source"><![CDATA[-- Short-lived pictures on the battlefield: shots, rockets, explosions, smoke and dust, and marks
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000018"><Properties><string name="Name">Effects</string><ProtectedString name="Source"><![CDATA[-- Short-lived pictures on the battlefield: shots, rockets, explosions, smoke and dust, and marks
 -- left on the ground (scorch, track prints). Objects are reused from pools, and the number of
 -- running effects is capped so a big battle stays smooth.
 local Board = require(script.Parent.Board)
@@ -4547,7 +5084,7 @@ function Effects.clear()
 end
 
 return Effects
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000018"><Properties><string name="Name">Factory</string><ProtectedString name="Source"><![CDATA[-- The factory panel: a row per unit kind the factory makes («+1» orders one, «Авто» repeats
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000019"><Properties><string name="Name">Factory</string><ProtectedString name="Source"><![CDATA[-- The factory panel: a row per unit kind the factory makes («+1» orders one, «Авто» repeats
 -- it), the current order with its progress, the queue, «Отменить последний» and the rally
 -- point. Part of the interface; Ui puts it together.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -4777,7 +5314,7 @@ function Factory.hide()
 end
 
 return Factory
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000019"><Properties><string name="Name">Fog</string><ProtectedString name="Source"><![CDATA[-- Fog of war. The player sees around their units and buildings; ground they have seen before
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001A"><Properties><string name="Name">Fog</string><ProtectedString name="Source"><![CDATA[-- Fog of war. The player sees around their units, buildings and strategic points; ground they have seen before
 -- stays dimmed, ground never seen is dark. Enemy units show only where the player sees them;
 -- enemy buildings stay on the map once found. A finished radar shows enemy units around it on
 -- the minimap, and the first enemy to come into sight after a quiet while is announced.
@@ -4810,7 +5347,7 @@ Fog.onSpotted = nil -- (x, y): an enemy came into sight after a quiet while
 
 local vis = buffer.create(W * H) -- 1 where the player sees now
 local known = buffer.create(W * H) -- 1 where the player has seen
-local buildings, units = {}, {}
+local buildings, units, points = {}, {}, {}
 local myId = function(): number
 	return 0
 end
@@ -4936,6 +5473,11 @@ local function refresh()
 			end
 		end
 	end
+	for _, p in points do
+		if p.owner == me then
+			reveal(p.x, p.y, Config.POINT_VISION)
+		end
+	end
 	for _, c in cells do
 		setTarget(c, clearness(c.x, c.y, CELL))
 	end
@@ -4985,10 +5527,10 @@ end
 
 ---------------------------------------------------------------- setup and state
 
--- board: the battlefield frame; buildingRecords, unitRecords: the map's records (the tables
--- themselves, kept up to date by the map); mine() gives the player's base id
-function Fog.init(board: Frame, buildingRecords, unitRecords, mine: () -> number)
-	buildings, units, myId = buildingRecords, unitRecords, mine
+-- board: the battlefield frame; buildingRecords, unitRecords, pointRecords: the map's records
+-- (the tables themselves, kept up to date by the map); mine() gives the player's base id
+function Fog.init(board: Frame, buildingRecords, unitRecords, pointRecords, mine: () -> number)
+	buildings, units, points, myId = buildingRecords, unitRecords, pointRecords, mine
 	local layer = make("Frame", { Name = "Fog", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = Board.Z.fog, Parent = board })
 	for cy = 0, CH - 1 do
 		for cx = 0, CW - 1 do
@@ -5070,10 +5612,10 @@ function Fog.update(dt: number)
 end
 
 return Fog
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001A"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- The match screen: the player's card, metal, energy and army at the top, the leaderboard, the army
--- panel and the build bar at the bottom, zoom buttons, the minimap frame, building tips, the
--- banner (spectator, results, defeat) and big announcements. Part of the interface; Ui puts
--- it together.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001B"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- The match screen: the player's card with their commander, army, metal, energy and strategic
+-- points at the top, the leaderboard, the army panel and the build bar at the bottom, zoom
+-- buttons, the minimap frame, building tips, the banner (spectator, results, defeat) and big
+-- announcements. Part of the interface; Ui puts it together.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
@@ -5140,11 +5682,17 @@ function Hud.build(context, play: Instance)
 	-- top HUD
 	local hudTop = make("Frame", { Name = "HudTop", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Parent = play })
 	refs.hudTop = hudTop
-	local me = Theme.panel({ Position = UDim2.fromOffset(16, 12), Size = UDim2.fromOffset(236, 62), Parent = hudTop })
+	local me = Theme.panel({ Position = UDim2.fromOffset(16, 12), Size = UDim2.fromOffset(268, 62), Parent = hudTop })
 	refs.meAvatar = Widgets.avatar(0, 46, { Position = UDim2.fromOffset(8, 8), Parent = me })
 	Theme.corner(12).Parent = refs.meAvatar
 	refs.meStroke = make("UIStroke", { Color = Theme.hex(ctx.color), Thickness = 2, Parent = refs.meAvatar })
-	refs.meName = Theme.label({ Text = "", Position = UDim2.fromOffset(62, 7), Size = UDim2.new(1, -70, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.ExtraBold), TextTruncate = Enum.TextTruncate.AtEnd, Parent = me })
+	-- the commander's badge on the corner of the avatar
+	refs.meBadge = make("Frame", { Position = UDim2.fromOffset(38, 38), Size = UDim2.fromOffset(22, 22), BackgroundColor3 = Color3.fromRGB(9, 13, 20), Visible = false, ZIndex = 2, Parent = me }, {
+		Theme.corner(nil, 1),
+		Theme.stroke(C.molten, 1.5, 0.2),
+	})
+	refs.meBadgeIcon = icon("gear", 15, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 2, Parent = refs.meBadge })
+	refs.meName = Theme.label({ Text = "", RichText = true, Position = UDim2.fromOffset(62, 7), Size = UDim2.new(1, -70, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.ExtraBold), TextTruncate = Enum.TextTruncate.AtEnd, Parent = me })
 	refs.meStats = Theme.label({ Text = "", Position = UDim2.fromOffset(62, 27), Size = UDim2.new(1, -70, 0, 14), TextSize = 12, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), Parent = me })
 	local army = make("Frame", { Position = UDim2.fromOffset(62, 42), Size = UDim2.new(1, -70, 0, 16), BackgroundTransparency = 1, Parent = me }, {
 		Theme.list(Enum.FillDirection.Horizontal, 3, nil, Enum.VerticalAlignment.Center),
@@ -5170,6 +5718,7 @@ function Hud.build(context, play: Instance)
 		pop = Widgets.resChip(res, "pop", 1, ctx.color),
 		metal = Widgets.resChip(res, "metal", 2, ctx.color),
 		energy = Widgets.resChip(res, "energy", 3, ctx.color),
+		points = Widgets.resChip(res, "flag", 4, ctx.color),
 	}
 
 	local right = make("Frame", {
@@ -5487,6 +6036,9 @@ function Hud.setMyColor(hex: string)
 	ctx.color = hex
 	refs.meStroke.Color = Theme.hex(hex)
 	Sprites.apply(refs.res.pop.icon, "pop", hex)
+	if refs.meCommander then
+		Sprites.apply(refs.meBadgeIcon, Config.COMMANDERS[refs.meCommander].icon, hex)
+	end
 	if refs.baseIcon then
 		Sprites.apply(refs.baseIcon, "castle", hex)
 	end
@@ -5567,6 +6119,11 @@ function Hud.setEconomy(eco)
 	refs.res.energy.value.TextColor3 = if short then C.bad else C.ink
 	refs.res.energy.rate.Text = if short then "мало энергии" else "энергия"
 	refs.res.energy.rate.TextColor3 = if short then C.bad else C.muted
+	-- strategic points: held / all; red while some of them are cut off from the base
+	local held, supplied = eco.points or 0, eco.supplied or 0
+	refs.res.points.value.Text = string.format("%d/%d", held, #Config.POINTS)
+	refs.res.points.rate.Text = if held > supplied then string.format("%d без снабжения", held - supplied) else "точки"
+	refs.res.points.rate.TextColor3 = if held > supplied then C.bad else C.muted
 	for g, group in GROUPS do
 		local total = 0
 		for _, kind in group.kinds do
@@ -5584,6 +6141,19 @@ end
 
 function Hud.setMe(text: string)
 	refs.meStats.Text = text
+end
+
+-- the player's commander: a badge on the avatar and its name after the player's
+function Hud.setCommander(id: string?)
+	local c = if id then Config.COMMANDERS[id] else nil
+	local name = string.gsub(refs.meDisplayName or "", "[&<>]", { ["&"] = "&amp;", ["<"] = "&lt;", [">"] = "&gt;" })
+	refs.meBadge.Visible = c ~= nil
+	if c then
+		Sprites.apply(refs.meBadgeIcon, c.icon, ctx.color)
+		name ..= ' <font size="12" color="#ffd27e">· ' .. c.name .. "</font>"
+	end
+	refs.meName.Text = name
+	refs.meCommander = id
 end
 
 -- rows: list of { place, name, color, value (text), isMe }
@@ -5679,7 +6249,7 @@ function Hud.showTip(k: string?)
 end
 
 return Hud
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001B"><Properties><string name="Name">Input</string><ProtectedString name="Source"><![CDATA[-- Pointer input on the battlefield. Mouse: left click selects and commands, left drag draws a
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001C"><Properties><string name="Name">Input</string><ProtectedString name="Source"><![CDATA[-- Pointer input on the battlefield. Mouse: left click selects and commands, left drag draws a
 -- selection box, right click commands, right or middle drag and the wheel move the camera.
 -- Touch: tap, drag to move the camera (or draw a box when armed), pinch to zoom.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -5891,11 +6461,197 @@ function Input.init(viewFrame: Frame, handlers)
 end
 
 return Input
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001C"><Properties><string name="Name">MapView</string><ProtectedString name="Source"><![CDATA[-- The battlefield seen from above, in 2D: the painted map, buildings and units as sprites with
--- their animations, shots, and what is under a tap. Positions are in tiles; see Board. The
--- camera, minimap, pointer input, build mode and fog of war are in Camera, Minimap, Input,
--- Placement and Fog; shots and explosions are drawn by Effects, and the buildings and units
--- without a painted sprite by Drawn.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001D"><Properties><string name="Name">Landing</string><ProtectedString name="Source"><![CDATA[-- The landing screen: when the player joins a match they have a few seconds to tap a free base
+-- on the map and to choose a commander. A title with the countdown at the top, the commanders
+-- and «ВЫСАДИТЬСЯ» at the bottom; the map shows between them. Part of the interface; Ui puts
+-- it together.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("TerraForge")
+local Config = require(Shared.Config)
+local Sfx = require(script.Parent.Sfx)
+local Theme = require(script.Parent.Theme)
+local Widgets = require(script.Parent.Widgets)
+
+local make = Theme.make
+local C = Theme.C
+local font = Theme.font
+
+local Landing = {}
+
+-- ctx: { UI = the interface, refs = shared widget references, color = the player's team colour }
+local ctx, refs
+local cards = {} -- commander id -> { button, stroke }
+
+local PICKED = Color3.fromRGB(70, 42, 18)
+
+function Landing.build(context, root: Instance)
+	ctx, refs = context, context.refs
+	local UI = ctx.UI
+	local screen = make("Frame", { Name = "Landing", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = 15, Parent = root })
+
+	-- the title and the countdown
+	local top = Theme.panel({
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 10),
+		Size = UDim2.fromOffset(560, 64),
+		BackgroundColor3 = Color3.fromRGB(16, 21, 34),
+		BackgroundTransparency = 0.04,
+		Parent = screen,
+	})
+	Theme.pad(18, 10).Parent = top
+	Theme.label({ Text = "ВЫБЕРИ ТОЧКУ ВЫСАДКИ", Size = UDim2.new(1, -64, 0, 24), TextSize = 21, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, Parent = top })
+	refs.landSub = Theme.label({
+		Text = "",
+		Position = UDim2.fromOffset(0, 26),
+		Size = UDim2.new(1, -64, 0, 18),
+		TextSize = 14,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextColor3 = Color3.fromRGB(214, 222, 235),
+		FontFace = font(Enum.FontWeight.SemiBold),
+		Parent = top,
+	})
+	refs.landCount = make("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.fromScale(1, 0.5),
+		Size = UDim2.fromOffset(56, 44),
+		BackgroundTransparency = 1,
+		Text = "",
+		TextScaled = true,
+		TextColor3 = Color3.new(1, 1, 1),
+		FontFace = font(Enum.FontWeight.Heavy),
+		Parent = top,
+	}, { Theme.molten(90) })
+	refs.landTop = top
+
+	-- the commanders, «ВЫСАДИТЬСЯ» and the way back
+	local bottom = Theme.panel({
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -10),
+		Size = UDim2.new(1, -32, 0, 128),
+		BackgroundColor3 = Color3.fromRGB(16, 21, 34),
+		BackgroundTransparency = 0.04,
+		Parent = screen,
+	})
+	make("UISizeConstraint", { MaxSize = Vector2.new(1000, 128) }).Parent = bottom
+	Theme.pad(10, 8).Parent = bottom
+	Theme.label({ Text = "КОМАНДИР", Size = UDim2.new(1, -190, 0, 14), TextSize = 12, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.muted, Parent = bottom })
+	local list = make("ScrollingFrame", {
+		Position = UDim2.fromOffset(0, 18),
+		Size = UDim2.new(1, -190, 0, 94),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollingDirection = Enum.ScrollingDirection.X,
+		AutomaticCanvasSize = Enum.AutomaticSize.X,
+		CanvasSize = UDim2.fromOffset(0, 0),
+		ScrollBarThickness = 3,
+		Parent = bottom,
+	}, { Theme.list(Enum.FillDirection.Horizontal, 8) })
+	for i, id in Config.COMMANDER_ORDER do
+		local c = Config.COMMANDERS[id]
+		local b = make("TextButton", {
+			Text = "",
+			AutoButtonColor = true,
+			Size = UDim2.fromOffset(144, 88),
+			BackgroundColor3 = C.panelHi,
+			LayoutOrder = i,
+			Parent = list,
+		}, { Theme.corner(12), Theme.pad(8, 6) })
+		local stroke = make("UIStroke", { Color = C.molten, Thickness = 2, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = b })
+		Widgets.icon(c.icon, 22, { color = ctx.color, Parent = b })
+		Theme.label({ Text = c.name, Position = UDim2.fromOffset(28, 2), Size = UDim2.new(1, -28, 0, 18), TextScaled = true, FontFace = font(Enum.FontWeight.Heavy), Parent = b }, {
+			make("UITextSizeConstraint", { MaxTextSize = 14 }),
+		})
+		-- the description shrinks to fit the card
+		Theme.label({
+			Text = c.desc,
+			Position = UDim2.fromOffset(0, 26),
+			Size = UDim2.new(1, 0, 1, -26),
+			TextScaled = true,
+			TextWrapped = true,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextColor3 = Color3.fromRGB(198, 207, 221),
+			FontFace = font(Enum.FontWeight.SemiBold),
+			Parent = b,
+		}, { make("UITextSizeConstraint", { MaxTextSize = 12 }) })
+		b.Activated:Connect(function()
+			Sfx.play("click")
+			if UI.onLandingCommander then
+				UI.onLandingCommander(id)
+			end
+		end)
+		cards[id] = { button = b, stroke = stroke }
+	end
+	local go = Widgets.moltenButton("ВЫСАДИТЬСЯ", bottom, function()
+		if UI.onLand then
+			UI.onLand()
+		end
+	end)
+	go.AnchorPoint = Vector2.new(1, 0)
+	go.Position = UDim2.new(1, 0, 0, 18)
+	go.Size = UDim2.fromOffset(180, 56)
+	refs.landGo = go
+	local back = make("TextButton", {
+		Text = "Назад в меню",
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.fromScale(1, 1),
+		Size = UDim2.fromOffset(180, 32),
+		AutoButtonColor = true,
+		FontFace = font(Enum.FontWeight.Bold),
+		TextSize = 13,
+		TextColor3 = C.ink,
+		BackgroundColor3 = C.panelHi,
+		Parent = bottom,
+	}, { Theme.corner(10) })
+	back.Activated:Connect(function()
+		Sfx.play("click")
+		if UI.onLeave then
+			UI.onLeave()
+		end
+	end)
+	refs.landBack = back
+	refs.landBottom = bottom
+	refs.landing = screen
+end
+
+-- what is chosen: base = its name (nil while none), commander = commander id
+function Landing.setChoice(base: string?, commander: string)
+	for id, card in cards do
+		local on = id == commander
+		card.stroke.Transparency = if on then 0 else 1
+		card.button.BackgroundColor3 = if on then PICKED else C.panelHi
+	end
+	refs.landSub.Text = if base
+		then string.format("База: %s · командир: %s", base, Config.COMMANDERS[commander].name)
+		else "Нажми на свободную базу на карте"
+end
+
+-- seconds left; waiting = the choice has been sent and the server is seating the player
+function Landing.setCountdown(seconds: number, waiting: boolean)
+	refs.landCount.Text = if waiting then "…" else tostring(seconds)
+end
+
+-- the screen heights between which the map stays in sight (GUI coordinates)
+function Landing.area(): (number, number)
+	local top, bottom = refs.landTop, refs.landBottom
+	return top.AbsolutePosition.Y + top.AbsoluteSize.Y + 8, bottom.AbsolutePosition.Y - 8
+end
+
+function Landing.show()
+	refs.landing.Visible = true
+end
+
+function Landing.hide()
+	refs.landing.Visible = false
+end
+
+return Landing
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001E"><Properties><string name="Name">MapView</string><ProtectedString name="Source"><![CDATA[-- The battlefield seen from above, in 2D: the painted map, buildings and units as sprites with
+-- their animations, shots, what is under a tap, and the free bases while the player chooses
+-- where to land. Positions are in tiles; see Board. The camera, minimap, pointer input, build
+-- mode, fog of war and strategic points are in Camera, Minimap, Input, Placement, Fog and
+-- Strategic; shots and explosions are drawn by Effects, and the buildings and units without a
+-- painted sprite by Drawn.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
@@ -5912,6 +6668,7 @@ local Minimap = require(script.Parent.Minimap)
 local Placement = require(script.Parent.Placement)
 local Sfx = require(script.Parent.Sfx)
 local Sprites = require(script.Parent.Sprites)
+local Strategic = require(script.Parent.Strategic)
 local Theme = require(script.Parent.Theme)
 
 local W = Map.W
@@ -6022,6 +6779,66 @@ function MapView.setPowered(on: boolean)
 	Fog.powered = on
 end
 
+-- the strategic points' state, as the server sends it
+function MapView.setPoints(state)
+	Strategic.setState(state)
+end
+
+---------------------------------------------------------------- choosing where to land
+
+local landing = {} -- seat id -> marker on a free base
+
+local function clearLanding()
+	for _, m in landing do
+		m:Destroy()
+	end
+	table.clear(landing)
+end
+
+-- marks the free bases the player can land at; tapping one calls onPick(seat id)
+function MapView.setLanding(seats: { number }, selected: number?, onPick: (number) -> ())
+	clearLanding()
+	for _, id in seats do
+		local n = MapView.nations[id]
+		if n and n.cap then
+			local chosen = id == selected
+			local color = if chosen then Color3.fromRGB(120, 255, 150) else Color3.new(1, 1, 1)
+			local b = make("TextButton", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = at(n.cap.x + 0.5, n.cap.y + 0.5),
+				Size = span(14, 14),
+				BackgroundColor3 = color,
+				BackgroundTransparency = if chosen then 0.7 else 0.85,
+				Text = "",
+				AutoButtonColor = false,
+				ZIndex = Z.top,
+				Parent = board,
+			}, { Theme.corner(nil, 1), make("UIStroke", { Color = color, Thickness = if chosen then 4 else 2.5 }) })
+			make("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.fromScale(0.5, 1.02),
+				Size = UDim2.fromScale(1.4, 0.2),
+				BackgroundTransparency = 1,
+				Text = if chosen then "ТВОЯ БАЗА" else "СВОБОДНО",
+				TextScaled = true,
+				TextColor3 = color,
+				FontFace = Theme.font(Enum.FontWeight.Heavy),
+				ZIndex = Z.top,
+				Parent = b,
+			}, { make("UIStroke", { Color = Color3.fromRGB(8, 10, 14), Thickness = 2 }) })
+			b.Activated:Connect(function()
+				onPick(id)
+			end)
+			landing[id] = b
+		end
+	end
+end
+
+-- the map fits between these screen heights while the player chooses (GUI coordinates)
+function MapView.setLandingArea(top: number, bottom: number)
+	Camera.area.top, Camera.area.bottom = top, bottom
+end
+
 ---------------------------------------------------------------- sprites
 
 -- a sprite and its team-colour layer, centred in parent, rotated together by the caller
@@ -6119,8 +6936,12 @@ function MapView.upsertNation(info)
 	n.userId = info.userId or 0
 	n.alive = info.alive ~= false
 	n.cap = if info.cap then { x = info.cap[1], y = info.cap[2] } else nil
+	n.commander = info.commander
 	MapView.nations[info.id] = n
 	updateLabel(n)
+	if not MapView.loading then
+		Strategic.refresh()
+	end
 	if recolor then
 		for _, rec in buildings do
 			if rec.owner == n.id then
@@ -6871,8 +7692,11 @@ function MapView.init(playerGui: PlayerGui)
 	local function mine(): number
 		return MapView.myId
 	end
-	Placement.init(board, buildings, mine)
-	Fog.init(board, buildings, units, mine)
+	Strategic.init(board, function(owner: number): Color3?
+		return if owner ~= 0 then teamColor(owner) else nil
+	end, mine, MapView.myBase)
+	Placement.init(board, buildings, Strategic.records(), mine)
+	Fog.init(board, buildings, units, Strategic.records(), mine)
 	Fog.onSpotted = function(x: number, y: number)
 		if MapView.onSpotted then
 			MapView.onSpotted(x, y)
@@ -6924,6 +7748,8 @@ function MapView.clear()
 	table.clear(units)
 	table.clear(labels)
 	Placement.clear()
+	Strategic.clear()
+	clearLanding()
 	table.clear(MapView.selected)
 	MapView.nations = {}
 	MapView.myId = 0
@@ -6943,18 +7769,23 @@ function MapView.load(s)
 	for _, u in s.units do
 		MapView.addUnit(u)
 	end
+	Strategic.load(s.points, s.pstate)
 	MapView.loading = false
 	Fog.reset()
 end
 
 function MapView.setPhase(_phase: string) end
 
--- "menu": the battle drifts slowly behind the menu; "play": the player moves the camera
+-- "menu": the battle drifts slowly behind the menu; "landing": the whole map while the player
+-- chooses a base; "play": the player moves the camera
 function MapView.setMode(m: string)
 	mode = m
 	Input.active = m == "play"
 	Input.reset()
 	Fog.enable(m == "play" and not MapView.spectator)
+	if m ~= "landing" then
+		clearLanding()
+	end
 	if m == "play" then
 		Camera.playZoom()
 	else
@@ -6970,12 +7801,13 @@ function MapView.update(dt: number)
 	updateUnits(dt)
 	updateWork(dt)
 	Placement.update()
+	Strategic.update()
 	Fog.update(dt)
 	Effects.update()
 	miniAcc += dt
 	if miniAcc >= 0.25 then
 		miniAcc = 0
-		Minimap.update(buildings, units, teamColor, Fog.showsBuilding, Fog.showsOnMinimap)
+		Minimap.update(buildings, units, Strategic.records(), teamColor, Fog.showsBuilding, Fog.showsOnMinimap)
 		-- the name over an enemy command centre shows once the base has been found
 		for id, tag in labels do
 			local n = MapView.nations[id]
@@ -6985,7 +7817,7 @@ function MapView.update(dt: number)
 end
 
 return MapView
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001D"><Properties><string name="Name">Menu</string><ProtectedString name="Source"><![CDATA[-- The main menu (player chip, logo, side cards, modes and the play button) and the arsenal
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001F"><Properties><string name="Name">Menu</string><ProtectedString name="Source"><![CDATA[-- The main menu (player chip, logo, side cards, modes and the play button) and the arsenal
 -- sheet with every unit kind. Part of the interface; Ui puts it together.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -7017,7 +7849,7 @@ function Menu.build(context, root: Instance, player: Player): Frame
 		Parent = menu,
 	}, { Theme.list(Enum.FillDirection.Horizontal, 8, nil, Enum.VerticalAlignment.Center) })
 	iconButton("help", topLeft, function()
-		UI.toast("Экстракторы на светящихся месторождениях дают металл, электростанции — энергию для заводов и башен. Построй казарму и завод, нажми на завод и заказывай войска. Армия ограничена: сверху видно, сколько мест занято. Инженеры чинят постройки, ремонтная станция — войска. Выбери войска (нажми на них или протяни рамку) и нажми на карту или на врага. Компьютер: ЛКМ — выбор, протяни ЛКМ — рамка, ПКМ — приказ, F — атака с ходу, X — стоп, H — держать, T — десант (транспорт с пехотой), Ctrl+1–9 — запомнить группу, 1–9 — выбрать её, WASD или край экрана — камера, пробел — к базе.", false, 14)
+		UI.toast("Выбери свободную базу и командира — у каждого свой бонус. Экстракторы на светящихся месторождениях дают металл, электростанции — энергию. Построй казарму и завод, нажми на завод и заказывай войска. Захватывай стратегические точки войсками: точки, связанные с базой цепочкой твоих точек, снабжены — дают металл, рядом с ними можно строить. Инженеры чинят постройки, ремонтная станция — войска. Компьютер: ЛКМ — выбор, протяни ЛКМ — рамка, ПКМ — приказ, F — атака с ходу, X — стоп, H — держать, T — десант, Ctrl+1–9 — запомнить группу, 1–9 — выбрать её, WASD или край экрана — камера, пробел — к базе.", false, 16)
 	end)
 	iconButton("shield", topLeft, function()
 		Menu.openArsenal()
@@ -7141,7 +7973,12 @@ function Menu.build(context, root: Instance, player: Player): Frame
 		Parent = refs.side,
 	}, { Theme.corner(16), Theme.stroke(), Theme.pad(14, 12), Theme.list(Enum.FillDirection.Vertical, 6) })
 	Theme.label({ Text = "КАК ИГРАТЬ", Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 0, Parent = how })
-	for i, s in { "Ставь экстракторы на светящиеся месторождения — это металл", "Строй электростанции, казарму, завод бронетехники и аэродром", "Нажми на завод и заказывай войска", "Выбери войска и нажми на карту. Разрушь командные центры врагов" } do
+	for i, s in {
+		"Выбери свободную базу и командира",
+		"Ставь экстракторы на месторождения, строй электростанции и заводы",
+		"Захватывай точки: они дают металл и место для стройки",
+		"Выбери войска и нажми на карту. Разрушь командные центры врагов",
+	} do
 		local line = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = i, Parent = how }, {
 			Theme.list(Enum.FillDirection.Horizontal, 8),
 		})
@@ -7335,8 +8172,9 @@ function Menu.setLobby(info)
 end
 
 return Menu
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001E"><Properties><string name="Name">Minimap</string><ProtectedString name="Source"><![CDATA[-- The minimap: the whole battlefield in a corner, with a dot for every building and unit and a
--- frame for what the camera sees. Tap or drag on it to move the camera there.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Minimap</string><ProtectedString name="Source"><![CDATA[-- The minimap: the whole battlefield in a corner, with a dot for every building, unit and
+-- strategic point and a frame for what the camera sees. Tap or drag on it to move the camera
+-- there.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local Map = require(ReplicatedStorage:WaitForChild("TerraForge").Map)
@@ -7403,14 +8241,18 @@ local function dot(x: number, y: number, s: number, color: Color3)
 	d.Visible = true
 end
 
--- buildings and units: the map's records; colorOf(owner) gives a team's colour;
--- buildingShows / unitShows tell which ones the player may see
-function Minimap.update(buildings, units, colorOf: (number) -> Color3, buildingShows: (any) -> boolean, unitShows: (any) -> boolean)
+-- buildings, units and strategic points: the map's records; colorOf(owner) gives a team's
+-- colour; buildingShows / unitShows tell which ones the player may see
+function Minimap.update(buildings, units, points, colorOf: (number) -> Color3, buildingShows: (any) -> boolean, unitShows: (any) -> boolean)
 	if not mini or not mini.holder.Visible then
 		return
 	end
 	mini.used = 0
 	local px = mini.holder.AbsoluteSize.X / W
+	-- points: bigger squares, light grey while nobody holds them
+	for _, p in points do
+		dot(p.x, p.y, 6, if p.owner ~= 0 then colorOf(p.owner) else Color3.fromRGB(214, 220, 228))
+	end
 	for _, b in buildings do
 		if buildingShows(b) then
 			dot(b.cx, b.cy, math.max(3, b.size * px), colorOf(b.owner))
@@ -7430,7 +8272,7 @@ function Minimap.update(buildings, units, colorOf: (number) -> Color3, buildingS
 end
 
 return Minimap
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001F"><Properties><string name="Name">Music</string><ProtectedString name="Source"><![CDATA[-- Background music: a calm playlist in the menu and a battle playlist during a match, one
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Music</string><ProtectedString name="Source"><![CDATA[-- Background music: a calm playlist in the menu and a battle playlist during a match, one
 -- track after another in shuffled order, fading between them. In battle it plays quieter so
 -- the shots and explosions come through. The player can switch it off.
 -- The tracks are Roblox-licensed music from the Creator Store, free to use in any Roblox
@@ -7533,9 +8375,10 @@ function Music.setOn(on: boolean)
 end
 
 return Music
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Placement</string><ProtectedString name="Source"><![CDATA[-- Build mode on the map: the server's placement rules, an outline of the chosen building under
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Placement</string><ProtectedString name="Source"><![CDATA[-- Build mode on the map: the server's placement rules, an outline of the chosen building under
 -- the pointer (green if it fits, red if not), and helpers that show where it can go: rings
--- around the free pools for extractors, the base zones for the rest.
+-- around the free pools for extractors, the zones around the base and its supplied strategic
+-- points for the rest.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -7553,6 +8396,7 @@ Placement.kind = nil :: string? -- the building chosen in the build bar
 
 local board, ghost
 local buildings = {} -- the map's building records
+local points = {} -- the strategic point records
 local myId = function(): number
 	return 0
 end
@@ -7571,11 +8415,17 @@ local function areaFree(x: number, y: number, size: number): boolean
 	return true
 end
 
+-- near one of the player's buildings, or one of their supplied points
 local function nearMyBase(cx: number, cy: number): boolean
 	local r2 = Config.BUILD_RADIUS * Config.BUILD_RADIUS
 	local me = myId()
 	for _, b in buildings do
 		if b.owner == me and (b.cx - cx) ^ 2 + (b.cy - cy) ^ 2 <= r2 then
+			return true
+		end
+	end
+	for _, p in points do
+		if p.owner == me and p.supplied and (p.x - cx) ^ 2 + (p.y - cy) ^ 2 <= r2 then
 			return true
 		end
 	end
@@ -7620,8 +8470,13 @@ function Placement.placeFor(kind: string, x: number, y: number): (number?, numbe
 			end
 		end
 	end
+	for _, p in points do
+		if (p.x - bx - size / 2) ^ 2 + (p.y - by - size / 2) ^ 2 < (Config.POINT_KEEP + size / 2) ^ 2 then
+			return nil, nil, "Тут стратегическая точка: строй рядом, а не на ней."
+		end
+	end
 	if not nearMyBase(bx + size / 2, by + size / 2) then
-		return nil, nil, "Строить можно только рядом со своей базой."
+		return nil, nil, "Строить можно только рядом со своей базой или снабжённой точкой."
 	end
 	return bx, by, nil
 end
@@ -7649,21 +8504,31 @@ function Placement.refresh()
 			end
 		end
 	else
+		-- the zones around the player's buildings and supplied points
 		local r = Config.BUILD_RADIUS
 		local me = myId()
+		local centres = {}
 		for _, b in buildings do
 			if b.owner == me then
-				local f = make("Frame", {
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					Position = at(b.cx, b.cy),
-					Size = span(2 * r, 2 * r),
-					BackgroundColor3 = Color3.new(1, 1, 1),
-					BackgroundTransparency = 0.95,
-					ZIndex = Z.mark,
-					Parent = board,
-				}, { Theme.corner(nil, 1), make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1.5, Transparency = 0.55 }) })
-				table.insert(helpers, { frame = f })
+				table.insert(centres, { b.cx, b.cy })
 			end
+		end
+		for _, p in points do
+			if p.owner == me and p.supplied then
+				table.insert(centres, { p.x, p.y })
+			end
+		end
+		for _, c in centres do
+			local f = make("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = at(c[1], c[2]),
+				Size = span(2 * r, 2 * r),
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BackgroundTransparency = 0.95,
+				ZIndex = Z.mark,
+				Parent = board,
+			}, { Theme.corner(nil, 1), make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1.5, Transparency = 0.55 }) })
+			table.insert(helpers, { frame = f })
 		end
 	end
 end
@@ -7710,17 +8575,17 @@ function Placement.update()
 	end
 end
 
--- records: the map's building records (the table itself, kept up to date by the map);
--- mine() gives the player's base id
-function Placement.init(boardFrame: Frame, records, mine: () -> number)
-	board, buildings, myId = boardFrame, records, mine
+-- records, pointRecords: the map's building and strategic point records (the tables themselves,
+-- kept up to date by the map); mine() gives the player's base id
+function Placement.init(boardFrame: Frame, records, pointRecords, mine: () -> number)
+	board, buildings, points, myId = boardFrame, records, pointRecords, mine
 	ghost = make("Frame", { BackgroundTransparency = 0.7, Visible = false, ZIndex = Z.top, Parent = board }, {
 		make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2 }),
 	})
 end
 
 return Placement
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Research</string><ProtectedString name="Source"><![CDATA[-- The research panel of a research centre: every technology with what it does and its price,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Research</string><ProtectedString name="Source"><![CDATA[-- The research panel of a research centre: every technology with what it does and its price,
 -- the one being studied with its progress, and a button to stop it (the metal comes back).
 -- Part of the interface; Ui puts it together.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7914,7 +8779,7 @@ function Research.hide()
 end
 
 return Research
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Sfx</string><ProtectedString name="Source"><![CDATA[-- Sound effects. All clips are cut from one audio asset (shared/SoundData) with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">Sfx</string><ProtectedString name="Source"><![CDATA[-- Sound effects. All clips are cut from one audio asset (shared/SoundData) with
 -- Sound.PlaybackRegion. Battle sounds get quieter away from the middle of the screen and are
 -- skipped when far off screen, when the same clip just played, or when many are playing.
 local ContentProvider = game:GetService("ContentProvider")
@@ -8010,7 +8875,7 @@ function Sfx.at(name: string, x: number, y: number)
 end
 
 return Sfx
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Unit and building pictures come from one sprite sheet (atlas) plus a matching sheet with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000025"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Unit and building pictures come from one sprite sheet (atlas) plus a matching sheet with
 -- the team-coloured parts in grey, which is tinted with ImageColor3. One pair of images
 -- serves every team. Other icons are text symbols.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8157,7 +9022,241 @@ function Sprites.setTransparency(label: GuiObject, value: number)
 end
 
 return Sprites
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Colours, fonts and small helpers for building UI in code.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000026"><Properties><string name="Name">Strategic</string><ProtectedString name="Source"><![CDATA[-- Strategic points on the board: a ring around each point in its owner's colour (light grey
+-- while nobody holds it), a diamond in the middle, its name (hidden when the map is zoomed far
+-- out), a bar while someone is taking it, and the player's supply lines: from the command
+-- centre along the points that are supplied. The server decides everything; this only draws
+-- what it sends.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("TerraForge")
+local Config = require(Shared.Config)
+local Map = require(Shared.Map)
+local Board = require(script.Parent.Board)
+local Theme = require(script.Parent.Theme)
+
+local make = Theme.make
+local Z = Board.Z
+local at, span = Board.at, Board.span
+
+local Strategic = {}
+
+local NEUTRAL = Color3.fromRGB(214, 220, 228)
+local CONTESTED = Color3.fromRGB(255, 150, 60)
+local R = Config.POINT_RADIUS
+
+local board
+local colorOf: (number) -> Color3? = function()
+	return nil
+end
+local myId: () -> number = function()
+	return 0
+end
+local myBase: () -> (number?, number?) = function()
+	return nil, nil
+end
+
+local points = {} -- id -> record
+local lines = {} -- supply line frames
+local namesShown = true -- the names hide when the map is too small to read them
+
+-- the point records: { id, name, x, y, owner, cap, k, contested, supplied, link }
+function Strategic.records()
+	return points
+end
+
+local function makePoint(info)
+	local p = {
+		id = info.id,
+		name = info.name,
+		x = info.x,
+		y = info.y,
+		owner = 0,
+		cap = 0,
+		k = 0,
+		contested = false,
+		supplied = false,
+		link = -1,
+	}
+	p.frame = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = at(p.x, p.y),
+		Size = span(2 * R, 2 * R),
+		BackgroundColor3 = NEUTRAL,
+		BackgroundTransparency = 0.9,
+		ZIndex = Z.mark,
+		Parent = board,
+	}, { Theme.corner(nil, 1) })
+	p.stroke = make("UIStroke", { Color = NEUTRAL, Thickness = 2.5, Transparency = 0.15, Parent = p.frame })
+	p.mark = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.22, 0.22),
+		Rotation = 45,
+		BackgroundColor3 = NEUTRAL,
+		ZIndex = Z.mark,
+		Parent = p.frame,
+	}, { make("UIStroke", { Color = Color3.fromRGB(20, 24, 30), Thickness = 1.5 }) })
+	p.label = make("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = at(p.x, p.y - R - 0.2),
+		Size = span(16, 1.2),
+		BackgroundTransparency = 1,
+		Visible = namesShown,
+		Text = p.name,
+		TextScaled = true,
+		TextColor3 = NEUTRAL,
+		FontFace = Theme.font(Enum.FontWeight.Heavy),
+		ZIndex = Z.label,
+		Parent = board,
+	}, {
+		make("UITextSizeConstraint", { MinTextSize = 8, MaxTextSize = 15 }),
+		make("UIStroke", { Color = Color3.fromRGB(8, 10, 14), Thickness = 2, Transparency = 0.1 }),
+	})
+	p.bar = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = at(p.x, p.y + R + 0.3),
+		Size = span(4, 0.45),
+		BackgroundColor3 = Color3.fromRGB(14, 17, 22),
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = Z.label,
+		Parent = board,
+	})
+	p.fill = make("Frame", { Size = UDim2.fromScale(0, 1), BorderSizePixel = 0, ZIndex = Z.label, Parent = p.bar })
+	points[p.id] = p
+	return p
+end
+
+local function refreshPoint(p)
+	local color = colorOf(p.owner) or NEUTRAL
+	p.frame.BackgroundColor3 = color
+	p.mark.BackgroundColor3 = color
+	p.stroke.Color = if p.contested then CONTESTED else color
+	p.label.TextColor3 = color:Lerp(Color3.new(1, 1, 1), 0.3)
+	p.bar.Visible = p.cap ~= 0
+	if p.cap ~= 0 then
+		p.fill.Size = UDim2.fromScale(math.clamp(p.k, 0, 1), 1)
+		p.fill.BackgroundColor3 = colorOf(p.cap) or NEUTRAL
+	end
+end
+
+-- a straight line on the board between two points, in tiles
+local function line(x1: number, y1: number, x2: number, y2: number, color: Color3)
+	local dx, dy = x2 - x1, y2 - y1
+	local len = math.sqrt(dx * dx + dy * dy)
+	return make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = at((x1 + x2) / 2, (y1 + y2) / 2),
+		Size = span(len, 0.28),
+		Rotation = math.deg(math.atan2(dy, dx)),
+		BackgroundColor3 = color,
+		BackgroundTransparency = 0.35,
+		BorderSizePixel = 0,
+		ZIndex = Z.mark,
+		Parent = board,
+	})
+end
+
+-- the player's supply lines: each supplied point is linked to the node that supplies it
+local function refreshLines()
+	for _, l in lines do
+		l:Destroy()
+	end
+	table.clear(lines)
+	local me = myId()
+	local color = colorOf(me)
+	local bx, by = myBase()
+	if not color then
+		return
+	end
+	for _, p in points do
+		if p.owner == me and p.supplied then
+			local from = if p.link == 0 then nil else points[p.link]
+			local fx, fy = if from then from.x else bx, if from then from.y else by
+			if fx and fy then
+				table.insert(lines, line(fx, fy, p.x, p.y, color))
+			end
+		end
+	end
+end
+
+-- s = flat: id, owner, capturer, progress 0..100, flags (1 contested, 2 supplied), link
+function Strategic.setState(s)
+	for i = 1, #s - 5, 6 do
+		local p = points[s[i]]
+		if p then
+			p.owner = s[i + 1]
+			p.cap = s[i + 2]
+			p.k = s[i + 3] / 100
+			p.contested = s[i + 4] % 2 == 1
+			p.supplied = s[i + 4] // 2 % 2 == 1
+			p.link = s[i + 5]
+			refreshPoint(p)
+		end
+	end
+	refreshLines()
+end
+
+-- the points of a match: list of { id, name, x, y }, and their state
+function Strategic.load(list, state)
+	Strategic.clear()
+	for _, info in list or {} do
+		refreshPoint(makePoint(info))
+	end
+	if state then
+		Strategic.setState(state)
+	end
+end
+
+-- colours and the player's base changed (a nation joined or changed hands)
+function Strategic.refresh()
+	for _, p in points do
+		refreshPoint(p)
+	end
+	refreshLines()
+end
+
+function Strategic.clear()
+	for _, p in points do
+		p.frame:Destroy()
+		p.label:Destroy()
+		p.bar:Destroy()
+	end
+	table.clear(points)
+	for _, l in lines do
+		l:Destroy()
+	end
+	table.clear(lines)
+end
+
+-- a contested point blinks; the names show from 10 pixels per tile
+function Strategic.update()
+	local shown = board.AbsoluteSize.X >= Map.W * 10
+	if shown ~= namesShown then
+		namesShown = shown
+		for _, p in points do
+			p.label.Visible = shown
+		end
+	end
+	local on = os.clock() % 0.6 < 0.3
+	for _, p in points do
+		if p.contested then
+			p.stroke.Transparency = if on then 0 else 0.6
+		elseif p.stroke.Transparency ~= 0.15 then
+			p.stroke.Transparency = 0.15
+		end
+	end
+end
+
+-- colors(owner id) gives a team colour (nil for nobody); mine() the player's base id; base()
+-- the middle of the player's command centre
+function Strategic.init(boardFrame: Frame, colors: (number) -> Color3?, mine: () -> number, base: () -> (number?, number?))
+	board, colorOf, myId, myBase = boardFrame, colors, mine, base
+end
+
+return Strategic
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000027"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Colours, fonts and small helpers for building UI in code.
 local Theme = {}
 
 Theme.C = {
@@ -8297,16 +9396,17 @@ function Theme.hex(h: string): Color3
 end
 
 return Theme
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000025"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[-- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000028"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[-- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
 -- This module is the interface the game script talks to; the parts are built in Menu (main
--- menu and arsenal), Hud (the match screen), Factory (the factory panel) and Research (the
--- research panel), from Widgets.
+-- menu and arsenal), Landing (choosing a base and a commander), Hud (the match screen), Factory
+-- (the factory panel) and Research (the research panel), from Widgets.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
 local Factory = require(script.Parent.Factory)
 local Hud = require(script.Parent.Hud)
+local Landing = require(script.Parent.Landing)
 local Menu = require(script.Parent.Menu)
 local Research = require(script.Parent.Research)
 local Sfx = require(script.Parent.Sfx)
@@ -8336,6 +9436,8 @@ UI.factoryId = nil
 UI.onResearch = nil -- (research centre id, tech id)
 UI.onStopResearch = nil -- (research centre id)
 UI.researchId = nil -- the research centre whose panel is open
+UI.onLandingCommander = nil -- a commander card was tapped: (commander id)
+UI.onLand = nil -- «ВЫСАДИТЬСЯ»
 UI.buildSel = nil
 UI.GROUPS = Hud.GROUPS
 
@@ -8365,6 +9467,10 @@ UI.showFactory = Factory.show
 UI.hideFactory = Factory.hide
 UI.showResearch = Research.show
 UI.hideResearch = Research.hide
+UI.setCommander = Hud.setCommander
+UI.setLandingChoice = Landing.setChoice
+UI.setLandingCountdown = Landing.setCountdown
+UI.landingArea = Landing.area
 
 -- the music buttons show whether the music plays
 function UI.setMusicOn(on: boolean)
@@ -8455,8 +9561,10 @@ function UI.init(playerGui: PlayerGui, player: Player)
 	Hud.build(ctx, play)
 	Factory.build(ctx, play)
 	Research.build(ctx, play)
+	Landing.build(ctx, root)
 	Menu.buildArsenal(root)
 	buildToast()
+	refs.meDisplayName = player.DisplayName
 	refs.meName.Text = player.DisplayName
 	refs.meAvatar.Image = if player.UserId > 0 then "rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150" else ""
 	gui.Parent = playerGui
@@ -8467,6 +9575,17 @@ end
 function UI.showMenu()
 	menu.Visible = true
 	play.Visible = false
+	Landing.hide()
+	UI.selectBuild(nil)
+	UI.hideFactory()
+	UI.hideResearch()
+end
+
+-- choosing where to land: only the map and the landing panels
+function UI.showLanding()
+	menu.Visible = false
+	play.Visible = false
+	Landing.show()
 	UI.selectBuild(nil)
 	UI.hideFactory()
 	UI.hideResearch()
@@ -8476,6 +9595,7 @@ end
 function UI.showPlay(phase: string, spectator: boolean)
 	menu.Visible = false
 	play.Visible = true
+	Landing.hide()
 	refs.announce.Visible = false
 	UI.setPhase(phase, spectator)
 end
@@ -8524,7 +9644,7 @@ function UI.artError()
 end
 
 return UI
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000026"><Properties><string name="Name">Widgets</string><ProtectedString name="Source"><![CDATA[-- Small pieces the menu and the match screen are built from: icons, round icon buttons, the
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000029"><Properties><string name="Name">Widgets</string><ProtectedString name="Source"><![CDATA[-- Small pieces the menu and the match screen are built from: icons, round icon buttons, the
 -- orange main buttons, avatars, resource chips and prices.
 local TweenService = game:GetService("TweenService")
 

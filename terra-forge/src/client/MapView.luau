@@ -1,8 +1,9 @@
 -- The battlefield seen from above, in 2D: the painted map, buildings and units as sprites with
--- their animations, shots, and what is under a tap. Positions are in tiles; see Board. The
--- camera, minimap, pointer input, build mode and fog of war are in Camera, Minimap, Input,
--- Placement and Fog; shots and explosions are drawn by Effects, and the buildings and units
--- without a painted sprite by Drawn.
+-- their animations, shots, what is under a tap, and the free bases while the player chooses
+-- where to land. Positions are in tiles; see Board. The camera, minimap, pointer input, build
+-- mode, fog of war and strategic points are in Camera, Minimap, Input, Placement, Fog and
+-- Strategic; shots and explosions are drawn by Effects, and the buildings and units without a
+-- painted sprite by Drawn.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
@@ -19,6 +20,7 @@ local Minimap = require(script.Parent.Minimap)
 local Placement = require(script.Parent.Placement)
 local Sfx = require(script.Parent.Sfx)
 local Sprites = require(script.Parent.Sprites)
+local Strategic = require(script.Parent.Strategic)
 local Theme = require(script.Parent.Theme)
 
 local W = Map.W
@@ -129,6 +131,66 @@ function MapView.setPowered(on: boolean)
 	Fog.powered = on
 end
 
+-- the strategic points' state, as the server sends it
+function MapView.setPoints(state)
+	Strategic.setState(state)
+end
+
+---------------------------------------------------------------- choosing where to land
+
+local landing = {} -- seat id -> marker on a free base
+
+local function clearLanding()
+	for _, m in landing do
+		m:Destroy()
+	end
+	table.clear(landing)
+end
+
+-- marks the free bases the player can land at; tapping one calls onPick(seat id)
+function MapView.setLanding(seats: { number }, selected: number?, onPick: (number) -> ())
+	clearLanding()
+	for _, id in seats do
+		local n = MapView.nations[id]
+		if n and n.cap then
+			local chosen = id == selected
+			local color = if chosen then Color3.fromRGB(120, 255, 150) else Color3.new(1, 1, 1)
+			local b = make("TextButton", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = at(n.cap.x + 0.5, n.cap.y + 0.5),
+				Size = span(14, 14),
+				BackgroundColor3 = color,
+				BackgroundTransparency = if chosen then 0.7 else 0.85,
+				Text = "",
+				AutoButtonColor = false,
+				ZIndex = Z.top,
+				Parent = board,
+			}, { Theme.corner(nil, 1), make("UIStroke", { Color = color, Thickness = if chosen then 4 else 2.5 }) })
+			make("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.fromScale(0.5, 1.02),
+				Size = UDim2.fromScale(1.4, 0.2),
+				BackgroundTransparency = 1,
+				Text = if chosen then "ТВОЯ БАЗА" else "СВОБОДНО",
+				TextScaled = true,
+				TextColor3 = color,
+				FontFace = Theme.font(Enum.FontWeight.Heavy),
+				ZIndex = Z.top,
+				Parent = b,
+			}, { make("UIStroke", { Color = Color3.fromRGB(8, 10, 14), Thickness = 2 }) })
+			b.Activated:Connect(function()
+				onPick(id)
+			end)
+			landing[id] = b
+		end
+	end
+end
+
+-- the map fits between these screen heights while the player chooses (GUI coordinates)
+function MapView.setLandingArea(top: number, bottom: number)
+	Camera.area.top, Camera.area.bottom = top, bottom
+end
+
 ---------------------------------------------------------------- sprites
 
 -- a sprite and its team-colour layer, centred in parent, rotated together by the caller
@@ -226,8 +288,12 @@ function MapView.upsertNation(info)
 	n.userId = info.userId or 0
 	n.alive = info.alive ~= false
 	n.cap = if info.cap then { x = info.cap[1], y = info.cap[2] } else nil
+	n.commander = info.commander
 	MapView.nations[info.id] = n
 	updateLabel(n)
+	if not MapView.loading then
+		Strategic.refresh()
+	end
 	if recolor then
 		for _, rec in buildings do
 			if rec.owner == n.id then
@@ -978,8 +1044,11 @@ function MapView.init(playerGui: PlayerGui)
 	local function mine(): number
 		return MapView.myId
 	end
-	Placement.init(board, buildings, mine)
-	Fog.init(board, buildings, units, mine)
+	Strategic.init(board, function(owner: number): Color3?
+		return if owner ~= 0 then teamColor(owner) else nil
+	end, mine, MapView.myBase)
+	Placement.init(board, buildings, Strategic.records(), mine)
+	Fog.init(board, buildings, units, Strategic.records(), mine)
 	Fog.onSpotted = function(x: number, y: number)
 		if MapView.onSpotted then
 			MapView.onSpotted(x, y)
@@ -1031,6 +1100,8 @@ function MapView.clear()
 	table.clear(units)
 	table.clear(labels)
 	Placement.clear()
+	Strategic.clear()
+	clearLanding()
 	table.clear(MapView.selected)
 	MapView.nations = {}
 	MapView.myId = 0
@@ -1050,18 +1121,23 @@ function MapView.load(s)
 	for _, u in s.units do
 		MapView.addUnit(u)
 	end
+	Strategic.load(s.points, s.pstate)
 	MapView.loading = false
 	Fog.reset()
 end
 
 function MapView.setPhase(_phase: string) end
 
--- "menu": the battle drifts slowly behind the menu; "play": the player moves the camera
+-- "menu": the battle drifts slowly behind the menu; "landing": the whole map while the player
+-- chooses a base; "play": the player moves the camera
 function MapView.setMode(m: string)
 	mode = m
 	Input.active = m == "play"
 	Input.reset()
 	Fog.enable(m == "play" and not MapView.spectator)
+	if m ~= "landing" then
+		clearLanding()
+	end
 	if m == "play" then
 		Camera.playZoom()
 	else
@@ -1077,12 +1153,13 @@ function MapView.update(dt: number)
 	updateUnits(dt)
 	updateWork(dt)
 	Placement.update()
+	Strategic.update()
 	Fog.update(dt)
 	Effects.update()
 	miniAcc += dt
 	if miniAcc >= 0.25 then
 		miniAcc = 0
-		Minimap.update(buildings, units, teamColor, Fog.showsBuilding, Fog.showsOnMinimap)
+		Minimap.update(buildings, units, Strategic.records(), teamColor, Fog.showsBuilding, Fog.showsOnMinimap)
 		-- the name over an enemy command centre shows once the base has been found
 		for id, tag in labels do
 			local n = MapView.nations[id]

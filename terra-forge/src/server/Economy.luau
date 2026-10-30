@@ -1,6 +1,7 @@
 -- The economy of a skirmish: metal income, energy, construction, factory queues and production,
--- research, repairs, and what each base is worth. These are methods of Match (Match.luau adds
--- them); self is the match. Metal is kept in n.money, finished research in n.tech.
+-- research, repairs, and what each base is worth, with the bonuses of each base's commander.
+-- These are methods of Match (Match.luau adds them); self is the match. Metal is kept in
+-- n.money, finished research in n.tech.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
@@ -112,6 +113,11 @@ function Economy:labOf(player: Player, id: number)
 	return n, b
 end
 
+-- what a study costs this base: the technology commander makes it cheaper
+function Economy:researchCost(n, id: string): number
+	return math.round(Config.TECH[id].cost * (1 - Config.commander(n.commander, "researchCost")))
+end
+
 -- why a base cannot start this study now, or nil
 function Economy:researchBlock(n, id: string): string?
 	local t = Config.TECH[id]
@@ -126,14 +132,16 @@ function Economy:researchBlock(n, id: string): string?
 			return "Уже изучается: " .. t.name
 		end
 	end
-	if n.money < t.cost then
-		return self:lackText(n, t.cost)
+	local cost = self:researchCost(n, id)
+	if n.money < cost then
+		return self:lackText(n, cost)
 	end
 	return nil
 end
 
 function Economy:beginResearch(n, b, id: string)
-	n.money -= Config.TECH[id].cost
+	b.researchPaid = self:researchCost(n, id)
+	n.money -= b.researchPaid
 	b.research = id
 	b.prog = 0
 end
@@ -168,7 +176,7 @@ function Economy:stopResearch(player: Player, labId: number)
 	if not n or not b.research then
 		return
 	end
-	n.money += Config.TECH[b.research].cost
+	n.money += b.researchPaid or Config.TECH[b.research].cost
 	b.research = nil
 	b.prog = 0
 	self:sendEconomy()
@@ -231,8 +239,10 @@ function Economy:tickEconomy(dt: number)
 		local n = b.n
 		local def = Config.BUILD[b.kind]
 		if b.built < 1 then
-			-- each engineer next to the site adds the normal speed again, up to three times faster
-			b.built = math.min(1, b.built + dt * (1 + math.min(2, help[b] or 0)) / def.time)
+			-- each engineer next to the site adds the normal speed again, up to three times faster;
+			-- the industry commander builds faster still
+			local speed = (1 + math.min(2, help[b] or 0)) * (1 + Config.commander(n.commander, "build"))
+			b.built = math.min(1, b.built + dt * speed / def.time)
 			if b.built >= 1 then
 				self:send({ t = "bdone", id = b.id })
 				self:toast(n, "Достроено: " .. def.name)
@@ -244,7 +254,7 @@ function Economy:tickEconomy(dt: number)
 		end
 		if b.research then
 			local t = Config.TECH[b.research]
-			b.prog = math.min(1, b.prog + dt * speedOf(b) / t.time)
+			b.prog = math.min(1, b.prog + dt * speedOf(b) * (1 + Config.commander(n.commander, "research")) / t.time)
 			if b.prog >= 1 then
 				n.tech[b.research] = true
 				self:toast(n, "Изучено: " .. t.name .. ". " .. t.desc)
@@ -275,7 +285,9 @@ function Economy:tickEconomy(dt: number)
 			if n.pop + Config.UNITS[current].pop > Config.ARMY_LIMIT then
 				b.blocked = "army"
 			else
-				b.prog = math.min(1, b.prog + dt * speedOf(b) * (1 + n.production) / Config.UNITS[current].time)
+				local ud = Config.UNITS[current]
+				local speed = speedOf(b) * (1 + n.production) * (1 + (if ud.air then Config.commander(n.commander, "airProduction") else 0))
+				b.prog = math.min(1, b.prog + dt * speed / ud.time)
 				if b.prog >= 1 then
 					self:spawnUnit(n, current, b.px, b.py + b.size / 2 + 0.8, b.rally)
 					b.prog = 0
@@ -290,6 +302,10 @@ function Economy:tickEconomy(dt: number)
 	end
 	for _, n in self.seats do
 		if n.alive then
+			-- supplied strategic points add metal, and the industry commander adds a share of it all
+			local _, supplied = self:pointsOf(n)
+			n.income += supplied * Config.POINT_INCOME
+			n.income *= 1 + Config.commander(n.commander, "income")
 			n.money += n.income * dt
 		end
 	end
@@ -350,6 +366,7 @@ function Economy:sendEconomy()
 		for id in n.tech do
 			table.insert(tech, id)
 		end
+		local held, supplied = self:pointsOf(n)
 		self:sendTo(player, {
 			t = "eco",
 			money = math.floor(n.money),
@@ -360,6 +377,8 @@ function Economy:sendEconomy()
 			pop = n.pop,
 			units = n.unitTotal,
 			tech = tech,
+			points = held,
+			supplied = supplied,
 			list = list,
 		})
 	end
@@ -367,12 +386,12 @@ end
 
 ---------------------------------------------------------------- strength
 
--- strength of a base: what its buildings and units are worth
+-- strength of a base: what its buildings, units and strategic points are worth
 function Economy:score(n): number
 	if not n.alive then
 		return 0
 	end
-	local s = 0
+	local s = (self:pointsOf(n)) * Config.POINT_SCORE
 	for _, b in self.buildings do
 		if b.n == n then
 			s += (Config.BUILD[b.kind].cost or 1000) * b.built

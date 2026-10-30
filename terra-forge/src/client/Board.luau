@@ -14,7 +14,7 @@ Board.frame = nil :: Frame?
 Board.W, Board.H = W, H
 
 -- drawing order on the board
-Board.Z = { ground = 1, mark = 2, building = 3, unit = 4, shot = 5, boom = 6, air = 7, smoke = 8, label = 9, top = 10 }
+Board.Z = { ground = 1, mark = 2, building = 3, unit = 4, shot = 5, boom = 6, air = 7, smoke = 8, fog = 9, label = 10, top = 11 }
 
 -- board position of a point, in tiles
 function Board.at(x: number, y: number): UDim2

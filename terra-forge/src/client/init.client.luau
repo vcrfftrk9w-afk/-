@@ -210,6 +210,7 @@ function handlers.phase(msg)
 		UI.setPhase("ended", state.spectator)
 		UI.results(msg, MapView.myId)
 		MapView.setBuild(nil)
+		MapView.revealAll()
 		if not state.spectator then
 			Sfx.play(if msg.winner ~= 0 and msg.winner == MapView.myId then "win" else "lose")
 		end
@@ -470,6 +471,7 @@ function handlers.defeat()
 	Sfx.play("lose")
 	if state.screen == "play" then
 		MapView.setBuild(nil)
+		MapView.revealAll()
 		UI.hideFactory()
 		UI.defeat()
 	end
@@ -544,6 +546,14 @@ end
 
 local RED = Color3.fromRGB(255, 80, 70)
 local ORANGE = Color3.fromRGB(255, 170, 60)
+
+-- the fog of war lifts off an enemy after a quiet while
+MapView.onSpotted = function(x, y)
+	if state.screen == "play" and not state.spectator and state.phase == "game" then
+		UI.toast("Противник обнаружен!", true, 3)
+		MapView.marker(x, y, RED, 4)
+	end
+end
 
 -- the enemy under a screen point, as an order target, and its middle
 local function enemyAt(sx: number, sy: number): (number?, number?, number?)

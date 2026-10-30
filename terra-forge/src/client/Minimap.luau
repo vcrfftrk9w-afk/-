@@ -21,7 +21,8 @@ function Minimap.attach(holder: GuiObject?)
 	end
 	mini = { holder = holder, dots = {}, used = 0 }
 	Board.ground(holder, holder.ZIndex)
-	mini.camRect = make("Frame", { BackgroundTransparency = 1, ZIndex = holder.ZIndex + 2, Parent = holder }, {
+	-- holder.ZIndex + 1 is left for the fog of war, between the ground and the dots
+	mini.camRect = make("Frame", { BackgroundTransparency = 1, ZIndex = holder.ZIndex + 3, Parent = holder }, {
 		make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1.5 }),
 	})
 	local dragging = nil
@@ -56,7 +57,7 @@ local function dot(x: number, y: number, s: number, color: Color3)
 	mini.used += 1
 	local d = mini.dots[mini.used]
 	if not d then
-		d = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, ZIndex = mini.holder.ZIndex + 1, Parent = mini.holder })
+		d = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, ZIndex = mini.holder.ZIndex + 2, Parent = mini.holder })
 		mini.dots[mini.used] = d
 	end
 	d.Position = at(x, y)
@@ -65,18 +66,23 @@ local function dot(x: number, y: number, s: number, color: Color3)
 	d.Visible = true
 end
 
--- buildings and units: the map's records; colorOf(owner) gives a team's colour
-function Minimap.update(buildings, units, colorOf: (number) -> Color3)
+-- buildings and units: the map's records; colorOf(owner) gives a team's colour;
+-- buildingShows / unitShows tell which ones the player may see
+function Minimap.update(buildings, units, colorOf: (number) -> Color3, buildingShows: (any) -> boolean, unitShows: (any) -> boolean)
 	if not mini or not mini.holder.Visible then
 		return
 	end
 	mini.used = 0
 	local px = mini.holder.AbsoluteSize.X / W
 	for _, b in buildings do
-		dot(b.cx, b.cy, math.max(3, b.size * px), colorOf(b.owner))
+		if buildingShows(b) then
+			dot(b.cx, b.cy, math.max(3, b.size * px), colorOf(b.owner))
+		end
 	end
 	for _, u in units do
-		dot(u.x, u.y, 2, colorOf(u.owner))
+		if unitShows(u) then
+			dot(u.x, u.y, 2, colorOf(u.owner))
+		end
 	end
 	for i = mini.used + 1, #mini.dots do
 		mini.dots[i].Visible = false

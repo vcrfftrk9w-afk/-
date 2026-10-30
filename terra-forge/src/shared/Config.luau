@@ -23,8 +23,8 @@ Config.BOT_NAMES = {
 }
 
 -- the command centre is placed at the start; the rest are built by players.
--- size = footprint in tiles; cost in money, time in seconds
-Config.BUILD_ORDER = { "extractor", "fabricator", "barracks", "tankf", "air", "tower", "aa" }
+-- size = footprint in tiles; cost in money, time in seconds; vision in tiles (fog of war)
+Config.BUILD_ORDER = { "extractor", "fabricator", "barracks", "tankf", "air", "radar", "tower", "aa" }
 Config.BUILD = {
 	cc = {
 		name = "Командный центр",
@@ -34,6 +34,7 @@ Config.BUILD = {
 		dps = 14,
 		range = 5,
 		hitsAir = 0.5,
+		vision = 9,
 		desc = "Сердце базы. Если его уничтожат, ты проиграл.",
 	},
 	extractor = {
@@ -45,6 +46,7 @@ Config.BUILD = {
 		hp = 500,
 		income = 6,
 		onPool = true,
+		vision = 5,
 		desc = "Добывает деньги: +6 $/с. Ставится только на месторождение — светящуюся воронку.",
 	},
 	fabricator = {
@@ -55,6 +57,7 @@ Config.BUILD = {
 		time = 16,
 		hp = 600,
 		income = 5,
+		vision = 5,
 		desc = "Производит деньги где угодно на базе: +5 $/с.",
 	},
 	barracks = {
@@ -65,6 +68,7 @@ Config.BUILD = {
 		time = 8,
 		hp = 500,
 		units = { "infantry", "rocket" },
+		vision = 6,
 		desc = "Обучает пехоту и ракетчиков. Нажми на неё, чтобы заказать.",
 	},
 	tankf = {
@@ -75,6 +79,7 @@ Config.BUILD = {
 		time = 12,
 		hp = 900,
 		units = { "scout", "tank", "artillery" },
+		vision = 6,
 		desc = "Собирает броневики, танки и артиллерию. Нажми на него, чтобы заказать.",
 	},
 	air = {
@@ -85,7 +90,19 @@ Config.BUILD = {
 		time = 15,
 		hp = 700,
 		units = { "fighter", "gunship" },
+		vision = 7,
 		desc = "Выпускает истребители и вертолёты. Нажми на него, чтобы заказать.",
+	},
+	radar = {
+		name = "Радар",
+		icon = "radar",
+		size = 2,
+		cost = 450,
+		time = 10,
+		hp = 400,
+		vision = 10,
+		radar = 32, -- enemy units this close show on the minimap, even in the fog
+		desc = "Показывает на мини-карте вражеские войска в радиусе 32 клеток, даже в тумане войны.",
 	},
 	tower = {
 		name = "Пушечная башня",
@@ -97,6 +114,7 @@ Config.BUILD = {
 		dps = 22,
 		range = 6,
 		hitsAir = 0,
+		vision = 8,
 		desc = "Сама стреляет по вражеской пехоте и технике в радиусе 6 клеток.",
 	},
 	aa = {
@@ -110,6 +128,7 @@ Config.BUILD = {
 		range = 8,
 		hitsAir = 1,
 		airOnly = true,
+		vision = 9,
 		desc = "Сбивает вражескую авиацию в радиусе 8 клеток.",
 	},
 }

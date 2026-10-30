@@ -36,6 +36,7 @@ local GLYPHS = {
 	help = { "?", Color3.fromRGB(238, 242, 248) },
 	play = { "▶", Color3.fromRGB(43, 18, 3) },
 	shield = { "🛡" },
+	radar = { "📡" },
 	lock = { "🔒" },
 	globe = { "🌍" },
 	swords = { "⚔", Color3.fromRGB(238, 242, 248) },

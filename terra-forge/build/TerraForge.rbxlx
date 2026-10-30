@@ -61,8 +61,8 @@ Config.BOT_NAMES = {
 }
 
 -- the command centre is placed at the start; the rest are built by players.
--- size = footprint in tiles; cost in money, time in seconds
-Config.BUILD_ORDER = { "extractor", "fabricator", "barracks", "tankf", "air", "tower", "aa" }
+-- size = footprint in tiles; cost in money, time in seconds; vision in tiles (fog of war)
+Config.BUILD_ORDER = { "extractor", "fabricator", "barracks", "tankf", "air", "radar", "tower", "aa" }
 Config.BUILD = {
 	cc = {
 		name = "Командный центр",
@@ -72,6 +72,7 @@ Config.BUILD = {
 		dps = 14,
 		range = 5,
 		hitsAir = 0.5,
+		vision = 9,
 		desc = "Сердце базы. Если его уничтожат, ты проиграл.",
 	},
 	extractor = {
@@ -83,6 +84,7 @@ Config.BUILD = {
 		hp = 500,
 		income = 6,
 		onPool = true,
+		vision = 5,
 		desc = "Добывает деньги: +6 $/с. Ставится только на месторождение — светящуюся воронку.",
 	},
 	fabricator = {
@@ -93,6 +95,7 @@ Config.BUILD = {
 		time = 16,
 		hp = 600,
 		income = 5,
+		vision = 5,
 		desc = "Производит деньги где угодно на базе: +5 $/с.",
 	},
 	barracks = {
@@ -103,6 +106,7 @@ Config.BUILD = {
 		time = 8,
 		hp = 500,
 		units = { "infantry", "rocket" },
+		vision = 6,
 		desc = "Обучает пехоту и ракетчиков. Нажми на неё, чтобы заказать.",
 	},
 	tankf = {
@@ -113,6 +117,7 @@ Config.BUILD = {
 		time = 12,
 		hp = 900,
 		units = { "scout", "tank", "artillery" },
+		vision = 6,
 		desc = "Собирает броневики, танки и артиллерию. Нажми на него, чтобы заказать.",
 	},
 	air = {
@@ -123,7 +128,19 @@ Config.BUILD = {
 		time = 15,
 		hp = 700,
 		units = { "fighter", "gunship" },
+		vision = 7,
 		desc = "Выпускает истребители и вертолёты. Нажми на него, чтобы заказать.",
+	},
+	radar = {
+		name = "Радар",
+		icon = "radar",
+		size = 2,
+		cost = 450,
+		time = 10,
+		hp = 400,
+		vision = 10,
+		radar = 32, -- enemy units this close show on the minimap, even in the fog
+		desc = "Показывает на мини-карте вражеские войска в радиусе 32 клеток, даже в тумане войны.",
 	},
 	tower = {
 		name = "Пушечная башня",
@@ -135,6 +152,7 @@ Config.BUILD = {
 		dps = 22,
 		range = 6,
 		hitsAir = 0,
+		vision = 8,
 		desc = "Сама стреляет по вражеской пехоте и технике в радиусе 6 клеток.",
 	},
 	aa = {
@@ -148,6 +166,7 @@ Config.BUILD = {
 		range = 8,
 		hitsAir = 1,
 		airOnly = true,
+		vision = 9,
 		desc = "Сбивает вражескую авиацию в радиусе 8 клеток.",
 	},
 }
@@ -2155,7 +2174,7 @@ function Path.inMap(x: number, y: number): (number, number)
 end
 
 return Path
-]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX00000025"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000024"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000023"><Properties><string name="Name">TerraForgeClient</string><ProtectedString name="Source"><![CDATA[-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
+]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX00000026"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000025"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000024"><Properties><string name="Name">TerraForgeClient</string><ProtectedString name="Source"><![CDATA[-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -2367,6 +2386,7 @@ function handlers.phase(msg)
 		UI.setPhase("ended", state.spectator)
 		UI.results(msg, MapView.myId)
 		MapView.setBuild(nil)
+		MapView.revealAll()
 		if not state.spectator then
 			Sfx.play(if msg.winner ~= 0 and msg.winner == MapView.myId then "win" else "lose")
 		end
@@ -2627,6 +2647,7 @@ function handlers.defeat()
 	Sfx.play("lose")
 	if state.screen == "play" then
 		MapView.setBuild(nil)
+		MapView.revealAll()
 		UI.hideFactory()
 		UI.defeat()
 	end
@@ -2701,6 +2722,14 @@ end
 
 local RED = Color3.fromRGB(255, 80, 70)
 local ORANGE = Color3.fromRGB(255, 170, 60)
+
+-- the fog of war lifts off an enemy after a quiet while
+MapView.onSpotted = function(x, y)
+	if state.screen == "play" and not state.spectator and state.phase == "game" then
+		UI.toast("Противник обнаружен!", true, 3)
+		MapView.marker(x, y, RED, 4)
+	end
+end
 
 -- the enemy under a screen point, as an order target, and its middle
 local function enemyAt(sx: number, sy: number): (number?, number?, number?)
@@ -3039,7 +3068,7 @@ Board.frame = nil :: Frame?
 Board.W, Board.H = W, H
 
 -- drawing order on the board
-Board.Z = { ground = 1, mark = 2, building = 3, unit = 4, shot = 5, boom = 6, air = 7, smoke = 8, label = 9, top = 10 }
+Board.Z = { ground = 1, mark = 2, building = 3, unit = 4, shot = 5, boom = 6, air = 7, smoke = 8, fog = 9, label = 10, top = 11 }
 
 -- board position of a point, in tiles
 function Board.at(x: number, y: number): UDim2
@@ -3781,7 +3810,296 @@ function Factory.hide()
 end
 
 return Factory
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000018"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- The match screen: the player's card, money and units at the top, the leaderboard, the army
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000018"><Properties><string name="Name">Fog</string><ProtectedString name="Source"><![CDATA[-- Fog of war. The player sees around their units and buildings; ground they have seen before
+-- stays dimmed, ground never seen is dark. Enemy units show only where the player sees them;
+-- enemy buildings stay on the map once found. A finished radar shows enemy units around it on
+-- the minimap, and the first enemy to come into sight after a quiet while is announced.
+-- In the menu and for spectators everything is visible.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("TerraForge")
+local Config = require(Shared.Config)
+local Map = require(Shared.Map)
+local Board = require(script.Parent.Board)
+local Camera = require(script.Parent.Camera)
+local Theme = require(script.Parent.Theme)
+
+local W, H = Map.W, Map.H
+local make = Theme.make
+
+local CELL = 2 -- tiles per fog square on the board
+local CW, CH = math.ceil(W / CELL), math.ceil(H / CELL)
+local MINI = 4 -- tiles per fog square on the minimap
+local MW, MH = math.ceil(W / MINI), math.ceil(H / MINI)
+local FOG = Color3.fromRGB(8, 12, 16)
+-- how clear a tile is: seen now, seen before, never seen (1 = no fog)
+local CLEAR_SEEN, CLEAR_KNOWN, CLEAR_DARK = 1, 0.55, 0.12
+local QUIET = 25 -- seconds without enemies in sight before a new sighting is announced
+
+local Fog = {}
+Fog.on = false
+Fog.onSpotted = nil -- (x, y): an enemy came into sight after a quiet while
+
+local vis = buffer.create(W * H) -- 1 where the player sees now
+local known = buffer.create(W * H) -- 1 where the player has seen
+local buildings, units = {}, {}
+local myId = function(): number
+	return 0
+end
+
+local cells = {} -- board fog squares: { frame, target, shown }
+local moving = {} -- squares whose transparency is still easing towards the target
+local miniCells = {}
+local radars = {} -- finished own radars: { x, y, r }
+local enemySeenAt = -math.huge
+local acc = 0
+local laidOut = -1 -- the zoom the board squares were laid out for
+
+local function reveal(x: number, y: number, r: number)
+	local r2 = r * r
+	local x0, x1 = math.max(0, math.floor(x - r)), math.min(W - 1, math.floor(x + r))
+	local y0, y1 = math.max(0, math.floor(y - r)), math.min(H - 1, math.floor(y + r))
+	for ty = y0, y1 do
+		local dy = ty + 0.5 - y
+		local row = ty * W
+		for tx = x0, x1 do
+			local dx = tx + 0.5 - x
+			if dx * dx + dy * dy <= r2 then
+				buffer.writeu8(vis, row + tx, 1)
+				buffer.writeu8(known, row + tx, 1)
+			end
+		end
+	end
+end
+
+local function tileAt(x: number, y: number): number?
+	local tx, ty = math.floor(x), math.floor(y)
+	if tx < 0 or ty < 0 or tx >= W or ty >= H then
+		return nil
+	end
+	return ty * W + tx
+end
+
+-- how clear the fog is over the tiles x0..x1, y0..y1: the average of their clearness
+local function clearness(x0: number, y0: number, size: number): number
+	local sum, n = 0, 0
+	for ty = y0, math.min(H - 1, y0 + size - 1) do
+		for tx = x0, math.min(W - 1, x0 + size - 1) do
+			local t = ty * W + tx
+			sum += if buffer.readu8(vis, t) == 1 then CLEAR_SEEN elseif buffer.readu8(known, t) == 1 then CLEAR_KNOWN else CLEAR_DARK
+			n += 1
+		end
+	end
+	return if n > 0 then sum / n else CLEAR_DARK
+end
+
+---------------------------------------------------------------- questions
+
+-- true if the player sees the point (x, y) now
+function Fog.sees(x: number, y: number): boolean
+	if not Fog.on then
+		return true
+	end
+	local t = tileAt(x, y)
+	return t ~= nil and buffer.readu8(vis, t) == 1
+end
+
+-- true if the player has seen the point (x, y) at some time
+function Fog.knows(x: number, y: number): boolean
+	if not Fog.on then
+		return true
+	end
+	local t = tileAt(x, y)
+	return t ~= nil and buffer.readu8(known, t) == 1
+end
+
+-- true if one of the player's radars covers (x, y)
+function Fog.radarSees(x: number, y: number): boolean
+	for _, r in radars do
+		if (x - r.x) ^ 2 + (y - r.y) ^ 2 <= r.r * r.r then
+			return true
+		end
+	end
+	return false
+end
+
+-- whether a unit or building of the map shows: the player's own always, enemies by the fog
+function Fog.showsUnit(u): boolean
+	return u.owner == myId() or Fog.sees(u.x, u.y)
+end
+
+function Fog.showsBuilding(b): boolean
+	return b.owner == myId() or Fog.knows(b.cx, b.cy)
+end
+
+-- a unit shows on the minimap where the player sees it or a radar covers it
+function Fog.showsOnMinimap(u): boolean
+	return Fog.showsUnit(u) or Fog.radarSees(u.x, u.y)
+end
+
+---------------------------------------------------------------- drawing
+
+local function setTarget(c, clear: number)
+	local target = 1 - clear -- fog opacity: 0 where the ground is clear
+	if math.abs(target - c.target) > 0.005 then
+		c.target = target
+		moving[c] = true
+	end
+end
+
+-- recomputes what the player sees and where the fog lies
+local function refresh()
+	buffer.fill(vis, 0, 0)
+	table.clear(radars)
+	local me = myId()
+	for _, u in units do
+		if u.owner == me then
+			reveal(u.x, u.y, u.def.vision or 6)
+		end
+	end
+	for _, b in buildings do
+		if b.owner == me then
+			reveal(b.cx, b.cy, b.def.vision or 6)
+			if b.def.radar and b.built >= 1 then
+				table.insert(radars, { x = b.cx, y = b.cy, r = b.def.radar })
+			end
+		end
+	end
+	for _, c in cells do
+		setTarget(c, clearness(c.x, c.y, CELL))
+	end
+	-- the minimap only darkens ground never seen: its squares are solid, so they overlap without seams
+	for _, c in miniCells do
+		c.frame.Visible = clearness(c.x, c.y, MINI) <= CLEAR_DARK + 0.001
+	end
+	-- a sighting after a quiet while is announced
+	local now = os.clock()
+	for _, u in units do
+		if u.owner ~= me and Fog.sees(u.x, u.y) then
+			if now - enemySeenAt > QUIET and Fog.onSpotted then
+				Fog.onSpotted(u.x, u.y)
+			end
+			enemySeenAt = now
+			break
+		end
+	end
+end
+
+-- shows or hides all the fog squares at once
+local function showAll(on: boolean)
+	for _, c in cells do
+		c.target = if on then 1 - CLEAR_DARK else 0
+		c.shown = c.target
+		c.frame.BackgroundTransparency = 1 - c.shown
+		c.frame.Visible = c.shown > 0.005
+	end
+	table.clear(moving)
+	for _, c in miniCells do
+		c.frame.Visible = on
+	end
+end
+
+-- puts the board squares on whole pixels, edge to edge, for the current zoom: squares placed
+-- by scale would round apart and show thin seams where they meet
+local function layout()
+	local ppt = Camera.ppt
+	laidOut = ppt
+	for _, c in cells do
+		local x0, y0 = math.round(c.x * ppt), math.round(c.y * ppt)
+		local x1, y1 = math.round((c.x + CELL) * ppt), math.round((c.y + CELL) * ppt)
+		c.frame.Position = UDim2.fromOffset(x0, y0)
+		c.frame.Size = UDim2.fromOffset(x1 - x0, y1 - y0)
+	end
+end
+
+---------------------------------------------------------------- setup and state
+
+-- board: the battlefield frame; buildingRecords, unitRecords: the map's records (the tables
+-- themselves, kept up to date by the map); mine() gives the player's base id
+function Fog.init(board: Frame, buildingRecords, unitRecords, mine: () -> number)
+	buildings, units, myId = buildingRecords, unitRecords, mine
+	local layer = make("Frame", { Name = "Fog", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = Board.Z.fog, Parent = board })
+	for cy = 0, CH - 1 do
+		for cx = 0, CW - 1 do
+			local frame = make("Frame", {
+				BackgroundColor3 = FOG,
+				BorderSizePixel = 0,
+				Visible = false,
+				Parent = layer,
+			})
+			table.insert(cells, { frame = frame, x = cx * CELL, y = cy * CELL, target = 0, shown = 0 })
+		end
+	end
+end
+
+-- fog squares on the minimap, between the ground picture (z) and the dots
+function Fog.attachMinimap(holder: GuiObject, z: number)
+	for cy = 0, MH - 1 do
+		for cx = 0, MW - 1 do
+			local frame = make("Frame", {
+				Position = Board.at(cx * MINI, cy * MINI),
+				-- a hair bigger than the square: solid squares may overlap, gaps would show
+				Size = UDim2.new(MINI / W, 1, MINI / H, 1),
+				BackgroundColor3 = FOG,
+				BorderSizePixel = 0,
+				Visible = Fog.on,
+				ZIndex = z,
+				Parent = holder,
+			})
+			table.insert(miniCells, { frame = frame, x = cx * MINI, y = cy * MINI })
+		end
+	end
+end
+
+-- on = the player is in a match with a base of their own
+function Fog.enable(on: boolean)
+	if Fog.on == on then
+		return
+	end
+	Fog.on = on
+	showAll(on)
+	if on then
+		refresh()
+	end
+end
+
+-- a new match: nothing has been seen yet
+function Fog.reset()
+	buffer.fill(known, 0, 0)
+	enemySeenAt = -math.huge
+	if Fog.on then
+		showAll(true)
+		refresh()
+	end
+end
+
+function Fog.update(dt: number)
+	if not Fog.on then
+		return
+	end
+	if Camera.ppt ~= laidOut then
+		layout()
+	end
+	acc += dt
+	if acc >= 0.25 then
+		acc = 0
+		refresh()
+	end
+	-- the fog eases in and out instead of jumping square by square
+	local k = math.min(1, dt * 5)
+	for c in moving do
+		c.shown += (c.target - c.shown) * k
+		if math.abs(c.target - c.shown) < 0.01 then
+			c.shown = c.target
+			moving[c] = nil
+		end
+		c.frame.BackgroundTransparency = 1 - c.shown
+		c.frame.Visible = c.shown > 0.005
+	end
+end
+
+return Fog
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000019"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- The match screen: the player's card, money and units at the top, the leaderboard, the army
 -- panel and the build bar at the bottom, zoom buttons, the minimap frame, building tips, the
 -- banner (spectator, results, defeat) and big announcements. Part of the interface; Ui puts
 -- it together.
@@ -4012,7 +4330,7 @@ function Hud.build(context, play: Instance)
 	local buildScroll = make("ScrollingFrame", {
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.fromOffset(572, 98),
+		Size = UDim2.fromOffset(650, 98),
 		BackgroundColor3 = C.panel,
 		BackgroundTransparency = 0.08,
 		BorderSizePixel = 0,
@@ -4142,7 +4460,7 @@ end
 function Hud.layout(w: number)
 	if refs.buildScroll then
 		local left, right = 16 + 250 + 8, 16 + 44 + 8
-		refs.buildScroll.Size = UDim2.fromOffset(math.clamp(w - left - right, 220, 572), 98)
+		refs.buildScroll.Size = UDim2.fromOffset(math.clamp(w - left - right, 220, 650), 98)
 		refs.buildScroll.Position = UDim2.new(0, left + (w - left - right) / 2, 1, -12)
 	end
 end
@@ -4353,7 +4671,7 @@ function Hud.showTip(k: string?)
 end
 
 return Hud
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000019"><Properties><string name="Name">Input</string><ProtectedString name="Source"><![CDATA[-- Pointer input on the battlefield. Mouse: left click selects and commands, left drag draws a
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001A"><Properties><string name="Name">Input</string><ProtectedString name="Source"><![CDATA[-- Pointer input on the battlefield. Mouse: left click selects and commands, left drag draws a
 -- selection box, right click commands, right or middle drag and the wheel move the camera.
 -- Touch: tap, drag to move the camera (or draw a box when armed), pinch to zoom.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -4565,10 +4883,10 @@ function Input.init(viewFrame: Frame, handlers)
 end
 
 return Input
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001A"><Properties><string name="Name">MapView</string><ProtectedString name="Source"><![CDATA[-- The battlefield seen from above, in 2D: the painted map, buildings and units as sprites with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001B"><Properties><string name="Name">MapView</string><ProtectedString name="Source"><![CDATA[-- The battlefield seen from above, in 2D: the painted map, buildings and units as sprites with
 -- their animations, shots, and what is under a tap. Positions are in tiles; see Board. The
--- camera, minimap, pointer input and build mode are in Camera, Minimap, Input and Placement;
--- shots and explosions are drawn by Effects.
+-- camera, minimap, pointer input, build mode and fog of war are in Camera, Minimap, Input,
+-- Placement and Fog; shots and explosions are drawn by Effects.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
@@ -4578,6 +4896,7 @@ local Motion = require(Shared.Motion)
 local Board = require(script.Parent.Board)
 local Camera = require(script.Parent.Camera)
 local Effects = require(script.Parent.Effects)
+local Fog = require(script.Parent.Fog)
 local Input = require(script.Parent.Input)
 local Minimap = require(script.Parent.Minimap)
 local Placement = require(script.Parent.Placement)
@@ -4597,6 +4916,7 @@ MapView.spectator = false
 MapView.onTap = nil -- (tileX, tileY, screenX, screenY)
 MapView.onAltTap = nil -- right mouse button: (tileX, tileY)
 MapView.onBox = nil -- a selection box was drawn: (x0, y0, x1, y1) in tiles
+MapView.onSpotted = nil -- an enemy came into sight after a quiet while: (x, y)
 MapView.boxArmed = false -- on touch screens, the next drag draws a selection box
 
 local Z = Board.Z
@@ -4674,7 +4994,18 @@ end
 MapView.screenToWorld = Camera.screenToWorld
 MapView.zoom = Camera.zoom
 MapView.focusOn = Camera.focusOn
-MapView.attachMinimap = Minimap.attach
+
+function MapView.attachMinimap(holder: GuiObject?)
+	Minimap.attach(holder)
+	if holder then
+		Fog.attachMinimap(holder, holder.ZIndex + 1)
+	end
+end
+
+-- the whole battlefield shows, without fog: after a defeat and when the match is over
+function MapView.revealAll()
+	Fog.enable(false)
+end
 
 ---------------------------------------------------------------- sprites
 
@@ -4695,6 +5026,44 @@ local function spritePair(parent: Instance, name: string, color: Color3, z: numb
 	local tint = make("ImageLabel", props)
 	Sprites.set(tint, name, "team")
 	return base, tint
+end
+
+-- a building without a picture (the radar): a round pad in the team colour with a dish that
+-- turns; returns the holder, which rises like a picture while it is built, and the dish
+local function station(parent: Instance, color: Color3)
+	local holder = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 1),
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ZIndex = 1,
+		Parent = parent,
+	})
+	make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.84, 0.84),
+		BackgroundColor3 = Color3.fromRGB(58, 64, 72),
+		ZIndex = 1,
+		Parent = holder,
+	}, { Theme.corner(nil, 1), make("UIStroke", { Color = color, Thickness = 2.5 }) })
+	make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.34, 0.34),
+		BackgroundColor3 = Color3.fromRGB(98, 106, 116),
+		ZIndex = 2,
+		Parent = holder,
+	}, { Theme.corner(nil, 1) })
+	local dish = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.18, 0.76),
+		BackgroundColor3 = Color3.fromRGB(216, 222, 230),
+		ZIndex = 3,
+		Parent = holder,
+	}, { Theme.corner(nil, 0.5), make("UIStroke", { Color = Color3.fromRGB(40, 44, 50), Thickness = 1 }) })
+	return holder, dish
 end
 
 local function makeBar(parent: Instance, pos: UDim2, anchor: Vector2, z: number)
@@ -4827,7 +5196,7 @@ local function refreshBuilding(rec)
 	local k = math.clamp(rec.built, 0.02, 1)
 	rec.clip.ClipsDescendants = building
 	rec.clip.Size = UDim2.fromScale(1, if building then k else 1)
-	for _, img in { rec.base, rec.tint } do
+	for _, img in { rec.base, rec.tint, rec.art } do
 		img.Size = UDim2.fromScale(1, if building then 1 / k else 1)
 	end
 	rec.plan.Visible = building
@@ -4905,6 +5274,9 @@ function MapView.addBuilding(info)
 		img.AnchorPoint = Vector2.new(0.5, 1)
 		img.Position = UDim2.fromScale(0.5, 1)
 	end
+	if not Sprites.has(def.icon) then
+		rec.art, rec.dish = station(rec.clip, color)
+	end
 	rec.line = make("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = UDim2.new(0.9, 0, 0, 2),
@@ -4925,7 +5297,8 @@ function MapView.addBuilding(info)
 	rec.workBar, rec.workFill = makeBar(rec.frame, UDim2.new(0.5, 0, 1, -8), Vector2.new(0.5, 1), 6)
 	buildings[rec.id] = rec
 	refreshBuilding(rec)
-	if rec.built < 1 and not MapView.loading then
+	rec.frame.Visible = Fog.showsBuilding(rec)
+	if rec.built < 1 and not MapView.loading and rec.frame.Visible then
 		Sfx.at("build", rec.cx, rec.cy)
 		for i = 1, 3 do
 			Effects.dust(rec.cx + (math.random() - 0.5) * size, rec.cy + size * 0.4, size * 0.5)
@@ -4952,8 +5325,10 @@ function MapView.finishBuilding(id: number)
 	if rec then
 		rec.built = 1
 		refreshBuilding(rec)
-		Effects.pop(rec.frame, rec.size, rec.size)
-		Effects.dust(rec.cx, rec.cy + rec.size * 0.3, rec.size * 0.9)
+		if Fog.showsBuilding(rec) then
+			Effects.pop(rec.frame, rec.size, rec.size)
+			Effects.dust(rec.cx, rec.cy + rec.size * 0.3, rec.size * 0.9)
+		end
 		if rec.owner == MapView.myId then
 			Sfx.play("built")
 		end
@@ -4994,7 +5369,7 @@ function MapView.buildingAt(sx: number, sy: number): number?
 	local x, y = Camera.screenToWorld(sx, sy)
 	local m = 0.15
 	for id, b in buildings do
-		if x >= b.x - m and x <= b.x + b.size + m and y >= b.y - m and y <= b.y + b.size + m then
+		if x >= b.x - m and x <= b.x + b.size + m and y >= b.y - m and y <= b.y + b.size + m and Fog.showsBuilding(b) then
 			return id
 		end
 	end
@@ -5199,7 +5574,7 @@ function MapView.thingAt(sx: number, sy: number): (string?, number?)
 	for id, u in units do
 		local reach = math.max((u.def.size or 1.5) * 0.5, 22 / Camera.ppt)
 		local d = math.sqrt((u.x - x) ^ 2 + (u.y - y) ^ 2)
-		if d <= reach and d < bd then
+		if d <= reach and d < bd and Fog.showsUnit(u) then
 			best, bd = id, d
 		end
 	end
@@ -5246,7 +5621,7 @@ local function updateUnits(dt: number)
 		local dx, dy = x - u.x, y - u.y
 		local moved = math.sqrt(dx * dx + dy * dy)
 		u.x, u.y = x, y
-		local onScreen = math.abs(x - camX) <= hw + 3 and math.abs(y - camY) <= hh + 3
+		local onScreen = math.abs(x - camX) <= hw + 3 and math.abs(y - camY) <= hh + 3 and Fog.showsUnit(u)
 		u.frame.Visible = onScreen
 		if moved > 3e-4 then
 			u.want = math.deg(math.atan2(dx, -dy))
@@ -5327,10 +5702,14 @@ local function updateUnits(dt: number)
 		end
 	end
 	for _, b in buildings do
+		b.frame.Visible = Fog.showsBuilding(b)
 		if b.built < 1 then
 			-- everyone sees buildings rise at the building speed; the owner also gets exact progress
 			b.built = math.min(0.99, b.built + dt / b.def.time)
 			refreshBuilding(b)
+		end
+		if b.dish then
+			b.dish.Rotation = (b.dish.Rotation + dt * 80) % 360
 		end
 		if b.gun or b.spin then
 			local want = if b.aimUntil and b.aimUntil > clock then b.aim else b.gunAngle
@@ -5372,6 +5751,10 @@ function MapView.shots(list)
 	local clock = os.clock()
 	for i = 1, #list - 3, 4 do
 		local x1, y1, x2, y2 = list[i], list[i + 1], list[i + 2], list[i + 3]
+		if not Fog.sees(x1, y1) and not Fog.sees(x2, y2) then
+			-- a fight in the fog makes no flashes and no sound
+			continue
+		end
 		local shooter = shooterAt(x1, y1, x2, y2)
 		local kind = if shooter then shooter.kind else "infantry"
 		if shooter then
@@ -5394,6 +5777,9 @@ function MapView.shots(list)
 end
 
 function MapView.boom(x: number, y: number, big: boolean)
+	if not Fog.sees(x, y) then
+		return
+	end
 	Effects.boom(x, y, big)
 	Sfx.at(if big then "bigboom" else "boom", x, y)
 end
@@ -5413,7 +5799,7 @@ local function updateWork(dt: number)
 	hammerAcc = 0.35 + math.random() * 0.5
 	local site = nil
 	for _, b in buildings do
-		if b.built < 1 and Camera.onScreen(b.cx, b.cy, 0) and (not site or math.random() < 0.5) then
+		if b.built < 1 and Camera.onScreen(b.cx, b.cy, 0) and Fog.showsBuilding(b) and (not site or math.random() < 0.5) then
 			site = b
 		end
 	end
@@ -5450,9 +5836,16 @@ function MapView.init(playerGui: PlayerGui)
 	})
 	Board.frame = board
 	Board.ground(board, Z.ground)
-	Placement.init(board, buildings, function()
+	local function mine(): number
 		return MapView.myId
-	end)
+	end
+	Placement.init(board, buildings, mine)
+	Fog.init(board, buildings, units, mine)
+	Fog.onSpotted = function(x: number, y: number)
+		if MapView.onSpotted then
+			MapView.onSpotted(x, y)
+		end
+	end
 	gui.Parent = playerGui
 	Camera.init(view, board)
 	Sfx.view = function()
@@ -5519,6 +5912,7 @@ function MapView.load(s)
 		MapView.addUnit(u)
 	end
 	MapView.loading = false
+	Fog.reset()
 end
 
 function MapView.setPhase(_phase: string) end
@@ -5528,6 +5922,7 @@ function MapView.setMode(m: string)
 	mode = m
 	Input.active = m == "play"
 	Input.reset()
+	Fog.enable(m == "play" and not MapView.spectator)
 	if m == "play" then
 		Camera.playZoom()
 	else
@@ -5543,16 +5938,22 @@ function MapView.update(dt: number)
 	updateUnits(dt)
 	updateWork(dt)
 	Placement.update()
+	Fog.update(dt)
 	Effects.update()
 	miniAcc += dt
 	if miniAcc >= 0.25 then
 		miniAcc = 0
-		Minimap.update(buildings, units, teamColor)
+		Minimap.update(buildings, units, teamColor, Fog.showsBuilding, Fog.showsOnMinimap)
+		-- the name over an enemy command centre shows once the base has been found
+		for id, tag in labels do
+			local n = MapView.nations[id]
+			tag.Visible = n ~= nil and n.cap ~= nil and (id == MapView.myId or Fog.knows(n.cap.x + 0.5, n.cap.y + 0.5))
+		end
 	end
 end
 
 return MapView
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001B"><Properties><string name="Name">Menu</string><ProtectedString name="Source"><![CDATA[-- The main menu (player chip, logo, side cards, modes and the play button) and the arsenal
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001C"><Properties><string name="Name">Menu</string><ProtectedString name="Source"><![CDATA[-- The main menu (player chip, logo, side cards, modes and the play button) and the arsenal
 -- sheet with every unit kind. Part of the interface; Ui puts it together.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -5893,7 +6294,7 @@ function Menu.setLobby(info)
 end
 
 return Menu
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001C"><Properties><string name="Name">Minimap</string><ProtectedString name="Source"><![CDATA[-- The minimap: the whole battlefield in a corner, with a dot for every building and unit and a
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001D"><Properties><string name="Name">Minimap</string><ProtectedString name="Source"><![CDATA[-- The minimap: the whole battlefield in a corner, with a dot for every building and unit and a
 -- frame for what the camera sees. Tap or drag on it to move the camera there.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -5916,7 +6317,8 @@ function Minimap.attach(holder: GuiObject?)
 	end
 	mini = { holder = holder, dots = {}, used = 0 }
 	Board.ground(holder, holder.ZIndex)
-	mini.camRect = make("Frame", { BackgroundTransparency = 1, ZIndex = holder.ZIndex + 2, Parent = holder }, {
+	-- holder.ZIndex + 1 is left for the fog of war, between the ground and the dots
+	mini.camRect = make("Frame", { BackgroundTransparency = 1, ZIndex = holder.ZIndex + 3, Parent = holder }, {
 		make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1.5 }),
 	})
 	local dragging = nil
@@ -5951,7 +6353,7 @@ local function dot(x: number, y: number, s: number, color: Color3)
 	mini.used += 1
 	local d = mini.dots[mini.used]
 	if not d then
-		d = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, ZIndex = mini.holder.ZIndex + 1, Parent = mini.holder })
+		d = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, ZIndex = mini.holder.ZIndex + 2, Parent = mini.holder })
 		mini.dots[mini.used] = d
 	end
 	d.Position = at(x, y)
@@ -5960,18 +6362,23 @@ local function dot(x: number, y: number, s: number, color: Color3)
 	d.Visible = true
 end
 
--- buildings and units: the map's records; colorOf(owner) gives a team's colour
-function Minimap.update(buildings, units, colorOf: (number) -> Color3)
+-- buildings and units: the map's records; colorOf(owner) gives a team's colour;
+-- buildingShows / unitShows tell which ones the player may see
+function Minimap.update(buildings, units, colorOf: (number) -> Color3, buildingShows: (any) -> boolean, unitShows: (any) -> boolean)
 	if not mini or not mini.holder.Visible then
 		return
 	end
 	mini.used = 0
 	local px = mini.holder.AbsoluteSize.X / W
 	for _, b in buildings do
-		dot(b.cx, b.cy, math.max(3, b.size * px), colorOf(b.owner))
+		if buildingShows(b) then
+			dot(b.cx, b.cy, math.max(3, b.size * px), colorOf(b.owner))
+		end
 	end
 	for _, u in units do
-		dot(u.x, u.y, 2, colorOf(u.owner))
+		if unitShows(u) then
+			dot(u.x, u.y, 2, colorOf(u.owner))
+		end
 	end
 	for i = mini.used + 1, #mini.dots do
 		mini.dots[i].Visible = false
@@ -5982,7 +6389,7 @@ function Minimap.update(buildings, units, colorOf: (number) -> Color3)
 end
 
 return Minimap
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001D"><Properties><string name="Name">Placement</string><ProtectedString name="Source"><![CDATA[-- Build mode on the map: the server's placement rules, an outline of the chosen building under
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001E"><Properties><string name="Name">Placement</string><ProtectedString name="Source"><![CDATA[-- Build mode on the map: the server's placement rules, an outline of the chosen building under
 -- the pointer (green if it fits, red if not), and helpers that show where it can go: rings
 -- around the free pools for extractors, the base zones for the rest.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6169,7 +6576,7 @@ function Placement.init(boardFrame: Frame, records, mine: () -> number)
 end
 
 return Placement
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001E"><Properties><string name="Name">Sfx</string><ProtectedString name="Source"><![CDATA[-- Sound effects. All clips are cut from one audio asset (shared/SoundData) with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001F"><Properties><string name="Name">Sfx</string><ProtectedString name="Source"><![CDATA[-- Sound effects. All clips are cut from one audio asset (shared/SoundData) with
 -- Sound.PlaybackRegion. Battle sounds get quieter away from the middle of the screen and are
 -- skipped when far off screen, when the same clip just played, or when many are playing.
 local ContentProvider = game:GetService("ContentProvider")
@@ -6265,7 +6672,7 @@ function Sfx.at(name: string, x: number, y: number)
 end
 
 return Sfx
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001F"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Unit and building pictures come from one sprite sheet (atlas) plus a matching sheet with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Unit and building pictures come from one sprite sheet (atlas) plus a matching sheet with
 -- the team-coloured parts in grey, which is tinted with ImageColor3. One pair of images
 -- serves every team. Other icons are text symbols.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6303,6 +6710,7 @@ local GLYPHS = {
 	help = { "?", Color3.fromRGB(238, 242, 248) },
 	play = { "▶", Color3.fromRGB(43, 18, 3) },
 	shield = { "🛡" },
+	radar = { "📡" },
 	lock = { "🔒" },
 	globe = { "🌍" },
 	swords = { "⚔", Color3.fromRGB(238, 242, 248) },
@@ -6397,7 +6805,7 @@ function Sprites.setTransparency(label: GuiObject, value: number)
 end
 
 return Sprites
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Colours, fonts and small helpers for building UI in code.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Colours, fonts and small helpers for building UI in code.
 local Theme = {}
 
 Theme.C = {
@@ -6537,7 +6945,7 @@ function Theme.hex(h: string): Color3
 end
 
 return Theme
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[-- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[-- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
 -- This module is the interface the game script talks to; the parts are built in Menu (main
 -- menu and arsenal), Hud (the match screen) and Factory (the factory panel), from Widgets.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6742,7 +7150,7 @@ function UI.artError()
 end
 
 return UI
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Widgets</string><ProtectedString name="Source"><![CDATA[-- Small pieces the menu and the match screen are built from: icons, round icon buttons, the
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Widgets</string><ProtectedString name="Source"><![CDATA[-- Small pieces the menu and the match screen are built from: icons, round icon buttons, the
 -- orange main buttons, avatars, resource chips and prices.
 local TweenService = game:GetService("TweenService")
 

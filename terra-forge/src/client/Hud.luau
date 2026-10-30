@@ -229,7 +229,7 @@ function Hud.build(context, play: Instance)
 	local buildScroll = make("ScrollingFrame", {
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.fromOffset(572, 98),
+		Size = UDim2.fromOffset(650, 98),
 		BackgroundColor3 = C.panel,
 		BackgroundTransparency = 0.08,
 		BorderSizePixel = 0,
@@ -359,7 +359,7 @@ end
 function Hud.layout(w: number)
 	if refs.buildScroll then
 		local left, right = 16 + 250 + 8, 16 + 44 + 8
-		refs.buildScroll.Size = UDim2.fromOffset(math.clamp(w - left - right, 220, 572), 98)
+		refs.buildScroll.Size = UDim2.fromOffset(math.clamp(w - left - right, 220, 650), 98)
 		refs.buildScroll.Position = UDim2.new(0, left + (w - left - right) / 2, 1, -12)
 	end
 end

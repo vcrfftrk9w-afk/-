@@ -118,11 +118,14 @@ local function goMenu()
 	UI.showMenu()
 end
 
-local function focusCapital(seconds: number)
+-- GTA-style flight to the player's capital; false when there is none yet
+local function switchHome(): boolean
 	local n = me()
 	if n and n.cap then
-		MapView.focusOn(n.cap.x + 0.5, n.cap.y + 0.5, seconds)
+		MapView.switchTo(n.cap.x + 0.5, n.cap.y + 0.5)
+		return true
 	end
+	return false
 end
 
 local function enterPlay(spectator: boolean)
@@ -138,7 +141,7 @@ local function enterPlay(spectator: boolean)
 		UI.setMyColor(n.color)
 	end
 	if state.phase == "game" then
-		focusCapital(0.8)
+		switchHome()
 	end
 end
 
@@ -196,10 +199,10 @@ function handlers.phase(msg)
 		UI.setPhase("game", state.spectator)
 		if not state.spectator then
 			UI.announce("ВОЙНА НАЧАЛАСЬ", "Захватывай землю и строй заводы")
-			focusCapital(1.2)
+			switchHome()
 			task.delay(2.4, function()
 				if state.screen == "play" and state.phase == "game" then
-					UI.toast("Нажми на землю у своей границы, чтобы захватить её. Построй казарму или танковый завод и нажми на него на карте, чтобы заказать войска.", false, 7)
+					UI.toast("Нажми на землю у своей границы, чтобы захватить её. Построй казарму или танковый завод и нажми на него, чтобы заказать войска. Кнопка с замком наверху вернёт к базе.", false, 7)
 				end
 			end)
 		end
@@ -302,6 +305,12 @@ end
 
 UI.onAuto = function(id, kind)
 	action:FireServer("auto", id, kind)
+end
+
+UI.onBase = function()
+	if not switchHome() then
+		UI.toast("Столицы пока нет.", true)
+	end
 end
 
 UI.onRally = function(id)
@@ -481,7 +490,13 @@ MapView.onTap = function(x, y, sx, sy)
 				return
 			end
 			if MapView.ownerAt(x, y) == MapView.myId then
-				UI.toast("Это твоя земля. Выбери постройку внизу, чтобы строить.")
+				if MapView.isFar() then
+					-- from high up, a tap on your land flies down to the base there
+					local bx, by = MapView.nearestBase(x + 0.5, y + 0.5, 30)
+					MapView.switchTo(bx or x + 0.5, by or y + 0.5)
+				else
+					UI.toast("Это твоя земля. Выбери постройку внизу, чтобы строить.")
+				end
 				return
 			end
 			action:FireServer("attack", x, y, UI.attackPct)

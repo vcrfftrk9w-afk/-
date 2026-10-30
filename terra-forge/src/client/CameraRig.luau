@@ -1,6 +1,8 @@
 -- The camera over the 3D map. Drag to move, pinch or mouse wheel to zoom, WASD or arrows on
 -- a keyboard; a short tap is passed on as a map action. The camera looks north from the
--- south and tilts down further the higher it is.
+-- south and tilts down further the higher it is. Rig.switchTo flies to another place the way
+-- GTA switches characters: up into the sky in jumps, across, and down in jumps.
+local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
@@ -22,6 +24,9 @@ Rig.MIN_D = 12
 local maxD = 420
 local PLANE_Y = 0.3
 local anim = nil
+local switch = nil
+local switchFx = 0 -- 0..1, how strongly the switch blur and grey are shown
+local blur, grey = nil, nil
 
 local function camera(): Camera
 	return workspace.CurrentCamera
@@ -97,6 +102,7 @@ function Rig.pxPerStud(depth: number): number
 end
 
 function Rig.flyTo(x: number, z: number, d: number, seconds: number)
+	switch = nil
 	anim = {
 		from = { Rig.fx, Rig.fz, Rig.dist },
 		to = { math.clamp(x, 0, W), math.clamp(z, 0, H), math.clamp(d, Rig.MIN_D, maxD) },
@@ -110,7 +116,98 @@ function Rig.overview(seconds: number)
 	Rig.flyTo(W / 2, H / 2 + 6, maxD, seconds)
 end
 
+---------------------------------------------------------------- switch flight
+
+local function ease(k: number): number
+	return if k < 0.5 then 2 * k * k else 1 - (-2 * k + 2) ^ 2 / 2
+end
+
+-- flies to (x, z) and ends at distance d; onDone runs on arrival
+function Rig.switchTo(x: number, z: number, d: number, onDone: (() -> ())?)
+	updateLimits()
+	anim = nil
+	x, z = math.clamp(x, 0, W), math.clamp(z, 0, H)
+	local top = maxD * 0.9
+	local steps = {}
+	local cur = { Rig.fx, Rig.fz, Rig.dist }
+	local function hop(to, seconds: number, hold: number)
+		table.insert(steps, { from = cur, to = to, d = seconds, hold = hold })
+		cur = to
+	end
+	-- up in three jumps, unless the camera is high already
+	if cur[3] < top * 0.75 then
+		local d0 = cur[3]
+		for k = 1, 3 do
+			hop({ cur[1], cur[2], d0 * (top / d0) ^ (k / 3) }, 0.24, 0.1)
+		end
+	end
+	local far = math.sqrt((x - cur[1]) ^ 2 + (z - cur[2]) ^ 2)
+	hop({ x, z, math.max(cur[3], top) }, math.clamp(far / 450, 0.3, 0.9), 0.08)
+	-- and down in three jumps
+	local d1 = cur[3]
+	local target = math.clamp(d, Rig.MIN_D, maxD)
+	for k = 1, 3 do
+		hop({ x, z, d1 * (target / d1) ^ (k / 3) }, 0.24, if k < 3 then 0.1 else 0)
+	end
+	switch = { steps = steps, i = 1, t0 = os.clock(), onDone = onDone }
+end
+
+function Rig.switching(): boolean
+	return switch ~= nil
+end
+
+-- moves the camera along the switch; returns the blur strength for this moment (0..1)
+local function stepSwitch(): number
+	local s = switch
+	local st = s.steps[s.i]
+	local e = os.clock() - s.t0
+	if e < st.d then
+		local k = e / st.d
+		local q = ease(k)
+		Rig.fx = st.from[1] + (st.to[1] - st.from[1]) * q
+		Rig.fz = st.from[2] + (st.to[2] - st.from[2]) * q
+		Rig.dist = st.from[3] * (st.to[3] / st.from[3]) ^ q
+		return math.sin(math.pi * k)
+	end
+	Rig.fx, Rig.fz, Rig.dist = st.to[1], st.to[2], st.to[3]
+	if e >= st.d + st.hold then
+		s.i += 1
+		s.t0 = os.clock()
+		if s.i > #s.steps then
+			switch = nil
+			if s.onDone then
+				task.spawn(s.onDone)
+			end
+		end
+	end
+	return 0
+end
+
+local function showSwitchFx(dt: number, motion: number)
+	switchFx += ((if switch then 1 else 0) - switchFx) * math.min(1, dt * 10)
+	if switchFx < 0.01 and not blur then
+		return
+	end
+	if not blur then
+		blur = Instance.new("BlurEffect")
+		blur.Name = "TerraForgeSwitchBlur"
+		blur.Size = 0
+		blur.Parent = Lighting
+		grey = Instance.new("ColorCorrectionEffect")
+		grey.Name = "TerraForgeSwitchGrey"
+		grey.Parent = Lighting
+	end
+	blur.Size = switchFx * (3 + 17 * motion)
+	grey.Saturation = -0.7 * switchFx
+	grey.Contrast = 0.12 * switchFx
+	grey.Brightness = 0.05 * switchFx
+	grey.TintColor = Color3.new(1, 1, 1):Lerp(Color3.fromRGB(214, 228, 255), switchFx)
+end
+
 function Rig.zoom(f: number)
+	if switch then
+		return
+	end
 	anim = nil
 	Rig.dist /= f
 	clampView()
@@ -155,7 +252,7 @@ function Rig.setupInput()
 	end
 
 	UserInputService.InputBegan:Connect(function(input, processed)
-		if processed or not Rig.active then
+		if processed or not Rig.active or switch then
 			return
 		end
 		local isTouch = input.UserInputType == Enum.UserInputType.Touch
@@ -181,7 +278,7 @@ function Rig.setupInput()
 			return
 		end
 		if input.UserInputType == Enum.UserInputType.MouseWheel then
-			if not processed then
+			if not processed and not switch then
 				anim = nil
 				zoomAround(UserInputService:GetMouseLocation(), if input.Position.Z > 0 then 1.2 else 1 / 1.2, true)
 			end
@@ -272,14 +369,18 @@ local KEYS = {
 
 function Rig.update(dt: number)
 	updateLimits()
+	local motion = 0
 	if Rig.menu then
+		switch = nil
 		local t = os.clock()
 		Rig.fx = W * 0.5 + math.sin(t / 47) * W * 0.3
 		Rig.fz = H * 0.36 + math.sin(t / 29) * H * 0.08
 		Rig.dist = 120 + math.sin(t / 31) * 25
+	elseif switch then
+		motion = stepSwitch()
 	elseif anim then
 		local k = math.clamp((os.clock() - anim.t0) / anim.d, 0, 1)
-		local e = if k < 0.5 then 2 * k * k else 1 - (-2 * k + 2) ^ 2 / 2
+		local e = ease(k)
 		Rig.fx = anim.from[1] + (anim.to[1] - anim.from[1]) * e
 		Rig.fz = anim.from[2] + (anim.to[2] - anim.from[2]) * e
 		Rig.dist = anim.from[3] * (anim.to[3] / anim.from[3]) ^ e
@@ -301,6 +402,7 @@ function Rig.update(dt: number)
 	end
 	clampView()
 	Rig.apply()
+	showSwitchFx(dt, motion)
 end
 
 return Rig

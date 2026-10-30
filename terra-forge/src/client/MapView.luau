@@ -536,6 +536,38 @@ function MapView.overview(seconds: number)
 	Rig.overview(seconds)
 end
 
+-- GTA-style flight to a map point: up into the sky, across, and down close to the ground
+function MapView.switchTo(x: number, y: number)
+	Rig.switchTo(x, y, 34)
+end
+
+-- the camera is high above the map
+function MapView.isFar(): boolean
+	return Rig.dist > 80
+end
+
+-- the player's capital or building nearest to a map point, within radius tiles
+function MapView.nearestBase(x: number, y: number, radius: number): (number?, number?)
+	local bx, by, best = nil, nil, radius * radius
+	local function try(px: number, py: number)
+		local d = (px - x) ^ 2 + (py - y) ^ 2
+		if d < best then
+			best = d
+			bx, by = px, py
+		end
+	end
+	local n = nations[MapView.myId]
+	if n and n.cap then
+		try(n.cap.x + 0.5, n.cap.y + 0.5)
+	end
+	for _, b in buildings do
+		if b.owner == MapView.myId then
+			try(b.x + 0.5, b.y + 0.5)
+		end
+	end
+	return bx, by
+end
+
 ---------------------------------------------------------------- nations and capitals
 
 local function removeLabel(id: number)

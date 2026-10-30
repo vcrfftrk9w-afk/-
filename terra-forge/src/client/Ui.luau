@@ -21,6 +21,7 @@ UI.onQueue = nil
 UI.onCancel = nil
 UI.onAuto = nil
 UI.onRally = nil
+UI.onBase = nil
 UI.factoryId = nil
 UI.buildSel = nil
 UI.attackPct = 40
@@ -550,6 +551,17 @@ local function buildPlay()
 		BackgroundTransparency = 1,
 		Parent = hudTop,
 	}, { Theme.list(Enum.FillDirection.Horizontal, 8) })
+	-- back to the base with a GTA-style flight
+	local baseBtn = iconButton("castle", right, function()
+		if UI.onBase then
+			UI.onBase()
+		end
+	end)
+	baseBtn.LayoutOrder = -1
+	refs.baseIcon = baseBtn:FindFirstChildOfClass("ImageLabel")
+	if refs.baseIcon then
+		Sprites.apply(refs.baseIcon, "castle", myColor)
+	end
 	iconButton("trophy", right, function()
 		refs.lb.Visible = not refs.lb.Visible
 	end)
@@ -946,6 +958,9 @@ function UI.setMyColor(hex: string)
 	end
 	myColor = hex
 	refs.meStroke.Color = Theme.hex(hex)
+	if refs.baseIcon then
+		Sprites.apply(refs.baseIcon, "castle", hex)
+	end
 	for k, b in refs.buildBtns do
 		Sprites.apply(b.icon, Config.BUILD[k].icon, hex)
 	end

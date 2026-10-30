@@ -75,6 +75,7 @@ local Config = require(Shared.Config)
 local Map = require(Shared.Map)
 local Art = require(script.Art)
 local MapView = require(script.MapView)
+local Music = require(script.Music)
 local Sfx = require(script.Sfx)
 local UI = require(script.Ui)
 
@@ -94,6 +95,7 @@ safe("мини-карта", MapView.attachMinimap, UI.minimap)
 safe("меню", function()
 	MapView.setMode("menu")
 	UI.showMenu()
+	Music.setMode("menu")
 end)
 
 -- the pictures reach the game a moment after it starts; say so if they never do
@@ -133,6 +135,7 @@ local function goMenu()
 	UI.setArmed("box", false)
 	MapView.setMode("menu")
 	UI.showMenu()
+	Music.setMode("menu")
 end
 
 -- moves the camera to the player's command centre; false when there is none
@@ -154,6 +157,7 @@ local function enterPlay(spectator: boolean)
 	MapView.spectator = spectator
 	MapView.setMode("play")
 	UI.showPlay(state.phase, spectator)
+	Music.setMode("battle")
 	local n = me()
 	if n then
 		UI.setMyColor(n.color)
@@ -402,6 +406,12 @@ end
 
 UI.onZoom = function(f)
 	MapView.zoom(f)
+end
+
+UI.onMusic = function()
+	Music.setOn(not Music.on)
+	UI.setMusicOn(Music.on)
+	UI.toast(if Music.on then "Музыка включена." else "Музыка выключена.")
 end
 
 function handlers.fx(msg)

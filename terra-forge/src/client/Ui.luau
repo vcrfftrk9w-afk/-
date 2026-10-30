@@ -11,6 +11,7 @@ local Hud = require(script.Parent.Hud)
 local Menu = require(script.Parent.Menu)
 local Research = require(script.Parent.Research)
 local Sfx = require(script.Parent.Sfx)
+local Sprites = require(script.Parent.Sprites)
 local Theme = require(script.Parent.Theme)
 local Widgets = require(script.Parent.Widgets)
 
@@ -31,6 +32,7 @@ UI.onRally = nil
 UI.onCommand = nil -- army panel: "screen", "box", "amove", "stop", "hold"
 UI.onBase = nil
 UI.onBuildSelect = nil
+UI.onMusic = nil -- a music button was pressed
 UI.factoryId = nil
 UI.onResearch = nil -- (research centre id, tech id)
 UI.onStopResearch = nil -- (research centre id)
@@ -64,6 +66,16 @@ UI.showFactory = Factory.show
 UI.hideFactory = Factory.hide
 UI.showResearch = Research.show
 UI.hideResearch = Research.hide
+
+-- the music buttons show whether the music plays
+function UI.setMusicOn(on: boolean)
+	for _, b in refs.musicButtons or {} do
+		local img = b:FindFirstChildOfClass("ImageLabel")
+		if img then
+			Sprites.apply(img, if on then "music" else "musicOff")
+		end
+	end
+end
 
 ---------------------------------------------------------------- scaling
 

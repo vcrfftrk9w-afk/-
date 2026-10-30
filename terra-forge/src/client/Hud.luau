@@ -117,6 +117,12 @@ function Hud.build(context, play: Instance)
 	if refs.baseIcon then
 		Sprites.apply(refs.baseIcon, "castle", ctx.color)
 	end
+	refs.musicButtons = refs.musicButtons or {}
+	table.insert(refs.musicButtons, iconButton("music", right, function()
+		if UI.onMusic then
+			UI.onMusic()
+		end
+	end))
 	iconButton("trophy", right, function()
 		refs.lb.Visible = not refs.lb.Visible
 	end)

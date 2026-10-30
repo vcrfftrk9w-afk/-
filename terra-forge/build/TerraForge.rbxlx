@@ -2504,7 +2504,7 @@ function Path.inMap(x: number, y: number): (number, number)
 end
 
 return Path
-]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX00000028"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000027"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000026"><Properties><string name="Name">TerraForgeClient</string><ProtectedString name="Source"><![CDATA[-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
+]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX00000029"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000028"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000027"><Properties><string name="Name">TerraForgeClient</string><ProtectedString name="Source"><![CDATA[-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -2581,6 +2581,7 @@ local Config = require(Shared.Config)
 local Map = require(Shared.Map)
 local Art = require(script.Art)
 local MapView = require(script.MapView)
+local Music = require(script.Music)
 local Sfx = require(script.Sfx)
 local UI = require(script.Ui)
 
@@ -2600,6 +2601,7 @@ safe("мини-карта", MapView.attachMinimap, UI.minimap)
 safe("меню", function()
 	MapView.setMode("menu")
 	UI.showMenu()
+	Music.setMode("menu")
 end)
 
 -- the pictures reach the game a moment after it starts; say so if they never do
@@ -2639,6 +2641,7 @@ local function goMenu()
 	UI.setArmed("box", false)
 	MapView.setMode("menu")
 	UI.showMenu()
+	Music.setMode("menu")
 end
 
 -- moves the camera to the player's command centre; false when there is none
@@ -2660,6 +2663,7 @@ local function enterPlay(spectator: boolean)
 	MapView.spectator = spectator
 	MapView.setMode("play")
 	UI.showPlay(state.phase, spectator)
+	Music.setMode("battle")
 	local n = me()
 	if n then
 		UI.setMyColor(n.color)
@@ -2908,6 +2912,12 @@ end
 
 UI.onZoom = function(f)
 	MapView.zoom(f)
+end
+
+UI.onMusic = function()
+	Music.setOn(not Music.on)
+	UI.setMusicOn(Music.on)
+	UI.toast(if Music.on then "Музыка включена." else "Музыка выключена.")
 end
 
 function handlers.fx(msg)
@@ -4760,6 +4770,12 @@ function Hud.build(context, play: Instance)
 	if refs.baseIcon then
 		Sprites.apply(refs.baseIcon, "castle", ctx.color)
 	end
+	refs.musicButtons = refs.musicButtons or {}
+	table.insert(refs.musicButtons, iconButton("music", right, function()
+		if UI.onMusic then
+			UI.onMusic()
+		end
+	end))
 	iconButton("trophy", right, function()
 		refs.lb.Visible = not refs.lb.Visible
 	end)
@@ -6568,6 +6584,12 @@ function Menu.build(context, root: Instance, player: Player): Frame
 	iconButton("shield", topLeft, function()
 		Menu.openArsenal()
 	end)
+	refs.musicButtons = refs.musicButtons or {}
+	table.insert(refs.musicButtons, iconButton("music", topLeft, function()
+		if UI.onMusic then
+			UI.onMusic()
+		end
+	end))
 	local pill = make("Frame", {
 		AutomaticSize = Enum.AutomaticSize.XY,
 		Size = UDim2.fromOffset(0, 0),
@@ -6967,7 +6989,110 @@ function Minimap.update(buildings, units, colorOf: (number) -> Color3, buildingS
 end
 
 return Minimap
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001F"><Properties><string name="Name">Placement</string><ProtectedString name="Source"><![CDATA[-- Build mode on the map: the server's placement rules, an outline of the chosen building under
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001F"><Properties><string name="Name">Music</string><ProtectedString name="Source"><![CDATA[-- Background music: a calm playlist in the menu and a battle playlist during a match, one
+-- track after another in shuffled order, fading between them. In battle it plays quieter so
+-- the shots and explosions come through. The player can switch it off.
+-- The tracks are Roblox-licensed music from the Creator Store, free to use in any Roblox
+-- experience: APM Music (by APMOfficial) and DistroKid artists (by DistrokidOfficial).
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
+
+local Music = {}
+Music.on = true
+
+local TRACKS = {
+	menu = {
+		1844412739, -- Heroic Sentiment (APM Music)
+		1836289820, -- Lost World (APM Music)
+	},
+	battle = {
+		1835772023, -- Battle Of Shadows (APM Music)
+		114403249324975, -- Victory in the Making (DistroKid)
+		124027970389012, -- Rise of the Heroes (DistroKid)
+		100277718098342, -- Battle Cry of the Free (DistroKid)
+	},
+}
+local VOLUME = { menu = 0.4, battle = 0.22 }
+local FADE = 1.6
+
+local mode = nil -- "menu" or "battle"
+local sound = nil -- the track playing now
+local order = {} -- the shuffled playlist of the current mode and where it is
+local rng = Random.new()
+
+local function fadeOut(s: Sound)
+	local tween = TweenService:Create(s, TweenInfo.new(FADE), { Volume = 0 })
+	tween.Completed:Connect(function()
+		s:Destroy()
+	end)
+	tween:Play()
+end
+
+local function shuffled(list)
+	local a = table.clone(list)
+	for i = #a, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		a[i], a[j] = a[j], a[i]
+	end
+	return a
+end
+
+local playNext
+
+-- starts the next track of the playlist, fading in
+function playNext()
+	if sound then
+		fadeOut(sound)
+		sound = nil
+	end
+	if not Music.on or not mode then
+		return
+	end
+	if #order.list == 0 then
+		order.list = shuffled(TRACKS[mode])
+	end
+	local id = table.remove(order.list, 1)
+	local s = Instance.new("Sound")
+	s.Name = "TerraForgeMusic"
+	s.SoundId = "rbxassetid://" .. id
+	s.Volume = 0
+	s.Parent = SoundService
+	s.Ended:Connect(function()
+		if sound == s then
+			playNext()
+		end
+	end)
+	sound = s
+	s:Play()
+	TweenService:Create(s, TweenInfo.new(FADE), { Volume = VOLUME[mode] }):Play()
+end
+
+-- "menu" or "battle": switches to that playlist (nothing happens if it already plays)
+function Music.setMode(m: string)
+	if m == mode then
+		return
+	end
+	mode = m
+	order = { list = {} }
+	playNext()
+end
+
+function Music.setOn(on: boolean)
+	if on == Music.on then
+		return
+	end
+	Music.on = on
+	if on then
+		order = { list = {} }
+		playNext()
+	elseif sound then
+		fadeOut(sound)
+		sound = nil
+	end
+end
+
+return Music
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Placement</string><ProtectedString name="Source"><![CDATA[-- Build mode on the map: the server's placement rules, an outline of the chosen building under
 -- the pointer (green if it fits, red if not), and helpers that show where it can go: rings
 -- around the free pools for extractors, the base zones for the rest.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7154,7 +7279,7 @@ function Placement.init(boardFrame: Frame, records, mine: () -> number)
 end
 
 return Placement
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Research</string><ProtectedString name="Source"><![CDATA[-- The research panel of a research centre: every technology with what it does and its price,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Research</string><ProtectedString name="Source"><![CDATA[-- The research panel of a research centre: every technology with what it does and its price,
 -- the one being studied with its progress, and a button to stop it (the metal comes back).
 -- Part of the interface; Ui puts it together.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7348,7 +7473,7 @@ function Research.hide()
 end
 
 return Research
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Sfx</string><ProtectedString name="Source"><![CDATA[-- Sound effects. All clips are cut from one audio asset (shared/SoundData) with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Sfx</string><ProtectedString name="Source"><![CDATA[-- Sound effects. All clips are cut from one audio asset (shared/SoundData) with
 -- Sound.PlaybackRegion. Battle sounds get quieter away from the middle of the screen and are
 -- skipped when far off screen, when the same clip just played, or when many are playing.
 local ContentProvider = game:GetService("ContentProvider")
@@ -7444,7 +7569,7 @@ function Sfx.at(name: string, x: number, y: number)
 end
 
 return Sfx
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Unit and building pictures come from one sprite sheet (atlas) plus a matching sheet with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Unit and building pictures come from one sprite sheet (atlas) plus a matching sheet with
 -- the team-coloured parts in grey, which is tinted with ImageColor3. One pair of images
 -- serves every team. Other icons are text symbols.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7492,6 +7617,8 @@ local GLYPHS = {
 	swords = { "⚔️" },
 	gear = { "⚙️" },
 	lab = { "🔬" },
+	music = { "🎵" },
+	musicOff = { "🔇" },
 }
 
 function Sprites.has(name: string): boolean
@@ -7583,7 +7710,7 @@ function Sprites.setTransparency(label: GuiObject, value: number)
 end
 
 return Sprites
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Colours, fonts and small helpers for building UI in code.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Colours, fonts and small helpers for building UI in code.
 local Theme = {}
 
 Theme.C = {
@@ -7723,7 +7850,7 @@ function Theme.hex(h: string): Color3
 end
 
 return Theme
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[-- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000025"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[-- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
 -- This module is the interface the game script talks to; the parts are built in Menu (main
 -- menu and arsenal), Hud (the match screen), Factory (the factory panel) and Research (the
 -- research panel), from Widgets.
@@ -7736,6 +7863,7 @@ local Hud = require(script.Parent.Hud)
 local Menu = require(script.Parent.Menu)
 local Research = require(script.Parent.Research)
 local Sfx = require(script.Parent.Sfx)
+local Sprites = require(script.Parent.Sprites)
 local Theme = require(script.Parent.Theme)
 local Widgets = require(script.Parent.Widgets)
 
@@ -7756,6 +7884,7 @@ UI.onRally = nil
 UI.onCommand = nil -- army panel: "screen", "box", "amove", "stop", "hold"
 UI.onBase = nil
 UI.onBuildSelect = nil
+UI.onMusic = nil -- a music button was pressed
 UI.factoryId = nil
 UI.onResearch = nil -- (research centre id, tech id)
 UI.onStopResearch = nil -- (research centre id)
@@ -7789,6 +7918,16 @@ UI.showFactory = Factory.show
 UI.hideFactory = Factory.hide
 UI.showResearch = Research.show
 UI.hideResearch = Research.hide
+
+-- the music buttons show whether the music plays
+function UI.setMusicOn(on: boolean)
+	for _, b in refs.musicButtons or {} do
+		local img = b:FindFirstChildOfClass("ImageLabel")
+		if img then
+			Sprites.apply(img, if on then "music" else "musicOff")
+		end
+	end
+end
 
 ---------------------------------------------------------------- scaling
 
@@ -7938,7 +8077,7 @@ function UI.artError()
 end
 
 return UI
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000025"><Properties><string name="Name">Widgets</string><ProtectedString name="Source"><![CDATA[-- Small pieces the menu and the match screen are built from: icons, round icon buttons, the
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000026"><Properties><string name="Name">Widgets</string><ProtectedString name="Source"><![CDATA[-- Small pieces the menu and the match screen are built from: icons, round icon buttons, the
 -- orange main buttons, avatars, resource chips and prices.
 local TweenService = game:GetService("TweenService")
 

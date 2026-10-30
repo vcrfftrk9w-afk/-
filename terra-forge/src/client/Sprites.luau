@@ -46,6 +46,8 @@ local GLYPHS = {
 	swords = { "⚔️" },
 	gear = { "⚙️" },
 	lab = { "🔬" },
+	music = { "🎵" },
+	musicOff = { "🔇" },
 }
 
 function Sprites.has(name: string): boolean

@@ -35,6 +35,12 @@ function Menu.build(context, root: Instance, player: Player): Frame
 	iconButton("shield", topLeft, function()
 		Menu.openArsenal()
 	end)
+	refs.musicButtons = refs.musicButtons or {}
+	table.insert(refs.musicButtons, iconButton("music", topLeft, function()
+		if UI.onMusic then
+			UI.onMusic()
+		end
+	end))
 	local pill = make("Frame", {
 		AutomaticSize = Enum.AutomaticSize.XY,
 		Size = UDim2.fromOffset(0, 0),

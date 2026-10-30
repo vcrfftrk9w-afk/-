@@ -11,18 +11,19 @@ local Map = require(Shared.Map)
 local Ground = require(script.Parent.Ground)
 
 local W, H = Map.W, Map.H
+local S = Ground.S -- studs per tile
 
 local Rig = {}
 Rig.onTap = nil :: ((number, number, number, number) -> ())?
 Rig.active = false -- map controls work only during a match
 Rig.menu = false -- slow flight over the world behind the menu
 Rig.fx, Rig.fz = W / 2, H / 2 -- the point the camera looks at, in tiles
-Rig.dist = 300 -- distance from that point, in studs
+Rig.dist = 300 * S -- distance from that point, in studs
 
 Rig.FOV = 50
-Rig.MIN_D = 12
-local maxD = 420
-local PLANE_Y = 0.3
+Rig.MIN_D = 14 * S
+local maxD = 420 * S
+local PLANE_Y = Ground.STAND_Y
 local anim = nil
 local switch = nil
 local switchFx = 0 -- 0..1, how strongly the switch blur and grey are shown
@@ -43,7 +44,7 @@ end
 
 function Rig.cframe(): CFrame
 	local p = tilt(Rig.dist)
-	local target = Vector3.new(Rig.fx, PLANE_Y, Rig.fz)
+	local target = Vector3.new(Rig.fx * S, PLANE_Y, Rig.fz * S)
 	return CFrame.lookAt(target + Vector3.new(0, math.sin(p), math.cos(p)) * Rig.dist, target)
 end
 
@@ -51,7 +52,7 @@ local function updateLimits()
 	local vp = camera().ViewportSize
 	local aspect = math.max(vp.X, 1) / math.max(vp.Y, 1)
 	local tanHalf = math.tan(math.rad(Rig.FOV / 2))
-	maxD = math.clamp(math.max(H * 0.56 / tanHalf, W * 0.56 / (tanHalf * aspect)), 150, 900)
+	maxD = math.clamp(math.max(H * S * 0.56 / tanHalf, W * S * 0.56 / (tanHalf * aspect)), 150 * S, 900 * S)
 end
 
 local function clampView()
@@ -68,10 +69,10 @@ function Rig.apply()
 	cam.CameraType = Enum.CameraType.Scriptable
 	cam.FieldOfView = Rig.FOV
 	cam.CFrame = Rig.cframe()
-	cam.Focus = CFrame.new(Rig.fx, PLANE_Y, Rig.fz)
+	cam.Focus = CFrame.new(Rig.fx * S, PLANE_Y, Rig.fz * S)
 end
 
--- where a ray from the camera meets the ground; refine follows hills and mountains
+-- where a ray from the camera meets the ground, in tiles; refine follows hills and mountains
 local function hit(ray: Ray, refine: boolean): Vector2?
 	local d = ray.Direction
 	if d.Y > -1e-3 then
@@ -81,9 +82,9 @@ local function hit(ray: Ray, refine: boolean): Vector2?
 	local p = ray.Origin
 	for _ = 1, if refine then 4 else 1 do
 		p = ray.Origin + d * ((y - ray.Origin.Y) / d.Y)
-		y = Ground.surface(p.X, p.Z)
+		y = Ground.surface(p.X / S, p.Z / S)
 	end
-	return Vector2.new(p.X, p.Z)
+	return Vector2.new(p.X / S, p.Z / S)
 end
 
 -- screen points as in InputObject.Position (below the top bar)
@@ -99,6 +100,11 @@ end
 -- screen pixels per stud at a given distance from the camera
 function Rig.pxPerStud(depth: number): number
 	return camera().ViewportSize.Y / (2 * math.max(depth, 0.1) * math.tan(math.rad(Rig.FOV / 2)))
+end
+
+-- screen pixels per map tile at a given distance from the camera
+function Rig.pxPerTile(depth: number): number
+	return Rig.pxPerStud(depth) * S
 end
 
 function Rig.flyTo(x: number, z: number, d: number, seconds: number)
@@ -375,7 +381,7 @@ function Rig.update(dt: number)
 		local t = os.clock()
 		Rig.fx = W * 0.5 + math.sin(t / 47) * W * 0.3
 		Rig.fz = H * 0.36 + math.sin(t / 29) * H * 0.08
-		Rig.dist = 120 + math.sin(t / 31) * 25
+		Rig.dist = (120 + math.sin(t / 31) * 25) * S
 	elseif switch then
 		motion = stepSwitch()
 	elseif anim then
@@ -395,7 +401,7 @@ function Rig.update(dt: number)
 			end
 		end
 		if move.Magnitude > 0 then
-			move = move.Unit * Rig.dist * 0.9 * dt
+			move = move.Unit * Rig.dist / S * 0.9 * dt
 			Rig.fx += move.X
 			Rig.fz += move.Y
 		end

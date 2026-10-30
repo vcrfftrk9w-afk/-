@@ -1,5 +1,6 @@
 -- 3D models built from Roblox parts: units, buildings, capitals, deposits and trees.
--- One map tile is one stud. Models face -Z (forward); their origin is on the ground.
+-- Sizes below are in map tiles; Models.SCALE turns them into studs. Models face -Z
+-- (forward); their origin is on the ground.
 -- A model is a kit: parts with their offsets from the origin, so units can be moved
 -- every frame with workspace:BulkMoveTo.
 local Models = {}
@@ -18,7 +19,9 @@ local OLIVE = Color3.fromRGB(96, 104, 72)
 local CONCRETE = Color3.fromRGB(150, 150, 154)
 local WALL = Color3.fromRGB(236, 228, 210)
 
--- how high aircraft fly above the ground
+-- studs per map tile
+Models.SCALE = 1
+-- how high aircraft fly above the ground, in tiles
 Models.AIR_ALT = 4
 
 local BLOCK = Enum.PartType.Block
@@ -51,6 +54,9 @@ local function newKit(name: string)
 end
 
 local function add(kit, shape, size: Vector3, offset: CFrame, color: Color3, material, transparency: number?): Part
+	local k = Models.SCALE
+	size *= k
+	offset = CFrame.new(offset.Position * k) * offset.Rotation
 	local p = newPart(shape, size, color, material)
 	p.Transparency = transparency or 0
 	p.Parent = kit.model
@@ -175,8 +181,9 @@ end
 function Models.unit(kind: string, team: Color3, air: boolean)
 	local kit = newKit(kind)
 	kit.air = air
-	kit.lift = if air then Models.AIR_ALT else 0
-	local root = newPart(BLOCK, Vector3.new(0.2, 0.2, 0.2), team)
+	local lift = if air then Models.AIR_ALT else 0
+	kit.lift = lift * Models.SCALE
+	local root = newPart(BLOCK, Vector3.new(0.2, 0.2, 0.2) * Models.SCALE, team)
 	root.Transparency = 1
 	root.CastShadow = false
 	root.Name = "Root"
@@ -186,7 +193,7 @@ function Models.unit(kind: string, team: Color3, air: boolean)
 	kit.body.Name = "Body"
 	local builder = UNIT_BUILDERS[kind] or UNIT_BUILDERS.tank
 	builder(kit, team)
-	local ring = add(kit, CYL, Vector3.new(0.04, 1.4, 1.4), at(0, 0.04 - kit.lift, 0) * UPRIGHT, Color3.new(1, 1, 1), NEON, 1)
+	local ring = add(kit, CYL, Vector3.new(0.04, 1.4, 1.4), at(0, 0.04 - lift, 0) * UPRIGHT, Color3.new(1, 1, 1), NEON, 1)
 	ring.CastShadow = false
 	kit.ring = ring
 	for _, p in kit.parts do
@@ -339,7 +346,7 @@ local PINE_COLORS = {
 -- one ball per tree keeps forests cheap to draw
 function Models.tree(pine: boolean, rng: Random): Part
 	local colors = if pine then PINE_COLORS else TREE_COLORS
-	local s = (if pine then 0.55 else 0.7) + rng:NextNumber() * 0.4
+	local s = ((if pine then 0.55 else 0.7) + rng:NextNumber() * 0.4) * Models.SCALE
 	local p = newPart(BALL, Vector3.new(s, s, s), colors[rng:NextInteger(1, #colors)], Enum.Material.Grass)
 	return p
 end

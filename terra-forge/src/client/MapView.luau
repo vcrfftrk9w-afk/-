@@ -1,6 +1,6 @@
--- The match on screen in 3D: the ground with territory and fog of war (Ground), the camera
--- (CameraRig), and buildings, units, deposits, nation labels and battle effects (Models).
--- Server messages arrive here in map tiles; one tile is one stud in the world.
+-- The match on screen in 3D: the terrain ground (Ground), territory and fog plates
+-- (Territory), the camera (CameraRig), and buildings, units, deposits, nation labels and
+-- battle effects (Models). Server messages arrive in map tiles; a tile is Ground.S studs.
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -13,10 +13,12 @@ local Motion = require(Shared.Motion)
 local Theme = require(script.Parent.Theme)
 local Sprites = require(script.Parent.Sprites)
 local Ground = require(script.Parent.Ground)
+local Territory = require(script.Parent.Territory)
 local Rig = require(script.Parent.CameraRig)
 local Models = require(script.Parent.Models)
 
 local W, H, N = Map.W, Map.H, Map.N
+local S = Ground.S
 local readu8, writeu8 = buffer.readu8, buffer.writeu8
 local readu16, writeu16 = buffer.readu16, buffer.writeu16
 local make = Theme.make
@@ -44,12 +46,12 @@ local props = {}
 local gui, shade, worldGui, anchor
 local unitFolder, bldFolder, fxFolder, propFolder
 local labelAcc = 0
-local fadeAcc = 0
 local nearView = true -- close enough to draw unit models; further out units are dots
-local airSpots = {} -- flat x, y, height of aircraft this frame, for tracers
+local airSpots = {} -- flat x, y (tiles), height (studs) of aircraft this frame, for tracers
 
 local GRAY3 = Color3.fromRGB(200, 200, 200)
-local NEAR_IN, NEAR_OUT = 105, 125
+local SPAWN_GRAY = Color3.fromRGB(Config.SPAWN_GRAY[1], Config.SPAWN_GRAY[2], Config.SPAWN_GRAY[3])
+local NEAR_IN, NEAR_OUT = 105 * S, 125 * S
 
 ---------------------------------------------------------------- helpers
 
@@ -69,100 +71,40 @@ local function camera(): Camera
 	return workspace.CurrentCamera
 end
 
+-- a map position (tiles) at a height (studs)
+local function at(x: number, y: number, h: number): Vector3
+	return Vector3.new(x * S, h, y * S)
+end
+
 -- within the area the camera can see (roughly), so off-screen work can be skipped
 local function inView(x: number, y: number, margin: number): boolean
-	local r = Rig.dist * 1.4 + margin
+	local r = Rig.dist * 1.4 / S + margin
 	local dx, dz = x - Rig.fx, y - Rig.fz
 	return dx * dx + dz * dz < r * r
 end
 
 ---------------------------------------------------------------- territory
 
-local GRAY, GRAY_B = Config.SPAWN_GRAY, Config.SPAWN_GRAY_BORDER
-local nbSet = {}
--- newly captured tiles fade in over FADE seconds, so borders spread smoothly
-local FADE = 0.5
-local fadeStart = {}
-local fadeList = {}
+-- colour and transparency of a nation's land; in the spawn phase other nations are grey
+local function look(o: number): (Color3?, number)
+	local n = nations[o]
+	if not n then
+		return nil, 1
+	end
+	if MapView.phase == "spawn" and o ~= MapView.myId then
+		return SPAWN_GRAY, 0.4
+	end
+	return n.color3, if o == MapView.myId then 0.38 else 0.46
+end
 
 -- fog of war: the map is split into 4 x 4-tile cells; a cell is visible near your land, buildings and units
 local FOG = 4
 local FW, FH = W // FOG, H // FOG
-local FOG_DARK = 0.45
 local ownCells = buffer.create(FW * FH * 2)
 local visible = buffer.create(FW * FH)
 local visNext = buffer.create(FW * FH)
 local fogOn = false
 local fogAcc = 0
-local repaintRow = H -- rows from here down still need repainting
-
-local function visAt(cx: number, cy: number): number
-	return readu8(visible, math.clamp(cy, 0, FH - 1) * FW + math.clamp(cx, 0, FW - 1))
-end
-
--- light left by the fog at a tile, blended between cells so its edge is soft
-local function fogLight(x: number, y: number): number
-	if not fogOn then
-		return 1
-	end
-	local fx, fy = (x + 0.5) / FOG - 0.5, (y + 0.5) / FOG - 0.5
-	local i, j = math.floor(fx), math.floor(fy)
-	local ax, ay = fx - i, fy - j
-	local top = visAt(i, j) * (1 - ax) + visAt(i + 1, j) * ax
-	local bottom = visAt(i, j + 1) * (1 - ax) + visAt(i + 1, j + 1) * ax
-	return FOG_DARK + (1 - FOG_DARK) * (top * (1 - ay) + bottom * ay)
-end
-
-local function paint(t: number)
-	local x, y = t % W, t // W
-	local o = readu16(owner, t * 2)
-	local n = if o ~= 0 then nations[o] else nil
-	local k = fogLight(x, y)
-	if not n then
-		Ground.paintTile(t, nil, nil, 0, 0, 0, k)
-		return
-	end
-	local mask = 0
-	if x == 0 or readu16(owner, (t - 1) * 2) ~= o then
-		mask += 1
-	end
-	if x == W - 1 or readu16(owner, (t + 1) * 2) ~= o then
-		mask += 2
-	end
-	if y == 0 or readu16(owner, (t - W) * 2) ~= o then
-		mask += 4
-	end
-	if y == H - 1 or readu16(owner, (t + W) * 2) ~= o then
-		mask += 8
-	end
-	local gray = MapView.phase == "spawn" and o ~= MapView.myId
-	-- inside a light tint, so the ground stays readable; the border is a strong thin line
-	local a = if gray then 0.5 elseif o == MapView.myId then 0.36 else 0.28
-	local ba = 0.95
-	local started = fadeStart[t]
-	if started then
-		local f = math.clamp((os.clock() - started) / FADE, 0.15, 1)
-		a *= f
-		ba *= f
-	end
-	Ground.paintTile(t, if gray then GRAY else n.rgb, if gray then GRAY_B else n.rgbB, a, ba, mask, k)
-end
-
-local function repaintAll()
-	repaintRow = 0
-end
-
--- repaints a few rows a frame, so big changes don't freeze the game
-local function repaintStep(rows: number)
-	if repaintRow >= H then
-		return
-	end
-	local last = math.min(H, repaintRow + rows)
-	for t = repaintRow * W, last * W - 1 do
-		paint(t)
-	end
-	repaintRow = last
-end
 
 local function cellOf(x: number, y: number): number
 	return math.clamp(y // FOG, 0, FH - 1) * FW + math.clamp(x // FOG, 0, FW - 1)
@@ -201,37 +143,7 @@ local function setTile(t: number, o: number)
 			addOwn(x, y, 1)
 		end
 	end
-	if o ~= 0 and not MapView.loading then
-		if not fadeStart[t] then
-			table.insert(fadeList, t)
-		end
-		fadeStart[t] = os.clock()
-	end
-	paint(t)
-	local c = Map.neighbors(t, nbSet)
-	for i = 1, c do
-		paint(nbSet[i])
-	end
-end
-
-local function processFades()
-	if #fadeList == 0 then
-		return
-	end
-	local now = os.clock()
-	local keep = {}
-	for _, t in fadeList do
-		local started = fadeStart[t]
-		local done = not started or now - started >= FADE
-		if done then
-			fadeStart[t] = nil
-		end
-		paint(t)
-		if not done then
-			table.insert(keep, t)
-		end
-	end
-	fadeList = keep
+	Territory.markRow(y)
 end
 
 function MapView.ownerAt(x: number, y: number): number
@@ -324,24 +236,15 @@ local function refreshStatics()
 	end
 end
 
+local function markAllFog()
+	for cy = 0, FH - 1 do
+		Territory.markFogRow(cy)
+	end
+end
+
 local function updateFog()
-	local changed = computeVisibility()
-	if #changed > 240 then
-		repaintAll()
-	elseif #changed > 0 then
-		local seen = {}
-		for _, c in changed do
-			local cx, cy = c % FW, c // FW
-			for y = math.max(0, cy * FOG - 2), math.min(H - 1, cy * FOG + FOG + 1) do
-				for x = math.max(0, cx * FOG - 2), math.min(W - 1, cx * FOG + FOG + 1) do
-					local t = y * W + x
-					if not seen[t] then
-						seen[t] = true
-						paint(t)
-					end
-				end
-			end
-		end
+	for _, c in computeVisibility() do
+		Territory.markFogRow(c // FW)
 	end
 	refreshStatics()
 end
@@ -357,10 +260,10 @@ local function makeBar(adornee: BasePart, width: number, height: number, withPro
 	bb.Name = "Bar"
 	bb.Adornee = adornee
 	bb.Size = UDim2.fromOffset(width, if withProgress then 12 else 5)
-	bb.StudsOffsetWorldSpace = Vector3.new(0, height, 0)
+	bb.StudsOffsetWorldSpace = Vector3.new(0, height * S, 0)
 	bb.AlwaysOnTop = true
 	bb.LightInfluence = 0
-	bb.MaxDistance = 140
+	bb.MaxDistance = 140 * S
 	bb.ResetOnSpawn = false
 	bb.Enabled = false
 	local hpBg = make("Frame", {
@@ -407,7 +310,7 @@ local function placeDeposits()
 		for dy = -2, 2 do
 			for dx = -2, 2 do
 				local x, y = d.x + dx, d.y + dy
-				if Map.inBounds(x, y) and Map.deposit(y * W + x) == d.kind then
+				if Map.inBounds(x, y) and Map.deposit(y * W + x) == d.kind and Ground.landTile(y * W + x) then
 					table.insert(spots, { x, y })
 				end
 			end
@@ -419,9 +322,9 @@ local function placeDeposits()
 			local kit = Models.deposit(d.kind, rng)
 			local px0, pz0 = s[1] + 0.5, s[2] + 0.5
 			local turn = CFrame.Angles(0, rng:NextNumber() * math.pi * 2, 0)
-			Models.place(kit, CFrame.new(px0, Ground.height(px0, pz0), pz0) * turn)
+			Models.place(kit, CFrame.new(at(px0, pz0, Ground.height(px0, pz0))) * turn)
 			kit.model.Parent = propFolder
-			table.insert(props, { kit = kit, x = px0, y = pz0, turn = turn, cover = 0 })
+			table.insert(props, { kit = kit, x = px0, y = pz0, cover = 0 })
 		end
 	end
 end
@@ -437,21 +340,6 @@ local function coverProps(x: number, y: number, delta: number)
 end
 
 ---------------------------------------------------------------- setup
-
--- after a switch to the flat map, everything standing on the ground is put back on it
-local function replaceStatics()
-	for _, p in props do
-		Models.place(p.kit, CFrame.new(p.x, Ground.height(p.x, p.y), p.y) * p.turn)
-	end
-	for _, b in buildings do
-		local gx, gy = b.x + 0.5, b.y + 0.5
-		Models.place(b.kit, CFrame.new(gx, Ground.height(gx, gy), gy))
-	end
-	for _, cap in capitals do
-		local gx, gy = cap.x + 0.5, cap.y + 0.5
-		Models.place(cap.kit, CFrame.new(gx, Ground.height(gx, gy), gy))
-	end
-end
 
 local function folderIn(parent: Instance, name: string): Folder
 	local f = Instance.new("Folder")
@@ -495,6 +383,7 @@ function MapView.init(playerGui: PlayerGui)
 	bldFolder = folderIn(world, "Buildings")
 	unitFolder = folderIn(world, "Units")
 	fxFolder = folderIn(world, "Effects")
+	Territory.init(world)
 	anchor = Instance.new("Part")
 	anchor.Name = "LabelAnchor"
 	anchor.Anchored = true
@@ -506,11 +395,10 @@ function MapView.init(playerGui: PlayerGui)
 	anchor.CFrame = CFrame.new()
 	anchor.Parent = world
 
+	Models.SCALE = S
 	Rig.menu = true
 	Rig.apply()
-	-- the ground needs "Allow Mesh / Image APIs" switched on for the experience
-	MapView.ok = Ground.init()
-	Ground.onFlat = replaceStatics
+	Ground.init()
 	placeDeposits()
 	Rig.onTap = function(x, y, sx, sy)
 		if MapView.onTap then
@@ -528,7 +416,7 @@ end
 
 -- flies the camera close to a map point
 function MapView.focusOn(x: number, y: number, seconds: number)
-	Rig.flyTo(x, y, 46, seconds)
+	Rig.flyTo(x, y, 46 * S, seconds)
 end
 
 -- the whole world in view
@@ -538,12 +426,12 @@ end
 
 -- GTA-style flight to a map point: up into the sky, across, and down close to the ground
 function MapView.switchTo(x: number, y: number)
-	Rig.switchTo(x, y, 34)
+	Rig.switchTo(x, y, 34 * S)
 end
 
 -- the camera is high above the map
 function MapView.isFar(): boolean
-	return Rig.dist > 80
+	return Rig.dist > 80 * S
 end
 
 -- the player's capital or building nearest to a map point, within radius tiles
@@ -579,6 +467,10 @@ local function removeLabel(id: number)
 	end
 end
 
+local function placeOnGround(kit, x: number, y: number)
+	Models.place(kit, CFrame.new(at(x, y, Ground.height(x, y))))
+end
+
 local function updateCapital(n)
 	local cap = capitals[n.id]
 	local want = n.alive and n.cap ~= nil
@@ -589,8 +481,7 @@ local function updateCapital(n)
 	end
 	if want and not cap then
 		local kit = Models.building("capital", n.color3)
-		local gx, gy = n.cap.x + 0.5, n.cap.y + 0.5
-		Models.place(kit, CFrame.new(gx, Ground.height(gx, gy), gy))
+		placeOnGround(kit, n.cap.x + 0.5, n.cap.y + 0.5)
 		kit.model.Parent = bldFolder
 		capitals[n.id] = { kit = kit, x = n.cap.x, y = n.cap.y, color = n.color, shown = true }
 	end
@@ -612,8 +503,6 @@ function MapView.upsertNation(info)
 	if colorChanged then
 		local r, g, b = Sprites.hexRGB(info.color)
 		n.rgb = { r, g, b }
-		local r2, g2, b2 = Sprites.shade(r, g, b, -0.25)
-		n.rgbB = { r2, g2, b2 }
 		n.color3 = Color3.fromRGB(r, g, b)
 	end
 	if not n.alive then
@@ -743,12 +632,12 @@ local function updateLabels()
 		else
 			cx, cy = n.sx / n.count + 0.5, n.sy / n.count + 0.5
 		end
-		local pos = Vector3.new(cx, Ground.surface(cx, cy) + 0.8, cy)
+		local pos = at(cx, cy, Ground.surface(cx, cy) + 0.8 * S)
 		local v, onScreen = cam:WorldToViewportPoint(pos)
 		local shown = showAll and onScreen
 		local fs = 0
 		if shown then
-			local z = Rig.pxPerStud(v.Z)
+			local z = Rig.pxPerTile(v.Z)
 			fs = math.min(math.sqrt(n.count) * z * 0.27, 30)
 			if n.id == me then
 				fs = math.max(fs, 13)
@@ -792,10 +681,6 @@ local function updateLabels()
 end
 
 ---------------------------------------------------------------- buildings
-
-local function placeOnGround(kit, x: number, y: number)
-	Models.place(kit, CFrame.new(x, Ground.height(x, y), y))
-end
 
 function MapView.addBuilding(b)
 	if buildings[b.id] then
@@ -872,12 +757,12 @@ function MapView.setProgress(list)
 	end
 end
 
+-- a flat ring on the ground that grows and fades; size in tiles
 local function flash(x: number, y: number, size: number, color: Color3, seconds: number)
-	local h = Ground.surface(x, y) + 0.05
 	local p = Instance.new("Part")
 	p.Shape = Enum.PartType.Cylinder
-	p.Size = Vector3.new(0.05, 0.4, 0.4)
-	p.CFrame = CFrame.new(x, h, y) * CFrame.Angles(0, 0, math.rad(90))
+	p.Size = Vector3.new(0.05, 0.4 * S, 0.4 * S)
+	p.CFrame = CFrame.new(at(x, y, Ground.surface(x, y) + 0.1)) * CFrame.Angles(0, 0, math.rad(90))
 	p.Anchored = true
 	p.CanCollide = false
 	p.CanQuery = false
@@ -888,7 +773,7 @@ local function flash(x: number, y: number, size: number, color: Color3, seconds:
 	p.Transparency = 0.2
 	p.Parent = fxFolder
 	TweenService:Create(p, TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Size = Vector3.new(0.05, size, size),
+		Size = Vector3.new(0.05, size * S, size * S),
 		Transparency = 1,
 	}):Play()
 	Debris:AddItem(p, seconds + 0.1)
@@ -921,10 +806,10 @@ function MapView.buildingAt(sx: number, sy: number): number?
 	for id, b in buildings do
 		if b.owner == MapView.myId then
 			local gx, gy = b.x + 0.5, b.y + 0.5
-			local p, depth = screenPos(Vector3.new(gx, Ground.height(gx, gy) + 0.4, gy))
+			local p, depth = screenPos(at(gx, gy, Ground.height(gx, gy) + 0.4 * S))
 			if p then
 				local d = (p - tap).Magnitude
-				local radius = math.max(26, Rig.pxPerStud(depth) * 0.9)
+				local radius = math.max(26, Rig.pxPerTile(depth) * 0.9)
 				if d < radius and d < bestD then
 					bestD = d
 					best = id
@@ -992,7 +877,7 @@ function MapView.addUnit(u)
 	local dotStroke = make("UIStroke", { Color = C.dark, Thickness = 1.5, Parent = dotFrame })
 	dot.Parent = kit.root
 	local x, y = u.path[1], u.path[2]
-	kit.root.CFrame = CFrame.new(x, Ground.surface(x, y) + kit.lift, y)
+	kit.root.CFrame = CFrame.new(at(x, y, Ground.surface(x, y) + kit.lift))
 	rec = {
 		id = u.id,
 		kind = u.kind,
@@ -1073,7 +958,7 @@ function MapView.unitAt(sx: number, sy: number): number?
 			local p, depth = screenPos(u.kit.root.Position)
 			if p then
 				local d = (p - tap).Magnitude
-				local radius = math.max(22, Rig.pxPerStud(depth) * 0.8)
+				local radius = math.max(22, Rig.pxPerTile(depth) * 0.8)
 				if d < radius and d < bestD then
 					bestD = d
 					best = id
@@ -1127,13 +1012,13 @@ local function updateUnits(dt: number)
 			end
 			local cf
 			if kit.air then
-				local h = Ground.surface(x, y) + kit.lift + math.sin(t * 2 + u.id) * 0.08
-				cf = CFrame.new(x, h, y) * CFrame.Angles(0, u.yaw, 0) * CFrame.Angles(0, 0, u.roll)
+				local h = Ground.surface(x, y) + kit.lift + math.sin(t * 2 + u.id) * 0.08 * S
+				cf = CFrame.new(at(x, y, h)) * CFrame.Angles(0, u.yaw, 0) * CFrame.Angles(0, 0, u.roll)
 				table.insert(airSpots, x)
 				table.insert(airSpots, y)
 				table.insert(airSpots, h)
 			else
-				cf = CFrame.new(x, math.max(Ground.height(x, y), 0.02), y) * CFrame.Angles(0, u.yaw, 0)
+				cf = CFrame.new(at(x, y, math.max(Ground.height(x, y), 0.05))) * CFrame.Angles(0, u.yaw, 0)
 			end
 			count += 1
 			moveParts[count] = kit.root
@@ -1175,7 +1060,7 @@ local function fxPart(shape, size: Vector3, cf: CFrame, color: Color3, transpare
 	return p
 end
 
--- height for a tracer end: an aircraft there, or just above the ground
+-- height in studs for a tracer end: an aircraft there, or just above the ground
 local function shotHeight(x: number, y: number): number
 	for i = 1, #airSpots - 2, 3 do
 		local dx, dy = airSpots[i] - x, airSpots[i + 1] - y
@@ -1183,7 +1068,7 @@ local function shotHeight(x: number, y: number): number
 			return airSpots[i + 2]
 		end
 	end
-	return Ground.surface(x, y) + 0.4
+	return Ground.surface(x, y) + 0.4 * S
 end
 
 -- tracer lines for shots: flat x1, y1, x2, y2
@@ -1199,13 +1084,13 @@ function MapView.shots(list)
 			if drawn > 40 then
 				break
 			end
-			local a = Vector3.new(x1, shotHeight(x1, y1), y1)
-			local b = Vector3.new(x2, shotHeight(x2, y2), y2)
+			local a = at(x1, y1, shotHeight(x1, y1))
+			local b = at(x2, y2, shotHeight(x2, y2))
 			local len = (b - a).Magnitude
 			if len > 0.05 then
-				local p = fxPart(Enum.PartType.Block, Vector3.new(0.05, 0.05, len), CFrame.lookAt((a + b) / 2, b), Color3.fromRGB(255, 226, 150), 0)
+				local p = fxPart(Enum.PartType.Block, Vector3.new(0.05 * S, 0.05 * S, len), CFrame.lookAt((a + b) / 2, b), Color3.fromRGB(255, 226, 150), 0)
 				Debris:AddItem(p, 0.12)
-				local spark = fxPart(Enum.PartType.Ball, Vector3.new(0.18, 0.18, 0.18), CFrame.new(b), Color3.fromRGB(255, 190, 90), 0.1)
+				local spark = fxPart(Enum.PartType.Ball, Vector3.one * 0.18 * S, CFrame.new(b), Color3.fromRGB(255, 190, 90), 0.1)
 				Debris:AddItem(spark, 0.1)
 			end
 		end
@@ -1214,22 +1099,22 @@ end
 
 -- explosion where a unit or building was destroyed
 function MapView.boom(x: number, y: number, big: boolean)
-	if not inView(x, y, 8) or Rig.dist > 260 then
+	if not inView(x, y, 8) or Rig.dist > 260 * S then
 		return
 	end
 	local h = shotHeight(x, y)
-	local fire = fxPart(Enum.PartType.Ball, Vector3.new(0.3, 0.3, 0.3), CFrame.new(x, h, y), Color3.fromRGB(255, 170, 60), 0)
-	local size = if big then 2.2 else 1.2
+	local fire = fxPart(Enum.PartType.Ball, Vector3.one * 0.3 * S, CFrame.new(at(x, y, h)), Color3.fromRGB(255, 170, 60), 0)
+	local size = (if big then 2.2 else 1.2) * S
 	TweenService:Create(fire, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Size = Vector3.new(size, size, size),
+		Size = Vector3.one * size,
 		Transparency = 1,
 	}):Play()
 	Debris:AddItem(fire, 0.55)
-	local smoke = fxPart(Enum.PartType.Ball, Vector3.new(0.5, 0.5, 0.5), CFrame.new(x, h, y), Color3.fromRGB(70, 70, 74), 0.25)
+	local smoke = fxPart(Enum.PartType.Ball, Vector3.one * 0.5 * S, CFrame.new(at(x, y, h)), Color3.fromRGB(70, 70, 74), 0.25)
 	smoke.Material = Enum.Material.SmoothPlastic
 	TweenService:Create(smoke, TweenInfo.new(1.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Size = Vector3.new(size * 1.3, size * 1.3, size * 1.3),
-		CFrame = CFrame.new(x, h + 1.4, y),
+		Size = Vector3.one * size * 1.3,
+		CFrame = CFrame.new(at(x, y, h + 1.4 * S)),
 		Transparency = 1,
 	}):Play()
 	Debris:AddItem(smoke, 1.4)
@@ -1247,37 +1132,53 @@ end
 
 -- where a move order was sent
 function MapView.marker(x: number, y: number)
-	flash(x, y, math.max(3, Rig.dist * 0.06), Color3.fromRGB(120, 255, 170), 0.6)
+	flash(x, y, math.max(3, Rig.dist / S * 0.06), Color3.fromRGB(120, 255, 170), 0.6)
 end
 
 ---------------------------------------------------------------- minimap
 
+-- the whole map drawn with frames in the HUD: land, nations (in 4 x 4-tile cells) and what
+-- the camera sees; tap or drag it to move the camera
 local mini = nil
+local MINI_LAND = Color3.fromRGB(122, 156, 96)
 
--- shows the whole map in a frame of the HUD; tap or drag it to move the camera
+local function miniRun(parent: GuiObject, x0: number, x1: number, cy: number, color: Color3, transparency: number, z: number): Frame
+	return make("Frame", {
+		Position = UDim2.fromScale(x0 / FW, cy / FH),
+		Size = UDim2.new((x1 - x0) / FW, 0, 1 / FH, 1),
+		BackgroundColor3 = color,
+		BackgroundTransparency = transparency,
+		BorderSizePixel = 0,
+		ZIndex = z,
+		Parent = parent,
+	})
+end
+
 function MapView.attachMinimap(holder: GuiObject?)
 	if not holder then
 		return
 	end
-	for c = 0, Ground.CX * Ground.CY - 1 do
-		local ci, cj = c % Ground.CX, c // Ground.CX
-		local img = make("ImageLabel", {
-			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(ci / Ground.CX, cj / Ground.CY),
-			Size = UDim2.fromScale(1 / Ground.CX, 1 / Ground.CY),
-			Parent = holder,
-		})
-		local source = Ground.images[c]
-		if source then
-			pcall(function()
-				img.ImageContent = Content.fromObject(source)
-			end)
+	-- land, drawn once: a cell is land when its middle tile is
+	for cy = 0, FH - 1 do
+		local cx = 0
+		while cx < FW do
+			if Ground.landTile((cy * FOG + 2) * W + cx * FOG + 2) then
+				local cx1 = cx + 1
+				while cx1 < FW and Ground.landTile((cy * FOG + 2) * W + cx1 * FOG + 2) do
+					cx1 += 1
+				end
+				miniRun(holder, cx, cx1, cy, MINI_LAND, 0, 1)
+				cx = cx1
+			else
+				cx += 1
+			end
 		end
 	end
-	local rect = make("Frame", { BackgroundTransparency = 1, ZIndex = 3, Parent = holder }, {
+	local nationsLayer = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 2, Parent = holder })
+	local rect = make("Frame", { BackgroundTransparency = 1, ZIndex = 4, Parent = holder }, {
 		make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1.5 }),
 	})
-	mini = { holder = holder, rect = rect }
+	mini = { holder = holder, layer = nationsLayer, rect = rect, rows = {}, keys = {}, acc = 1 }
 	local dragging = false
 	local function jump(input: InputObject)
 		local size = holder.AbsoluteSize
@@ -1307,10 +1208,50 @@ function MapView.attachMinimap(holder: GuiObject?)
 	end)
 end
 
--- the outline of what the camera sees
-local function updateMinimap()
+-- redraws the rows of nation colours that changed
+local function updateMinimapNations()
+	local runs = {}
+	for cy = 0, FH - 1 do
+		table.clear(runs)
+		local cx = 0
+		local key = ""
+		while cx < FW do
+			local o = readu16(owner, ((cy * FOG + 2) * W + cx * FOG + 2) * 2)
+			local cx1 = cx + 1
+			while cx1 < FW and readu16(owner, ((cy * FOG + 2) * W + cx1 * FOG + 2) * 2) == o do
+				cx1 += 1
+			end
+			if o ~= 0 and nations[o] then
+				table.insert(runs, { cx, cx1, o })
+				key ..= cx .. ":" .. cx1 .. ":" .. o .. ";"
+			end
+			cx = cx1
+		end
+		if mini.keys[cy] ~= key then
+			mini.keys[cy] = key
+			for _, f in mini.rows[cy] or {} do
+				f:Destroy()
+			end
+			local frames = {}
+			for _, r in runs do
+				local color = look(r[3])
+				if color then
+					table.insert(frames, miniRun(mini.layer, r[1], r[2], cy, color, 0.1, 2))
+				end
+			end
+			mini.rows[cy] = frames
+		end
+	end
+end
+
+local function updateMinimap(dt: number)
 	if not mini then
 		return
+	end
+	mini.acc += dt
+	if mini.acc >= 1 then
+		mini.acc = 0
+		updateMinimapNations()
 	end
 	local vp = camera().ViewportSize
 	local x0, y0, x1, y1 = math.huge, math.huge, -math.huge, -math.huge
@@ -1337,8 +1278,6 @@ end
 function MapView.clear()
 	buffer.fill(owner, 0, 0)
 	buffer.fill(ownCells, 0, 0)
-	table.clear(fadeStart)
-	fadeList = {}
 	for id in labels do
 		removeLabel(id)
 	end
@@ -1357,8 +1296,10 @@ function MapView.clear()
 	MapView.myId = 0
 	MapView.phase = "none"
 	fogOn = false
-	repaintRow = H
-	Ground.reset()
+	Territory.clear()
+	if mini then
+		mini.acc = 1
+	end
 end
 
 function MapView.load(s)
@@ -1381,7 +1322,7 @@ function MapView.load(s)
 			addOwn(t % W, t // W, 1)
 		end
 	end)
-	repaintAll()
+	Territory.markAll()
 	for _, b in s.buildings do
 		MapView.addBuilding(b)
 	end
@@ -1400,7 +1341,10 @@ function MapView.setPhase(phase: string)
 		local wasSpawn = MapView.phase == "spawn"
 		MapView.phase = phase
 		if wasSpawn or phase == "spawn" then
-			repaintAll()
+			Territory.markAll()
+			if mini then
+				table.clear(mini.keys)
+			end
 		end
 	end
 end
@@ -1426,7 +1370,7 @@ function MapView.update(dt: number)
 		if on then
 			computeVisibility()
 		end
-		repaintAll()
+		markAllFog()
 		refreshStatics()
 		fogAcc = 0
 	elseif on then
@@ -1436,19 +1380,14 @@ function MapView.update(dt: number)
 			updateFog()
 		end
 	end
-	fadeAcc += dt
-	if fadeAcc >= 0.05 then
-		fadeAcc = 0
-		processFades()
-	end
-	repaintStep(14)
-	Ground.flush()
+	Territory.update(owner, look, 40)
+	Territory.updateFog(visible, FW, FOG, fogOn, 30)
 	updateUnits(dt)
 	labelAcc += dt
 	if labelAcc >= 0.1 then
-		labelAcc = 0
 		updateLabels()
-		updateMinimap()
+		updateMinimap(labelAcc)
+		labelAcc = 0
 	end
 end
 

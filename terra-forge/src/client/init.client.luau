@@ -129,6 +129,8 @@ end
 local function enterPlay(spectator: boolean)
 	state.screen = "play"
 	state.spectator = spectator
+	state.rallyFor = nil
+	MapView.spectator = spectator
 	state.defeated = false
 	MapView.setMode("play")
 	UI.showPlay(state.phase, spectator)
@@ -232,15 +234,24 @@ end
 
 ---------------------------------------------------------------- unit selection
 
+-- unit kind -> army panel group
+local groupOf = {}
+for g, group in UI.GROUPS do
+	for _, kind in group.kinds do
+		groupOf[kind] = g
+	end
+end
+
 local function refreshArmy()
-	local counts = { infantry = 0, tank = 0, plane = 0 }
-	local selected = { infantry = 0, tank = 0, plane = 0 }
+	local counts = { inf = 0, veh = 0, air = 0 }
+	local selected = { inf = 0, veh = 0, air = 0 }
 	for _, id in MapView.ownUnits(nil) do
 		local u = MapView.unitRecord(id)
-		if u then
-			counts[u.kind] += 1
+		local g = u and groupOf[u.kind]
+		if g then
+			counts[g] += 1
 			if MapView.selected[id] then
-				selected[u.kind] += 1
+				selected[g] += 1
 			end
 		end
 	end
@@ -256,8 +267,14 @@ local function selectedIds(): { number }
 	return ids
 end
 
-UI.onSelectKind = function(kind)
-	local ids = MapView.ownUnits(if kind == "all" then nil else kind)
+UI.onSelectKind = function(group)
+	local ids = {}
+	for _, id in MapView.ownUnits(nil) do
+		local u = MapView.unitRecord(id)
+		if u and (group == "all" or groupOf[u.kind] == group) then
+			table.insert(ids, id)
+		end
+	end
 	local allOn = #ids > 0
 	for _, id in ids do
 		if not MapView.selected[id] then
@@ -279,16 +296,21 @@ UI.onClearSelection = function()
 	refreshArmy()
 end
 
-UI.onQueue = function(id)
-	action:FireServer("queue", id)
+UI.onQueue = function(id, kind)
+	action:FireServer("queue", id, kind)
 end
 
 UI.onCancel = function(id)
 	action:FireServer("cancel", id)
 end
 
-UI.onAuto = function(id, on)
-	action:FireServer("auto", id, on)
+UI.onAuto = function(id, kind)
+	action:FireServer("auto", id, kind)
+end
+
+UI.onRally = function(id)
+	state.rallyFor = id
+	UI.toast("Нажми на карту, куда новым юнитам ехать после выпуска.")
 end
 
 function handlers.fx(msg)
@@ -327,15 +349,22 @@ local function refreshFactory()
 		UI.hideFactory()
 		return
 	end
-	UI.showFactory({ id = id, kind = b.kind, prog = b.prog, queue = b.queue, auto = b.auto, on = b.on ~= false })
+	UI.showFactory({ id = id, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto })
 end
 
 function handlers.eco(msg)
 	state.eco = msg
-	MapView.setProgress(msg.prog)
-	refreshFactory()
+	MapView.setProgress(msg.list)
 	local n = me()
 	UI.setEconomy(msg, if n then n.troops else 0, MapView.fmt)
+	refreshFactory()
+end
+
+function handlers.bdone(msg)
+	MapView.finishBuilding(msg.id)
+	if UI.factoryId == msg.id then
+		refreshFactory()
+	end
 end
 
 function handlers.toast(msg)
@@ -407,14 +436,20 @@ MapView.onTap = function(x, y, sx, sy)
 		end
 		action:FireServer("spawn", x, y)
 	elseif state.phase == "game" then
+		if state.rallyFor then
+			action:FireServer("rally", state.rallyFor, x, y)
+			MapView.marker(x + 0.5, y + 0.5)
+			state.rallyFor = nil
+			return
+		end
 		if not UI.buildSel then
 			-- with nothing selected, a factory under the finger wins over units parked next to it
 			local bid = if next(MapView.selected) == nil then MapView.buildingAt(sx, sy) else nil
 			if bid then
 				local b = MapView.buildingRecord(bid)
 				local def = Config.BUILD[b.kind]
-				if def.unit then
-					UI.showFactory({ id = bid, kind = b.kind, prog = b.prog, queue = b.queue, auto = b.auto, on = b.on ~= false })
+				if def.units then
+					UI.showFactory({ id = bid, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto })
 				else
 					UI.hideFactory()
 					UI.toast(def.name .. ": " .. def.desc)

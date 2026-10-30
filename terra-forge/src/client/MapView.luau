@@ -153,6 +153,10 @@ end
 
 local GRAY, GRAY_B = Config.SPAWN_GRAY, Config.SPAWN_GRAY_BORDER
 local nbPaint, nbSet = {}, {}
+-- newly captured tiles fade in over FADE seconds, so borders spread smoothly
+local FADE = 0.5
+local fadeStart = {}
+local fadeList = {}
 
 local function paint(t: number)
 	local o = readu16(owner, t * 2)
@@ -182,13 +186,18 @@ local function paint(t: number)
 	writeu8(ov, k, col[1])
 	writeu8(ov, k + 1, col[2])
 	writeu8(ov, k + 2, col[3])
-	local alpha = 112
+	-- interiors are a light tint so the terrain underneath stays readable; borders are strong
+	local alpha = 50
 	if border then
-		alpha = 235
+		alpha = 225
 	elseif gray then
-		alpha = 150
+		alpha = 120
 	elseif o == MapView.myId then
-		alpha = 132
+		alpha = 78
+	end
+	local started = fadeStart[t]
+	if started then
+		alpha = math.floor(alpha * math.clamp((os.clock() - started) / FADE, 0.15, 1))
 	end
 	writeu8(ov, k + 3, alpha)
 end
@@ -203,6 +212,28 @@ local function markDirty(x: number, y: number)
 		dirtyRect[3] = math.max(dirtyRect[3], x1)
 		dirtyRect[4] = math.max(dirtyRect[4], y1)
 	end
+end
+
+-- fog of war: the map is split into 4x4-tile cells; a cell is visible near your land, buildings and units
+local FOG = 4
+local FW, FH = W // FOG, H // FOG
+local ownCells = buffer.create(FW * FH * 2)
+local visible = buffer.create(FW * FH)
+local fogPx = buffer.create(FW * FH * 4)
+local fogImg = nil
+local fogLabel = nil
+local fogAcc = 0
+local fogWasOn = false
+MapView.spectator = false
+MapView.loading = false
+
+local function cellOf(x: number, y: number): number
+	return math.clamp(y // FOG, 0, FH - 1) * FW + math.clamp(x // FOG, 0, FW - 1)
+end
+
+local function addOwn(x: number, y: number, delta: number)
+	local c = cellOf(x, y) * 2
+	buffer.writeu16(ownCells, c, math.max(0, buffer.readu16(ownCells, c) + delta))
 end
 
 local function setTile(t: number, o: number)
@@ -223,6 +254,21 @@ local function setTile(t: number, o: number)
 		nn.count += 1
 		nn.sx += x
 		nn.sy += y
+	end
+	local me = MapView.myId
+	if me ~= 0 then
+		if old == me then
+			addOwn(x, y, -1)
+		end
+		if o == me then
+			addOwn(x, y, 1)
+		end
+	end
+	if o ~= 0 and not MapView.loading then
+		if not fadeStart[t] then
+			table.insert(fadeList, t)
+		end
+		fadeStart[t] = os.clock()
 	end
 	paint(t)
 	local c = Map.neighbors(t, nbSet)
@@ -314,10 +360,18 @@ function MapView.init(playerGui: PlayerGui)
 		return make("Frame", { Name = name, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = z, Parent = board })
 	end
 	depLayer = layer("Deposits", 3)
-	bldLayer = layer("Buildings", 4)
-	unitLayer = layer("Units", 5)
-	fxLayer = layer("Effects", 6)
-	labelLayer = layer("Labels", 7)
+	fogLabel = make("ImageLabel", {
+		Name = "Fog",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ZIndex = 4,
+		Visible = false,
+		Parent = board,
+	})
+	bldLayer = layer("Buildings", 5)
+	unitLayer = layer("Units", 6)
+	fxLayer = layer("Effects", 7)
+	labelLayer = layer("Labels", 8)
 	shade = make("Frame", {
 		Name = "MenuShade",
 		Size = UDim2.fromScale(1, 1),
@@ -350,6 +404,13 @@ function MapView.init(playerGui: PlayerGui)
 	if not shown then
 		MapView.ok = false
 		ovImg = nil
+	else
+		fogImg = Sprites.create(Vector2.new(FW, FH), fogPx)
+		if fogImg then
+			pcall(function()
+				fogLabel.ImageContent = Content.fromObject(fogImg)
+			end)
+		end
 	end
 
 	for _, d in Map.deposits do
@@ -687,6 +748,9 @@ local function updateLabels()
 			fs = math.max(fs, 9)
 		end
 		local visible = showAll and fs >= 8 and sx > -200 and sy > -100 and sx < cw + 200 and sy < ch + 100
+		if visible and n.id ~= me and not MapView.isVisible(cx, cy) then
+			visible = false
+		end
 		local l = labels[n.id]
 		if visible then
 			local width = utf8.len(n.name) * fs * 0.62 + (if n.human then fs * 1.9 else 0)
@@ -788,6 +852,10 @@ function MapView.addBuilding(b)
 		owner = b.owner,
 		x = b.x,
 		y = b.y,
+		built = b.built or 1,
+		queue = {},
+		auto = "",
+		prog = 0,
 		hp = b.hp or 1,
 		maxHp = b.maxHp or 1,
 		plate = plate,
@@ -799,6 +867,13 @@ function MapView.addBuilding(b)
 	}
 	buildings[b.id] = rec
 	setHp(rec)
+	if rec.built < 1 then
+		-- under construction: faded icon and a blue progress bar
+		Sprites.setTransparency(icon, 0.55)
+		bar.Visible = true
+		bar.BackgroundColor3 = Color3.fromRGB(90, 170, 255)
+		bar.Size = UDim2.new(rec.built, 0, 0, 4)
+	end
 	for _, d in depMarks do
 		if d.t == b.y * W + b.x then
 			d.hidden = true
@@ -821,22 +896,37 @@ function MapView.removeBuilding(id: number)
 	end
 end
 
--- prog: per building id, progress (negative = waiting), powered (1/0), queued units, auto (1/0)
-function MapView.setProgress(prog)
-	for i = 1, #prog - 4, 5 do
-		local b = buildings[prog[i]]
+-- list: own buildings as { id, p = progress (negative = waiting for money), built, q = queued kinds, auto }
+function MapView.setProgress(list)
+	for _, e in list do
+		local b = buildings[e.id]
 		if b then
-			local p, on = prog[i + 1], prog[i + 2] == 1
+			b.prog, b.built, b.queue, b.auto = e.p, e.built, e.q, e.auto
 			local def = Config.BUILD[b.kind]
-			b.prog, b.on, b.queue, b.auto = p, on, prog[i + 3], prog[i + 4] == 1
-			if def.unit then
-				local busy = b.queue > 0 or b.auto
+			if b.built < 1 then
+				b.bar.Visible = view.z >= 3.5
+				b.bar.Size = UDim2.new(b.built, 0, 0, 4)
+				b.bar.BackgroundColor3 = Color3.fromRGB(90, 170, 255)
+			elseif def.units then
+				local busy = #b.queue > 0 or b.auto ~= ""
 				b.bar.Visible = busy and view.z >= 3.5
-				b.bar.Size = UDim2.new(math.abs(p), 0, 0, 4)
-				b.bar.BackgroundColor3 = if p < 0 then C.bad else C.molten
+				b.bar.Size = UDim2.new(math.abs(b.prog), 0, 0, 4)
+				b.bar.BackgroundColor3 = if b.prog < 0 then C.bad else C.molten
+			else
+				b.bar.Visible = false
 			end
-			b.warn.Visible = not on and def.power > 0 and view.z >= 3.5
+			b.warn.Visible = false
 		end
+	end
+end
+
+-- construction finished
+function MapView.finishBuilding(id: number)
+	local b = buildings[id]
+	if b then
+		b.built = 1
+		Sprites.setTransparency(b.icon, 0)
+		b.bar.Visible = false
 	end
 end
 
@@ -905,7 +995,15 @@ function MapView.addUnit(u)
 		Parent = holder,
 	}, { Theme.corner(nil, 1), make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2 }) })
 	local imgs = {}
-	local spots = if u.kind == "infantry" then { { 0.22, 0.45, 0.8 }, { 0.78, 0.45, 0.8 }, { 0.5, 0.56, 0.86 } } else { { 0.5, 0.5, 1 } }
+	local def = Config.UNITS[u.kind]
+	local spots
+	if u.kind == "infantry" then
+		spots = { { 0.22, 0.45, 0.8 }, { 0.78, 0.45, 0.8 }, { 0.5, 0.56, 0.86 } }
+	elseif u.kind == "rocket" then
+		spots = { { 0.3, 0.5, 0.86 }, { 0.72, 0.5, 0.86 } }
+	else
+		spots = { { 0.5, 0.5, 1 } }
+	end
 	for _, s in spots do
 		local img = make("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -915,7 +1013,7 @@ function MapView.addUnit(u)
 			ZIndex = 2,
 			Parent = holder,
 		})
-		Sprites.apply(img, u.kind, color)
+		Sprites.apply(img, def.icon, color)
 		table.insert(imgs, img)
 	end
 	local dot = make("Frame", {
@@ -931,6 +1029,8 @@ function MapView.addUnit(u)
 	rec = {
 		id = u.id,
 		kind = u.kind,
+		icon = def.icon,
+		air = def.air == true,
 		owner = u.owner,
 		path = u.path,
 		t0 = u.t0,
@@ -1014,7 +1114,7 @@ end
 local function updateUnits(t: number)
 	for _, u in units do
 		local x, y, _, dir = Motion.position(u, t)
-		if u.kind == "plane" then
+		if u.air then
 			if u.px then
 				local vx, vy = x - u.px, y - u.py
 				if vx * vx + vy * vy > 1e-8 then
@@ -1026,12 +1126,13 @@ local function updateUnits(t: number)
 			if flip ~= u.flip then
 				u.flip = flip
 				for _, img in u.imgs do
-					Sprites.apply(img, u.kind, u.color, flip)
+					Sprites.apply(img, u.icon, u.color, flip)
 				end
 			end
 		end
 		u.px, u.py = x, y
 		u.holder.Position = UDim2.fromScale(x / W, y / H)
+		u.holder.Visible = u.owner == MapView.myId or MapView.isVisible(x, y)
 	end
 end
 
@@ -1042,9 +1143,9 @@ local function resizeMarkers()
 		local s
 		if unitSmall then
 			s = 8
-		elseif u.kind == "plane" then
+		elseif u.air then
 			s = math.clamp(z * 2.8, 18, 44)
-		elseif u.kind == "tank" then
+		elseif u.kind ~= "infantry" and u.kind ~= "rocket" then
 			s = math.clamp(z * 2.5, 16, 40)
 		else
 			s = math.clamp(z * 2.6, 18, 40)
@@ -1156,6 +1257,9 @@ end
 function MapView.clear()
 	buffer.fill(owner, 0, 0)
 	buffer.fill(ov, 0, 0)
+	buffer.fill(ownCells, 0, 0)
+	table.clear(fadeStart)
+	fadeList = {}
 	dirtyRect = { 0, 0, W - 1, H - 1 }
 	for id in labels do
 		removeLabel(id)
@@ -1178,6 +1282,7 @@ function MapView.load(s)
 	for _, info in s.nations do
 		MapView.upsertNation(info)
 	end
+	local me = MapView.myId
 	Codec.decodeOwners(s.owners, function(t, o)
 		writeu16(owner, t * 2, o)
 		local n = nations[o]
@@ -1185,6 +1290,9 @@ function MapView.load(s)
 			n.count += 1
 			n.sx += t % W
 			n.sy += t // W
+		end
+		if o == me then
+			addOwn(t % W, t // W, 1)
 		end
 	end)
 	repaintAll()
@@ -1225,6 +1333,102 @@ function MapView.setMode(mode: string)
 	end
 end
 
+---------------------------------------------------------------- fog of war
+
+local function fogActive(): boolean
+	return fogImg ~= nil and MapView.mode == "play" and MapView.phase == "game" and MapView.myId ~= 0 and not MapView.spectator
+end
+
+-- true when a tile position is not hidden by fog for this player
+function MapView.isVisible(x: number, y: number): boolean
+	if not fogActive() then
+		return true
+	end
+	local cx, cy = math.floor(x / FOG), math.floor(y / FOG)
+	if cx < 0 or cy < 0 or cx >= FW or cy >= FH then
+		return false
+	end
+	return readu8(visible, cy * FW + cx) == 1
+end
+
+local function reveal(cx: number, cy: number, r: number)
+	local ri = math.ceil(r)
+	for dy = -ri, ri do
+		local y = cy + dy
+		if y >= 0 and y < FH then
+			for dx = -ri, ri do
+				local x = cx + dx
+				if x >= 0 and x < FW and dx * dx + dy * dy <= r * r + 0.5 then
+					writeu8(visible, y * FW + x, 1)
+				end
+			end
+		end
+	end
+end
+
+local function updateFog()
+	buffer.fill(visible, 0, 0)
+	local me = MapView.myId
+	local landR = Config.VISION.land / FOG
+	for c = 0, FW * FH - 1 do
+		if buffer.readu16(ownCells, c * 2) > 0 then
+			reveal(c % FW, c // FW, landR)
+		end
+	end
+	for _, u in units do
+		if u.owner == me and u.px then
+			reveal(math.floor(u.px / FOG), math.floor(u.py / FOG), (Config.UNITS[u.kind].vision or 6) / FOG)
+		end
+	end
+	for _, b in buildings do
+		if b.owner == me then
+			reveal(b.x // FOG, b.y // FOG, Config.VISION.building / FOG)
+		end
+	end
+	local n = nations[me]
+	if n and n.cap then
+		reveal(n.cap.x // FOG, n.cap.y // FOG, Config.VISION.capital / FOG)
+	end
+	for c = 0, FW * FH - 1 do
+		local k = c * 4
+		if readu8(visible, c) == 1 then
+			writeu8(fogPx, k + 3, 0)
+		else
+			writeu8(fogPx, k, 8)
+			writeu8(fogPx, k + 1, 12)
+			writeu8(fogPx, k + 2, 22)
+			writeu8(fogPx, k + 3, 170)
+		end
+	end
+	pcall(function()
+		fogImg:WritePixelsBuffer(Vector2.zero, Vector2.new(FW, FH), fogPx)
+	end)
+	for _, b in buildings do
+		b.plate.Visible = b.owner == me or readu8(visible, cellOf(b.x, b.y)) == 1
+	end
+end
+
+local function processFades()
+	if #fadeList == 0 then
+		return
+	end
+	local now = os.clock()
+	local keep = {}
+	for _, t in fadeList do
+		local started = fadeStart[t]
+		local done = not started or now - started >= FADE
+		if done then
+			fadeStart[t] = nil
+		end
+		paint(t)
+		markDirty(t % W, t // W)
+		if not done then
+			table.insert(keep, t)
+		end
+	end
+	fadeList = keep
+end
+
 ---------------------------------------------------------------- frame update
 
 function MapView.update(dt: number)
@@ -1252,7 +1456,22 @@ function MapView.update(dt: number)
 	end
 	board.Position = UDim2.fromOffset(view.x, view.y)
 	board.Size = UDim2.fromOffset(W * view.z, H * view.z)
+	processFades()
 	flushOverlay()
+	local fogOn = fogActive()
+	fogLabel.Visible = fogOn
+	if fogOn then
+		fogAcc += dt
+		if fogAcc >= 0.25 or not fogWasOn then
+			fogAcc = 0
+			updateFog()
+		end
+	elseif fogWasOn then
+		for _, b in buildings do
+			b.plate.Visible = true
+		end
+	end
+	fogWasOn = fogOn
 	if MapView.mode == "play" then
 		if math.abs(view.z - lastZ) > 0.01 then
 			lastZ = view.z

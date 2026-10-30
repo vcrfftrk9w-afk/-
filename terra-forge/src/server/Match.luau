@@ -30,10 +30,6 @@ local function shuffle(list, rng: Random)
 	return a
 end
 
-local function newFlow()
-	return { pop = 0, iron = 0, coal = 0, oil = 0, steel = 0 }
-end
-
 local function nationInfo(n)
 	return {
 		id = n.id,
@@ -47,7 +43,7 @@ local function nationInfo(n)
 end
 
 local function buildingInfo(b)
-	return { id = b.id, kind = b.kind, owner = b.n.id, x = b.x, y = b.y, hp = math.ceil(b.hp), maxHp = b.maxHp }
+	return { id = b.id, kind = b.kind, owner = b.n.id, x = b.x, y = b.y, hp = math.ceil(b.hp), maxHp = b.maxHp, built = b.built }
 end
 
 local function unitInfo(u)
@@ -64,10 +60,16 @@ local function unitInfo(u)
 	}
 end
 
--- attack strength from the army: soldiers, tanks and planes each add a little
+-- attack strength from the army: every unit adds a little
 local function power(n): number
-	local a = n.army
-	return math.min(3, 1 + a.infantry * Config.UNITS.infantry.power + a.tank * Config.UNITS.tank.power + a.plane * Config.UNITS.plane.power)
+	local total = 1
+	for kind, count in n.army do
+		local def = Config.UNITS[kind]
+		if def then
+			total += count * def.power
+		end
+	end
+	return math.min(3, total)
 end
 
 local function fmt(v: number): string
@@ -158,7 +160,7 @@ function Match:newNation(o)
 		cap = nil,
 		cool = self.rng:NextInteger(0, 3),
 		stuck = 0,
-		army = { infantry = 0, tank = 0, plane = 0 },
+		army = {},
 		botUnits = 0,
 		unitTotal = 0,
 		cities = 0,
@@ -243,10 +245,8 @@ function Match:play(player: Player)
 		player = player,
 		troops = Config.START_TROOPS,
 	})
-	n.res = table.clone(Config.START_RES)
-	n.flow = newFlow()
-	n.rates = newFlow()
-	n.energy = { supply = 0, need = 0 }
+	n.money = Config.START_MONEY
+	n.income = Config.BASE_INCOME
 	self.humans[player] = n
 	table.remove(self.botQueue)
 	self:send({ t = "nation", n = nationInfo(n) })
@@ -328,87 +328,84 @@ function Match:attack(player: Player, x: number, y: number, pct: number)
 	end
 end
 
-local function canAfford(n, cost): boolean
-	for k, v in cost do
-		local have = if k == "pop" then n.troops else n.res[k]
-		if have < v then
-			return false
-		end
-	end
-	return true
+local function lackText(n, cost: number): string
+	return "Не хватает денег: нужно ещё " .. math.ceil(cost - n.money) .. " $"
 end
 
-local function missingText(n, cost): string
-	local missing = {}
-	for _, k in Config.RES_ORDER do
-		local need = cost[k]
-		local have = if k == "pop" then n.troops else n.res[k]
-		if need and have and have < need then
-			table.insert(missing, math.ceil(need - have) .. " " .. Config.RES_OF[k])
-		end
-	end
-	return "Не хватает: " .. table.concat(missing, ", ")
-end
-
-local function payCost(n, cost, sign: number)
-	for k, v in cost do
-		if k == "pop" then
-			n.troops -= v * sign
-		else
-			n.res[k] -= v * sign
-		end
-	end
-end
-
--- a player's own factory, or nil
+-- a player's own finished factory, or nil
 function Match:factoryOf(player: Player, id: number)
 	local n = self.humans[player]
 	local b = self.buildings[id]
-	if not n or not b or b.n ~= n or self.phase ~= "game" or not Config.BUILD[b.kind].unit then
+	if not n or not b or b.n ~= n or self.phase ~= "game" or not Config.BUILD[b.kind].units then
 		return nil, nil
 	end
 	return n, b
 end
 
+local function makes(b, kind: string): boolean
+	return table.find(Config.BUILD[b.kind].units, kind) ~= nil
+end
+
 -- orders one unit from a factory; it is paid now and refunded if cancelled
-function Match:queueUnit(player: Player, id: number)
+function Match:queueUnit(player: Player, id: number, kind: string)
 	local n, b = self:factoryOf(player, id)
-	if not n then
+	if not n or not makes(b, kind) then
 		return
 	end
-	local def = Config.BUILD[b.kind]
-	if b.queue >= Config.MAX_QUEUE then
+	local cost = Config.UNITS[kind].cost
+	if #b.queue >= Config.MAX_QUEUE then
 		self:toast(n, "Очередь полная: не больше " .. Config.MAX_QUEUE .. " юнитов.", true)
 		return
 	end
-	if not canAfford(n, def.ucost) then
-		self:toast(n, missingText(n, def.ucost), true)
+	if n.money < cost then
+		self:toast(n, lackText(n, cost), true)
 		return
 	end
-	payCost(n, def.ucost, 1)
-	b.queue += 1
+	n.money -= cost
+	table.insert(b.queue, kind)
+	if b.built < 1 then
+		self:toast(n, "Заказ принят. Начнётся, когда достроят: " .. Config.BUILD[b.kind].name)
+	end
 	self:sendEconomy()
 end
 
+-- removes the last ordered unit and returns its money
 function Match:cancelUnit(player: Player, id: number)
 	local n, b = self:factoryOf(player, id)
-	if not n or b.queue <= 0 then
+	if not n or #b.queue == 0 then
 		return
 	end
-	payCost(n, Config.BUILD[b.kind].ucost, -1)
-	b.queue -= 1
-	if b.queue == 0 and not b.auto then
+	local kind = table.remove(b.queue)
+	n.money += Config.UNITS[kind].cost
+	if #b.queue == 0 and not b.autoPaid then
 		b.prog = 0
 	end
 	self:sendEconomy()
 end
 
-function Match:setAuto(player: Player, id: number, on: boolean)
+-- kind = unit to repeat while the queue is empty, or "" to switch it off
+function Match:setAuto(player: Player, id: number, kind: string)
 	local n, b = self:factoryOf(player, id)
-	if n then
-		b.auto = on
-		self:sendEconomy()
+	if not n or (kind ~= "" and not makes(b, kind)) then
+		return
 	end
+	if b.autoPaid and b.autoPaid ~= kind and #b.queue == 0 then
+		n.money += Config.UNITS[b.autoPaid].cost
+		b.autoPaid = nil
+		b.prog = 0
+	end
+	b.auto = if kind ~= "" then kind else nil
+	self:sendEconomy()
+end
+
+-- new units from this factory drive to the rally point
+function Match:setRally(player: Player, id: number, x: number, y: number)
+	local n, b = self:factoryOf(player, id)
+	if not n or not Map.inBounds(math.floor(x), math.floor(y)) then
+		return
+	end
+	b.rally = { x = math.floor(x) + 0.5, y = math.floor(y) + 0.5 }
+	self:toast(n, "Точка сбора поставлена: новые юниты поедут туда.")
 end
 
 function Match:build(player: Player, kind: string, x: number, y: number)
@@ -426,30 +423,21 @@ function Match:build(player: Player, kind: string, x: number, y: number)
 		self:toast(n, "Строить можно только на своей земле.", true)
 		return
 	end
-	if not canAfford(n, def.cost) then
-		self:toast(n, missingText(n, def.cost), true)
+	if def.onDeposit and Map.deposit(t) == 0 then
+		self:toast(n, "Экстрактор ставится только на месторождение: рыжие, серые или чёрные пятна на карте.", true)
+		return
+	end
+	if n.money < def.cost then
+		self:toast(n, lackText(n, def.cost), true)
 		return
 	end
 	if not self:addBuilding(n, kind, x, y) then
 		self:toast(n, "Тут тесно. Отступи на клетку от других построек.", true)
 		return
 	end
-	for k, v in def.cost do
-		n.res[k] -= v
-	end
-	local dep = Map.deposit(t)
-	local extra = ""
-	if kind == "mine" then
-		extra = if dep == 1 then ": на руде, железо ×3" elseif dep == 2 then ": на угле, уголь ×3" else ""
-	elseif kind == "rig" then
-		extra = if dep == 3 then ": на нефти, ×5" else " (нефти тут мало, ищи чёрные пятна)"
-	end
-	if def.unit then
-		extra ..= ". Нажми на неё на карте, чтобы заказать войска"
-	elseif def.power > 0 and n.energy.supply < n.energy.need + def.power then
-		extra ..= ". Энергии мало: поставь электростанцию"
-	end
-	self:toast(n, "Построено: " .. def.name .. extra)
+	n.money -= def.cost
+	local extra = if def.units then ". Когда достроят, нажми на неё и заказывай войска" else ""
+	self:toast(n, "Строится: " .. def.name .. " (" .. def.time .. " с)" .. extra)
 end
 
 ---------------------------------------------------------------- buildings and units
@@ -468,7 +456,6 @@ function Match:addBuilding(n, kind: string, x: number, y: number): boolean
 	end
 	self.nextBuildingId += 1
 	local def = Config.BUILD[kind]
-	local hp = def.hp or Config.BUILDING_HP
 	local b = {
 		id = self.nextBuildingId,
 		kind = kind,
@@ -478,15 +465,16 @@ function Match:addBuilding(n, kind: string, x: number, y: number): boolean
 		y = y,
 		px = x + 0.5,
 		py = y + 0.5,
-		hp = hp,
-		maxHp = hp,
+		hp = def.hp,
+		maxHp = def.hp,
 		isBuilding = true,
+		-- players' buildings take time to build; bots get theirs ready
+		built = if n.isHuman then 0 else 1,
 		prog = if n.isHuman then 0 else self.rng:NextNumber() * 0.5,
-		on = true,
+		queue = {},
+		auto = nil,
+		autoPaid = nil,
 		blocked = false,
-		queue = 0,
-		auto = false,
-		paid = false,
 	}
 	self.buildings[b.id] = b
 	if kind == "city" then
@@ -509,13 +497,14 @@ function Match:removeBuilding(b)
 end
 
 -- creates a unit next to (x, y); returns false when a limit is reached
-function Match:spawnUnit(n, kind: string, x: number, y: number): boolean
+-- creates a unit next to (x, y); returns the unit, or nil when a limit is reached
+function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
 	local cap = if n.isHuman then Config.MAX_UNITS_PER_NATION else Config.BOT_MAX_UNITS
 	if self.unitCount >= Config.MAX_UNITS or not n.cap or n.unitTotal >= cap then
-		return false
+		return nil
 	end
 	local def = Config.UNITS[kind]
-	if kind ~= "plane" then
+	if not def.air then
 		-- new units wait just below their factory, so they don't cover it
 		local lx, ly = Path.nearestLand(x + self.rng:NextNumber() * 2 - 1, y + 1.5 + self.rng:NextNumber(), 3)
 		if lx then
@@ -527,6 +516,7 @@ function Match:spawnUnit(n, kind: string, x: number, y: number): boolean
 	local u = {
 		id = self.nextUnitId,
 		kind = kind,
+		air = def.air == true,
 		n = n,
 		hp = def.hp,
 		maxHp = def.hp,
@@ -538,15 +528,20 @@ function Match:spawnUnit(n, kind: string, x: number, y: number): boolean
 		shotAt = 0,
 		orderedAt = 0,
 	}
-	if kind == "plane" then
+	if u.air then
 		local r = 3 + self.rng:NextNumber() * 2
 		u.orbit = { r = r, a0 = self.rng:NextNumber() * math.pi * 2, w = (if self.rng:NextNumber() < 0.5 then 1 else -1) * 2.6 / r }
 	end
-	n.army[kind] += 1
+	n.army[kind] = (n.army[kind] or 0) + 1
 	n.unitTotal += 1
 	self.units[u.id] = u
-	self:send({ t = "unit", u = unitInfo(u) })
-	return true
+	if rally then
+		local a, r = self.rng:NextNumber() * math.pi * 2, self.rng:NextNumber() * 1.5
+		self:orderUnit(u, rally.x + math.cos(a) * r, rally.y + math.sin(a) * r, 15000)
+	else
+		self:send({ t = "unit", u = unitInfo(u) })
+	end
+	return u
 end
 
 function Match:removeUnit(u)
@@ -560,12 +555,12 @@ function Match:removeUnit(u)
 	end
 end
 
--- sends one unit towards (tx, ty) along a land route (planes fly straight)
+-- sends one unit towards (tx, ty) along a land route (aircraft fly straight)
 function Match:orderUnit(u, tx: number, ty: number, maxNodes: number)
 	local t = now()
 	local x, y = Motion.position(u, t)
 	tx, ty = Path.inMap(tx, ty)
-	if u.kind == "plane" then
+	if u.air then
 		u.path = { x, y, tx, ty }
 	else
 		u.path = Path.ground(x, y, tx, ty, maxNodes)
@@ -606,7 +601,7 @@ function Match:move(player: Player, ids, tx: number, ty: number)
 		end
 		local gx, gy = Path.inMap(tx + ox, ty + oy)
 		local x, y = Motion.position(u, t)
-		if u.kind == "plane" then
+		if u.air then
 			u.path = { x, y, gx, gy }
 		elseif leader and #leader >= 4 and (leader[1] - x) ^ 2 + (leader[2] - y) ^ 2 < 400 and Path.clear(x, y, leader[3], leader[4]) then
 			-- close to the first unit: follow its route
@@ -716,8 +711,7 @@ function Match:tickCombat(dt: number)
 				if cell then
 					for _, o in cell do
 						if o.n ~= owner and o.hp > 0 then
-							local isAir = o.kind == "plane"
-							if (isAir and air) or (not isAir and ground) then
+							if (o.air and air) or (not o.air and ground) then
 								local d = (o.px - sx) ^ 2 + (o.py - sy) ^ 2
 								if d <= bestD then
 									bestD = d
@@ -732,7 +726,7 @@ function Match:tickCombat(dt: number)
 		return best
 	end
 
-	local function fire(attacker, kind: string, dps: number, range: number, hitsAir: number, groundToo: boolean)
+	local function fire(attacker, kind: string, dps: number, range: number, hitsAir: number, groundToo: boolean, vsBuildings: number)
 		local target = attacker.target
 		if target then
 			local gone = target.hp <= 0 or (if target.isBuilding then not self.buildings[target.id] else not self.units[target.id])
@@ -748,8 +742,10 @@ function Match:tickCombat(dt: number)
 			return
 		end
 		local mult
-		if target.kind == "plane" then
+		if target.air then
 			mult = hitsAir
+		elseif target.isBuilding then
+			mult = vsBuildings
 		else
 			local vs = Config.VS[kind]
 			mult = if vs and vs[target.kind] then vs[target.kind] else 1
@@ -771,21 +767,18 @@ function Match:tickCombat(dt: number)
 
 	for _, u in self.units do
 		local def = Config.UNITS[u.kind]
-		fire(u, u.kind, def.dps, def.range, def.hitsAir, true)
+		fire(u, u.kind, def.dps, def.range, def.hitsAir, def.hitsGround ~= false, def.vsBuildings or 1)
 	end
 	for _, b in self.buildings do
 		local def = Config.BUILD[b.kind]
-		if def.dps and b.n.alive then
-			local eff = if b.n.isHuman then (b.n.eff or 1) else 1
-			if eff > 0 then
-				fire(b, b.kind, def.dps * eff, def.range, def.hitsAir, not def.airOnly)
-			end
+		if def.dps and b.n.alive and b.built >= 1 then
+			fire(b, b.kind, def.dps, def.range, def.hitsAir, not def.airOnly, 1)
 		end
 	end
 
 	for _, u in self.units do
 		if u.hp <= 0 then
-			self:send({ t = "boom", x = u.px, y = u.py, big = u.kind ~= "infantry" })
+			self:send({ t = "boom", x = u.px, y = u.py, big = u.kind ~= "infantry" and u.kind ~= "rocket" })
 			self:removeUnit(u)
 		end
 	end
@@ -799,7 +792,7 @@ function Match:tickCombat(dt: number)
 
 	local nb = self.nb
 	for _, u in self.units do
-		if u.kind ~= "plane" then
+		if not u.air then
 			local tx, ty = math.floor(u.px), math.floor(u.py)
 			if Map.inBounds(tx, ty) then
 				local tile = ty * W + tx
@@ -858,7 +851,7 @@ function Match:beginWar()
 	self.phase = "game"
 	self.timer = Config.MATCH_SECONDS
 	self:send({ t = "phase", phase = "game", timer = self.timer })
-	local kinds = { "mine", "mill", "barracks", "tankf", "rig", "power" }
+	local kinds = { "city", "barracks", "barracks", "tankf", "tower", "air" }
 	for _, n in self.world.nations do
 		if not n.isHuman and n.cap then
 			if self.rng:NextNumber() < 0.55 then
@@ -869,7 +862,7 @@ function Match:beginWar()
 				self:spawnUnit(n, "tank", n.cap.x + 0.5, n.cap.y + 0.5)
 			end
 			if self.rng:NextNumber() < 0.18 then
-				self:spawnUnit(n, "plane", n.cap.x + 0.5, n.cap.y + 0.5)
+				self:spawnUnit(n, if self.rng:NextNumber() < 0.5 then "gunship" else "fighter", n.cap.x + 0.5, n.cap.y + 0.5)
 			end
 		end
 	end
@@ -947,9 +940,6 @@ function Match:tick()
 		local cap = 1400 + n.count * 22 + n.cities * 1500
 		local grown = math.max(0, cap - n.troops) * 0.006 + (if n.isHuman then 2.2 else 1.6) + n.cities * 0.8
 		n.troops += grown
-		if n.flow then
-			n.flow.pop += grown
-		end
 		if not n.isHuman and not n.attack then
 			n.cool -= 1
 			if n.cool <= 0 then
@@ -1003,27 +993,7 @@ end
 function Match:tickEconomy(dt: number)
 	local world = self.world
 	for _, n in self.humans do
-		local supply, need = Config.CAPITAL_POWER, 0
-		for _, b in self.buildings do
-			if b.n == n then
-				if b.kind == "power" then
-					if n.res.coal > 0.05 then
-						supply += 12
-						n.res.coal -= 0.5 * dt
-						n.flow.coal -= 0.5 * dt
-						b.on = true
-					else
-						b.on = false
-					end
-				else
-					need += Config.BUILD[b.kind].power
-				end
-			end
-		end
-		n.energy.supply = supply
-		n.energy.need = need
-		local floor = Config.LOW_POWER_SPEED
-		n.eff = if need > 0 then floor + (1 - floor) * math.min(1, supply / need) else 1
+		n.income = Config.BASE_INCOME + n.count * Config.LAND_INCOME
 	end
 	for _, b in self.buildings do
 		local n = b.n
@@ -1032,74 +1002,64 @@ function Match:tickEconomy(dt: number)
 			continue
 		end
 		local def = Config.BUILD[b.kind]
+		if b.built < 1 then
+			b.built = math.min(1, b.built + dt / def.time)
+			if b.built >= 1 then
+				self:send({ t = "bdone", id = b.id })
+				self:toast(n, "Достроено: " .. def.name)
+			end
+			continue
+		end
+		if def.income and n.isHuman then
+			n.income += def.income
+		end
+		if not def.units then
+			continue
+		end
 		if not n.isHuman then
-			if def.unit then
-				b.prog += dt / 40
-				if b.prog >= 1 then
-					b.prog = 0
-					if n.alive then
-						self:spawnUnit(n, def.unit, b.x + 0.5, b.y + 0.5)
-					end
+			b.prog += dt / 40
+			if b.prog >= 1 then
+				b.prog = 0
+				if n.alive then
+					self:spawnUnit(n, def.units[self.rng:NextInteger(1, #def.units)], b.x + 0.5, b.y + 0.5)
 				end
 			end
 			continue
 		end
-		local res, flow, eff = n.res, n.flow, n.eff or 1
-		local function gain(k, v)
-			res[k] += v
-			flow[k] += v
-		end
-		local dep = Map.deposit(b.t)
-		if b.kind == "mine" then
-			if dep == 1 then
-				gain("iron", 4.5 * dt)
-			elseif dep == 2 then
-				gain("coal", 4.5 * dt)
-			else
-				gain("iron", 1.5 * dt)
-				gain("coal", 0.6 * dt)
-			end
-		elseif b.kind == "rig" then
-			gain("oil", (if dep == 3 then 3 else 0.6) * dt)
-		elseif b.kind == "mill" then
-			local k = dt * eff
-			if k > 0 and res.iron >= 2 * k and res.coal >= k then
-				gain("iron", -2 * k)
-				gain("coal", -k)
-				gain("steel", k)
-				b.on = true
-			else
-				b.on = false
-			end
-		elseif def.unit then
-			-- queued units are paid when ordered; in auto mode each unit is paid when it starts
-			b.on = n.energy.supply >= n.energy.need
-			b.blocked = false
-			if b.queue == 0 and b.auto and not b.paid then
-				if canAfford(n, def.ucost) then
-					payCost(n, def.ucost, 1)
-					b.paid = true
+		-- queued units are paid when ordered; in auto mode each unit is paid when it starts
+		b.blocked = false
+		local current = b.queue[1]
+		if not current and b.auto then
+			if not b.autoPaid then
+				local cost = Config.UNITS[b.auto].cost
+				if n.money >= cost then
+					n.money -= cost
+					b.autoPaid = b.auto
 				else
 					b.blocked = true
 				end
 			end
-			if b.queue > 0 or b.paid then
-				if n.unitTotal >= Config.MAX_UNITS_PER_NATION then
-					b.blocked = true
-				else
-					b.prog = math.min(1, b.prog + dt * eff / def.every)
-					if b.prog >= 1 then
-						self:spawnUnit(n, def.unit, b.x + 0.5, b.y + 0.5)
-						b.prog = 0
-						if b.queue > 0 then
-							b.queue -= 1
-						else
-							b.paid = false
-						end
+			current = b.autoPaid
+		end
+		if current then
+			if n.unitTotal >= Config.MAX_UNITS_PER_NATION then
+				b.blocked = true
+			else
+				b.prog = math.min(1, b.prog + dt / Config.UNITS[current].time)
+				if b.prog >= 1 then
+					self:spawnUnit(n, current, b.x + 0.5, b.y + 0.5, b.rally)
+					b.prog = 0
+					if b.queue[1] then
+						table.remove(b.queue, 1)
+					else
+						b.autoPaid = nil
 					end
 				end
 			end
 		end
+	end
+	for _, n in self.humans do
+		n.money += n.income * dt
 	end
 end
 
@@ -1115,24 +1075,24 @@ end
 
 function Match:sendEconomy()
 	for player, n in self.humans do
-		local prog = {}
+		local list = {}
 		for _, b in self.buildings do
 			if b.n == n then
-				table.insert(prog, b.id)
-				table.insert(prog, if b.blocked then -math.max(b.prog, 0.001) else b.prog)
-				table.insert(prog, if b.on then 1 else 0)
-				table.insert(prog, b.queue or 0)
-				table.insert(prog, if b.auto then 1 else 0)
+				table.insert(list, {
+					id = b.id,
+					p = if b.blocked then -math.max(b.prog, 0.001) else b.prog,
+					built = b.built,
+					q = b.queue,
+					auto = b.auto or "",
+				})
 			end
 		end
 		self:sendTo(player, {
 			t = "eco",
-			res = n.res,
-			rates = n.rates,
-			supply = n.energy.supply,
-			need = n.energy.need,
-			prog = prog,
+			money = math.floor(n.money),
+			income = n.income,
 			army = n.army,
+			list = list,
 		})
 	end
 end
@@ -1196,10 +1156,6 @@ function Match:step(dt: number)
 		self.secAcc += dt
 		if self.secAcc >= 1 then
 			self.secAcc = 0
-			for _, n in self.humans do
-				n.rates = n.flow
-				n.flow = newFlow()
-			end
 			self:checkEnd()
 		end
 		self.botUnitAcc += dt
@@ -1213,7 +1169,8 @@ function Match:step(dt: number)
 			end
 			if #candidates > 0 then
 				local n = candidates[self.rng:NextInteger(1, #candidates)]
-				self:spawnUnit(n, if self.rng:NextNumber() < 0.7 then "tank" else "infantry", n.cap.x + 0.5, n.cap.y + 0.5)
+				local kinds = { "infantry", "rocket", "scout", "tank", "tank", "artillery" }
+				self:spawnUnit(n, kinds[self.rng:NextInteger(1, #kinds)], n.cap.x + 0.5, n.cap.y + 0.5)
 			end
 		end
 		self.botOrderAcc += dt

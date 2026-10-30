@@ -6,20 +6,25 @@ Config.H = 336
 Config.N = 720 * 336
 
 Config.TOTAL_NATIONS = 40 -- humans + bots in one match
-Config.SPAWN_SECONDS = 15
+Config.SPAWN_SECONDS = 10
 Config.TICK = 0.1 -- simulation step, seconds
 Config.NET_RATE = 0.2 -- how often territory changes are sent to clients
 Config.WIN_SHARE = 0.25 -- share of all land that wins the match
 Config.MATCH_SECONDS = 25 * 60
 Config.RESULT_SECONDS = 12
 Config.CAPITAL_RADIUS = 3
-Config.CAPITAL_POWER = 8 -- energy every capital gives for free
-Config.LOW_POWER_SPEED = 0.4 -- factories still work this fast with no energy at all
 Config.MAX_QUEUE = 10
 
 Config.START_TROOPS = 2500
-Config.START_RES = { iron = 450, coal = 160, oil = 120, steel = 220 }
 Config.ATTACK_STEPS = { 20, 40, 60, 80 }
+
+-- money: the capital pays a base income, every tile of land adds a little, extractors add more
+Config.START_MONEY = 1500
+Config.BASE_INCOME = 6
+Config.LAND_INCOME = 1 / 40
+
+-- how far you can see, in tiles; everything else is under fog during the war
+Config.VISION = { land = 4, building = 6, capital = 9 }
 
 Config.HUMAN_COLORS = { "#ff3e8a", "#b45cff", "#18d4c4", "#ffe14d", "#ff7a2f", "#5b8cff", "#7dff6a", "#ff5c5c" }
 Config.BOT_COLORS = {
@@ -39,139 +44,128 @@ Config.BOT_NAMES = {
 	"Дымные трубы", "Бронзовый век", "Пустынные скорпионы", "Красные кирпичи",
 }
 
-Config.RES_NAMES = {
-	pop = "Войска",
-	iron = "Железо",
-	coal = "Уголь",
-	oil = "Нефть",
-	steel = "Сталь",
-	energy = "Энергия",
-}
--- genitive forms for amounts: "50 железа", "30 угля"
-Config.RES_OF = {
-	pop = "войск",
-	iron = "железа",
-	coal = "угля",
-	oil = "нефти",
-	steel = "стали",
-}
-Config.RES_ORDER = { "pop", "iron", "coal", "oil", "steel" }
-
-Config.BUILD_ORDER = { "mine", "rig", "power", "mill", "city", "barracks", "tankf", "air", "tower", "aa" }
+-- cost in money, build time in seconds
+Config.BUILD_ORDER = { "extractor", "city", "barracks", "tankf", "air", "tower", "aa" }
 Config.BUILD = {
+	extractor = {
+		name = "Экстрактор",
+		icon = "extractor",
+		cost = 300,
+		time = 8,
+		hp = 350,
+		income = 6,
+		onDeposit = true,
+		desc = "Добывает деньги: +6 $/с. Ставится только на месторождение: рыжие, серые и чёрные пятна на карте.",
+	},
 	city = {
 		name = "Город",
 		icon = "city",
-		cost = { iron = 150 },
-		power = 0,
+		cost = 500,
+		time = 14,
 		hp = 500,
-		desc = "Больше людей: +1500 к пределу войск и быстрее их прирост.",
-	},
-	tower = {
-		name = "Башня",
-		icon = "tower",
-		cost = { iron = 80, steel = 20 },
-		power = 1,
-		hp = 420,
-		dps = 20,
-		range = 5,
-		hitsAir = 0,
-		desc = "Сама стреляет по вражеской пехоте и танкам в радиусе 5 клеток.",
-	},
-	aa = {
-		name = "ПВО",
-		icon = "aa",
-		cost = { steel = 60 },
-		power = 2,
-		hp = 260,
-		dps = 32,
-		range = 7,
-		hitsAir = 1,
-		airOnly = true,
-		desc = "Сбивает вражеские самолёты в радиусе 7 клеток.",
-	},
-	mine = {
-		name = "Шахта",
-		icon = "mine",
-		cost = { iron = 50 },
-		power = 0,
-		desc = "Копает железо и уголь. На рыжем пятне руды железо ×3, на тёмном пятне угля уголь ×3.",
-	},
-	rig = {
-		name = "Нефтевышка",
-		icon = "rig",
-		cost = { iron = 80 },
-		power = 0,
-		desc = "Качает нефть. На чёрных пятнах нефти в пять раз больше.",
-	},
-	power = {
-		name = "Электростанция",
-		icon = "power",
-		cost = { iron = 100, coal = 30 },
-		power = -12,
-		desc = "Сжигает уголь и даёт 12 энергии заводам.",
-	},
-	mill = {
-		name = "Сталеплавильня",
-		icon = "mill",
-		cost = { iron = 120 },
-		power = 4,
-		desc = "Плавит 2 железа и 1 уголь в 1 сталь каждую секунду.",
+		income = 2,
+		desc = "Больше людей: +1500 к пределу войск, быстрее их прирост и +2 $/с.",
 	},
 	barracks = {
 		name = "Казарма",
 		icon = "barracks",
-		cost = { iron = 80 },
-		power = 2,
-		unit = "infantry",
-		every = 6,
-		ucost = { pop = 60 },
-		desc = "Обучает пехоту. Нажми на казарму на карте, чтобы заказать солдат.",
+		cost = 250,
+		time = 8,
+		hp = 400,
+		units = { "infantry", "rocket" },
+		desc = "Обучает пехоту и ракетчиков. Нажми на неё на карте, чтобы заказать.",
 	},
 	tankf = {
 		name = "Танковый завод",
 		icon = "tank",
-		cost = { iron = 60, steel = 60 },
-		power = 6,
-		unit = "tank",
-		every = 9,
-		ucost = { steel = 25, oil = 8 },
-		desc = "Собирает танки. Нажми на завод на карте, чтобы заказать танки.",
+		cost = 600,
+		time = 12,
+		hp = 600,
+		units = { "scout", "tank", "artillery" },
+		desc = "Собирает броневики, танки и артиллерию. Нажми на него на карте, чтобы заказать.",
 	},
 	air = {
 		name = "Аэродром",
 		icon = "plane",
-		cost = { steel = 90, oil = 40 },
-		power = 8,
-		unit = "plane",
-		every = 12,
-		ucost = { steel = 35, oil = 20 },
-		desc = "Выпускает самолёты. Нажми на аэродром на карте, чтобы заказать самолёты.",
+		cost = 800,
+		time = 15,
+		hp = 450,
+		units = { "fighter", "gunship" },
+		desc = "Выпускает истребители и штурмовики. Нажми на него на карте, чтобы заказать.",
+	},
+	tower = {
+		name = "Башня",
+		icon = "tower",
+		cost = 350,
+		time = 8,
+		hp = 450,
+		dps = 20,
+		range = 5,
+		hitsAir = 0,
+		desc = "Сама стреляет по вражеской пехоте и технике в радиусе 5 клеток.",
+	},
+	aa = {
+		name = "ПВО",
+		icon = "aa",
+		cost = 400,
+		time = 8,
+		hp = 300,
+		dps = 34,
+		range = 7,
+		hitsAir = 1,
+		airOnly = true,
+		desc = "Сбивает вражескую авиацию в радиусе 7 клеток.",
 	},
 }
 
--- hp, damage per second, range in tiles; hitsAir = damage multiplier against planes
+-- hp, damage per second, range and vision in tiles; hitsAir = damage multiplier against aircraft
+Config.UNIT_ORDER = { "infantry", "rocket", "scout", "tank", "artillery", "fighter", "gunship" }
 Config.UNITS = {
-	infantry = { title = "Пехота", name = "пехота", speed = 1.7, power = 0.03, hp = 60, dps = 7, range = 1.6, hitsAir = 0.25 },
-	tank = { title = "Танк", name = "танк", speed = 2.4, power = 0.08, hp = 220, dps = 18, range = 2.6, hitsAir = 0 },
-	plane = { title = "Самолёт", name = "самолёт", speed = 6, power = 0.05, hp = 90, dps = 12, range = 2.4, hitsAir = 1, air = true },
+	infantry = {
+		title = "Пехота", name = "пехота", icon = "infantry", cost = 60, time = 4,
+		hp = 60, dps = 7, range = 1.6, speed = 1.7, vision = 6, hitsAir = 0.25, power = 0.03,
+		desc = "Дешёвая. Захватывает землю, может стрелять по авиации.",
+	},
+	rocket = {
+		title = "Ракетчик", name = "ракетчик", icon = "rocket", cost = 110, time = 6,
+		hp = 55, dps = 9, range = 2.4, speed = 1.5, vision = 6, hitsAir = 0.8, power = 0.04,
+		desc = "Сильно бьёт по технике и авиации, слаб против пехоты.",
+	},
+	scout = {
+		title = "Броневик", name = "броневик", icon = "scout", cost = 180, time = 6,
+		hp = 130, dps = 10, range = 2, speed = 3.4, vision = 10, hitsAir = 0.2, power = 0.05,
+		desc = "Быстрый и зоркий. Хорош для разведки и захвата земли.",
+	},
+	tank = {
+		title = "Танк", name = "танк", icon = "tank", cost = 320, time = 9,
+		hp = 240, dps = 18, range = 2.6, speed = 2.3, vision = 7, hitsAir = 0, power = 0.08,
+		desc = "Крепкая броня, силён против пехоты. По авиации не стреляет.",
+	},
+	artillery = {
+		title = "Артиллерия", name = "артиллерия", icon = "artillery", cost = 380, time = 11,
+		hp = 110, dps = 22, range = 6, speed = 1.4, vision = 7, hitsAir = 0, power = 0.06, vsBuildings = 1.6,
+		desc = "Бьёт издалека, особенно по постройкам. Береги от танков.",
+	},
+	fighter = {
+		title = "Истребитель", name = "истребитель", icon = "fighter", cost = 400, time = 10,
+		hp = 90, dps = 16, range = 3, speed = 6.5, vision = 11, hitsAir = 1, hitsGround = false, air = true, power = 0.04,
+		desc = "Охотится только за вражеской авиацией.",
+	},
+	gunship = {
+		title = "Штурмовик", name = "штурмовик", icon = "gunship", cost = 480, time = 12,
+		hp = 130, dps = 15, range = 2.5, speed = 4.5, vision = 9, hitsAir = 0, air = true, power = 0.06,
+		desc = "Летает где угодно и бьёт по наземным войскам и постройкам.",
+	},
 }
 -- extra damage multipliers: attacker kind -> target kind
 Config.VS = {
-	infantry = { tank = 0.5 },
-	tank = { infantry = 1.6 },
+	infantry = { tank = 0.5, scout = 0.7 },
+	rocket = { tank = 1.8, scout = 1.5, infantry = 0.6 },
+	scout = { infantry = 1.4, rocket = 1.3 },
+	tank = { infantry = 1.6, rocket = 1.3 },
 }
-Config.BUILDING_HP = 300
 Config.MAX_UNITS = 320
 Config.MAX_UNITS_PER_NATION = 60
 Config.BOT_MAX_UNITS = 6
-
-Config.ARSENAL = {
-	{ icon = "infantry", name = "Пехота", desc = "Дешёвая и быстрая. Захватывает землю и держит границу.", open = true },
-	{ icon = "tank", name = "Танк", desc = "Крепкая броня. Пробивает оборону соседей.", open = true },
-	{ icon = "plane", name = "Самолёт", desc = "Летает над страной и усиливает атаки.", open = true },
-	{ icon = "artillery", name = "Артиллерия", desc = "Будет сама стрелять по врагам у границы.", open = false },
-	{ icon = "ship", name = "Корабль", desc = "Будет перевозить войска через море.", open = false },
-}
 
 return Config

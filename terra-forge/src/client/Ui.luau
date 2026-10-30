@@ -20,9 +20,19 @@ UI.onClearSelection = nil
 UI.onQueue = nil
 UI.onCancel = nil
 UI.onAuto = nil
+UI.onRally = nil
 UI.factoryId = nil
 UI.buildSel = nil
 UI.attackPct = 40
+
+-- unit kinds grouped for the army panel: infantry, vehicles, aircraft
+local GROUPS = {
+	inf = { kinds = { "infantry", "rocket" }, icon = "infantry", title = "Пехота" },
+	veh = { kinds = { "scout", "tank", "artillery" }, icon = "tank", title = "Техника" },
+	air = { kinds = { "fighter", "gunship" }, icon = "fighter", title = "Авиация" },
+}
+local GROUP_ORDER = { "inf", "veh", "air" }
+UI.GROUPS = GROUPS
 
 local gui, root, scale
 local menu, play
@@ -248,9 +258,9 @@ local function buildMenu(player: Player)
 		Parent = refs.side,
 	}, { Theme.corner(16), Theme.stroke(), Theme.pad(14, 12), Theme.list(Enum.FillDirection.Vertical, 4) })
 	Theme.label({ Text = "АРСЕНАЛ", Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 1, Parent = ars })
-	Theme.label({ Text = "5 видов войск. Посмотри, как выглядит каждый.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.Medium), LayoutOrder = 2, Parent = ars })
+	Theme.label({ Text = "7 видов войск: пехота, техника и авиация.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.Medium), LayoutOrder = 2, Parent = ars })
 	local row = make("Frame", { Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, LayoutOrder = 3, Parent = ars }, { Theme.list(Enum.FillDirection.Horizontal, 6) })
-	for _, k in { "infantry", "tank", "plane", "artillery" } do
+	for _, k in { "infantry", "tank", "artillery", "gunship" } do
 		local cell = make("Frame", { Size = UDim2.fromOffset(52, 44), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.95, Parent = row }, { Theme.corner(10) })
 		icon(k, 38, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), color = myColor, Parent = cell })
 	end
@@ -391,7 +401,8 @@ local function buildArsenal()
 		ZIndex = 22,
 		Parent = sheet,
 	}, { Theme.list(Enum.FillDirection.Horizontal, 10) })
-	for _, u in Config.ARSENAL do
+	for _, kind in Config.UNIT_ORDER do
+		local u = Config.UNITS[kind]
 		local card = make("Frame", { Size = UDim2.fromOffset(156, 226), BackgroundColor3 = C.panelHi, ZIndex = 22, Parent = cards }, {
 			Theme.corner(16),
 			Theme.stroke(),
@@ -400,18 +411,18 @@ local function buildArsenal()
 		})
 		local pic = make("Frame", { Size = UDim2.new(1, 0, 0, 84), BackgroundColor3 = Color3.fromRGB(22, 32, 51), ZIndex = 22, LayoutOrder = 1, Parent = card }, { Theme.corner(12) })
 		icon(u.icon, 72, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), color = myColor, ZIndex = 23, Parent = pic })
-		Theme.label({ Text = u.name, Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), LayoutOrder = 2, ZIndex = 22, Parent = card })
+		Theme.label({ Text = u.title, Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), LayoutOrder = 2, ZIndex = 22, Parent = card })
 		Theme.label({ Text = u.desc, Size = UDim2.new(1, 0, 0, 52), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextSize = 12.5, TextColor3 = Color3.fromRGB(200, 209, 223), FontFace = font(Enum.FontWeight.SemiBold), LayoutOrder = 3, ZIndex = 22, Parent = card })
-		local st = make("Frame", {
-			AutomaticSize = Enum.AutomaticSize.XY,
-			Size = UDim2.fromOffset(0, 0),
-			BackgroundColor3 = if u.open then C.ok else Color3.new(1, 1, 1),
-			BackgroundTransparency = if u.open then 0.85 else 0.93,
+		Theme.label({
+			Text = string.format("%d $ · здоровье %d · урон %d", u.cost, u.hp, u.dps),
+			Size = UDim2.new(1, 0, 0, 16),
+			TextSize = 11.5,
+			TextColor3 = C.moltenHi,
+			FontFace = font(Enum.FontWeight.Bold),
 			LayoutOrder = 4,
 			ZIndex = 22,
 			Parent = card,
-		}, { Theme.corner(7), Theme.pad(8, 3) })
-		Theme.label({ Text = if u.open then "ОТКРЫТО" else "СКОРО", AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), TextSize = 11, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = if u.open then C.ok else C.muted, ZIndex = 22, Parent = st })
+		})
 	end
 	refs.arsenal = overlay
 end
@@ -444,24 +455,13 @@ local function resChip(parent: Instance, key: string, order: number)
 	return { value = value, rate = rate }
 end
 
-local function costRow(cost, parent: Instance, size: number)
+local function costRow(cost: number, parent: Instance, size: number)
 	local row = make("Frame", { AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), BackgroundTransparency = 1, Parent = parent }, {
-		Theme.list(Enum.FillDirection.Horizontal, 5, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center),
+		Theme.list(Enum.FillDirection.Horizontal, 3, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center),
 	})
-	local parts = {}
-	local order = 0
-	for _, k in Config.RES_ORDER do
-		local v = cost[k]
-		if v then
-			order += 1
-			local item = make("Frame", { AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), BackgroundTransparency = 1, LayoutOrder = order, Parent = row }, {
-				Theme.list(Enum.FillDirection.Horizontal, 2, nil, Enum.VerticalAlignment.Center),
-			})
-			icon(k, size, { Parent = item })
-			parts[k] = Theme.label({ Text = tostring(v), AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), TextSize = size, FontFace = font(Enum.FontWeight.Bold), TextColor3 = Color3.fromRGB(198, 207, 221), Parent = item })
-		end
-	end
-	return row, parts
+	icon("money", size + 1, { LayoutOrder = 1, Parent = row })
+	local label = Theme.label({ Text = tostring(cost), AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), TextSize = size + 1, FontFace = font(Enum.FontWeight.Bold), TextColor3 = Color3.fromRGB(255, 226, 150), LayoutOrder = 2, Parent = row })
+	return row, label
 end
 
 local function buildPlay()
@@ -522,10 +522,10 @@ local function buildPlay()
 	})
 	refs.army = {}
 	refs.armyIcons = {}
-	for i, k in { "infantry", "tank", "plane" } do
-		local img = icon(k, 16, { LayoutOrder = i * 2 - 1, color = myColor, Parent = army })
-		refs.armyIcons[k] = img
-		refs.army[k] = Theme.label({ Text = "0", AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 16), TextSize = 12, FontFace = font(Enum.FontWeight.Bold), LayoutOrder = i * 2, Parent = army })
+	for i, g in GROUP_ORDER do
+		local img = icon(GROUPS[g].icon, 16, { LayoutOrder = i * 2 - 1, color = myColor, Parent = army })
+		refs.armyIcons[g] = img
+		refs.army[g] = Theme.label({ Text = "0", AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 16), TextSize = 12, FontFace = font(Enum.FontWeight.Bold), LayoutOrder = i * 2, Parent = army })
 	end
 
 	local res = Theme.panel({
@@ -537,11 +537,10 @@ local function buildPlay()
 	})
 	Theme.pad(6).Parent = res
 	Theme.list(Enum.FillDirection.Horizontal, 4, nil, Enum.VerticalAlignment.Center).Parent = res
-	refs.res = {}
-	for i, k in Config.RES_ORDER do
-		refs.res[k] = resChip(res, k, i)
-	end
-	refs.res.energy = resChip(res, "energy", 10)
+	refs.res = {
+		pop = resChip(res, "pop", 1),
+		money = resChip(res, "money", 2),
+	}
 
 	local right = make("Frame", {
 		AnchorPoint = Vector2.new(1, 0),
@@ -612,7 +611,7 @@ local function buildPlay()
 	})
 	refs.armyBtns = {}
 	refs.armyBtnIcons = {}
-	for i, k in { "infantry", "tank", "plane", "all" } do
+	for i, k in { "inf", "veh", "air", "all" } do
 		local b = make("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = C.panelHi, LayoutOrder = i, Parent = kinds }, {
 			Theme.corner(9),
 			make("UIStroke", { Color = Color3.fromRGB(120, 255, 170), Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
@@ -621,7 +620,7 @@ local function buildPlay()
 		if k == "all" then
 			count = Theme.label({ Text = "ВСЕ", Size = UDim2.fromScale(1, 1), TextSize = 12, FontFace = font(Enum.FontWeight.Heavy), TextXAlignment = Enum.TextXAlignment.Center, Parent = b })
 		else
-			refs.armyBtnIcons[k] = icon(k, 22, { Position = UDim2.fromOffset(2, 5), color = myColor, Parent = b })
+			refs.armyBtnIcons[k] = icon(GROUPS[k].icon, 22, { Position = UDim2.fromOffset(2, 5), color = myColor, Parent = b })
 			count = Theme.label({ Text = "0", Position = UDim2.fromOffset(25, 0), Size = UDim2.new(1, -27, 1, 0), TextSize = 12, FontFace = font(Enum.FontWeight.ExtraBold), Parent = b })
 		end
 		b.Activated:Connect(function()
@@ -699,7 +698,7 @@ local function buildPlay()
 			FontFace = font(Enum.FontWeight.Bold),
 			Parent = b,
 		})
-		local row, parts = costRow(def.cost, b, 11)
+		local row, costLabel = costRow(def.cost, b, 11)
 		row.AnchorPoint = Vector2.new(0.5, 1)
 		row.Position = UDim2.new(0.5, 0, 1, -4)
 		b.Activated:Connect(function()
@@ -711,7 +710,7 @@ local function buildPlay()
 		b.MouseLeave:Connect(function()
 			UI.showTip(UI.buildSel)
 		end)
-		refs.buildBtns[k] = { button = b, icon = img, parts = parts, stroke = b:FindFirstChildOfClass("UIStroke") }
+		refs.buildBtns[k] = { button = b, icon = img, cost = costLabel, stroke = b:FindFirstChildOfClass("UIStroke") }
 	end
 
 	local zoom = make("Frame", {
@@ -733,11 +732,11 @@ local function buildPlay()
 		end
 	end)
 
-	-- factory panel: order units, see the queue, toggle automatic production
+	-- factory panel: a row per unit kind (+1 to order, «Авто» to repeat), queue, rally point
 	local fac = Theme.panel({
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -120),
-		Size = UDim2.fromOffset(380, 0),
+		Size = UDim2.fromOffset(420, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = Color3.fromRGB(16, 21, 34),
 		BackgroundTransparency = 0.02,
@@ -746,8 +745,6 @@ local function buildPlay()
 		Parent = play,
 	})
 	Theme.pad(14, 12).Parent = fac
-	refs.facTitle = Theme.label({ Text = "", Size = UDim2.new(1, -50, 0, 22), TextSize = 18, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 9, Parent = fac })
-	refs.facSub = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, -50, 0, 16), TextSize = 12.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 9, Parent = fac })
 	local facClose = iconButton("close", fac, function()
 		UI.hideFactory()
 	end)
@@ -755,44 +752,35 @@ local function buildPlay()
 	facClose.Position = UDim2.new(1, 0, 0, -2)
 	facClose.Size = UDim2.fromOffset(36, 36)
 	facClose.ZIndex = 10
-	local orderBtn = make("TextButton", {
-		Text = "",
-		AutoButtonColor = true,
-		Position = UDim2.fromOffset(0, 48),
-		Size = UDim2.new(1, 0, 0, 74),
-		BackgroundColor3 = C.panelHi,
-		ZIndex = 9,
-		Parent = fac,
-	}, { Theme.corner(14), make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 0.2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }) })
-	refs.facIcon = icon("infantry", 60, { Position = UDim2.fromOffset(8, 7), ZIndex = 10, color = myColor, Parent = orderBtn })
-	refs.facUnit = Theme.label({ Text = "", Position = UDim2.fromOffset(78, 10), Size = UDim2.new(1, -170, 0, 22), TextSize = 17, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 10, Parent = orderBtn })
-	refs.facCost = Theme.label({ Text = "", Position = UDim2.fromOffset(78, 34), Size = UDim2.new(1, -170, 0, 32), TextSize = 12.5, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = Color3.fromRGB(198, 207, 221), FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 10, Parent = orderBtn })
-	local plus = make("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(84, 44), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 10, Parent = orderBtn }, { Theme.corner(12), Theme.molten(90) })
-	Theme.label({ Text = "+1", Size = UDim2.fromScale(1, 1), TextSize = 20, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenInk, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 11, Parent = plus })
-	orderBtn.Activated:Connect(function()
-		if UI.onQueue and UI.factoryId then
-			UI.onQueue(UI.factoryId)
-		end
-	end)
-	local barBg = make("Frame", { Position = UDim2.fromOffset(0, 132), Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.9, ZIndex = 9, Parent = fac }, { Theme.corner(nil, 1) })
+	local body = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, ZIndex = 9, Parent = fac }, {
+		Theme.list(Enum.FillDirection.Vertical, 8),
+	})
+	refs.facTitle = Theme.label({ Text = "", Size = UDim2.new(1, -50, 0, 22), TextSize = 18, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 9, LayoutOrder = 1, Parent = body })
+	refs.facSub = Theme.label({ Text = "", Size = UDim2.new(1, -50, 0, 16), TextSize = 12.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 9, LayoutOrder = 2, Parent = body })
+	refs.facRows = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, ZIndex = 9, LayoutOrder = 3, Parent = body }, {
+		Theme.list(Enum.FillDirection.Vertical, 6),
+	})
+	local barBg = make("Frame", { Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.9, ZIndex = 9, LayoutOrder = 4, Parent = body }, { Theme.corner(nil, 1) })
 	refs.facBar = make("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = C.molten, ZIndex = 10, Parent = barBg }, { Theme.corner(nil, 1) })
-	refs.facQueue = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 144), Size = UDim2.new(1, 0, 0, 18), TextSize = 13.5, FontFace = font(Enum.FontWeight.Bold), ZIndex = 9, Parent = fac })
-	local row = make("Frame", { Position = UDim2.fromOffset(0, 168), Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, ZIndex = 9, Parent = fac }, {
+	refs.facQueue = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, FontFace = font(Enum.FontWeight.Bold), ZIndex = 9, LayoutOrder = 5, Parent = body })
+	local buttons = make("Frame", { Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, ZIndex = 9, LayoutOrder = 6, Parent = body }, {
 		make("UIGridLayout", { CellSize = UDim2.new(0.5, -4, 1, 0), CellPadding = UDim2.fromOffset(8, 0), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
-	local cancel = make("TextButton", { Text = "Отменить 1", AutoButtonColor = true, FontFace = font(Enum.FontWeight.Bold), TextSize = 14, TextColor3 = C.ink, BackgroundColor3 = C.panelHi, LayoutOrder = 1, ZIndex = 10, Parent = row }, { Theme.corner(10) })
+	local cancel = make("TextButton", { Text = "Отменить последний", AutoButtonColor = true, FontFace = font(Enum.FontWeight.Bold), TextSize = 13, TextColor3 = C.ink, BackgroundColor3 = C.panelHi, LayoutOrder = 1, ZIndex = 10, Parent = buttons }, { Theme.corner(10) })
 	cancel.Activated:Connect(function()
 		if UI.onCancel and UI.factoryId then
 			UI.onCancel(UI.factoryId)
 		end
 	end)
-	refs.facAuto = make("TextButton", { Text = "Авто: выкл", AutoButtonColor = true, FontFace = font(Enum.FontWeight.Bold), TextSize = 14, TextColor3 = C.ink, BackgroundColor3 = C.panelHi, LayoutOrder = 2, ZIndex = 10, Parent = row }, { Theme.corner(10) })
-	refs.facAuto.Activated:Connect(function()
-		if UI.onAuto and UI.factoryId then
-			UI.onAuto(UI.factoryId, not refs.facAutoOn)
+	local rally = make("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = C.panelHi, LayoutOrder = 2, ZIndex = 10, Parent = buttons }, { Theme.corner(10) })
+	icon("flag", 20, { Position = UDim2.new(0, 10, 0.5, -10), ZIndex = 11, Parent = rally })
+	Theme.label({ Text = "Точка сбора", Position = UDim2.fromOffset(36, 0), Size = UDim2.new(1, -40, 1, 0), TextSize = 13, FontFace = font(Enum.FontWeight.Bold), ZIndex = 11, Parent = rally })
+	rally.Activated:Connect(function()
+		if UI.onRally and UI.factoryId then
+			UI.onRally(UI.factoryId)
 		end
 	end)
-	refs.facNote = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 210), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 12.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 9, Parent = fac })
+	refs.facNote = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 12, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 9, LayoutOrder = 7, Parent = body })
 	refs.fac = fac
 
 	local tip = Theme.panel({
@@ -940,11 +928,11 @@ function UI.setMyColor(hex: string)
 	for k, b in refs.buildBtns do
 		Sprites.apply(b.icon, Config.BUILD[k].icon, hex)
 	end
-	for k, img in refs.armyIcons do
-		Sprites.apply(img, k, hex)
+	for g, img in refs.armyIcons do
+		Sprites.apply(img, GROUPS[g].icon, hex)
 	end
-	for k, img in refs.armyBtnIcons do
-		Sprites.apply(img, k, hex)
+	for g, img in refs.armyBtnIcons do
+		Sprites.apply(img, GROUPS[g].icon, hex)
 	end
 	for _, row in refs.lbRows do
 		row.frame.BackgroundColor3 = Theme.hex(hex)
@@ -1028,52 +1016,26 @@ function UI.setLobby(info)
 	refs.serverPill.Text = string.format("На сервере: %d · в матче: %d", info.players, info.inMatch)
 end
 
-local function fmtRate(k: string, r: number, fmt): (string, Color3)
-	local a = math.abs(r)
-	local txt = if k == "pop" then fmt(a) elseif a < 10 then string.format("%.1f", a) else tostring(math.floor(a))
-	local color = if a < 0.05 then C.muted elseif r < 0 then C.bad else C.ok
-	return (if r < 0 then "−" else "+") .. txt .. "/с", color
-end
-
 function UI.setEconomy(eco, troops: number, fmt)
-	for _, k in Config.RES_ORDER do
-		local chip = refs.res[k]
-		local v = if k == "pop" then troops else eco.res[k] or 0
-		chip.value.Text = if k == "pop" then fmt(v) else tostring(math.floor(v))
-		local txt, color = fmtRate(k, eco.rates[k] or 0, fmt)
-		chip.rate.Text = txt
-		chip.rate.TextColor3 = color
-	end
-	local e = refs.res.energy
-	e.value.Text = string.format("%d/%d", eco.supply, eco.need)
-	if eco.need > eco.supply then
-		e.rate.Text = "мало"
-		e.rate.TextColor3 = C.bad
-	elseif eco.supply > 0 then
-		e.rate.Text = "хватает"
-		e.rate.TextColor3 = C.ok
-	else
-		e.rate.Text = "нет"
-		e.rate.TextColor3 = C.muted
-	end
-	for k, v in eco.army do
-		if refs.army[k] then
-			refs.army[k].Text = tostring(v)
+	refs.res.pop.value.Text = fmt(troops)
+	refs.res.pop.rate.Text = "войска"
+	refs.res.pop.rate.TextColor3 = C.muted
+	refs.res.money.value.Text = tostring(eco.money) .. " $"
+	refs.res.money.rate.Text = string.format("+%d/с", math.floor(eco.income + 0.5))
+	refs.res.money.rate.TextColor3 = C.ok
+	for g, group in GROUPS do
+		local total = 0
+		for _, kind in group.kinds do
+			total += eco.army[kind] or 0
 		end
+		refs.army[g].Text = tostring(total)
 	end
 	for k, b in refs.buildBtns do
-		local def = Config.BUILD[k]
-		local poor = false
-		for r, need in def.cost do
-			local have = eco.res[r] or 0
-			local lack = have < need
-			poor = poor or lack
-			if b.parts[r] then
-				b.parts[r].TextColor3 = if lack then C.bad else Color3.fromRGB(198, 207, 221)
-			end
-		end
+		local poor = eco.money < Config.BUILD[k].cost
+		b.cost.TextColor3 = if poor then C.bad else Color3.fromRGB(255, 226, 150)
 		Sprites.setTransparency(b.icon, if poor then 0.5 else 0)
 	end
+	refs.money = eco.money
 end
 
 function UI.setMe(share: number, troops: number, fmt)
@@ -1095,17 +1057,18 @@ function UI.setLeaderboard(rows)
 	end
 end
 
--- counts: units of each kind the player has; selected: how many of each are selected
+-- counts / selected: units of each group the player has and has selected
 function UI.setArmy(counts, selected)
-	local total = 0
-	for _, k in { "infantry", "tank", "plane" } do
-		local b = refs.armyBtns[k]
-		local n, s = counts[k] or 0, selected[k] or 0
+	local total, all = 0, 0
+	for _, g in GROUP_ORDER do
+		local b = refs.armyBtns[g]
+		local n, s = counts[g] or 0, selected[g] or 0
 		total += s
+		all += n
 		b.count.Text = if s > 0 then s .. "/" .. n else tostring(n)
 		b.stroke.Transparency = if s > 0 then 0 else 1
 	end
-	refs.armyBtns.all.stroke.Transparency = if total > 0 and total == (counts.infantry or 0) + (counts.tank or 0) + (counts.plane or 0) then 0 else 1
+	refs.armyBtns.all.stroke.Transparency = if total > 0 and total == all then 0 else 1
 	refs.armyClear.Visible = total > 0
 	refs.armyInfo.Text = if total > 0 then string.format("Выбрано %d · нажми на карту, куда идти", total) else "Нажми на юнит или кнопку"
 	refs.armyInfo.TextColor3 = if total > 0 then Color3.fromRGB(120, 255, 170) else C.muted
@@ -1142,73 +1105,132 @@ function UI.showTip(k: string?)
 	local d = Config.BUILD[k]
 	refs.tipTitle.Text = d.name
 	refs.tipDesc.Text = d.desc
-	if d.unit then
-		local parts = {}
-		for _, r in Config.RES_ORDER do
-			if d.ucost[r] then
-				table.insert(parts, d.ucost[r] .. " " .. Config.RES_OF[r])
-			end
+	if d.units then
+		local names = {}
+		for _, kind in d.units do
+			table.insert(names, Config.UNITS[kind].name)
 		end
-		refs.tipOut.Text = string.format("Выпускает: %s каждые %d с · %s", Config.UNITS[d.unit].name, d.every, table.concat(parts, ", "))
+		refs.tipOut.Text = "Выпускает: " .. table.concat(names, ", ")
 		refs.tipOut.Visible = true
 	else
 		refs.tipOut.Visible = false
 	end
-	local costs = {}
-	for _, r in Config.RES_ORDER do
-		if d.cost[r] then
-			table.insert(costs, d.cost[r] .. " " .. Config.RES_OF[r])
-		end
-	end
-	if d.power < 0 then
-		table.insert(costs, "+" .. -d.power .. " энергии")
-	elseif d.power > 0 then
-		table.insert(costs, "−" .. d.power .. " энергии")
-	end
-	refs.tipCost.Text = "Цена: " .. table.concat(costs, " · ")
+	refs.tipCost.Text = string.format("Цена: %d $ · стройка %d с", d.cost, d.time)
 	refs.tipHint.Visible = UI.buildSel == k
 	refs.tip.Visible = true
 end
 
--- the map needs EditableImage, which is off until the owner allows it for the experience
--- info: { id, kind, prog, queue, auto, on, blocked }
+local function factoryRow(kind: string, order: number)
+	local u = Config.UNITS[kind]
+	local row = make("Frame", { Size = UDim2.new(1, 0, 0, 58), BackgroundColor3 = C.panelHi, LayoutOrder = order, ZIndex = 9, Parent = refs.facRows }, {
+		Theme.corner(12),
+	})
+	local stroke = make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = row })
+	local img = icon(u.icon, 46, { Position = UDim2.fromOffset(6, 6), ZIndex = 10, color = myColor, Parent = row })
+	Theme.label({ Text = u.title, Position = UDim2.fromOffset(58, 6), Size = UDim2.new(1, -200, 0, 20), TextSize = 15, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 10, Parent = row })
+	local info = Theme.label({
+		Text = string.format("%d $ · %d с · здоровье %d", u.cost, u.time, u.hp),
+		Position = UDim2.fromOffset(58, 27),
+		Size = UDim2.new(1, -200, 0, 16),
+		TextSize = 12,
+		TextColor3 = Color3.fromRGB(198, 207, 221),
+		FontFace = font(Enum.FontWeight.SemiBold),
+		ZIndex = 10,
+		Parent = row,
+	})
+	local queued = Theme.label({ Text = "", Position = UDim2.fromOffset(58, 42), Size = UDim2.new(1, -200, 0, 14), TextSize = 11.5, TextColor3 = C.moltenHi, FontFace = font(Enum.FontWeight.Bold), ZIndex = 10, Parent = row })
+	local auto = make("TextButton", {
+		Text = "Авто",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -78, 0.5, 0),
+		Size = UDim2.fromOffset(56, 38),
+		AutoButtonColor = true,
+		FontFace = font(Enum.FontWeight.Bold),
+		TextSize = 13,
+		TextColor3 = C.ink,
+		BackgroundColor3 = C.panel,
+		ZIndex = 10,
+		Parent = row,
+	}, { Theme.corner(10) })
+	auto.Activated:Connect(function()
+		if UI.onAuto and UI.factoryId then
+			UI.onAuto(UI.factoryId, if refs.facAutoKind == kind then "" else kind)
+		end
+	end)
+	local plus = make("TextButton", {
+		Text = "",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -8, 0.5, 0),
+		Size = UDim2.fromOffset(64, 40),
+		AutoButtonColor = false,
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		ZIndex = 10,
+		Parent = row,
+	}, { Theme.corner(10), Theme.molten(90) })
+	Theme.label({ Text = "+1", Size = UDim2.fromScale(1, 1), TextSize = 18, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenInk, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 11, Parent = plus })
+	plus.Activated:Connect(function()
+		if UI.onQueue and UI.factoryId then
+			UI.onQueue(UI.factoryId, kind)
+		end
+	end)
+	return { kind = kind, row = row, stroke = stroke, icon = img, info = info, queued = queued, auto = auto }
+end
+
+-- info: { id, kind, prog, built, queue = { unit kinds }, auto = kind or "" }
 function UI.showFactory(info)
 	local def = Config.BUILD[info.kind]
-	local unit = Config.UNITS[def.unit]
 	UI.factoryId = info.id
 	UI.selectBuild(nil)
-	refs.facTitle.Text = def.name
-	refs.facSub.Text = "Нажми, чтобы заказать. Юнит появится у постройки."
-	Sprites.apply(refs.facIcon, def.unit, myColor)
-	refs.facUnit.Text = unit.title
-	local parts = {}
-	for _, r in Config.RES_ORDER do
-		if def.ucost[r] then
-			table.insert(parts, def.ucost[r] .. " " .. Config.RES_OF[r])
+	if refs.facKind ~= info.kind then
+		refs.facKind = info.kind
+		for _, r in refs.facRowList or {} do
+			r.row:Destroy()
+		end
+		refs.facRowList = {}
+		for i, kind in def.units do
+			table.insert(refs.facRowList, factoryRow(kind, i))
 		end
 	end
-	refs.facCost.Text = string.format("%s · %d с · здоровье %d, урон %d", table.concat(parts, ", "), def.every, unit.hp, unit.dps)
+	refs.facTitle.Text = def.name
+	local queue = info.queue or {}
+	local auto = info.auto or ""
+	refs.facAutoKind = auto
+	local counts = {}
+	for _, kind in queue do
+		counts[kind] = (counts[kind] or 0) + 1
+	end
+	local money = refs.money or 0
+	for _, r in refs.facRowList do
+		local u = Config.UNITS[r.kind]
+		local n = counts[r.kind] or 0
+		r.queued.Text = if n > 0 then "в очереди: " .. n elseif auto == r.kind then "выпускается по кругу" else ""
+		r.stroke.Transparency = if auto == r.kind then 0 else 1
+		r.auto.BackgroundColor3 = if auto == r.kind then Color3.fromRGB(70, 42, 18) else C.panel
+		r.auto.TextColor3 = if auto == r.kind then C.moltenHi else C.ink
+		r.info.TextColor3 = if money < u.cost then C.bad else Color3.fromRGB(198, 207, 221)
+		Sprites.apply(r.icon, u.icon, myColor)
+	end
+	local built = info.built or 1
 	local p = math.abs(info.prog or 0)
-	refs.facBar.Size = UDim2.fromScale(if (info.queue or 0) > 0 or info.auto then p else 0, 1)
-	refs.facBar.BackgroundColor3 = if (info.prog or 0) < 0 then C.bad else C.molten
-	if (info.queue or 0) > 0 then
-		refs.facQueue.Text = string.format("В очереди: %d · готово на %d%%", info.queue, math.floor(p * 100))
-	elseif info.auto then
-		refs.facQueue.Text = if (info.prog or 0) < 0 then "Авто: ждёт ресурсы" else string.format("Авто: готово на %d%%", math.floor(p * 100))
+	local current = queue[1] or (if auto ~= "" then auto else nil)
+	if built < 1 then
+		refs.facSub.Text = string.format("Строится: %d%%. Заказы можно делать уже сейчас.", math.floor(built * 100))
+		refs.facBar.Size = UDim2.fromScale(built, 1)
+		refs.facBar.BackgroundColor3 = Color3.fromRGB(90, 170, 255)
+		refs.facQueue.Text = if #queue > 0 then "В очереди: " .. #queue else "Очередь пустая"
+	elseif current then
+		refs.facSub.Text = "Нажми «+1», чтобы заказать. Юнит появится у постройки."
+		refs.facBar.Size = UDim2.fromScale(p, 1)
+		refs.facBar.BackgroundColor3 = if (info.prog or 0) < 0 then C.bad else C.molten
+		local waiting = (info.prog or 0) < 0
+		refs.facQueue.Text = string.format("Сейчас: %s — %s", Config.UNITS[current].title, if waiting then "ждёт денег" else math.floor(p * 100) .. "%")
+			.. (if #queue > 1 then string.format(" · ещё в очереди: %d", #queue - 1) else "")
 	else
+		refs.facSub.Text = "Нажми «+1», чтобы заказать. Юнит появится у постройки."
+		refs.facBar.Size = UDim2.fromScale(0, 1)
 		refs.facQueue.Text = "Очередь пустая"
 	end
-	refs.facAutoOn = info.auto == true
-	refs.facAuto.Text = if info.auto then "Авто: вкл" else "Авто: выкл"
-	refs.facAuto.BackgroundColor3 = if info.auto then Color3.fromRGB(70, 42, 18) else C.panelHi
-	refs.facAuto.TextColor3 = if info.auto then C.moltenHi else C.ink
-	if not info.on then
-		refs.facNote.Text = "Мало энергии: завод работает медленнее. Поставь электростанцию."
-		refs.facNote.TextColor3 = C.bad
-	else
-		refs.facNote.Text = "«Авто» выпускает юниты сам, пока хватает ресурсов."
-		refs.facNote.TextColor3 = C.muted
-	end
+	refs.facNote.Text = "«Авто» выпускает выбранный юнит по кругу, пока хватает денег. «Точка сбора»: нажми её, потом место на карте."
 	refs.tip.Visible = false
 	refs.fac.Visible = true
 end

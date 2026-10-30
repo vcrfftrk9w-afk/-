@@ -22,9 +22,9 @@ UI.onCancel = nil
 UI.onAuto = nil
 UI.onRally = nil
 UI.onBase = nil
+UI.onBuildSelect = nil
 UI.factoryId = nil
 UI.buildSel = nil
-UI.attackPct = 40
 
 -- unit kinds grouped for the army panel: infantry, vehicles, aircraft
 local GROUPS = {
@@ -38,7 +38,7 @@ UI.GROUPS = GROUPS
 local gui, root, scale
 local menu, play
 local refs = {}
-local myColor = Config.HUMAN_COLORS[1]
+local myColor = Config.SEAT_COLORS[1]
 
 ---------------------------------------------------------------- small widgets
 
@@ -159,7 +159,7 @@ local function buildMenu(player: Player)
 		Parent = menu,
 	}, { Theme.list(Enum.FillDirection.Horizontal, 8, nil, Enum.VerticalAlignment.Center) })
 	iconButton("help", topLeft, function()
-		UI.toast("1. Поставь столицу. 2. Захватывай землю войсками. 3. Построй казарму или танковый завод, нажми на него на карте и заказывай войска. 4. Выбери войска и нажми на карту, куда им идти.", false, 8)
+		UI.toast("1. Поставь экстракторы на светящиеся месторождения — это деньги. 2. Построй казарму и завод бронетехники. 3. Нажми на завод и заказывай войска. 4. Выбери войска и нажми на карту: они поедут туда и будут стрелять сами. Разрушь командные центры врагов.", false, 9)
 	end)
 	iconButton("shield", topLeft, function()
 		UI.openArsenal()
@@ -229,7 +229,7 @@ local function buildMenu(player: Player)
 		make("UITextSizeConstraint", { MaxTextSize = 104 }),
 	})
 	Theme.label({
-		Text = "ЗАХВАТИ МИР  ·  ПОСТРОЙ ЗАВОДЫ",
+		Text = "СТРОЙ БАЗУ  ·  СОБИРАЙ АРМИЮ  ·  РАЗГРОМИ ВРАГОВ",
 		Position = UDim2.fromOffset(0, 116),
 		Size = UDim2.new(1, 0, 0, 22),
 		TextSize = 16,
@@ -277,7 +277,7 @@ local function buildMenu(player: Player)
 		Parent = refs.side,
 	}, { Theme.corner(16), Theme.stroke(), Theme.pad(14, 12), Theme.list(Enum.FillDirection.Vertical, 6) })
 	Theme.label({ Text = "КАК ИГРАТЬ", Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 0, Parent = how })
-	for i, s in { "Поставь столицу в любой точке Земли", "Захватывай соседние земли войсками", "Строй казарму или танковый завод, нажми на него и заказывай войска", "Выбери войска и нажми на карту: они поедут туда и будут воевать" } do
+	for i, s in { "Ставь экстракторы на светящиеся месторождения — это деньги", "Строй казарму, завод бронетехники и аэродром", "Нажми на завод и заказывай войска", "Выбери войска и нажми на карту. Разрушь командные центры врагов" } do
 		local line = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = i, Parent = how }, {
 			Theme.list(Enum.FillDirection.Horizontal, 8),
 		})
@@ -305,7 +305,9 @@ local function buildMenu(player: Player)
 		make("UIGridLayout", { CellSize = UDim2.new(0.5, -5, 1, 0), CellPadding = UDim2.fromOffset(10, 0), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 	local function modeCard(title: string, active: boolean, order: number)
-		local f = make("Frame", {
+		local f = make("TextButton", {
+			Text = "",
+			AutoButtonColor = not active,
 			BackgroundColor3 = if active then Color3.fromRGB(52, 36, 24) else C.panelHi,
 			BackgroundTransparency = 0.06,
 			LayoutOrder = order,
@@ -316,13 +318,16 @@ local function buildMenu(player: Player)
 			Theme.pad(14, 9),
 		})
 		Theme.label({ Text = title, Size = UDim2.new(1, 0, 0, 24), TextSize = 19, FontFace = font(Enum.FontWeight.Heavy), Parent = f })
-		local dot = make("Frame", { Position = UDim2.fromOffset(0, 32), Size = UDim2.fromOffset(8, 8), BackgroundColor3 = if active then C.ok else C.muted, Parent = f }, { Theme.corner(nil, 1) })
+		make("Frame", { Position = UDim2.fromOffset(0, 32), Size = UDim2.fromOffset(8, 8), BackgroundColor3 = if active then C.ok else C.muted, Parent = f }, { Theme.corner(nil, 1) })
 		local sub = Theme.label({ Position = UDim2.fromOffset(14, 26), Size = UDim2.new(1, -14, 0, 20), Text = "", TextSize = 13, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), TextTruncate = Enum.TextTruncate.AtEnd, Parent = f })
-		return sub, dot
+		return sub, f
 	end
-	refs.modeStatus = modeCard("МИР", true, 1)
-	local teams = modeCard("КОМАНДЫ", false, 2)
-	teams.Text = "Скоро"
+	refs.modeStatus = modeCard("СХВАТКА", true, 1)
+	local world, worldCard = modeCard("КАРТА МИРА", false, 2)
+	world.Text = "Скоро: бои за страны на карте Земли"
+	worldCard.Activated:Connect(function()
+		UI.toast("Карта мира скоро появится. А пока — схватка за базы!")
+	end)
 	local playBtn = moltenButton("ИГРАТЬ", bottom, function()
 		if UI.onPlay then
 			UI.onPlay()
@@ -447,13 +452,13 @@ local function resChip(parent: Instance, key: string, order: number)
 		make("UIPadding", { PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 9) }),
 		Theme.list(Enum.FillDirection.Horizontal, 6, nil, Enum.VerticalAlignment.Center),
 	})
-	icon(key, 20, { LayoutOrder = 1, Parent = f })
+	local img = icon(key, 20, { LayoutOrder = 1, color = myColor, Parent = f })
 	local col = make("Frame", { AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), BackgroundTransparency = 1, LayoutOrder = 2, Parent = f }, {
 		Theme.list(Enum.FillDirection.Vertical, -1),
 	})
 	local value = Theme.label({ Text = "0", AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), TextSize = 15, FontFace = font(Enum.FontWeight.ExtraBold), Parent = col })
 	local rate = Theme.label({ Text = "", AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), TextSize = 11, TextColor3 = C.ok, FontFace = font(Enum.FontWeight.Bold), Parent = col })
-	return { value = value, rate = rate }
+	return { value = value, rate = rate, icon = img }
 end
 
 local function costRow(cost: number, parent: Instance, size: number)
@@ -468,7 +473,7 @@ end
 local function buildPlay()
 	play = make("Frame", { Name = "Play", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Parent = root })
 
-	-- banner (spawn countdown, results, defeat)
+	-- banner (spectator, results, defeat)
 	local banner = Theme.panel({
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 10),
@@ -480,22 +485,9 @@ local function buildPlay()
 	})
 	make("UISizeConstraint", { MaxSize = Vector2.new(780, 400) }).Parent = banner
 	Theme.pad(20, 10).Parent = banner
-	refs.bnTitle = Theme.label({ Text = "", Size = UDim2.new(1, -150, 0, 26), TextSize = 22, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 5, Parent = banner })
-	refs.bnSub = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 27), Size = UDim2.new(1, -150, 0, 20), TextSize = 15, TextColor3 = Color3.fromRGB(210, 218, 231), FontFace = font(Enum.FontWeight.SemiBold), TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = banner })
-	refs.bnCount = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 48), Size = UDim2.new(1, -150, 0, 18), TextSize = 14, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), ZIndex = 5, Parent = banner })
-	local ring = make("Frame", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, 0, 0.5, 0),
-		Size = UDim2.fromOffset(58, 58),
-		BackgroundColor3 = Color3.fromRGB(26, 33, 50),
-		ZIndex = 5,
-		Parent = banner,
-	}, { Theme.corner(nil, 1), make("UIStroke", { Color = C.molten, Thickness = 4 }) })
-	refs.ringNum = Theme.label({ Text = "15", Size = UDim2.fromScale(1, 1), TextSize = 24, FontFace = font(Enum.FontWeight.Heavy), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 6, Parent = ring })
-	refs.ring = ring
-	local barBg = make("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 2), Size = UDim2.new(1, -80, 0, 4), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.9, ZIndex = 5, Parent = banner }, { Theme.corner(nil, 1) })
-	refs.bnBar = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.molten, ZIndex = 6, Parent = barBg }, { Theme.corner(nil, 1) })
-	refs.bnBarBg = barBg
+	refs.bnTitle = Theme.label({ Text = "", Size = UDim2.new(1, -170, 0, 26), TextSize = 22, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 5, Parent = banner })
+	refs.bnSub = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 27), Size = UDim2.new(1, -170, 0, 20), TextSize = 15, TextColor3 = Color3.fromRGB(210, 218, 231), FontFace = font(Enum.FontWeight.SemiBold), TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = banner })
+	refs.bnCount = Theme.label({ Text = "", Position = UDim2.fromOffset(0, 48), Size = UDim2.new(1, -170, 0, 18), TextSize = 14, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = banner })
 	local bnBtn = moltenButton("В МЕНЮ", banner, function()
 		if UI.onLeave then
 			UI.onLeave()
@@ -551,7 +543,7 @@ local function buildPlay()
 		BackgroundTransparency = 1,
 		Parent = hudTop,
 	}, { Theme.list(Enum.FillDirection.Horizontal, 8) })
-	-- back to the base with a GTA-style flight
+	-- back to the command centre
 	local baseBtn = iconButton("castle", right, function()
 		if UI.onBase then
 			UI.onBase()
@@ -597,7 +589,7 @@ local function buildPlay()
 	refs.hudBottom = hudBottom
 
 	-- army: select units by kind, then tap the map to send them
-	local armyPanel = Theme.panel({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -118), Size = UDim2.fromOffset(210, 86), Parent = hudBottom })
+	local armyPanel = Theme.panel({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -12), Size = UDim2.fromOffset(210, 98), Parent = hudBottom })
 	Theme.pad(10, 8).Parent = armyPanel
 	Theme.label({ Text = "Армия", Size = UDim2.new(1, -40, 0, 16), TextSize = 14, FontFace = font(Enum.FontWeight.ExtraBold), Parent = armyPanel })
 	local clear = make("TextButton", {
@@ -642,33 +634,7 @@ local function buildPlay()
 		end)
 		refs.armyBtns[k] = { button = b, count = count, stroke = b:FindFirstChildOfClass("UIStroke") }
 	end
-	refs.armyInfo = Theme.label({ Text = "Нажми на юнит или кнопку", Position = UDim2.fromOffset(0, 56), Size = UDim2.new(1, 0, 0, 14), TextSize = 11.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), TextTruncate = Enum.TextTruncate.AtEnd, Parent = armyPanel })
-	local attack = Theme.panel({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -12), Size = UDim2.fromOffset(210, 98), Parent = hudBottom })
-	Theme.pad(12, 10).Parent = attack
-	Theme.label({ Text = "В атаку", Size = UDim2.new(1, 0, 0, 18), TextSize = 14, FontFace = font(Enum.FontWeight.ExtraBold), Parent = attack })
-	local chips = make("Frame", { Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Parent = attack }, {
-		make("UIGridLayout", { CellSize = UDim2.new(0.25, -4, 1, 0), CellPadding = UDim2.fromOffset(5, 0), SortOrder = Enum.SortOrder.LayoutOrder }),
-	})
-	refs.atkChips = {}
-	for i, pct in Config.ATTACK_STEPS do
-		local b = make("TextButton", {
-			Text = pct .. "%",
-			AutoButtonColor = true,
-			FontFace = font(Enum.FontWeight.ExtraBold),
-			TextSize = 14,
-			TextColor3 = C.ink,
-			BackgroundColor3 = C.panelHi,
-			LayoutOrder = i,
-			Parent = chips,
-		}, { Theme.corner(9), make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }) })
-		b.Activated:Connect(function()
-			UI.attackPct = pct
-			UI.refreshAttack()
-		end)
-		refs.atkChips[pct] = b
-	end
-	Theme.label({ Text = "Нажми на землю у своей границы", Position = UDim2.fromOffset(0, 60), Size = UDim2.new(1, 0, 0, 16), TextSize = 11.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), TextWrapped = true, Parent = attack })
-	UI.refreshAttack()
+	refs.armyInfo = Theme.label({ Text = "Нажми на юнит или кнопку", Position = UDim2.fromOffset(0, 58), Size = UDim2.new(1, 0, 0, 24), TextSize = 11.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, Parent = armyPanel })
 
 	local buildScroll = make("ScrollingFrame", {
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -744,11 +710,11 @@ local function buildPlay()
 		end
 	end)
 
-	-- minimap: the whole world; tap or drag on it to move the camera
+	-- minimap: the whole battlefield; tap or drag on it to move the camera
 	local miniBack = make("Frame", {
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -16, 1, -118),
-		Size = UDim2.fromOffset(206, 100),
+		Size = UDim2.fromOffset(176, 117),
 		BackgroundColor3 = Color3.fromRGB(9, 13, 20),
 		BackgroundTransparency = 0.12,
 		Parent = play,
@@ -759,8 +725,8 @@ local function buildPlay()
 		AutoButtonColor = false,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(196, 91),
-		BackgroundColor3 = C.ocean,
+		Size = UDim2.fromOffset(168, 108),
+		BackgroundColor3 = Color3.fromRGB(62, 96, 46),
 		ClipsDescendants = true,
 		Parent = miniBack,
 	}, { Theme.corner(7) })
@@ -831,7 +797,7 @@ local function buildPlay()
 	refs.tipDesc = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = Color3.fromRGB(207, 215, 228), FontFace = font(Enum.FontWeight.SemiBold), LayoutOrder = 2, Parent = tip })
 	refs.tipOut = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = Color3.fromRGB(207, 215, 228), FontFace = font(Enum.FontWeight.SemiBold), LayoutOrder = 3, Parent = tip })
 	refs.tipCost = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, FontFace = font(Enum.FontWeight.ExtraBold), LayoutOrder = 4, Parent = tip })
-	refs.tipHint = Theme.label({ Text = "Нажми на свою территорию, чтобы поставить. Нажми на кнопку ещё раз, чтобы отменить.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.moltenHi, FontFace = font(Enum.FontWeight.Bold), LayoutOrder = 5, Parent = tip })
+	refs.tipHint = Theme.label({ Text = "Нажми на карту рядом со своей базой, чтобы поставить. Нажми на кнопку ещё раз, чтобы отменить.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.moltenHi, FontFace = font(Enum.FontWeight.Bold), LayoutOrder = 5, Parent = tip })
 	refs.tip = tip
 
 	-- big announcement
@@ -937,14 +903,12 @@ function UI.setPhase(phase: string, spectator: boolean)
 	end
 	refs.hudTop.Visible = inGame
 	refs.hudBottom.Visible = inGame
-	refs.banner.Visible = phase == "spawn" or spectator or phase == "ended"
-	refs.ring.Visible = phase == "spawn"
-	refs.bnBarBg.Visible = phase == "spawn"
+	refs.banner.Visible = spectator or phase == "ended"
 	refs.bnBtn.Visible = spectator or phase == "ended"
 	if spectator and phase ~= "ended" then
 		refs.bnTitle.Text = "ТЫ ЗРИТЕЛЬ"
-		refs.bnSub.Text = "Матч уже идёт. Следующий начнётся, когда этот закончится."
-		refs.bnCount.Text = ""
+		refs.bnSub.Text = "Все базы заняты. Следующий бой начнётся, когда этот закончится."
+		refs.bnCount.Text = "Карту можно двигать и приближать."
 	end
 	if not inGame then
 		UI.selectBuild(nil)
@@ -958,6 +922,7 @@ function UI.setMyColor(hex: string)
 	end
 	myColor = hex
 	refs.meStroke.Color = Theme.hex(hex)
+	Sprites.apply(refs.res.pop.icon, "pop", hex)
 	if refs.baseIcon then
 		Sprites.apply(refs.baseIcon, "castle", hex)
 	end
@@ -975,19 +940,8 @@ function UI.setMyColor(hex: string)
 	end
 end
 
-function UI.spawnBanner(timer: number, placed: number, total: number, hasCap: boolean)
-	refs.bnTitle.Text = if hasCap then "СТОЛИЦА ПОСТАВЛЕНА" else "ВЫБЕРИ МЕСТО ДЛЯ СТОЛИЦЫ"
-	refs.bnSub.Text = if hasCap then "Нажми в другом месте, чтобы переставить её, пока идёт отсчёт." else "Нажми на любую сушу. Карту можно двигать и приближать."
-	refs.bnCount.Text = string.format("Высадились %d / %d командиров", placed, total)
-	local left = math.max(0, timer)
-	refs.ringNum.Text = tostring(math.ceil(left))
-	refs.bnBar.Size = UDim2.fromScale(math.clamp(left / Config.SPAWN_SECONDS, 0, 1), 1)
-end
-
 function UI.results(msg, myId: number)
 	refs.banner.Visible = true
-	refs.ring.Visible = false
-	refs.bnBarBg.Visible = false
 	refs.bnBtn.Visible = true
 	refs.hudBottom.Visible = false
 	local won = msg.winner ~= 0 and msg.winner == myId
@@ -1002,7 +956,7 @@ function UI.results(msg, myId: number)
 		if i > 3 then
 			break
 		end
-		table.insert(parts, string.format("%d. %s %.1f%%", i, row.name, row.share * 100))
+		table.insert(parts, string.format("%d. %s %d%%", i, row.name, math.floor(row.share * 100 + 0.5)))
 	end
 	refs.bnCount.Text = table.concat(parts, "   ")
 	UI.announce(if won then "ПОБЕДА!" else "МАТЧ ОКОНЧЕН", lead)
@@ -1010,11 +964,9 @@ end
 
 function UI.defeat()
 	refs.banner.Visible = true
-	refs.ring.Visible = false
-	refs.bnBarBg.Visible = false
 	refs.bnBtn.Visible = true
 	refs.hudBottom.Visible = false
-	refs.bnTitle.Text = "ТВОЮ СТРАНУ ЗАХВАТИЛИ"
+	refs.bnTitle.Text = "ТВОЮ БАЗУ РАЗГРОМИЛИ"
 	refs.bnSub.Text = "Можно досмотреть матч или вернуться в меню."
 	refs.bnCount.Text = ""
 	UI.selectBuild(nil)
@@ -1038,23 +990,26 @@ end
 
 function UI.setLobby(info)
 	local status
-	if info.phase == "spawn" then
-		status = string.format("Высадка, ещё %d с · заходи", math.max(0, math.ceil(info.timer)))
-	elseif info.phase == "game" then
+	if info.phase == "game" then
 		local t = math.max(0, math.floor(info.timer))
-		status = string.format("Идёт матч · осталось %d:%02d", t // 60, t % 60)
+		status = string.format("Идёт бой, осталось %d:%02d", t // 60, t % 60)
+		if info.join > 0 then
+			status ..= string.format(" · можно зайти ещё %d с", math.ceil(info.join))
+		else
+			status ..= " · можно смотреть"
+		end
 	elseif info.phase == "ended" then
-		status = "Матч закончился · начни новый"
+		status = "Бой закончился · начни новый"
 	else
-		status = "Свободно · начни матч"
+		status = "Свободно · начни бой"
 	end
-	refs.modeStatus.Text = string.format("С ботами · 40 стран · %s", status)
-	refs.serverPill.Text = string.format("На сервере: %d · в матче: %d", info.players, info.inMatch)
+	refs.modeStatus.Text = string.format("4 базы, боты · %s", status)
+	refs.serverPill.Text = string.format("На сервере: %d · в бою: %d", info.players, info.inMatch)
 end
 
-function UI.setEconomy(eco, troops: number, fmt)
-	refs.res.pop.value.Text = fmt(troops)
-	refs.res.pop.rate.Text = "войска"
+function UI.setEconomy(eco)
+	refs.res.pop.value.Text = string.format("%d/%d", eco.units or 0, Config.MAX_UNITS_PER_NATION)
+	refs.res.pop.rate.Text = "юниты"
 	refs.res.pop.rate.TextColor3 = C.muted
 	refs.res.money.value.Text = tostring(eco.money) .. " $"
 	refs.res.money.rate.Text = string.format("+%d/с", math.floor(eco.income + 0.5))
@@ -1074,11 +1029,11 @@ function UI.setEconomy(eco, troops: number, fmt)
 	refs.money = eco.money
 end
 
-function UI.setMe(share: number, troops: number, fmt)
-	refs.meStats.Text = string.format("%.2f%% земли · %s войск", share * 100, fmt(troops))
+function UI.setMe(text: string)
+	refs.meStats.Text = text
 end
 
--- rows: list of { name, color, share, isMe, place }
+-- rows: list of { place, name, color, value (text), isMe }
 function UI.setLeaderboard(rows)
 	for i, r in refs.lbRows do
 		local data = rows[i]
@@ -1087,7 +1042,7 @@ function UI.setLeaderboard(rows)
 			r.place.Text = tostring(data.place)
 			r.sw.BackgroundColor3 = Theme.hex(data.color)
 			r.name.Text = data.name
-			r.share.Text = string.format("%.1f%%", data.share * 100)
+			r.share.Text = data.value
 			r.frame.BackgroundTransparency = if data.isMe then 0.84 else 1
 		end
 	end
@@ -1110,17 +1065,11 @@ function UI.setArmy(counts, selected)
 	refs.armyInfo.TextColor3 = if total > 0 then Color3.fromRGB(120, 255, 170) else C.muted
 end
 
-function UI.refreshAttack()
-	for pct, b in refs.atkChips do
-		local on = pct == UI.attackPct
-		b.BackgroundColor3 = if on then Color3.fromRGB(70, 42, 18) else C.panelHi
-		b:FindFirstChildOfClass("UIStroke").Transparency = if on then 0 else 1
-		b.TextColor3 = if on then C.moltenHi else C.ink
-	end
-end
-
 function UI.selectBuild(k: string?)
 	UI.buildSel = k
+	if UI.onBuildSelect then
+		UI.onBuildSelect(k)
+	end
 	if k and refs.fac then
 		UI.hideFactory()
 	end
@@ -1276,15 +1225,16 @@ function UI.hideFactory()
 	refs.fac.Visible = false
 end
 
-function UI.mapError()
-	if refs.mapError then
-		refs.mapError.Visible = true
+-- shown when the game pictures could not be loaded
+function UI.artError()
+	if refs.artError then
+		refs.artError.Visible = true
 		return
 	end
 	local panel = Theme.panel({
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.42),
-		Size = UDim2.fromOffset(560, 0),
+		Size = UDim2.fromOffset(520, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = Color3.fromRGB(16, 21, 34),
 		BackgroundTransparency = 0.02,
@@ -1295,13 +1245,10 @@ function UI.mapError()
 	panel:FindFirstChildOfClass("UIStroke").Transparency = 0.3
 	Theme.pad(20, 16).Parent = panel
 	Theme.list(Enum.FillDirection.Vertical, 8).Parent = panel
-	Theme.label({ Text = "КАРТА ВЫКЛЮЧЕНА", Size = UDim2.new(1, -50, 0, 24), TextSize = 20, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, ZIndex = 41, LayoutOrder = 1, Parent = panel })
+	local holder = make("Frame", { Size = UDim2.fromScale(1, 0), BackgroundTransparency = 1, LayoutOrder = 0, ZIndex = 41, Parent = panel })
+	Theme.label({ Text = "КАРТИНКИ НЕ ЗАГРУЗИЛИСЬ", Size = UDim2.new(1, -50, 0, 24), TextSize = 20, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, ZIndex = 41, LayoutOrder = 1, Parent = panel })
 	Theme.label({
-		Text = "Карте нужен доступ к созданию картинок, а в этой игре он пока выключен. Владелец игры включает его один раз:\n\n"
-			.. "1. Roblox Studio → вкладка Home → Experience Settings (раньше Game Settings).\n"
-			.. "2. Раздел Security → включи «Allow Mesh / Image APIs» → Save.\n"
-			.. "Или на сайте: create.roblox.com → Creations → эта игра → Configure → Settings → «Enable Mesh / Image APIs».\n\n"
-			.. "Игра должна быть опубликована (File → Publish to Roblox). Потом перезапусти её.",
+		Text = "Карта и войска пока не видны: Roblox не отдал картинки игры. Перезайди через минуту. Если не поможет — сделай скриншот и пришли его.",
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		TextWrapped = true,
@@ -1312,16 +1259,13 @@ function UI.mapError()
 		LayoutOrder = 2,
 		Parent = panel,
 	})
-	local close = iconButton("close", panel, function()
+	local close = iconButton("close", holder, function()
 		panel.Visible = false
 	end)
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.Position = UDim2.new(1, 0, 0, 0)
 	close.ZIndex = 42
-	-- keep the close button out of the list layout
-	local holder = make("Frame", { Size = UDim2.fromScale(1, 0), BackgroundTransparency = 1, LayoutOrder = 0, ZIndex = 41, Parent = panel })
-	close.Parent = holder
-	refs.mapError = panel
+	refs.artError = panel
 end
 
 return UI

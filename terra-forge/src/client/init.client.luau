@@ -1,4 +1,4 @@
--- Terra Forge client: shows the menu and the match, and forwards taps to the server.
+-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -72,6 +72,7 @@ end
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
 local Map = require(Shared.Map)
+local Art = require(script.Art)
 local MapView = require(script.MapView)
 local UI = require(script.Ui)
 
@@ -92,9 +93,13 @@ safe("меню", function()
 	MapView.setMode("menu")
 	UI.showMenu()
 end)
-if not MapView.ok then
-	safe("сообщение о карте", UI.mapError)
-end
+
+-- the pictures reach the game a moment after it starts; say so if they never do
+task.delay(30, function()
+	if not Art.get("atlas") or not Art.get("map0") then
+		safe("картинки", UI.artError)
+	end
+end)
 
 local state = {
 	screen = "menu",
@@ -104,6 +109,7 @@ local state = {
 	wantPlay = false,
 	eco = nil,
 	defeated = false,
+	rallyFor = nil,
 }
 
 local function me()
@@ -114,45 +120,45 @@ local function goMenu()
 	state.screen = "menu"
 	state.spectator = false
 	state.defeated = false
+	state.rallyFor = nil
 	MapView.setMode("menu")
 	UI.showMenu()
 end
 
--- GTA-style flight to the player's capital; false when there is none yet
-local function switchHome(): boolean
-	local n = me()
-	if n and n.cap then
-		MapView.switchTo(n.cap.x + 0.5, n.cap.y + 0.5)
+-- moves the camera to the player's command centre; false when there is none
+local function goHome(instant: boolean?): boolean
+	local x, y = MapView.myBase()
+	if x and y then
+		MapView.focusOn(x, y + 2, instant)
 		return true
 	end
 	return false
 end
 
 local function enterPlay(spectator: boolean)
+	local starting = state.screen ~= "play" or state.spectator
 	state.screen = "play"
 	state.spectator = spectator
 	state.rallyFor = nil
-	MapView.spectator = spectator
 	state.defeated = false
+	MapView.spectator = spectator
 	MapView.setMode("play")
 	UI.showPlay(state.phase, spectator)
 	local n = me()
 	if n then
 		UI.setMyColor(n.color)
 	end
-	if state.phase == "game" then
-		switchHome()
+	if not goHome(true) then
+		MapView.focusOn(Map.W / 2, Map.H / 2, true)
 	end
-end
-
-local function placedCount(): number
-	local c = 0
-	for _, n in MapView.nations do
-		if n.alive and n.cap then
-			c += 1
-		end
+	if starting and not spectator and state.phase == "game" then
+		UI.announce("БОЙ НАЧАЛСЯ", "Строй базу и разгроми врагов")
+		task.delay(2.6, function()
+			if state.screen == "play" and not state.spectator then
+				UI.toast("Выбери внизу «Экстрактор» и нажми на светящееся месторождение рядом с базой — это деньги. Потом построй казарму и завод бронетехники.", false, 8)
+			end
+		end)
 	end
-	return c
 end
 
 local handlers = {}
@@ -163,10 +169,11 @@ function handlers.snapshot(msg)
 	state.timer = msg.timer
 	if msg.you ~= 0 then
 		enterPlay(false)
-	elseif state.wantPlay and msg.phase ~= "spawn" then
+	elseif state.wantPlay then
 		enterPlay(true)
 	elseif state.screen == "play" then
 		goMenu()
+		UI.toast("Начался новый бой. Нажми «ИГРАТЬ», чтобы зайти в него.")
 	end
 	state.wantPlay = false
 end
@@ -176,10 +183,6 @@ function handlers.nation(msg)
 	if msg.n.id == MapView.myId then
 		UI.setMyColor(msg.n.color)
 	end
-end
-
-function handlers.delta(msg)
-	MapView.applyDelta(msg.d)
 end
 
 function handlers.stats(msg)
@@ -195,20 +198,10 @@ function handlers.phase(msg)
 	if state.screen ~= "play" then
 		return
 	end
-	if msg.phase == "game" then
-		UI.setPhase("game", state.spectator)
-		if not state.spectator then
-			UI.announce("ВОЙНА НАЧАЛАСЬ", "Захватывай землю и строй заводы")
-			switchHome()
-			task.delay(2.4, function()
-				if state.screen == "play" and state.phase == "game" then
-					UI.toast("Нажми на землю у своей границы, чтобы захватить её. Построй казарму или танковый завод и нажми на него, чтобы заказать войска. Кнопка с замком наверху вернёт к базе.", false, 7)
-				end
-			end)
-		end
-	elseif msg.phase == "ended" then
+	if msg.phase == "ended" then
 		UI.setPhase("ended", state.spectator)
 		UI.results(msg, MapView.myId)
+		MapView.setBuild(nil)
 	end
 end
 
@@ -242,6 +235,7 @@ for g, group in UI.GROUPS do
 end
 
 local function refreshArmy()
+	MapView.refreshSelection()
 	local counts = { inf = 0, veh = 0, air = 0 }
 	local selected = { inf = 0, veh = 0, air = 0 }
 	for _, id in MapView.ownUnits(nil) do
@@ -255,7 +249,6 @@ local function refreshArmy()
 		end
 	end
 	UI.setArmy(counts, selected)
-	MapView.refreshSelection()
 end
 
 local function selectedIds(): { number }
@@ -285,7 +278,7 @@ UI.onSelectKind = function(group)
 		MapView.selected[id] = if allOn then nil else true
 	end
 	if #ids == 0 then
-		UI.toast("Таких войск пока нет. Построй казарму, танковый завод или аэродром.")
+		UI.toast("Таких войск пока нет. Построй казарму, завод бронетехники или аэродром.")
 	end
 	refreshArmy()
 end
@@ -308,32 +301,39 @@ UI.onAuto = function(id, kind)
 end
 
 UI.onBase = function()
-	if not switchHome() then
-		UI.toast("Столицы пока нет.", true)
+	if not goHome(false) then
+		UI.toast("Командного центра больше нет.", true)
 	end
 end
 
 UI.onRally = function(id)
 	state.rallyFor = id
+	UI.hideFactory()
 	UI.toast("Нажми на карту, куда новым юнитам ехать после выпуска.")
 end
 
-function handlers.fx(msg)
-	if state.screen == "play" then
-		MapView.fx(msg.x, msg.y)
+UI.onBuildSelect = function(kind)
+	MapView.setBuild(kind)
+	if kind then
+		table.clear(MapView.selected)
+		refreshArmy()
 	end
+end
+
+UI.onZoom = function(f)
+	MapView.zoom(f)
+end
+
+function handlers.fx(msg)
+	MapView.marker(msg.x, msg.y)
 end
 
 function handlers.boom(msg)
-	if state.screen == "play" then
-		MapView.boom(msg.x, msg.y, msg.big)
-	end
+	MapView.boom(msg.x, msg.y, msg.big)
 end
 
 function handlers.shots(msg)
-	if state.screen == "play" then
-		MapView.shots(msg.s)
-	end
+	MapView.shots(msg.s)
 end
 
 function handlers.hp(msg)
@@ -344,24 +344,31 @@ function handlers.bhp(msg)
 	MapView.setBuildingHp(msg.s)
 end
 
+local function factoryInfo(id: number)
+	local b = MapView.buildingRecord(id)
+	if not b then
+		return nil
+	end
+	return { id = id, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto }
+end
+
 local function refreshFactory()
 	local id = UI.factoryId
 	if not id then
 		return
 	end
-	local b = MapView.buildingRecord(id)
-	if not b then
+	local info = factoryInfo(id)
+	if info then
+		UI.showFactory(info)
+	else
 		UI.hideFactory()
-		return
 	end
-	UI.showFactory({ id = id, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto })
 end
 
 function handlers.eco(msg)
 	state.eco = msg
 	MapView.setProgress(msg.list)
-	local n = me()
-	UI.setEconomy(msg, if n then n.troops else 0, MapView.fmt)
+	UI.setEconomy(msg)
 	refreshFactory()
 end
 
@@ -381,6 +388,8 @@ end
 function handlers.defeat()
 	state.defeated = true
 	if state.screen == "play" then
+		MapView.setBuild(nil)
+		UI.hideFactory()
 		UI.defeat()
 	end
 end
@@ -425,106 +434,123 @@ UI.onLeave = function()
 	goMenu()
 end
 
-UI.onZoom = function(f)
-	MapView.zoom(f)
+local function ownerName(owner: number): string
+	local n = MapView.nations[owner]
+	return if n then n.name else "?"
+end
+
+local function moveSelected(x: number, y: number)
+	action:FireServer("move", selectedIds(), x, y)
+	MapView.marker(x + 0.5, y + 0.5)
+end
+
+local function tryBuild(kind: string, x: number, y: number)
+	MapView.ghostAt(x + 0.5, y + 0.5)
+	local bx, by, why = MapView.placeFor(kind, x + 0.5, y + 0.5)
+	if not bx or not by then
+		UI.toast(why or "Тут нельзя строить.", true)
+		return
+	end
+	local cost = Config.BUILD[kind].cost
+	local money = if state.eco then state.eco.money else 0
+	if money < cost then
+		UI.toast("Не хватает денег: нужно ещё " .. math.ceil(cost - money) .. " $", true)
+		return
+	end
+	action:FireServer("build", kind, x, y)
+	UI.selectBuild(nil)
 end
 
 MapView.onTap = function(x, y, sx, sy)
-	if state.spectator or state.defeated then
+	if state.spectator or state.defeated or state.phase ~= "game" then
 		return
 	end
-	local t = y * Map.W + x
-	if state.phase == "spawn" then
-		if not Map.isLand(t) then
-			UI.toast("Тут вода. Выбери сушу.", true)
-			return
-		end
-		action:FireServer("spawn", x, y)
-	elseif state.phase == "game" then
-		if state.rallyFor then
-			action:FireServer("rally", state.rallyFor, x, y)
-			MapView.marker(x + 0.5, y + 0.5)
-			state.rallyFor = nil
-			return
-		end
-		if not UI.buildSel then
-			-- with nothing selected, a factory under the finger wins over units parked next to it
-			local bid = if next(MapView.selected) == nil then MapView.buildingAt(sx, sy) else nil
-			if bid then
-				local b = MapView.buildingRecord(bid)
-				local def = Config.BUILD[b.kind]
-				if def.units then
-					UI.showFactory({ id = bid, kind = b.kind, prog = b.prog, built = b.built, queue = b.queue, auto = b.auto })
-				else
-					UI.hideFactory()
-					UI.toast(def.name .. ": " .. def.desc)
+	if state.rallyFor then
+		action:FireServer("rally", state.rallyFor, x, y)
+		MapView.marker(x + 0.5, y + 0.5, Color3.fromRGB(255, 210, 90))
+		state.rallyFor = nil
+		return
+	end
+	if UI.buildSel then
+		tryBuild(UI.buildSel, x, y)
+		return
+	end
+	local hasSelection = next(MapView.selected) ~= nil
+	-- with nothing selected, a building under the finger wins over units parked next to it
+	if not hasSelection then
+		local bid = MapView.buildingAt(sx, sy)
+		local b = if bid then MapView.buildingRecord(bid) else nil
+		if b then
+			local def = Config.BUILD[b.kind]
+			if b.owner ~= MapView.myId then
+				UI.toast("Враг «" .. ownerName(b.owner) .. "»: " .. def.name .. ". Выбери войска и нажми сюда, чтобы атаковать.")
+			elseif def.units then
+				local info = factoryInfo(bid)
+				if info then
+					UI.showFactory(info)
 				end
-				return
-			end
-			local unit = MapView.unitAt(sx, sy)
-			if unit then
-				MapView.selected[unit] = if MapView.selected[unit] then nil else true
-				refreshArmy()
-				return
-			end
-			local ids = selectedIds()
-			if #ids > 0 then
-				action:FireServer("move", ids, x, y)
-				MapView.marker(x + 0.5, y + 0.5)
-				return
-			end
-			if UI.factoryId then
+			else
 				UI.hideFactory()
-				return
+				UI.toast(def.name .. ": " .. def.desc)
 			end
+			return
 		end
-		if UI.buildSel then
-			if MapView.ownerAt(x, y) ~= MapView.myId then
-				UI.toast("Строить можно только на своей земле.", true)
-				return
-			end
-			action:FireServer("build", UI.buildSel, x, y)
-		else
-			if not Map.isLand(t) then
-				UI.toast("Через море пока не пройти. Для этого будут корабли.", true)
-				return
-			end
-			if MapView.ownerAt(x, y) == MapView.myId then
-				if MapView.isFar() then
-					-- from high up, a tap on your land flies down to the base there
-					local bx, by = MapView.nearestBase(x + 0.5, y + 0.5, 30)
-					MapView.switchTo(bx or x + 0.5, by or y + 0.5)
-				else
-					UI.toast("Это твоя земля. Выбери постройку внизу, чтобы строить.")
-				end
-				return
-			end
-			action:FireServer("attack", x, y, UI.attackPct)
-		end
+	end
+	local unit = MapView.unitAt(sx, sy)
+	if unit then
+		MapView.selected[unit] = if MapView.selected[unit] then nil else true
+		refreshArmy()
+		return
+	end
+	if hasSelection then
+		moveSelected(x, y)
+		return
+	end
+	if UI.factoryId then
+		UI.hideFactory()
+		return
+	end
+	local what, id = MapView.thingAt(sx, sy)
+	if what == "unit" and id then
+		local u = MapView.unitRecord(id)
+		UI.toast("Враг «" .. ownerName(u.owner) .. "»: " .. Config.UNITS[u.kind].title .. ".")
+	end
+end
+
+-- right mouse button: cancel building, or send the selected units
+MapView.onAltTap = function(x, y)
+	if state.spectator or state.defeated or state.phase ~= "game" then
+		return
+	end
+	if UI.buildSel then
+		UI.selectBuild(nil)
+	elseif state.rallyFor then
+		state.rallyFor = nil
+	elseif next(MapView.selected) ~= nil then
+		moveSelected(x, y)
 	end
 end
 
 ---------------------------------------------------------------- per frame
 
 do
-	local onTap = MapView.onTap
+	local onTap, onAltTap = MapView.onTap, MapView.onAltTap
 	MapView.onTap = function(x, y, sx, sy)
 		safe("нажатие", onTap, x, y, sx, sy)
+	end
+	MapView.onAltTap = function(x, y)
+		safe("нажатие", onAltTap, x, y)
 	end
 end
 
 local hudAcc = 0
 local function frame(dt: number)
 	MapView.update(dt)
-	if state.phase == "spawn" or state.phase == "game" or state.phase == "ended" then
+	if state.phase == "game" or state.phase == "ended" then
 		state.timer -= dt
 	end
 	if state.screen ~= "play" then
 		return
-	end
-	if state.phase == "spawn" and not state.spectator then
-		local n = me()
-		UI.spawnBanner(state.timer, placedCount(), Config.TOTAL_NATIONS, n ~= nil and n.cap ~= nil)
 	end
 	hudAcc += dt
 	if hudAcc < 0.5 then
@@ -536,31 +562,36 @@ local function frame(dt: number)
 	end
 	local list = {}
 	for _, n in MapView.nations do
-		if n.alive and n.count > 0 then
-			table.insert(list, n)
-		end
+		table.insert(list, n)
 	end
 	table.sort(list, function(a, b)
-		return a.count > b.count
+		if a.alive ~= b.alive then
+			return a.alive
+		end
+		return a.score > b.score
 	end)
 	local rows = {}
-	local myPlace = 0
+	local myPlace, alive = 0, 0
 	for i, n in list do
+		if n.alive then
+			alive += 1
+		end
 		if n.id == MapView.myId then
 			myPlace = i
 		end
-		if i <= 6 then
-			table.insert(rows, { place = i, name = n.name, color = n.color, share = n.count / Map.landCount, isMe = n.id == MapView.myId })
-		end
-	end
-	local mine = me()
-	if mine and myPlace > 6 then
-		table.insert(rows, { place = myPlace, name = mine.name, color = mine.color, share = mine.count / Map.landCount, isMe = true })
+		table.insert(rows, {
+			place = i,
+			name = n.name,
+			color = n.color,
+			value = if n.alive then MapView.fmt(n.score) else "разбит",
+			isMe = n.id == MapView.myId,
+		})
 	end
 	UI.setLeaderboard(rows)
 	refreshArmy()
-	if mine then
-		UI.setMe(mine.count / Map.landCount, mine.troops, MapView.fmt)
+	if me() then
+		local t = math.max(0, math.floor(state.timer))
+		UI.setMe(string.format("Место %d из %d · осталось %d:%02d", myPlace, alive, t // 60, t % 60))
 	end
 end
 

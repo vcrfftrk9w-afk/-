@@ -1,18 +1,17 @@
--- One match: spawn phase, war, results. Runs nations, bots, economy, buildings and units,
--- and sends everything clients need through one RemoteEvent as batches of small messages.
+-- One skirmish: four bases on the map, each run by a player or a bot. Runs the economy,
+-- buildings, factories, units, combat and the bots, and sends clients everything as batches
+-- of small messages through one RemoteEvent. A base is lost with its command centre.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
 local Map = require(Shared.Map)
-local Codec = require(Shared.Codec)
 local Motion = require(Shared.Motion)
-local World = require(script.Parent.World)
 local Path = require(script.Parent.Path)
 
-local W = Map.W
+local W, H = Map.W, Map.H
 local CELL = 8 -- spatial grid cell size for finding targets, in tiles
-local COLS = math.ceil(Map.W / CELL)
-local ROWS = math.ceil(Map.H / CELL)
+local COLS = math.ceil(W / CELL)
+local ROWS = math.ceil(H / CELL)
 
 local Match = {}
 Match.__index = Match
@@ -37,13 +36,13 @@ local function nationInfo(n)
 		color = n.color,
 		human = n.isHuman,
 		userId = n.userId or 0,
-		cap = if n.cap then { n.cap.x, n.cap.y } else nil,
+		cap = if n.cc then { n.cc.x + 1, n.cc.y + 1 } else nil,
 		alive = n.alive,
 	}
 end
 
 local function buildingInfo(b)
-	return { id = b.id, kind = b.kind, owner = b.n.id, x = b.x, y = b.y, hp = math.ceil(b.hp), maxHp = b.maxHp, built = b.built }
+	return { id = b.id, kind = b.kind, owner = b.n.id, x = b.x, y = b.y, size = b.size, hp = math.ceil(b.hp), maxHp = b.maxHp, built = b.built }
 end
 
 local function unitInfo(u)
@@ -60,43 +59,26 @@ local function unitInfo(u)
 	}
 end
 
--- attack strength from the army: every unit adds a little
-local function power(n): number
-	local total = 1
-	for kind, count in n.army do
-		local def = Config.UNITS[kind]
-		if def then
-			total += count * def.power
-		end
-	end
-	return math.min(3, total)
+local function overlaps(ax: number, ay: number, as: number, bx: number, by: number, bs: number): boolean
+	return ax < bx + bs and bx < ax + as and ay < by + bs and by < ay + as
 end
 
-local function fmt(v: number): string
-	v = math.max(0, v)
-	if v < 1000 then
-		return tostring(math.round(v))
-	elseif v < 10000 then
-		return string.format("%.2fK", v / 1000)
-	elseif v < 100000 then
-		return string.format("%.1fK", v / 1000)
-	end
-	return string.format("%dK", math.round(v / 1000))
+local function lackText(n, cost: number): string
+	return "Не хватает денег: нужно ещё " .. math.ceil(cost - n.money) .. " $"
 end
+
+---------------------------------------------------------------- setup
 
 function Match.new(event: RemoteEvent)
 	local self = setmetatable({}, Match)
 	self.event = event
 	self.rng = Random.new()
-	self.world = World.new(self.rng)
-	self.world.onCapture = function(n, t, e)
-		self:onCapture(n, t, e)
-	end
-	self.phase = "spawn"
-	self.timer = Config.SPAWN_SECONDS
-	self.nextId = 0
+	self.phase = "game"
+	self.timer = Config.MATCH_SECONDS
+	self.joinTimer = Config.JOIN_SECONDS
+	self.nations = {}
+	self.seats = {}
 	self.humans = {}
-	self.humanCount = 0
 	self.buildings = {}
 	self.nextBuildingId = 0
 	self.units = {}
@@ -105,26 +87,35 @@ function Match.new(event: RemoteEvent)
 	self.outbox = {}
 	self.tickAcc = 0
 	self.netAcc = 0
-	self.statAcc = 0
 	self.ecoAcc = 0
 	self.secAcc = 0
-	self.botTimer = 0
-	self.botUnitAcc = 0
-	self.botOrderAcc = 0
+	self.botAcc = 0
 	self.shots = {}
 	self.hpDirty = {}
 	self.bhpDirty = {}
-	self.nb = {}
-	self.nb2 = {}
 	self.done = false
 	local names = shuffle(Config.BOT_NAMES, self.rng)
-	local colors = shuffle(Config.BOT_COLORS, self.rng)
-	self.botQueue = {}
-	for i = 1, Config.TOTAL_NATIONS - 1 do
-		table.insert(self.botQueue, { name = names[(i - 1) % #names + 1], color = colors[(i - 1) % #colors + 1] })
-	end
-	for _ = 1, 9 do
-		self:placeBot()
+	for i = 1, math.min(Config.SEATS, #Map.starts) do
+		local start = Map.starts[i]
+		local n = {
+			id = i,
+			name = names[i],
+			botName = names[i],
+			color = Config.SEAT_COLORS[i],
+			isHuman = false,
+			alive = true,
+			money = Config.START_MONEY,
+			income = 0,
+			army = {},
+			unitTotal = 0,
+			bot = { think = self.rng:NextNumber() * 2, wave = 80 + self.rng:NextNumber() * 40, step = 1 },
+		}
+		self.nations[i] = n
+		table.insert(self.seats, n)
+		n.cc = self:addBuilding(n, "cc", start.x - 1, start.y - 1, true)
+		for k, kind in { "infantry", "infantry", "scout" } do
+			self:spawnUnit(n, kind, start.x - 1.5 + k, start.y + 3)
+		end
 	end
 	return self
 end
@@ -140,65 +131,15 @@ function Match:sendTo(player: Player, msg)
 end
 
 function Match:toast(n, text: string, warn: boolean?)
-	if n and n.player then
+	if n.isHuman and n.player then
 		self:sendTo(n.player, { t = "toast", text = text, warn = warn or false })
 	end
 end
 
-function Match:newNation(o)
-	self.nextId += 1
-	local n = {
-		id = self.nextId,
-		name = o.name,
-		color = o.color,
-		isHuman = o.isHuman or false,
-		userId = o.userId,
-		player = o.player,
-		troops = o.troops or 1500,
-		alive = true,
-		attack = nil,
-		cap = nil,
-		cool = self.rng:NextInteger(0, 3),
-		stuck = 0,
-		army = {},
-		botUnits = 0,
-		unitTotal = 0,
-		cities = 0,
-	}
-	self.world:addNation(n)
-	return n
-end
-
-function Match:placedCount(): number
-	local c = 0
-	for _, n in self.world.nations do
-		if n.cap then
-			c += 1
-		end
-	end
-	return c
-end
-
-function Match:placeBot()
-	local b = table.remove(self.botQueue)
-	if not b then
-		return
-	end
-	local p = self.world:randomLand(14)
-	if not p then
-		return
-	end
-	local n = self:newNation({ name = b.name, color = b.color, troops = 900 + self.rng:NextNumber() * 1500 })
-	n.cap = p
-	self.world:claimDisc(n, p.x, p.y, Config.CAPITAL_RADIUS)
-	self:send({ t = "nation", n = nationInfo(n) })
-end
-
----------------------------------------------------------------- players
-
 function Match:snapshot(player: Player)
+	local me = self.humans[player]
 	local nations, buildings, units = {}, {}, {}
-	for _, n in self.world.nations do
+	for _, n in self.seats do
 		table.insert(nations, nationInfo(n))
 	end
 	for _, b in self.buildings do
@@ -207,52 +148,49 @@ function Match:snapshot(player: Player)
 	for _, u in self.units do
 		table.insert(units, unitInfo(u))
 	end
-	local me = self.humans[player]
 	return {
 		t = "snapshot",
 		phase = self.phase,
 		timer = self.timer,
-		owners = Codec.encodeOwners(self.world.owner, Map.N),
+		you = if me then me.id else 0,
 		nations = nations,
 		buildings = buildings,
 		units = units,
-		you = if me then me.id else 0,
-		stats = self:statsArray(),
 	}
 end
 
 function Match:sendSnapshot(player: Player)
-	self.event:FireClient(player, "batch", { self:snapshot(player) })
+	self:sendTo(player, self:snapshot(player))
 end
 
+---------------------------------------------------------------- players
+
+-- a player takes a bot's base while the match is young; later they watch
 function Match:play(player: Player)
-	local n = self.humans[player]
-	if n then
+	if self.humans[player] then
 		self:sendSnapshot(player)
 		return
 	end
-	if self.phase ~= "spawn" then
-		self:sendSnapshot(player)
-		self:sendTo(player, { t = "toast", text = "Матч уже идёт. Смотри карту, следующий начнётся после него.", warn = false })
-		return
+	if self.phase == "game" and self.joinTimer > 0 then
+		for _, n in self.seats do
+			if n.alive and not n.isHuman then
+				n.isHuman = true
+				n.player = player
+				n.name = player.DisplayName
+				n.userId = player.UserId
+				self.humans[player] = n
+				self:send({ t = "nation", n = nationInfo(n) })
+				self:sendSnapshot(player)
+				self:sendEconomy()
+				return
+			end
+		end
 	end
-	self.humanCount += 1
-	n = self:newNation({
-		name = player.DisplayName,
-		color = Config.HUMAN_COLORS[(self.humanCount - 1) % #Config.HUMAN_COLORS + 1],
-		isHuman = true,
-		userId = player.UserId,
-		player = player,
-		troops = Config.START_TROOPS,
-	})
-	n.money = Config.START_MONEY
-	n.income = Config.BASE_INCOME
-	self.humans[player] = n
-	table.remove(self.botQueue)
-	self:send({ t = "nation", n = nationInfo(n) })
 	self:sendSnapshot(player)
+	self:sendTo(player, { t = "toast", text = "Все базы заняты. Смотри бой — следующий начнётся после него.", warn = false })
 end
 
+-- the base goes back to a bot
 function Match:leave(player: Player)
 	local n = self.humans[player]
 	if not n then
@@ -261,78 +199,182 @@ function Match:leave(player: Player)
 	self.humans[player] = nil
 	n.isHuman = false
 	n.player = nil
-	if not n.cap then
-		-- never placed a capital: drop the nation entirely
-		n.alive = false
-	end
+	n.userId = 0
+	n.name = n.botName
 	self:send({ t = "nation", n = nationInfo(n) })
 end
 
-function Match:placeCapital(player: Player, x: number, y: number)
-	local n = self.humans[player]
-	if not n or self.phase ~= "spawn" then
-		return
+function Match:humanCount(): number
+	local c = 0
+	for _ in self.humans do
+		c += 1
 	end
-	x, y = math.floor(x), math.floor(y)
-	if not Map.inBounds(x, y) then
-		return
-	end
-	local t = y * W + x
-	if not Map.isLand(t) then
-		self:toast(n, "Тут вода. Выбери сушу.", true)
-		return
-	end
-	local o = self.world:ownerOf(t)
-	if o ~= 0 and o ~= n.id then
-		self:toast(n, "Здесь уже стоит «" .. self.world.nations[o].name .. "»", true)
-		return
-	end
-	if n.cap then
-		self.world:releaseNear(n, n.cap.x, n.cap.y, Config.CAPITAL_RADIUS + 1)
-	end
-	n.cap = { x = x, y = y }
-	self.world:claimDisc(n, x, y, Config.CAPITAL_RADIUS)
-	self:send({ t = "nation", n = nationInfo(n) })
+	return c
 end
 
-function Match:attack(player: Player, x: number, y: number, pct: number)
-	local n = self.humans[player]
-	if not n or self.phase ~= "game" or not n.alive then
-		return
+---------------------------------------------------------------- building
+
+function Match:areaFree(x: number, y: number, size: number): boolean
+	for _, b in self.buildings do
+		if overlaps(x, y, size, b.x, b.y, b.size) then
+			return false
+		end
 	end
+	return true
+end
+
+function Match:groundOk(x: number, y: number, size: number): boolean
+	for ty = y, y + size - 1 do
+		for tx = x, x + size - 1 do
+			if not Map.inBounds(tx, ty) or not Map.isLand(ty * W + tx) then
+				return false
+			end
+		end
+	end
+	return true
+end
+
+function Match:nearBase(n, cx: number, cy: number): boolean
+	local r2 = Config.BUILD_RADIUS * Config.BUILD_RADIUS
+	for _, b in self.buildings do
+		if b.n == n and (b.px - cx) ^ 2 + (b.py - cy) ^ 2 <= r2 then
+			return true
+		end
+	end
+	return false
+end
+
+-- where a building of this kind goes for a tap at (x, y): its top-left tile, or nil and why not
+function Match:placeFor(n, kind: string, x: number, y: number): (number?, number?, string?)
+	local def = Config.BUILD[kind]
+	local size = def.size
 	x, y = math.floor(x), math.floor(y)
-	if not Map.inBounds(x, y) then
-		return
-	end
-	local t = y * W + x
-	if not Map.isLand(t) then
-		self:toast(n, "Через море пока не пройти. Для этого будут корабли.", true)
-		return
-	end
-	local target = self.world:ownerOf(t)
-	if target == n.id then
-		self:toast(n, "Это твоя земля. Выбери постройку внизу, чтобы строить.")
-		return
-	end
-	pct = math.clamp(pct, 5, 100) / 100
-	if n.attack then
-		n.troops += math.max(0, n.attack.budget)
-	end
-	local budget = n.troops * pct
-	n.troops -= budget
-	n.attack = { target = target, tx = x, ty = y, budget = budget, miss = 0, taken = 0 }
-	if target ~= 0 then
-		self:toast(n, "Атака на «" .. self.world.nations[target].name .. "» · " .. fmt(budget) .. " войск")
+	local bx, by
+	if def.onPool then
+		local best, bd = nil, 3.5 * 3.5
+		for _, p in Map.pools do
+			local d = (p.x + 1 - (x + 0.5)) ^ 2 + (p.y + 1 - (y + 0.5)) ^ 2
+			if d < bd and self:areaFree(p.x, p.y, 2) then
+				best, bd = p, d
+			end
+		end
+		if not best then
+			return nil, nil, "Экстрактор ставится на свободное месторождение — светящуюся воронку."
+		end
+		bx, by = best.x, best.y
 	else
-		self:toast(n, "Захват земли · " .. fmt(budget) .. " войск")
+		bx, by = x - size // 2, y - size // 2
+	end
+	if not self:groundOk(bx, by, size) then
+		return nil, nil, "Тут нельзя строить: вода, скалы или край карты."
+	end
+	if not self:areaFree(bx, by, size) then
+		return nil, nil, "Тут тесно: место занято другой постройкой."
+	end
+	if not def.onPool then
+		for _, p in Map.pools do
+			if overlaps(bx, by, size, p.x, p.y, 2) then
+				return nil, nil, "Месторождения оставь для экстракторов."
+			end
+		end
+	end
+	if not self:nearBase(n, bx + size / 2, by + size / 2) then
+		return nil, nil, "Строить можно только рядом со своей базой."
+	end
+	return bx, by, nil
+end
+
+function Match:build(player: Player, kind: string, x: number, y: number)
+	local n = self.humans[player]
+	local def = Config.BUILD[kind]
+	if not n or not def or not def.cost or self.phase ~= "game" or not n.alive then
+		return
+	end
+	local bx, by, why = self:placeFor(n, kind, x, y)
+	if not bx or not by then
+		self:toast(n, why or "Тут нельзя строить.", true)
+		return
+	end
+	if n.money < def.cost then
+		self:toast(n, lackText(n, def.cost), true)
+		return
+	end
+	n.money -= def.cost
+	self:addBuilding(n, kind, bx, by, false)
+	local extra = if def.units then ". Когда достроят, нажми на неё и заказывай войска" else ""
+	self:toast(n, "Строится: " .. def.name .. " (" .. def.time .. " с)" .. extra)
+	self:sendEconomy()
+end
+
+function Match:addBuilding(n, kind: string, x: number, y: number, ready: boolean)
+	local def = Config.BUILD[kind]
+	self.nextBuildingId += 1
+	local b = {
+		id = self.nextBuildingId,
+		kind = kind,
+		n = n,
+		x = x,
+		y = y,
+		size = def.size,
+		px = x + def.size / 2,
+		py = y + def.size / 2,
+		hp = def.hp,
+		maxHp = def.hp,
+		isBuilding = true,
+		built = if ready then 1 else 0,
+		prog = 0,
+		queue = {},
+		auto = nil,
+		autoPaid = nil,
+		blocked = false,
+		shotAt = 0,
+	}
+	self.buildings[b.id] = b
+	self:send({ t = "building", b = buildingInfo(b) })
+	return b
+end
+
+function Match:removeBuilding(b)
+	if not self.buildings[b.id] then
+		return
+	end
+	self.buildings[b.id] = nil
+	self.bhpDirty[b] = nil
+	self:send({ t = "bgone", id = b.id })
+	if b == b.n.cc and b.n.alive then
+		self:killNation(b.n)
 	end
 end
 
-local function lackText(n, cost: number): string
-	return "Не хватает денег: нужно ещё " .. math.ceil(cost - n.money) .. " $"
+-- a base without its command centre is out: everything it has left falls
+function Match:killNation(n)
+	n.alive = false
+	n.cc = nil
+	for _, b in self.buildings do
+		if b.n == n then
+			self:send({ t = "boom", x = b.px, y = b.py, big = true })
+			self:removeBuilding(b)
+		end
+	end
+	for _, u in self.units do
+		if u.n == n then
+			self:removeUnit(u)
+		end
+	end
+	self:send({ t = "nation", n = nationInfo(n) })
+	for _, other in self.seats do
+		if other ~= n then
+			self:toast(other, "База «" .. n.name .. "» разгромлена!")
+		end
+	end
+	if n.isHuman and n.player then
+		self:sendTo(n.player, { t = "defeat" })
+	end
 end
 
--- a player's own finished factory, or nil
+---------------------------------------------------------------- factories
+
+-- a player's own factory, or nil
 function Match:factoryOf(player: Player, id: number)
 	local n = self.humans[player]
 	local b = self.buildings[id]
@@ -408,112 +450,16 @@ function Match:setRally(player: Player, id: number, x: number, y: number)
 	self:toast(n, "Точка сбора поставлена: новые юниты поедут туда.")
 end
 
-function Match:build(player: Player, kind: string, x: number, y: number)
-	local n = self.humans[player]
-	local def = Config.BUILD[kind]
-	if not n or not def or self.phase ~= "game" or not n.alive then
-		return
-	end
-	x, y = math.floor(x), math.floor(y)
-	if not Map.inBounds(x, y) then
-		return
-	end
-	local t = y * W + x
-	if self.world:ownerOf(t) ~= n.id then
-		self:toast(n, "Строить можно только на своей земле.", true)
-		return
-	end
-	if def.onDeposit and Map.deposit(t) == 0 then
-		self:toast(n, "Экстрактор ставится только на месторождение: рыжие, серые или чёрные пятна на карте.", true)
-		return
-	end
-	if n.money < def.cost then
-		self:toast(n, lackText(n, def.cost), true)
-		return
-	end
-	if not self:addBuilding(n, kind, x, y) then
-		self:toast(n, "Тут тесно. Отступи на клетку от других построек.", true)
-		return
-	end
-	n.money -= def.cost
-	local extra = if def.units then ". Когда достроят, нажми на неё и заказывай войска" else ""
-	self:toast(n, "Строится: " .. def.name .. " (" .. def.time .. " с)" .. extra)
-end
+---------------------------------------------------------------- units
 
----------------------------------------------------------------- buildings and units
-
-function Match:addBuilding(n, kind: string, x: number, y: number): boolean
-	x = math.clamp(x, 0, Map.W - 1)
-	y = math.clamp(y, 0, Map.H - 1)
-	local t = y * W + x
-	if not Map.isLand(t) or self.world:ownerOf(t) ~= n.id then
-		return false
-	end
-	for _, b in self.buildings do
-		if math.abs(b.x - x) <= 1 and math.abs(b.y - y) <= 1 then
-			return false
-		end
-	end
-	-- capitals stand on the map as buildings too
-	for _, other in self.world.nations do
-		if other.cap and math.abs(other.cap.x - x) <= 1 and math.abs(other.cap.y - y) <= 1 then
-			return false
-		end
-	end
-	self.nextBuildingId += 1
-	local def = Config.BUILD[kind]
-	local b = {
-		id = self.nextBuildingId,
-		kind = kind,
-		n = n,
-		t = t,
-		x = x,
-		y = y,
-		px = x + 0.5,
-		py = y + 0.5,
-		hp = def.hp,
-		maxHp = def.hp,
-		isBuilding = true,
-		-- players' buildings take time to build; bots get theirs ready
-		built = if n.isHuman then 0 else 1,
-		prog = if n.isHuman then 0 else self.rng:NextNumber() * 0.5,
-		queue = {},
-		auto = nil,
-		autoPaid = nil,
-		blocked = false,
-		shotAt = 0,
-	}
-	self.buildings[b.id] = b
-	if kind == "city" then
-		n.cities += 1
-	end
-	self:send({ t = "building", b = buildingInfo(b) })
-	return true
-end
-
-function Match:removeBuilding(b)
-	if not self.buildings[b.id] then
-		return
-	end
-	self.buildings[b.id] = nil
-	self.bhpDirty[b] = nil
-	if b.kind == "city" then
-		b.n.cities = math.max(0, b.n.cities - 1)
-	end
-	self:send({ t = "bgone", id = b.id })
-end
-
--- creates a unit next to (x, y); returns false when a limit is reached
 -- creates a unit next to (x, y); returns the unit, or nil when a limit is reached
 function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
-	local cap = if n.isHuman then Config.MAX_UNITS_PER_NATION else Config.BOT_MAX_UNITS
-	if self.unitCount >= Config.MAX_UNITS or not n.cap or n.unitTotal >= cap then
+	if self.unitCount >= Config.MAX_UNITS or n.unitTotal >= Config.MAX_UNITS_PER_NATION then
 		return nil
 	end
 	local def = Config.UNITS[kind]
 	if not def.air then
-		-- new units wait just below their factory, so they don't cover it
-		local lx, ly = Path.nearestLand(x + self.rng:NextNumber() * 2 - 1, y + 1.5 + self.rng:NextNumber(), 3)
+		local lx, ly = Path.nearestLand(x + self.rng:NextNumber() * 2 - 1, y + self.rng:NextNumber(), 4)
 		if lx then
 			x, y = lx + 0.5, ly + 0.5
 		end
@@ -536,7 +482,7 @@ function Match:spawnUnit(n, kind: string, x: number, y: number, rally)
 		orderedAt = 0,
 	}
 	if u.air then
-		local r = 3 + self.rng:NextNumber() * 2
+		local r = 2.5 + self.rng:NextNumber() * 1.5
 		u.orbit = { r = r, a0 = self.rng:NextNumber() * math.pi * 2, w = (if self.rng:NextNumber() < 0.5 then 1 else -1) * 2.6 / r }
 	end
 	n.army[kind] = (n.army[kind] or 0) + 1
@@ -556,7 +502,7 @@ function Match:removeUnit(u)
 		self.units[u.id] = nil
 		self.hpDirty[u] = nil
 		self.unitCount -= 1
-		u.n.army[u.kind] = math.max(0, u.n.army[u.kind] - 1)
+		u.n.army[u.kind] = math.max(0, (u.n.army[u.kind] or 1) - 1)
 		u.n.unitTotal = math.max(0, u.n.unitTotal - 1)
 		self:send({ t = "ugone", id = u.id })
 	end
@@ -577,25 +523,8 @@ function Match:orderUnit(u, tx: number, ty: number, maxNodes: number)
 	self:send({ t = "unit", u = unitInfo(u) })
 end
 
--- a player's move order for several units; they spread out around the target
-function Match:move(player: Player, ids, tx: number, ty: number)
-	local n = self.humans[player]
-	if not n or self.phase ~= "game" or not n.alive then
-		return
-	end
-	local list = {}
-	for _, id in ids do
-		local u = self.units[id]
-		if u and u.n == n then
-			table.insert(list, u)
-			if #list >= 80 then
-				break
-			end
-		end
-	end
-	if #list == 0 then
-		return
-	end
+-- sends several units to (tx, ty); they spread out around it and share the first route
+function Match:orderGroup(list, tx: number, ty: number)
 	tx, ty = Path.inMap(math.floor(tx) + 0.5, math.floor(ty) + 0.5)
 	local t = now()
 	local budget = 60000
@@ -611,7 +540,6 @@ function Match:move(player: Player, ids, tx: number, ty: number)
 		if u.air then
 			u.path = { x, y, gx, gy }
 		elseif leader and #leader >= 4 and (leader[1] - x) ^ 2 + (leader[2] - y) ^ 2 < 400 and Path.clear(x, y, leader[3], leader[4]) then
-			-- close to the first unit: follow its route
 			local p = { x, y }
 			for k = 3, #leader - 2 do
 				table.insert(p, leader[k])
@@ -633,56 +561,145 @@ function Match:move(player: Player, ids, tx: number, ty: number)
 	end
 end
 
--- bots send idle units to their border, towards whoever they are attacking
-function Match:botOrders()
-	local t = now()
-	local issued = 0
+-- a player's move order for several units
+function Match:move(player: Player, ids, tx: number, ty: number)
+	local n = self.humans[player]
+	if not n or self.phase ~= "game" or not n.alive then
+		return
+	end
+	local list = {}
+	for _, id in ids do
+		local u = self.units[id]
+		if u and u.n == n then
+			table.insert(list, u)
+			if #list >= 80 then
+				break
+			end
+		end
+	end
+	if #list > 0 then
+		self:orderGroup(list, tx, ty)
+	end
+end
+
+---------------------------------------------------------------- bots
+
+local BOT_PLAN = { "extractor", "barracks", "extractor", "tankf", "extractor", "tower", "air", "extractor", "tower", "aa", "fabricator", "tankf", "extractor", "tower" }
+
+-- a spot for a building near the bot's base, or nil
+function Match:botSpot(n, kind: string)
+	local def = Config.BUILD[kind]
+	if def.onPool then
+		local best, bd = nil, math.huge
+		for _, p in Map.pools do
+			if self:areaFree(p.x, p.y, 2) and self:nearBase(n, p.x + 1, p.y + 1) then
+				local d = (p.x + 1 - n.cc.px) ^ 2 + (p.y + 1 - n.cc.py) ^ 2
+				if d < bd then
+					best, bd = p, d
+				end
+			end
+		end
+		return if best then best.x + 1 else nil, if best then best.y + 1 else nil
+	end
+	for _ = 1, 30 do
+		local a = self.rng:NextNumber() * math.pi * 2
+		local r = 3 + self.rng:NextNumber() * (Config.BUILD_RADIUS - 4)
+		local x, y = n.cc.px + math.cos(a) * r, n.cc.py + math.sin(a) * r
+		local bx, by = self:placeFor(n, kind, x, y)
+		if bx and by then
+			return x, y
+		end
+	end
+	return nil, nil
+end
+
+-- enemies near a point: the closest enemy unit or building within radius
+function Match:enemyNear(n, x: number, y: number, radius: number)
+	local best, bd = nil, radius * radius
 	for _, u in self.units do
-		local n = u.n
-		if not n.isHuman and n.alive and t - u.orderedAt > 6 + u.id % 7 then
+		if u.n ~= n then
+			local d = (u.px - x) ^ 2 + (u.py - y) ^ 2
+			if d < bd then
+				best, bd = u, d
+			end
+		end
+	end
+	for _, b in self.buildings do
+		if b.n ~= n then
+			local d = (b.px - x) ^ 2 + (b.py - y) ^ 2
+			if d < bd then
+				best, bd = b, d
+			end
+		end
+	end
+	return best
+end
+
+function Match:botThink(n, dt: number)
+	local bot = n.bot
+	-- build the next thing on the plan when there is money for it
+	local kind = BOT_PLAN[(bot.step - 1) % #BOT_PLAN + 1]
+	local def = Config.BUILD[kind]
+	if n.money >= def.cost + 60 then
+		local x, y = self:botSpot(n, kind)
+		local bx, by
+		if x and y then
+			bx, by = self:placeFor(n, kind, x, y)
+		end
+		if bx and by then
+			n.money -= def.cost
+			self:addBuilding(n, kind, bx, by, false)
+		end
+		bot.step += 1
+	end
+	-- factories keep producing while there is money left over for building
+	for _, b in self.buildings do
+		local bd = Config.BUILD[b.kind]
+		if b.n == n and bd.units then
+			if n.money > 350 then
+				b.auto = b.auto or bd.units[self.rng:NextInteger(1, #bd.units)]
+			elseif not b.autoPaid then
+				b.auto = nil
+			end
+		end
+	end
+	-- defend the base, then attack in waves
+	local threat = self:enemyNear(n, n.cc.px, n.cc.py, Config.BUILD_RADIUS + 4)
+	local idle = {}
+	local t = now()
+	for _, u in self.units do
+		if u.n == n then
 			local _, _, arrived = Motion.position(u, t)
-			if arrived then
-				local a = n.attack
-				local f = if a then self.world:pickFront(n, a.tx, a.ty, 10) else self.world:pickFront(n, u.px, u.py, 8)
-				if f >= 0 then
-					self:orderUnit(u, f % W + 0.5, f // W + 0.5, 6000)
-				else
-					u.orderedAt = t
-				end
-				issued += 1
-				if issued >= 4 then
-					return
+			if arrived and t - u.orderedAt > 3 then
+				table.insert(idle, u)
+			end
+		end
+	end
+	if threat and #idle > 0 then
+		self:orderGroup(idle, threat.px, threat.py)
+		return
+	end
+	bot.wave -= dt
+	if bot.wave <= 0 and #idle >= 6 then
+		bot.wave = 60 + self.rng:NextNumber() * 40
+		local target, bd = nil, math.huge
+		for _, e in self.seats do
+			if e ~= n and e.alive and e.cc then
+				local d = (e.cc.px - n.cc.px) ^ 2 + (e.cc.py - n.cc.py) ^ 2
+				if d < bd then
+					target, bd = e, d
 				end
 			end
+		end
+		if target then
+			local goal = self:enemyNear(n, target.cc.px, target.cc.py, 30) or target.cc
+			self:orderGroup(idle, goal.px, goal.py)
 		end
 	end
 end
 
--- a ground unit standing on foreign land takes it, if the tile touches its own country
-function Match:unitCapture(n, t: number)
-	if not Map.isLand(t) then
-		return
-	end
-	local o = self.world:ownerOf(t)
-	if o == n.id then
-		return
-	end
-	local nb = self.nb2
-	local c = Map.neighbors(t, nb)
-	for i = 1, c do
-		if self.world:ownerOf(nb[i]) == n.id then
-			self.world:setOwner(t, n.id)
-			if o ~= 0 then
-				local e = self.world.nations[o]
-				e.troops = math.max(0, e.troops - 2)
-				self:onCapture(n, t, e)
-			end
-			return
-		end
-	end
-end
+---------------------------------------------------------------- combat
 
--- targeting, damage, deaths and capturing land under units
 function Match:tickCombat(dt: number)
 	local t = now()
 	local grid = {}
@@ -708,22 +725,22 @@ function Match:tickCombat(dt: number)
 
 	local function findTarget(sx: number, sy: number, range: number, owner, ground: boolean, air: boolean)
 		local best, bestD = nil, range * range
-		local c0x = math.clamp(math.floor((sx - range) / CELL), 0, COLS - 1)
-		local c1x = math.clamp(math.floor((sx + range) / CELL), 0, COLS - 1)
-		local c0y = math.clamp(math.floor((sy - range) / CELL), 0, ROWS - 1)
-		local c1y = math.clamp(math.floor((sy + range) / CELL), 0, ROWS - 1)
+		local c0x = math.clamp(math.floor((sx - range - 2) / CELL), 0, COLS - 1)
+		local c1x = math.clamp(math.floor((sx + range + 2) / CELL), 0, COLS - 1)
+		local c0y = math.clamp(math.floor((sy - range - 2) / CELL), 0, ROWS - 1)
+		local c1y = math.clamp(math.floor((sy + range + 2) / CELL), 0, ROWS - 1)
 		for cy = c0y, c1y do
 			for cx = c0x, c1x do
 				local cell = grid[cy * COLS + cx]
 				if cell then
 					for _, o in cell do
-						if o.n ~= owner and o.hp > 0 then
-							if (o.air and air) or (not o.air and ground) then
-								local d = (o.px - sx) ^ 2 + (o.py - sy) ^ 2
-								if d <= bestD then
-									bestD = d
-									best = o
-								end
+						if o.n ~= owner and o.hp > 0 and ((o.air and air) or (not o.air and ground)) then
+							-- buildings are big: measure to their edge
+							local reach = if o.isBuilding then o.size * 0.5 else 0
+							local d = math.max(0, math.sqrt((o.px - sx) ^ 2 + (o.py - sy) ^ 2) - reach) ^ 2
+							if d <= bestD then
+								bestD = d
+								best = o
 							end
 						end
 					end
@@ -737,7 +754,8 @@ function Match:tickCombat(dt: number)
 		local target = attacker.target
 		if target then
 			local gone = target.hp <= 0 or (if target.isBuilding then not self.buildings[target.id] else not self.units[target.id])
-			if gone or (target.px - attacker.px) ^ 2 + (target.py - attacker.py) ^ 2 > range * range then
+			local reach = if target.isBuilding then target.size * 0.5 else 0
+			if gone or math.sqrt((target.px - attacker.px) ^ 2 + (target.py - attacker.py) ^ 2) - reach > range then
 				target = nil
 			end
 		end
@@ -796,218 +814,16 @@ function Match:tickCombat(dt: number)
 			self:removeBuilding(b)
 		end
 	end
-
-	local nb = self.nb
-	for _, u in self.units do
-		if not u.air then
-			local tx, ty = math.floor(u.px), math.floor(u.py)
-			if Map.inBounds(tx, ty) then
-				local tile = ty * W + tx
-				self:unitCapture(u.n, tile)
-				local c = Map.neighbors(tile, nb)
-				for i = 1, c do
-					self:unitCapture(u.n, nb[i])
-				end
-			end
-		end
-	end
 end
 
-function Match:onCapture(n, t: number, enemy)
-	if (n.isHuman or enemy.isHuman) and self.rng:NextNumber() < 0.14 then
-		self:send({ t = "fx", x = t % W + 0.5, y = t // W + 0.5 })
-	end
-end
-
-function Match:killNation(n)
-	n.alive = false
-	n.attack = nil
-	for _, u in self.units do
-		if u.n == n then
-			self:removeUnit(u)
-		end
-	end
-	for _, b in self.buildings do
-		if b.n == n then
-			self:removeBuilding(b)
-		end
-	end
-	self:send({ t = "nation", n = nationInfo(n) })
-	if n.player then
-		self:sendTo(n.player, { t = "defeat" })
-	end
-end
-
----------------------------------------------------------------- phases
-
-function Match:beginWar()
-	for _, n in self.humans do
-		if not n.cap then
-			local p = self.world:randomLand(10)
-			if p then
-				n.cap = p
-				self.world:claimDisc(n, p.x, p.y, Config.CAPITAL_RADIUS)
-				self:send({ t = "nation", n = nationInfo(n) })
-				self:toast(n, "Столица поставлена автоматически")
-			end
-		end
-	end
-	while #self.botQueue > 0 and self:placedCount() < Config.TOTAL_NATIONS do
-		self:placeBot()
-	end
-	self.phase = "game"
-	self.timer = Config.MATCH_SECONDS
-	self:send({ t = "phase", phase = "game", timer = self.timer })
-	local kinds = { "city", "barracks", "barracks", "tankf", "tower", "air" }
-	for _, n in self.world.nations do
-		if not n.isHuman and n.cap then
-			if self.rng:NextNumber() < 0.55 then
-				local kind = kinds[self.rng:NextInteger(1, #kinds)]
-				self:addBuilding(n, kind, n.cap.x + self.rng:NextInteger(-2, 2), n.cap.y + self.rng:NextInteger(-2, 2))
-			end
-			if self.rng:NextNumber() < 0.3 then
-				self:spawnUnit(n, "tank", n.cap.x + 0.5, n.cap.y + 0.5)
-			end
-			if self.rng:NextNumber() < 0.18 then
-				self:spawnUnit(n, if self.rng:NextNumber() < 0.5 then "gunship" else "fighter", n.cap.x + 0.5, n.cap.y + 0.5)
-			end
-		end
-	end
-end
-
-function Match:endMatch(winner, reason: string)
-	self.phase = "ended"
-	self.timer = Config.RESULT_SECONDS
-	local ranking = {}
-	for _, n in self.world.nations do
-		if n.alive and n.count > 0 then
-			table.insert(ranking, n)
-		end
-	end
-	table.sort(ranking, function(a, b)
-		return a.count > b.count
-	end)
-	local top = {}
-	for i = 1, math.min(5, #ranking) do
-		local n = ranking[i]
-		table.insert(top, { id = n.id, name = n.name, share = n.count / Map.landCount })
-	end
-	self:send({
-		t = "phase",
-		phase = "ended",
-		timer = self.timer,
-		winner = if winner then winner.id else 0,
-		winnerName = if winner then winner.name else "",
-		reason = reason,
-		top = top,
-	})
-end
-
-function Match:checkEnd()
-	local biggest = nil
-	for _, n in self.world.nations do
-		if n.alive and (not biggest or n.count > biggest.count) then
-			biggest = n
-		end
-	end
-	if biggest and biggest.count >= Config.WIN_SHARE * Map.landCount then
-		self:endMatch(biggest, "share")
-		return
-	end
-	if self.timer <= 0 then
-		self:endMatch(biggest, "time")
-		return
-	end
-	local humansAlive = false
-	for _, n in self.humans do
-		if n.alive then
-			humansAlive = true
-			break
-		end
-	end
-	if not humansAlive then
-		self:endMatch(biggest, "nohumans")
-	end
-end
-
----------------------------------------------------------------- simulation
-
-function Match:tick()
-	local dt = Config.TICK
-	local world = self.world
-	local rng = self.rng
-	for _, n in world.nations do
-		if not n.alive then
-			continue
-		end
-		if n.count <= 0 then
-			self:killNation(n)
-			continue
-		end
-		local cap = 1400 + n.count * 22 + n.cities * 1500
-		local grown = math.max(0, cap - n.troops) * 0.006 + (if n.isHuman then 2.2 else 1.6) + n.cities * 0.8
-		n.troops += grown
-		if not n.isHuman and not n.attack then
-			n.cool -= 1
-			if n.cool <= 0 then
-				n.cool = 1 + rng:NextInteger(0, 2)
-				local claims = math.clamp(math.round(math.sqrt(n.count) / 5), 1, 9)
-				local got = world:grow(n, 0, 0, 0, claims, false)
-				n.troops = math.max(0, n.troops - got * 1.2 / math.sqrt(power(n)))
-				if got == 0 then
-					n.stuck += 1
-					if n.stuck > 8 and rng:NextNumber() < 0.05 and n.troops > 900 then
-						local e = world:findNeighbor(n)
-						if e and e.count > 0 and (not e.isHuman or rng:NextNumber() < 0.3) then
-							local budget = n.troops * (0.22 + rng:NextNumber() * 0.2)
-							n.troops -= budget
-							n.attack = { target = e.id, tx = e.sx / e.count, ty = e.sy / e.count, budget = budget, miss = 0, taken = 0 }
-						end
-					end
-				else
-					n.stuck = 0
-				end
-			end
-		end
-		local a = n.attack
-		if a then
-			local claims = math.clamp(math.round(2 + math.sqrt(#n.front) * 0.32), 2, 16)
-			local got = world:grow(n, a.target, a.tx, a.ty, claims, true)
-			local per
-			if a.target ~= 0 then
-				local d = world.nations[a.target]
-				per = 3.2 * power(d) / power(n)
-			else
-				per = 1.4 / math.sqrt(power(n))
-			end
-			a.budget -= got * per + 0.4
-			a.taken += got
-			a.miss = if got > 0 then 0 else a.miss + 1
-			local targetDead = a.target ~= 0 and not world.nations[a.target].alive
-			if a.miss > 6 or a.budget <= 0 or targetDead then
-				n.troops += math.max(0, a.budget)
-				if n.isHuman and a.taken == 0 then
-					self:toast(n, "Туда не дойти: нет общей границы. Нажми ближе к своей стране.", true)
-				end
-				n.attack = nil
-			end
-		end
-	end
-	self:tickEconomy(dt)
-	self:tickCombat(dt)
-end
+---------------------------------------------------------------- economy
 
 function Match:tickEconomy(dt: number)
-	local world = self.world
-	for _, n in self.humans do
-		n.income = Config.BASE_INCOME + n.count * Config.LAND_INCOME
+	for _, n in self.seats do
+		n.income = if n.alive and n.cc then Config.BASE_INCOME else 0
 	end
 	for _, b in self.buildings do
 		local n = b.n
-		if world:ownerOf(b.t) ~= n.id then
-			self:removeBuilding(b)
-			continue
-		end
 		local def = Config.BUILD[b.kind]
 		if b.built < 1 then
 			b.built = math.min(1, b.built + dt / def.time)
@@ -1017,20 +833,10 @@ function Match:tickEconomy(dt: number)
 			end
 			continue
 		end
-		if def.income and n.isHuman then
+		if def.income then
 			n.income += def.income
 		end
 		if not def.units then
-			continue
-		end
-		if not n.isHuman then
-			b.prog += dt / 40
-			if b.prog >= 1 then
-				b.prog = 0
-				if n.alive then
-					self:spawnUnit(n, def.units[self.rng:NextInteger(1, #def.units)], b.x + 0.5, b.y + 0.5)
-				end
-			end
 			continue
 		end
 		-- queued units are paid when ordered; in auto mode each unit is paid when it starts
@@ -1054,7 +860,7 @@ function Match:tickEconomy(dt: number)
 			else
 				b.prog = math.min(1, b.prog + dt / Config.UNITS[current].time)
 				if b.prog >= 1 then
-					self:spawnUnit(n, current, b.x + 0.5, b.y + 0.5, b.rally)
+					self:spawnUnit(n, current, b.px, b.py + b.size / 2 + 0.8, b.rally)
 					b.prog = 0
 					if b.queue[1] then
 						table.remove(b.queue, 1)
@@ -1065,19 +871,11 @@ function Match:tickEconomy(dt: number)
 			end
 		end
 	end
-	for _, n in self.humans do
-		n.money += n.income * dt
+	for _, n in self.seats do
+		if n.alive then
+			n.money += n.income * dt
+		end
 	end
-end
-
-function Match:statsArray()
-	local s = {}
-	for _, n in self.world.nations do
-		local troops = n.troops + (if n.attack then math.max(0, n.attack.budget) else 0)
-		table.insert(s, n.id)
-		table.insert(s, math.round(troops))
-	end
-	return s
 end
 
 function Match:sendEconomy()
@@ -1099,10 +897,108 @@ function Match:sendEconomy()
 			money = math.floor(n.money),
 			income = n.income,
 			army = n.army,
+			units = n.unitTotal,
 			list = list,
 		})
 	end
 end
+
+-- strength of a base: what its buildings and units are worth
+function Match:score(n): number
+	if not n.alive then
+		return 0
+	end
+	local s = 0
+	for _, b in self.buildings do
+		if b.n == n then
+			s += (Config.BUILD[b.kind].cost or 1000) * b.built
+		end
+	end
+	for _, u in self.units do
+		if u.n == n then
+			s += Config.UNITS[u.kind].cost
+		end
+	end
+	return s
+end
+
+function Match:statsArray()
+	local s = {}
+	for _, n in self.seats do
+		table.insert(s, n.id)
+		table.insert(s, math.round(self:score(n)))
+	end
+	return s
+end
+
+---------------------------------------------------------------- end of the match
+
+function Match:endMatch(winner, reason: string)
+	self.phase = "ended"
+	self.timer = Config.RESULT_SECONDS
+	local ranking = {}
+	local total = 0
+	for _, n in self.seats do
+		local s = self:score(n)
+		total += s
+		table.insert(ranking, { n = n, s = s })
+	end
+	table.sort(ranking, function(a, b)
+		return a.s > b.s
+	end)
+	local top = {}
+	for _, r in ranking do
+		if r.n.alive then
+			table.insert(top, { id = r.n.id, name = r.n.name, share = r.s / math.max(total, 1) })
+		end
+	end
+	self:send({
+		t = "phase",
+		phase = "ended",
+		timer = self.timer,
+		winner = if winner then winner.id else 0,
+		winnerName = if winner then winner.name else "",
+		reason = reason,
+		top = top,
+	})
+end
+
+function Match:checkEnd()
+	local alive, last = 0, nil
+	for _, n in self.seats do
+		if n.alive then
+			alive += 1
+			last = n
+		end
+	end
+	if alive <= 1 then
+		self:endMatch(last, "conquest")
+		return
+	end
+	if self.timer <= 0 then
+		local best, bs = nil, -1
+		for _, n in self.seats do
+			local s = self:score(n)
+			if n.alive and s > bs then
+				best, bs = n, s
+			end
+		end
+		self:endMatch(best, "time")
+		return
+	end
+	local humansAlive = false
+	for _, n in self.humans do
+		if n.alive then
+			humansAlive = true
+			break
+		end
+	end
+	if self:humanCount() > 0 and not humansAlive then
+		self:endMatch(nil, "defeat")
+	end
+end
+
+---------------------------------------------------------------- the loop
 
 function Match:flush()
 	if next(self.hpDirty) then
@@ -1127,10 +1023,6 @@ function Match:flush()
 		table.insert(self.outbox, { t = "shots", s = self.shots })
 		self.shots = {}
 	end
-	local changes = self.world:takeChanges()
-	if #changes > 0 then
-		table.insert(self.outbox, { t = "delta", d = Codec.packChanges(changes) })
-	end
 	if #self.outbox > 0 then
 		self.event:FireAllClients("batch", self.outbox)
 		self.outbox = {}
@@ -1138,52 +1030,34 @@ function Match:flush()
 end
 
 function Match:step(dt: number)
-	if self.phase == "spawn" then
+	if self.phase == "game" then
 		self.timer -= dt
-		self.botTimer += dt
-		if self.botTimer > 0.32 and #self.botQueue > 0 and self:placedCount() < Config.TOTAL_NATIONS and self.rng:NextNumber() < 0.55 then
-			self.botTimer = 0
-			self:placeBot()
-		end
-		if self.timer <= 0 then
-			self:beginWar()
-		end
-	elseif self.phase == "game" then
-		self.timer -= dt
+		self.joinTimer -= dt
 		self.tickAcc += dt
 		local steps = 0
 		while self.tickAcc >= Config.TICK and steps < 3 do
 			self.tickAcc -= Config.TICK
 			steps += 1
-			self:tick()
+			self:tickEconomy(Config.TICK)
+			self:tickCombat(Config.TICK)
 		end
 		if steps >= 3 then
 			self.tickAcc = 0
+		end
+		self.botAcc += dt
+		if self.botAcc >= 1 then
+			for _, n in self.seats do
+				if n.alive and not n.isHuman and n.cc then
+					self:botThink(n, self.botAcc)
+				end
+			end
+			self.botAcc = 0
 		end
 		self.secAcc += dt
 		if self.secAcc >= 1 then
 			self.secAcc = 0
 			self:checkEnd()
-		end
-		self.botUnitAcc += dt
-		if self.botUnitAcc > 25 then
-			self.botUnitAcc = 0
-			local candidates = {}
-			for _, n in self.world.nations do
-				if n.alive and not n.isHuman and n.count > 200 and n.unitTotal < Config.BOT_MAX_UNITS then
-					table.insert(candidates, n)
-				end
-			end
-			if #candidates > 0 then
-				local n = candidates[self.rng:NextInteger(1, #candidates)]
-				local kinds = { "infantry", "rocket", "scout", "tank", "tank", "artillery" }
-				self:spawnUnit(n, kinds[self.rng:NextInteger(1, #kinds)], n.cap.x + 0.5, n.cap.y + 0.5)
-			end
-		end
-		self.botOrderAcc += dt
-		if self.botOrderAcc >= 0.5 then
-			self.botOrderAcc = 0
-			self:botOrders()
+			self:send({ t = "stats", s = self:statsArray(), phase = self.phase, timer = self.timer })
 		end
 		self.ecoAcc += dt
 		if self.ecoAcc >= 0.5 then
@@ -1195,11 +1069,6 @@ function Match:step(dt: number)
 		if self.timer <= 0 then
 			self.done = true
 		end
-	end
-	self.statAcc += dt
-	if self.statAcc >= 0.5 then
-		self.statAcc = 0
-		self:send({ t = "stats", s = self:statsArray(), phase = self.phase, timer = self.timer })
 	end
 	self.netAcc += dt
 	if self.netAcc >= Config.NET_RATE then

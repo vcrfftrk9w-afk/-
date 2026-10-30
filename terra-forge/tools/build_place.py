@@ -52,8 +52,6 @@ def folder(path, name):
 def main():
     src = os.path.join(ROOT, 'src')
     body = ''.join([
-        # sharp shadow maps: the 3D models are small, voxel lighting would blur their shadows
-        item('Lighting', 'Lighting', extra=['<token name="Technology">3</token>']),
         item('ReplicatedStorage', 'ReplicatedStorage', [folder(os.path.join(src, 'shared'), 'TerraForge')]),
         item('ServerScriptService', 'ServerScriptService', [folder(os.path.join(src, 'server'), 'TerraForgeServer')]),
         item('StarterPlayer', 'StarterPlayer', [

@@ -163,10 +163,79 @@ function handlers.ugone(msg)
 	MapView.removeUnit(msg.id)
 end
 
+---------------------------------------------------------------- unit selection
+
+local function refreshArmy()
+	local counts = { infantry = 0, tank = 0, plane = 0 }
+	local selected = { infantry = 0, tank = 0, plane = 0 }
+	for _, id in MapView.ownUnits(nil) do
+		local u = MapView.unitRecord(id)
+		if u then
+			counts[u.kind] += 1
+			if MapView.selected[id] then
+				selected[u.kind] += 1
+			end
+		end
+	end
+	UI.setArmy(counts, selected)
+	MapView.refreshSelection()
+end
+
+local function selectedIds(): { number }
+	local ids = {}
+	for id in MapView.selected do
+		table.insert(ids, id)
+	end
+	return ids
+end
+
+UI.onSelectKind = function(kind)
+	local ids = MapView.ownUnits(if kind == "all" then nil else kind)
+	local allOn = #ids > 0
+	for _, id in ids do
+		if not MapView.selected[id] then
+			allOn = false
+			break
+		end
+	end
+	for _, id in ids do
+		MapView.selected[id] = if allOn then nil else true
+	end
+	if #ids == 0 then
+		UI.toast("Таких войск пока нет. Построй казарму, танковый завод или аэродром.")
+	end
+	refreshArmy()
+end
+
+UI.onClearSelection = function()
+	table.clear(MapView.selected)
+	refreshArmy()
+end
+
 function handlers.fx(msg)
 	if state.screen == "play" then
 		MapView.fx(msg.x, msg.y)
 	end
+end
+
+function handlers.boom(msg)
+	if state.screen == "play" then
+		MapView.boom(msg.x, msg.y, msg.big)
+	end
+end
+
+function handlers.shots(msg)
+	if state.screen == "play" then
+		MapView.shots(msg.s)
+	end
+end
+
+function handlers.hp(msg)
+	MapView.setUnitHp(msg.s)
+end
+
+function handlers.bhp(msg)
+	MapView.setBuildingHp(msg.s)
 end
 
 function handlers.eco(msg)
@@ -229,7 +298,7 @@ UI.onZoom = function(f)
 	MapView.zoom(f)
 end
 
-MapView.onTap = function(x, y)
+MapView.onTap = function(x, y, sx, sy)
 	if state.spectator or state.defeated then
 		return
 	end
@@ -241,6 +310,20 @@ MapView.onTap = function(x, y)
 		end
 		action:FireServer("spawn", x, y)
 	elseif state.phase == "game" then
+		if not UI.buildSel then
+			local unit = MapView.unitAt(sx, sy)
+			if unit then
+				MapView.selected[unit] = if MapView.selected[unit] then nil else true
+				refreshArmy()
+				return
+			end
+			local ids = selectedIds()
+			if #ids > 0 then
+				action:FireServer("move", ids, x, y)
+				MapView.marker(x + 0.5, y + 0.5)
+				return
+			end
+		end
 		if UI.buildSel then
 			if MapView.ownerAt(x, y) ~= MapView.myId then
 				UI.toast("Строить можно только на своей земле.", true)
@@ -308,6 +391,7 @@ RunService.RenderStepped:Connect(function(dt)
 		table.insert(rows, { place = myPlace, name = mine.name, color = mine.color, share = mine.count / Map.landCount, isMe = true })
 	end
 	UI.setLeaderboard(rows)
+	refreshArmy()
 	if mine then
 		UI.setMe(mine.count / Map.landCount, mine.troops, MapView.fmt)
 	end

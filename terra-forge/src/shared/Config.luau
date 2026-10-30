@@ -54,8 +54,39 @@ Config.RES_OF = {
 }
 Config.RES_ORDER = { "pop", "iron", "coal", "oil", "steel" }
 
-Config.BUILD_ORDER = { "mine", "rig", "power", "mill", "barracks", "tankf", "air" }
+Config.BUILD_ORDER = { "mine", "rig", "power", "mill", "city", "barracks", "tankf", "air", "tower", "aa" }
 Config.BUILD = {
+	city = {
+		name = "Город",
+		icon = "city",
+		cost = { iron = 150 },
+		power = 0,
+		hp = 500,
+		desc = "Больше людей: +1500 к пределу войск и быстрее их прирост.",
+	},
+	tower = {
+		name = "Башня",
+		icon = "tower",
+		cost = { iron = 80, steel = 20 },
+		power = 1,
+		hp = 420,
+		dps = 20,
+		range = 5,
+		hitsAir = 0,
+		desc = "Сама стреляет по вражеской пехоте и танкам в радиусе 5 клеток.",
+	},
+	aa = {
+		name = "ПВО",
+		icon = "aa",
+		cost = { steel = 60 },
+		power = 2,
+		hp = 260,
+		dps = 32,
+		range = 7,
+		hitsAir = 1,
+		airOnly = true,
+		desc = "Сбивает вражеские самолёты в радиусе 7 клеток.",
+	},
 	mine = {
 		name = "Шахта",
 		icon = "mine",
@@ -116,12 +147,21 @@ Config.BUILD = {
 	},
 }
 
+-- hp, damage per second, range in tiles; hitsAir = damage multiplier against planes
 Config.UNITS = {
-	infantry = { name = "пехота", speed = 1.7, power = 0.03 },
-	tank = { name = "танк", speed = 2.4, power = 0.08 },
-	plane = { name = "самолёт", speed = 0, power = 0.05 },
+	infantry = { name = "пехота", speed = 1.7, power = 0.03, hp = 60, dps = 7, range = 1.6, hitsAir = 0.25 },
+	tank = { name = "танк", speed = 2.4, power = 0.08, hp = 220, dps = 18, range = 2.6, hitsAir = 0 },
+	plane = { name = "самолёт", speed = 6, power = 0.05, hp = 90, dps = 12, range = 2.4, hitsAir = 1, air = true },
 }
-Config.MAX_UNITS = 170
+-- extra damage multipliers: attacker kind -> target kind
+Config.VS = {
+	infantry = { tank = 0.5 },
+	tank = { infantry = 1.6 },
+}
+Config.BUILDING_HP = 300
+Config.MAX_UNITS = 320
+Config.MAX_UNITS_PER_NATION = 60
+Config.BOT_MAX_UNITS = 6
 
 Config.ARSENAL = {
 	{ icon = "infantry", name = "Пехота", desc = "Дешёвая и быстрая. Захватывает землю и держит границу.", open = true },

@@ -5,9 +5,14 @@ local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
 local Map = require(Shared.Map)
 local Codec = require(Shared.Codec)
+local Motion = require(Shared.Motion)
 local World = require(script.Parent.World)
+local Path = require(script.Parent.Path)
 
 local W = Map.W
+local CELL = 8 -- spatial grid cell size for finding targets, in tiles
+local COLS = math.ceil(Map.W / CELL)
+local ROWS = math.ceil(Map.H / CELL)
 
 local Match = {}
 Match.__index = Match
@@ -42,14 +47,21 @@ local function nationInfo(n)
 end
 
 local function buildingInfo(b)
-	return { id = b.id, kind = b.kind, owner = b.n.id, x = b.x, y = b.y }
+	return { id = b.id, kind = b.kind, owner = b.n.id, x = b.x, y = b.y, hp = math.ceil(b.hp), maxHp = b.maxHp }
 end
 
 local function unitInfo(u)
-	if u.kind == "plane" then
-		return { id = u.id, kind = u.kind, owner = u.n.id, cx = u.cx, cy = u.cy, r = u.r, a0 = u.a0, w = u.w, t0 = u.t0 }
-	end
-	return { id = u.id, kind = u.kind, owner = u.n.id, x0 = u.x0, y0 = u.y0, tx = u.tx, ty = u.ty, speed = u.speed, t0 = u.t0 }
+	return {
+		id = u.id,
+		kind = u.kind,
+		owner = u.n.id,
+		path = u.path,
+		t0 = u.t0,
+		speed = u.speed,
+		orbit = u.orbit,
+		hp = math.ceil(u.hp),
+		maxHp = u.maxHp,
+	}
 end
 
 -- attack strength from the army: soldiers, tanks and planes each add a little
@@ -96,6 +108,12 @@ function Match.new(event: RemoteEvent)
 	self.secAcc = 0
 	self.botTimer = 0
 	self.botUnitAcc = 0
+	self.botOrderAcc = 0
+	self.shots = {}
+	self.hpDirty = {}
+	self.bhpDirty = {}
+	self.nb = {}
+	self.nb2 = {}
 	self.done = false
 	local names = shuffle(Config.BOT_NAMES, self.rng)
 	local colors = shuffle(Config.BOT_COLORS, self.rng)
@@ -142,6 +160,8 @@ function Match:newNation(o)
 		stuck = 0,
 		army = { infantry = 0, tank = 0, plane = 0 },
 		botUnits = 0,
+		unitTotal = 0,
+		cities = 0,
 	}
 	self.world:addNation(n)
 	return n
@@ -379,47 +399,345 @@ function Match:addBuilding(n, kind: string, x: number, y: number): boolean
 		end
 	end
 	self.nextBuildingId += 1
-	local b = { id = self.nextBuildingId, kind = kind, n = n, t = t, x = x, y = y, prog = if n.isHuman then 0.6 else self.rng:NextNumber() * 0.5, on = true, blocked = false }
+	local def = Config.BUILD[kind]
+	local hp = def.hp or Config.BUILDING_HP
+	local b = {
+		id = self.nextBuildingId,
+		kind = kind,
+		n = n,
+		t = t,
+		x = x,
+		y = y,
+		px = x + 0.5,
+		py = y + 0.5,
+		hp = hp,
+		maxHp = hp,
+		isBuilding = true,
+		prog = if n.isHuman then 0.6 else self.rng:NextNumber() * 0.5,
+		on = true,
+		blocked = false,
+	}
 	self.buildings[b.id] = b
+	if kind == "city" then
+		n.cities += 1
+	end
 	self:send({ t = "building", b = buildingInfo(b) })
 	return true
 end
 
 function Match:removeBuilding(b)
+	if not self.buildings[b.id] then
+		return
+	end
 	self.buildings[b.id] = nil
+	self.bhpDirty[b] = nil
+	if b.kind == "city" then
+		b.n.cities = math.max(0, b.n.cities - 1)
+	end
 	self:send({ t = "bgone", id = b.id })
 end
 
-function Match:spawnUnit(n, kind: string, x: number, y: number)
-	if self.unitCount >= Config.MAX_UNITS or not n.cap then
-		return
+-- creates a unit next to (x, y); returns false when a limit is reached
+function Match:spawnUnit(n, kind: string, x: number, y: number): boolean
+	local cap = if n.isHuman then Config.MAX_UNITS_PER_NATION else Config.BOT_MAX_UNITS
+	if self.unitCount >= Config.MAX_UNITS or not n.cap or n.unitTotal >= cap then
+		return false
+	end
+	local def = Config.UNITS[kind]
+	if kind ~= "plane" then
+		local lx, ly = Path.nearestLand(x + self.rng:NextNumber() * 2 - 1, y + self.rng:NextNumber() * 2 - 1, 3)
+		if lx then
+			x, y = lx + 0.5, ly + 0.5
+		end
 	end
 	self.nextUnitId += 1
 	self.unitCount += 1
-	local u = { id = self.nextUnitId, kind = kind, n = n, t0 = now() }
+	local u = {
+		id = self.nextUnitId,
+		kind = kind,
+		n = n,
+		hp = def.hp,
+		maxHp = def.hp,
+		speed = def.speed,
+		t0 = now(),
+		path = { x, y },
+		px = x,
+		py = y,
+		shotAt = 0,
+		orderedAt = 0,
+	}
 	if kind == "plane" then
-		u.cx = n.cap.x + 0.5
-		u.cy = n.cap.y + 0.5
-		u.r = 7 + self.rng:NextNumber() * 6
-		u.a0 = self.rng:NextNumber() * math.pi * 2
-		u.w = (if self.rng:NextNumber() < 0.5 then 1 else -1) * 0.42 * 10 / u.r
-	else
-		u.x0, u.y0, u.tx, u.ty = x, y, x, y
-		u.speed = Config.UNITS[kind].speed
-		u.arrive = u.t0
-		u.waitUntil = u.t0
+		local r = 3 + self.rng:NextNumber() * 2
+		u.orbit = { r = r, a0 = self.rng:NextNumber() * math.pi * 2, w = (if self.rng:NextNumber() < 0.5 then 1 else -1) * 2.6 / r }
 	end
 	n.army[kind] += 1
+	n.unitTotal += 1
 	self.units[u.id] = u
 	self:send({ t = "unit", u = unitInfo(u) })
+	return true
 end
 
 function Match:removeUnit(u)
 	if self.units[u.id] then
 		self.units[u.id] = nil
+		self.hpDirty[u] = nil
 		self.unitCount -= 1
 		u.n.army[u.kind] = math.max(0, u.n.army[u.kind] - 1)
+		u.n.unitTotal = math.max(0, u.n.unitTotal - 1)
 		self:send({ t = "ugone", id = u.id })
+	end
+end
+
+-- sends one unit towards (tx, ty) along a land route (planes fly straight)
+function Match:orderUnit(u, tx: number, ty: number, maxNodes: number)
+	local t = now()
+	local x, y = Motion.position(u, t)
+	tx, ty = Path.inMap(tx, ty)
+	if u.kind == "plane" then
+		u.path = { x, y, tx, ty }
+	else
+		u.path = Path.ground(x, y, tx, ty, maxNodes)
+	end
+	u.t0 = t
+	u.orderedAt = t
+	self:send({ t = "unit", u = unitInfo(u) })
+end
+
+-- a player's move order for several units; they spread out around the target
+function Match:move(player: Player, ids, tx: number, ty: number)
+	local n = self.humans[player]
+	if not n or self.phase ~= "game" or not n.alive then
+		return
+	end
+	local list = {}
+	for _, id in ids do
+		local u = self.units[id]
+		if u and u.n == n then
+			table.insert(list, u)
+			if #list >= 80 then
+				break
+			end
+		end
+	end
+	if #list == 0 then
+		return
+	end
+	tx, ty = Path.inMap(math.floor(tx) + 0.5, math.floor(ty) + 0.5)
+	local t = now()
+	local budget = 60000
+	local leader = nil
+	for i, u in list do
+		local ox, oy = 0, 0
+		if i > 1 then
+			local a, r = i * 2.4, 0.75 * math.sqrt(i)
+			ox, oy = math.cos(a) * r, math.sin(a) * r
+		end
+		local gx, gy = Path.inMap(tx + ox, ty + oy)
+		local x, y = Motion.position(u, t)
+		if u.kind == "plane" then
+			u.path = { x, y, gx, gy }
+		elseif leader and #leader >= 4 and (leader[1] - x) ^ 2 + (leader[2] - y) ^ 2 < 400 and Path.clear(x, y, leader[3], leader[4]) then
+			-- close to the first unit: follow its route
+			local p = { x, y }
+			for k = 3, #leader - 2 do
+				table.insert(p, leader[k])
+			end
+			table.insert(p, gx)
+			table.insert(p, gy)
+			u.path = p
+		else
+			local nodes = if budget > 0 then math.min(budget, 25000) else 1500
+			budget -= nodes
+			u.path = Path.ground(x, y, gx, gy, nodes)
+			if not leader then
+				leader = u.path
+			end
+		end
+		u.t0 = t
+		u.orderedAt = t
+		self:send({ t = "unit", u = unitInfo(u) })
+	end
+end
+
+-- bots send idle units to their border, towards whoever they are attacking
+function Match:botOrders()
+	local t = now()
+	local issued = 0
+	for _, u in self.units do
+		local n = u.n
+		if not n.isHuman and n.alive and t - u.orderedAt > 6 + u.id % 7 then
+			local _, _, arrived = Motion.position(u, t)
+			if arrived then
+				local a = n.attack
+				local f = if a then self.world:pickFront(n, a.tx, a.ty, 10) else self.world:pickFront(n, u.px, u.py, 8)
+				if f >= 0 then
+					self:orderUnit(u, f % W + 0.5, f // W + 0.5, 6000)
+				else
+					u.orderedAt = t
+				end
+				issued += 1
+				if issued >= 4 then
+					return
+				end
+			end
+		end
+	end
+end
+
+-- a ground unit standing on foreign land takes it, if the tile touches its own country
+function Match:unitCapture(n, t: number)
+	if not Map.isLand(t) then
+		return
+	end
+	local o = self.world:ownerOf(t)
+	if o == n.id then
+		return
+	end
+	local nb = self.nb2
+	local c = Map.neighbors(t, nb)
+	for i = 1, c do
+		if self.world:ownerOf(nb[i]) == n.id then
+			self.world:setOwner(t, n.id)
+			if o ~= 0 then
+				local e = self.world.nations[o]
+				e.troops = math.max(0, e.troops - 2)
+				self:onCapture(n, t, e)
+			end
+			return
+		end
+	end
+end
+
+-- targeting, damage, deaths and capturing land under units
+function Match:tickCombat(dt: number)
+	local t = now()
+	local grid = {}
+	local function insert(o)
+		local cx = math.clamp(math.floor(o.px / CELL), 0, COLS - 1)
+		local cy = math.clamp(math.floor(o.py / CELL), 0, ROWS - 1)
+		local key = cy * COLS + cx
+		local cell = grid[key]
+		if not cell then
+			cell = {}
+			grid[key] = cell
+		end
+		table.insert(cell, o)
+	end
+	for _, u in self.units do
+		local x, y = Motion.position(u, t)
+		u.px, u.py = x, y
+		insert(u)
+	end
+	for _, b in self.buildings do
+		insert(b)
+	end
+
+	local function findTarget(sx: number, sy: number, range: number, owner, ground: boolean, air: boolean)
+		local best, bestD = nil, range * range
+		local c0x = math.clamp(math.floor((sx - range) / CELL), 0, COLS - 1)
+		local c1x = math.clamp(math.floor((sx + range) / CELL), 0, COLS - 1)
+		local c0y = math.clamp(math.floor((sy - range) / CELL), 0, ROWS - 1)
+		local c1y = math.clamp(math.floor((sy + range) / CELL), 0, ROWS - 1)
+		for cy = c0y, c1y do
+			for cx = c0x, c1x do
+				local cell = grid[cy * COLS + cx]
+				if cell then
+					for _, o in cell do
+						if o.n ~= owner and o.hp > 0 then
+							local isAir = o.kind == "plane"
+							if (isAir and air) or (not isAir and ground) then
+								local d = (o.px - sx) ^ 2 + (o.py - sy) ^ 2
+								if d <= bestD then
+									bestD = d
+									best = o
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+		return best
+	end
+
+	local function fire(attacker, kind: string, dps: number, range: number, hitsAir: number, groundToo: boolean)
+		local target = attacker.target
+		if target then
+			local gone = target.hp <= 0 or (if target.isBuilding then not self.buildings[target.id] else not self.units[target.id])
+			if gone or (target.px - attacker.px) ^ 2 + (target.py - attacker.py) ^ 2 > range * range then
+				target = nil
+			end
+		end
+		if not target then
+			target = findTarget(attacker.px, attacker.py, range, attacker.n, groundToo, hitsAir > 0)
+			attacker.target = target
+		end
+		if not target then
+			return
+		end
+		local mult
+		if target.kind == "plane" then
+			mult = hitsAir
+		else
+			local vs = Config.VS[kind]
+			mult = if vs and vs[target.kind] then vs[target.kind] else 1
+		end
+		target.hp -= dps * dt * mult
+		if target.isBuilding then
+			self.bhpDirty[target] = true
+		else
+			self.hpDirty[target] = true
+		end
+		if t - attacker.shotAt > 0.7 and #self.shots < 240 then
+			attacker.shotAt = t
+			table.insert(self.shots, math.round(attacker.px * 10) / 10)
+			table.insert(self.shots, math.round(attacker.py * 10) / 10)
+			table.insert(self.shots, math.round(target.px * 10) / 10)
+			table.insert(self.shots, math.round(target.py * 10) / 10)
+		end
+	end
+
+	for _, u in self.units do
+		local def = Config.UNITS[u.kind]
+		fire(u, u.kind, def.dps, def.range, def.hitsAir, true)
+	end
+	for _, b in self.buildings do
+		local def = Config.BUILD[b.kind]
+		if def.dps and b.n.alive then
+			local eff = if b.n.isHuman then (b.n.eff or 1) else 1
+			if eff > 0 then
+				fire(b, b.kind, def.dps * eff, def.range, def.hitsAir, not def.airOnly)
+			end
+		end
+	end
+
+	for _, u in self.units do
+		if u.hp <= 0 then
+			self:send({ t = "boom", x = u.px, y = u.py, big = u.kind ~= "infantry" })
+			self:removeUnit(u)
+		end
+	end
+	for _, b in self.buildings do
+		if b.hp <= 0 then
+			self:send({ t = "boom", x = b.px, y = b.py, big = true })
+			self:toast(b.n, "Враги разрушили: " .. Config.BUILD[b.kind].name, true)
+			self:removeBuilding(b)
+		end
+	end
+
+	local nb = self.nb
+	for _, u in self.units do
+		if u.kind ~= "plane" then
+			local tx, ty = math.floor(u.px), math.floor(u.py)
+			if Map.inBounds(tx, ty) then
+				local tile = ty * W + tx
+				self:unitCapture(u.n, tile)
+				local c = Map.neighbors(tile, nb)
+				for i = 1, c do
+					self:unitCapture(u.n, nb[i])
+				end
+			end
+		end
 	end
 end
 
@@ -554,8 +872,8 @@ function Match:tick()
 			self:killNation(n)
 			continue
 		end
-		local cap = 1400 + n.count * 22
-		local grown = math.max(0, cap - n.troops) * 0.006 + (if n.isHuman then 2.2 else 1.6)
+		local cap = 1400 + n.count * 22 + n.cities * 1500
+		local grown = math.max(0, cap - n.troops) * 0.006 + (if n.isHuman then 2.2 else 1.6) + n.cities * 0.8
 		n.troops += grown
 		if n.flow then
 			n.flow.pop += grown
@@ -607,7 +925,7 @@ function Match:tick()
 		end
 	end
 	self:tickEconomy(dt)
-	self:tickUnits()
+	self:tickCombat(dt)
 end
 
 function Match:tickEconomy(dt: number)
@@ -646,8 +964,7 @@ function Match:tickEconomy(dt: number)
 				b.prog += dt / 40
 				if b.prog >= 1 then
 					b.prog = 0
-					if n.alive and n.botUnits < 3 then
-						n.botUnits += 1
+					if n.alive then
 						self:spawnUnit(n, def.unit, b.x + 0.5, b.y + 0.5)
 					end
 				end
@@ -685,7 +1002,9 @@ function Match:tickEconomy(dt: number)
 			b.on = eff > 0
 			b.prog = math.min(1, b.prog + dt * eff / def.every)
 			if b.prog >= 1 then
-				if canAfford(n, def.ucost) then
+				if n.unitTotal >= Config.MAX_UNITS_PER_NATION then
+					b.blocked = true
+				elseif canAfford(n, def.ucost) then
 					for k, v in def.ucost do
 						if k == "pop" then
 							n.troops -= v
@@ -702,40 +1021,6 @@ function Match:tickEconomy(dt: number)
 				end
 			end
 		end
-	end
-end
-
-function Match:tickUnits()
-	local t = now()
-	local world = self.world
-	for _, u in self.units do
-		if not u.n.alive then
-			self:removeUnit(u)
-			continue
-		end
-		if u.kind == "plane" or t < u.waitUntil then
-			continue
-		end
-		local a = u.n.attack
-		local f = if a then world:pickFront(u.n, a.tx, a.ty, 10) else world:pickFront(u.n, u.tx, u.ty, 6)
-		if f < 0 then
-			u.waitUntil = t + 5
-			continue
-		end
-		local tx, ty = f % W + 0.5, f // W + 0.5
-		local dx, dy = tx - u.tx, ty - u.ty
-		local d = math.sqrt(dx * dx + dy * dy)
-		if d > 40 then
-			tx = u.tx + dx / d * 40
-			ty = u.ty + dy / d * 40
-			d = 40
-		end
-		u.x0, u.y0 = u.tx, u.ty
-		u.tx, u.ty = tx, ty
-		u.t0 = t
-		u.arrive = t + d / u.speed
-		u.waitUntil = u.arrive + 3 + self.rng:NextNumber() * 6
-		self:send({ t = "unit", u = unitInfo(u) })
 	end
 end
 
@@ -772,6 +1057,28 @@ function Match:sendEconomy()
 end
 
 function Match:flush()
+	if next(self.hpDirty) then
+		local list = {}
+		for u in self.hpDirty do
+			table.insert(list, u.id)
+			table.insert(list, math.max(0, math.ceil(u.hp)))
+		end
+		self.hpDirty = {}
+		table.insert(self.outbox, { t = "hp", s = list })
+	end
+	if next(self.bhpDirty) then
+		local list = {}
+		for b in self.bhpDirty do
+			table.insert(list, b.id)
+			table.insert(list, math.max(0, math.ceil(b.hp)))
+		end
+		self.bhpDirty = {}
+		table.insert(self.outbox, { t = "bhp", s = list })
+	end
+	if #self.shots > 0 then
+		table.insert(self.outbox, { t = "shots", s = self.shots })
+		self.shots = {}
+	end
 	local changes = self.world:takeChanges()
 	if #changes > 0 then
 		table.insert(self.outbox, { t = "delta", d = Codec.packChanges(changes) })
@@ -819,15 +1126,19 @@ function Match:step(dt: number)
 			self.botUnitAcc = 0
 			local candidates = {}
 			for _, n in self.world.nations do
-				if n.alive and not n.isHuman and n.count > 200 and n.botUnits < 3 then
+				if n.alive and not n.isHuman and n.count > 200 and n.unitTotal < Config.BOT_MAX_UNITS then
 					table.insert(candidates, n)
 				end
 			end
 			if #candidates > 0 then
 				local n = candidates[self.rng:NextInteger(1, #candidates)]
-				n.botUnits += 1
 				self:spawnUnit(n, if self.rng:NextNumber() < 0.7 then "tank" else "infantry", n.cap.x + 0.5, n.cap.y + 0.5)
 			end
+		end
+		self.botOrderAcc += dt
+		if self.botOrderAcc >= 0.5 then
+			self.botOrderAcc = 0
+			self:botOrders()
 		end
 		self.ecoAcc += dt
 		if self.ecoAcc >= 0.5 then

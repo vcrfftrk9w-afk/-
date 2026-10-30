@@ -63,6 +63,17 @@ action.OnServerEvent:Connect(function(player: Player, kind, a, b, c)
 		match:attack(player, a, b, c)
 	elseif kind == "build" and typeof(a) == "string" and Config.BUILD[a] and isNumber(b) and isNumber(c) then
 		match:build(player, a, b, c)
+	elseif kind == "move" and typeof(a) == "table" and isNumber(b) and isNumber(c) then
+		local ids = {}
+		for i, id in a do
+			if typeof(i) ~= "number" or i > 80 then
+				break
+			end
+			if isNumber(id) then
+				table.insert(ids, id)
+			end
+		end
+		match:move(player, ids, b, c)
 	elseif kind == "leave" then
 		match:leave(player)
 	end

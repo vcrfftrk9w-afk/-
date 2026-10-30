@@ -15,6 +15,8 @@ local UI = {}
 UI.onPlay = nil
 UI.onLeave = nil
 UI.onZoom = nil
+UI.onSelectKind = nil
+UI.onClearSelection = nil
 UI.buildSel = nil
 UI.attackPct = 40
 
@@ -142,7 +144,7 @@ local function buildMenu(player: Player)
 		Parent = menu,
 	}, { Theme.list(Enum.FillDirection.Horizontal, 8, nil, Enum.VerticalAlignment.Center) })
 	iconButton("help", topLeft, function()
-		UI.toast("1. Поставь столицу. 2. Захватывай землю войсками. 3. Строй шахты и заводы, выпускай армию.", false, 6)
+		UI.toast("1. Поставь столицу. 2. Захватывай землю войсками. 3. Строй шахты и заводы, выпускай армию. 4. Выбери войска и нажми на карту, куда им идти.", false, 7)
 	end)
 	iconButton("shield", topLeft, function()
 		UI.openArsenal()
@@ -260,7 +262,7 @@ local function buildMenu(player: Player)
 		Parent = refs.side,
 	}, { Theme.corner(16), Theme.stroke(), Theme.pad(14, 12), Theme.list(Enum.FillDirection.Vertical, 6) })
 	Theme.label({ Text = "КАК ИГРАТЬ", Size = UDim2.new(1, 0, 0, 20), TextSize = 16, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 0, Parent = how })
-	for i, s in { "Поставь столицу в любой точке Земли", "Захватывай соседние земли войсками", "Строй шахты и заводы, выпускай танки и самолёты" } do
+	for i, s in { "Поставь столицу в любой точке Земли", "Захватывай соседние земли войсками", "Строй шахты и заводы, выпускай танки и самолёты", "Выбери войска и нажми на карту: они поедут туда и будут воевать" } do
 		local line = make("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = i, Parent = how }, {
 			Theme.list(Enum.FillDirection.Horizontal, 8),
 		})
@@ -578,6 +580,54 @@ local function buildPlay()
 	-- bottom HUD
 	local hudBottom = make("Frame", { Name = "HudBottom", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Parent = play })
 	refs.hudBottom = hudBottom
+
+	-- army: select units by kind, then tap the map to send them
+	local armyPanel = Theme.panel({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -118), Size = UDim2.fromOffset(210, 86), Parent = hudBottom })
+	Theme.pad(10, 8).Parent = armyPanel
+	Theme.label({ Text = "Армия", Size = UDim2.new(1, -40, 0, 16), TextSize = 14, FontFace = font(Enum.FontWeight.ExtraBold), Parent = armyPanel })
+	local clear = make("TextButton", {
+		Text = "Снять",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, -2),
+		Size = UDim2.fromOffset(54, 20),
+		FontFace = font(Enum.FontWeight.Bold),
+		TextSize = 12,
+		TextColor3 = C.ink,
+		BackgroundColor3 = C.panelHi,
+		Visible = false,
+		Parent = armyPanel,
+	}, { Theme.corner(7) })
+	clear.Activated:Connect(function()
+		if UI.onClearSelection then
+			UI.onClearSelection()
+		end
+	end)
+	refs.armyClear = clear
+	local kinds = make("Frame", { Position = UDim2.fromOffset(0, 20), Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, Parent = armyPanel }, {
+		make("UIGridLayout", { CellSize = UDim2.new(0.25, -4, 1, 0), CellPadding = UDim2.fromOffset(5, 0), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	refs.armyBtns = {}
+	refs.armyBtnIcons = {}
+	for i, k in { "infantry", "tank", "plane", "all" } do
+		local b = make("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = C.panelHi, LayoutOrder = i, Parent = kinds }, {
+			Theme.corner(9),
+			make("UIStroke", { Color = Color3.fromRGB(120, 255, 170), Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+		})
+		local count
+		if k == "all" then
+			count = Theme.label({ Text = "ВСЕ", Size = UDim2.fromScale(1, 1), TextSize = 12, FontFace = font(Enum.FontWeight.Heavy), TextXAlignment = Enum.TextXAlignment.Center, Parent = b })
+		else
+			refs.armyBtnIcons[k] = icon(k, 22, { Position = UDim2.fromOffset(2, 5), color = myColor, Parent = b })
+			count = Theme.label({ Text = "0", Position = UDim2.fromOffset(25, 0), Size = UDim2.new(1, -27, 1, 0), TextSize = 12, FontFace = font(Enum.FontWeight.ExtraBold), Parent = b })
+		end
+		b.Activated:Connect(function()
+			if UI.onSelectKind then
+				UI.onSelectKind(k)
+			end
+		end)
+		refs.armyBtns[k] = { button = b, count = count, stroke = b:FindFirstChildOfClass("UIStroke") }
+	end
+	refs.armyInfo = Theme.label({ Text = "Нажми на юнит или кнопку", Position = UDim2.fromOffset(0, 56), Size = UDim2.new(1, 0, 0, 14), TextSize = 11.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), TextTruncate = Enum.TextTruncate.AtEnd, Parent = armyPanel })
 	local attack = Theme.panel({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -12), Size = UDim2.fromOffset(210, 98), Parent = hudBottom })
 	Theme.pad(12, 10).Parent = attack
 	Theme.label({ Text = "В атаку", Size = UDim2.new(1, 0, 0, 18), TextSize = 14, FontFace = font(Enum.FontWeight.ExtraBold), Parent = attack })
@@ -824,6 +874,9 @@ function UI.setMyColor(hex: string)
 	for k, img in refs.armyIcons do
 		Sprites.apply(img, k, hex)
 	end
+	for k, img in refs.armyBtnIcons do
+		Sprites.apply(img, k, hex)
+	end
 	for _, row in refs.lbRows do
 		row.frame.BackgroundColor3 = Theme.hex(hex)
 	end
@@ -971,6 +1024,22 @@ function UI.setLeaderboard(rows)
 			r.frame.BackgroundTransparency = if data.isMe then 0.84 else 1
 		end
 	end
+end
+
+-- counts: units of each kind the player has; selected: how many of each are selected
+function UI.setArmy(counts, selected)
+	local total = 0
+	for _, k in { "infantry", "tank", "plane" } do
+		local b = refs.armyBtns[k]
+		local n, s = counts[k] or 0, selected[k] or 0
+		total += s
+		b.count.Text = if s > 0 then s .. "/" .. n else tostring(n)
+		b.stroke.Transparency = if s > 0 then 0 else 1
+	end
+	refs.armyBtns.all.stroke.Transparency = if total > 0 and total == (counts.infantry or 0) + (counts.tank or 0) + (counts.plane or 0) then 0 else 1
+	refs.armyClear.Visible = total > 0
+	refs.armyInfo.Text = if total > 0 then string.format("Выбрано %d · нажми на карту, куда идти", total) else "Нажми на юнит или кнопку"
+	refs.armyInfo.TextColor3 = if total > 0 then Color3.fromRGB(120, 255, 170) else C.muted
 end
 
 function UI.refreshAttack()

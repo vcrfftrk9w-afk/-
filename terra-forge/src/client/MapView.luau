@@ -11,6 +11,7 @@ local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
 local Map = require(Shared.Map)
 local Codec = require(Shared.Codec)
+local Motion = require(Shared.Motion)
 local Theme = require(script.Parent.Theme)
 local Sprites = require(script.Parent.Sprites)
 
@@ -21,7 +22,7 @@ local make = Theme.make
 local C = Theme.C
 
 local MapView = {}
-MapView.onTap = nil :: ((number, number) -> ())?
+MapView.onTap = nil :: ((number, number, number, number) -> ())?
 MapView.myId = 0
 MapView.phase = "none"
 MapView.mode = "menu"
@@ -514,7 +515,7 @@ function MapView.setupInput()
 				local x = math.floor((p.X - view.x) / view.z)
 				local y = math.floor((p.Y - view.y) / view.z)
 				if Map.inBounds(x, y) then
-					MapView.onTap(x, y)
+					MapView.onTap(x, y, p.X, p.Y)
 				end
 			end
 			gesture = nil
@@ -708,6 +709,31 @@ local function updateLabels()
 	end
 end
 
+---------------------------------------------------------------- health bars
+
+local function hpBar(parent: Instance, above: boolean)
+	local bg = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, if above then 1 else 0),
+		Position = if above then UDim2.new(0.5, 0, 0, -3) else UDim2.new(0.5, 0, 1, 1),
+		Size = UDim2.new(0.9, 0, 0, 4),
+		BackgroundColor3 = C.dark,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 3,
+		Parent = parent,
+	})
+	local fill = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.ok, BorderSizePixel = 0, ZIndex = 4, Parent = bg })
+	return bg, fill
+end
+
+local function setHp(rec)
+	local k = math.clamp(rec.hp / math.max(rec.maxHp, 1), 0, 1)
+	rec.hpBg.Visible = k < 0.999 and view.z >= 2
+	rec.hpFill.Size = UDim2.fromScale(k, 1)
+	rec.hpFill.BackgroundColor3 = if k > 0.5 then C.ok elseif k > 0.25 then C.moltenHi else C.bad
+end
+
 ---------------------------------------------------------------- buildings
 
 function MapView.addBuilding(b)
@@ -746,7 +772,24 @@ function MapView.addBuilding(b)
 		Parent = plate,
 	}, { Theme.corner(nil, 1) })
 	Sprites.apply(warn, "energy")
-	buildings[b.id] = { id = b.id, kind = b.kind, owner = b.owner, x = b.x, y = b.y, plate = plate, icon = icon, bar = bar, warn = warn }
+	local hpBg, hpFill = hpBar(plate, true)
+	local rec = {
+		id = b.id,
+		kind = b.kind,
+		owner = b.owner,
+		x = b.x,
+		y = b.y,
+		hp = b.hp or 1,
+		maxHp = b.maxHp or 1,
+		plate = plate,
+		icon = icon,
+		bar = bar,
+		warn = warn,
+		hpBg = hpBg,
+		hpFill = hpFill,
+	}
+	buildings[b.id] = rec
+	setHp(rec)
 	for _, d in depMarks do
 		if d.t == b.y * W + b.x then
 			d.hidden = true
@@ -786,22 +829,49 @@ function MapView.setProgress(prog)
 	end
 end
 
+-- list: flat building id, hp
+function MapView.setBuildingHp(list)
+	for i = 1, #list - 1, 2 do
+		local b = buildings[list[i]]
+		if b then
+			b.hp = list[i + 1]
+			setHp(b)
+		end
+	end
+end
+
 ---------------------------------------------------------------- units
 
+MapView.selected = {}
+
 function MapView.addUnit(u)
-	local existing = units[u.id]
-	if existing then
-		for k, v in u do
-			existing[k] = v
-		end
+	local rec = units[u.id]
+	if rec then
+		rec.path = u.path
+		rec.t0 = u.t0
+		rec.speed = u.speed
+		rec.orbit = u.orbit
+		rec.hp = u.hp
+		rec.maxHp = u.maxHp
+		setHp(rec)
 		return
 	end
 	local n = nations[u.owner]
+	local color = if n then n.color else "#cccccc"
 	local holder = make("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Parent = unitLayer,
 	})
+	local ring = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1.35, 1.35),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.82,
+		Visible = false,
+		Parent = holder,
+	}, { Theme.corner(nil, 1), make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2 }) })
 	local imgs = {}
 	local spots = if u.kind == "infantry" then { { 0.22, 0.45, 0.8 }, { 0.78, 0.45, 0.8 }, { 0.5, 0.56, 0.86 } } else { { 0.5, 0.5, 1 } }
 	for _, s in spots do
@@ -810,9 +880,10 @@ function MapView.addUnit(u)
 			Position = UDim2.fromScale(s[1], s[2]),
 			Size = UDim2.fromScale(s[3], s[3]),
 			BackgroundTransparency = 1,
+			ZIndex = 2,
 			Parent = holder,
 		})
-		Sprites.apply(img, u.kind, if n then n.color else "#cccccc")
+		Sprites.apply(img, u.kind, color)
 		table.insert(imgs, img)
 	end
 	local dot = make("Frame", {
@@ -821,15 +892,33 @@ function MapView.addUnit(u)
 		Size = UDim2.fromOffset(6, 6),
 		BackgroundColor3 = if n then n.color3 else C.ink,
 		Visible = false,
+		ZIndex = 2,
 		Parent = holder,
 	}, { Theme.corner(nil, 1), make("UIStroke", { Color = C.dark, Thickness = 1.5 }) })
-	local rec = table.clone(u)
-	rec.holder = holder
-	rec.imgs = imgs
-	rec.dot = dot
-	rec.flip = false
-	rec.color = if n then n.color else "#cccccc"
+	local hpBg, hpFill = hpBar(holder, false)
+	rec = {
+		id = u.id,
+		kind = u.kind,
+		owner = u.owner,
+		path = u.path,
+		t0 = u.t0,
+		speed = u.speed,
+		orbit = u.orbit,
+		hp = u.hp,
+		maxHp = u.maxHp,
+		holder = holder,
+		ring = ring,
+		imgs = imgs,
+		dot = dot,
+		hpBg = hpBg,
+		hpFill = hpFill,
+		flip = false,
+		color = color,
+		px = u.path[1],
+		py = u.path[2],
+	}
 	units[u.id] = rec
+	setHp(rec)
 	lastZ = -1
 end
 
@@ -838,43 +927,79 @@ function MapView.removeUnit(id: number)
 	if u then
 		u.holder:Destroy()
 		units[id] = nil
+		MapView.selected[id] = nil
 	end
 end
 
+-- list: flat unit id, hp
+function MapView.setUnitHp(list)
+	for i = 1, #list - 1, 2 do
+		local u = units[list[i]]
+		if u then
+			u.hp = list[i + 1]
+			setHp(u)
+		end
+	end
+end
+
+function MapView.unitRecord(id: number)
+	return units[id]
+end
+
+function MapView.refreshSelection()
+	for id, u in units do
+		u.ring.Visible = MapView.selected[id] == true
+	end
+end
+
+-- ids of the player's units, optionally of one kind
+function MapView.ownUnits(kind: string?): { number }
+	local ids = {}
+	for id, u in units do
+		if u.owner == MapView.myId and (kind == nil or u.kind == kind) then
+			table.insert(ids, id)
+		end
+	end
+	return ids
+end
+
+-- the player's unit closest to a screen point, if one is close enough to tap
+function MapView.unitAt(sx: number, sy: number): number?
+	local best, bestD = nil, math.max(20, view.z * 1.6) ^ 2
+	for id, u in units do
+		if u.owner == MapView.myId then
+			local x, y = view.x + u.px * view.z, view.y + u.py * view.z
+			local d = (x - sx) ^ 2 + (y - sy) ^ 2
+			if d < bestD then
+				bestD = d
+				best = id
+			end
+		end
+	end
+	return best
+end
+
 local function updateUnits(t: number)
-	local small = view.z < 2
 	for _, u in units do
-		local x, y
+		local x, y, _, dir = Motion.position(u, t)
 		if u.kind == "plane" then
-			local a = u.a0 + u.w * (t - u.t0)
-			x = u.cx + math.cos(a) * u.r
-			y = u.cy + math.sin(a) * u.r * 0.82
-			local sign = if u.w >= 0 then 1 else -1
-			local vx, vy = -math.sin(a) * sign, math.cos(a) * 0.82 * sign
-			u.holder.Rotation = math.deg(math.atan2(vx, -vy))
-		else
-			local dx, dy = u.tx - u.x0, u.ty - u.y0
-			local d = math.sqrt(dx * dx + dy * dy)
-			local k = if d > 0 then math.clamp((t - u.t0) * u.speed / d, 0, 1) else 1
-			x, y = u.x0 + dx * k, u.y0 + dy * k
-			local flip = dx < -0.05
-			if math.abs(dx) > 0.05 and flip ~= u.flip then
+			if u.px then
+				local vx, vy = x - u.px, y - u.py
+				if vx * vx + vy * vy > 1e-8 then
+					u.imgs[1].Rotation = math.deg(math.atan2(vx, -vy))
+				end
+			end
+		elseif math.abs(dir) > 0.05 then
+			local flip = dir < 0
+			if flip ~= u.flip then
 				u.flip = flip
 				for _, img in u.imgs do
 					Sprites.apply(img, u.kind, u.color, flip)
 				end
 			end
 		end
+		u.px, u.py = x, y
 		u.holder.Position = UDim2.fromScale(x / W, y / H)
-	end
-	if small ~= MapView._smallUnits then
-		MapView._smallUnits = small
-		for _, u in units do
-			u.dot.Visible = small
-			for _, img in u.imgs do
-				img.Visible = not small
-			end
-		end
 	end
 end
 
@@ -897,8 +1022,8 @@ local function resizeMarkers()
 		for _, img in u.imgs do
 			img.Visible = not unitSmall
 		end
+		setHp(u)
 	end
-	MapView._smallUnits = unitSmall
 	local small = z < 3.5
 	local bs = math.clamp(z * 1.9, 14, 40)
 	for _, b in buildings do
@@ -911,6 +1036,7 @@ local function resizeMarkers()
 			b.plate.Size = UDim2.fromOffset(bs, bs)
 			b.icon.Visible = true
 		end
+		setHp(b)
 	end
 	local ds = math.clamp(z * 1.9, 12, 22)
 	for _, d in depMarks do
@@ -921,25 +1047,76 @@ end
 
 ---------------------------------------------------------------- effects
 
-function MapView.fx(x: number, y: number)
-	if view.z < 1.5 then
-		return
-	end
-	local r = (3 + 2.2) * math.max(view.z, 2) * 2
+local function ringFx(x: number, y: number, size: number, fill: Color3, edge: Color3, seconds: number)
 	local ring = make("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = tilePos(x, y),
 		Size = UDim2.fromOffset(4, 4),
-		BackgroundColor3 = C.moltenHi,
+		BackgroundColor3 = fill,
 		BackgroundTransparency = 0.1,
 		Parent = fxLayer,
-	}, { Theme.corner(nil, 1), make("UIStroke", { Color = C.molten, Thickness = 2.5 }) })
-	local info = TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	TweenService:Create(ring, info, { Size = UDim2.fromOffset(r, r), BackgroundTransparency = 1 }):Play()
+	}, { Theme.corner(nil, 1), make("UIStroke", { Color = edge, Thickness = 2.5 }) })
+	local info = TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(ring, info, { Size = UDim2.fromOffset(size, size), BackgroundTransparency = 1 }):Play()
 	TweenService:Create(ring:FindFirstChildOfClass("UIStroke"), info, { Transparency = 1 }):Play()
-	task.delay(0.95, function()
+	task.delay(seconds + 0.05, function()
 		ring:Destroy()
 	end)
+end
+
+-- small flash where a tile was captured
+function MapView.fx(x: number, y: number)
+	if view.z < 1.5 then
+		return
+	end
+	ringFx(x, y, 10.4 * math.max(view.z, 2), C.moltenHi, C.molten, 0.9)
+end
+
+-- explosion where a unit or building was destroyed
+function MapView.boom(x: number, y: number, big: boolean)
+	if view.z < 1.2 then
+		return
+	end
+	local size = (if big then 5 else 3) * math.max(view.z, 2.5)
+	ringFx(x, y, size, Color3.fromRGB(255, 196, 92), Color3.fromRGB(230, 70, 30), 0.7)
+end
+
+-- where a move order was sent
+function MapView.marker(x: number, y: number)
+	ringFx(x, y, math.max(view.z * 3, 24), Color3.fromRGB(120, 255, 170), Color3.fromRGB(67, 217, 133), 0.6)
+end
+
+-- tracer lines for shots: flat x1, y1, x2, y2
+function MapView.shots(list)
+	if view.z < 2.5 then
+		return
+	end
+	local drawn = 0
+	for i = 1, #list - 3, 4 do
+		local x1, y1, x2, y2 = list[i], list[i + 1], list[i + 2], list[i + 3]
+		local sx, sy = view.x + x1 * view.z, view.y + y1 * view.z
+		if sx > -50 and sy > -50 and sx < cw + 50 and sy < ch + 50 then
+			drawn += 1
+			if drawn > 40 then
+				break
+			end
+			local dx, dy = x2 - x1, y2 - y1
+			local len = math.sqrt(dx * dx + dy * dy) * view.z
+			local line = make("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = tilePos((x1 + x2) / 2, (y1 + y2) / 2),
+				Size = UDim2.fromOffset(len, 2),
+				Rotation = math.deg(math.atan2(dy, dx)),
+				BackgroundColor3 = Color3.fromRGB(255, 226, 150),
+				BorderSizePixel = 0,
+				Parent = fxLayer,
+			})
+			TweenService:Create(line, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+			task.delay(0.3, function()
+				line:Destroy()
+			end)
+		end
+	end
 end
 
 ---------------------------------------------------------------- snapshots and deltas

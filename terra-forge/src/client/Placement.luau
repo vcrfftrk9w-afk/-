@@ -171,6 +171,13 @@ function Placement.ghostAt(x: number, y: number)
 	end
 	ghost.Position = at(bx, by)
 	ghost.Size = span(s, s)
+	-- towers and AA show how far they will shoot (measured from their edge, as on the server)
+	local range = ghost:FindFirstChild("Range") :: Frame
+	range.Visible = def.range ~= nil
+	if def.range then
+		local d = (2 * def.range + s) / s
+		range.Size = UDim2.fromScale(d, d)
+	end
 	local color = if why then Color3.fromRGB(255, 90, 80) else Color3.fromRGB(110, 255, 140)
 	ghost.BackgroundColor3 = color
 	local stroke: any = ghost:FindFirstChildOfClass("UIStroke")
@@ -205,6 +212,15 @@ function Placement.init(boardFrame: Frame, records, pointRecords, mine: () -> nu
 	ghost = make("Frame", { BackgroundTransparency = 0.7, Visible = false, ZIndex = Z.top, Parent = board }, {
 		make("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2 }),
 	})
+	make("Frame", {
+		Name = "Range",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(255, 214, 120),
+		BackgroundTransparency = 0.93,
+		Visible = false,
+		Parent = ghost,
+	}, { Theme.corner(nil, 1), make("UIStroke", { Color = Color3.fromRGB(255, 214, 120), Thickness = 1.5, Transparency = 0.4 }) })
 end
 
 return Placement

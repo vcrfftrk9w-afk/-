@@ -96,6 +96,8 @@ local function factoryRow(kind: string, order: number)
 	})
 	local stroke = make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = row })
 	local img = icon(u.icon, 38, { Position = UDim2.fromOffset(5, 4), ZIndex = 10, color = ctx.color, Parent = row })
+	-- a tank's turret is a sprite of its own: put it on the hull
+	local gun = if u.gun then icon(u.gun, 38, { Position = UDim2.fromOffset(5, 4), ZIndex = 11, color = ctx.color, Parent = row }) else nil
 	Theme.label({ Text = u.title, Position = UDim2.fromOffset(50, 3), Size = UDim2.new(1, -190, 0, 18), TextSize = 14, FontFace = font(Enum.FontWeight.Heavy), ZIndex = 10, Parent = row })
 	local info = Theme.label({
 		Text = string.format("%d 🔩 · %d с · здоровье %d", u.cost, u.time, u.hp),
@@ -142,7 +144,7 @@ local function factoryRow(kind: string, order: number)
 			UI.onQueue(UI.factoryId, kind)
 		end
 	end)
-	return { kind = kind, row = row, stroke = stroke, icon = img, info = info, queued = queued, auto = auto }
+	return { kind = kind, row = row, stroke = stroke, icon = img, gun = gun, info = info, queued = queued, auto = auto }
 end
 
 -- info: { id, kind, prog, built, queue = { unit kinds }, auto = kind or "", wait = what a
@@ -191,6 +193,10 @@ function Factory.show(info)
 		r.info.TextColor3 = if money < u.cost or locked then C.bad else Color3.fromRGB(198, 207, 221)
 		Sprites.apply(r.icon, u.icon, ctx.color)
 		Sprites.setTransparency(r.icon, if locked then 0.55 else 0)
+		if r.gun then
+			Sprites.apply(r.gun, u.gun, ctx.color)
+			Sprites.setTransparency(r.gun, if locked then 0.55 else 0)
+		end
 	end
 	local built = info.built or 1
 	local p = math.abs(info.prog or 0)

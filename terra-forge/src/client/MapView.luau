@@ -44,6 +44,7 @@ local at, span = Board.at, Board.span
 
 local NEUTRAL = Color3.fromRGB(150, 158, 172)
 local SELECT = Color3.fromRGB(120, 255, 150)
+local RANGE = Color3.fromRGB(255, 214, 120) -- the circle of how far a selected unit shoots
 local HP_BACK = Color3.fromRGB(14, 17, 22)
 
 -- turret sprites of the buildings that shoot; when the picture has its gun drawn in,
@@ -562,6 +563,22 @@ local function refreshUnit(u)
 	if u.ring then
 		u.ring.Visible = sel
 	end
+	-- a selected armed unit shows how far it shoots: a faint circle around it
+	if sel and not u.rangeRing and u.def.dps > 0 then
+		local d = 2 * u.def.range / u.size
+		u.rangeRing = make("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(d, d),
+			BackgroundColor3 = RANGE,
+			BackgroundTransparency = 0.94,
+			ZIndex = 0,
+			Parent = u.frame,
+		}, { Theme.corner(nil, 1), make("UIStroke", { Color = RANGE, Thickness = 1.5, Transparency = 0.45 }) })
+	end
+	if u.rangeRing then
+		u.rangeRing.Visible = sel
+	end
 	local k = math.clamp(u.hp / math.max(u.maxHp, 1), 0, 1)
 	local show = sel or k < 0.999
 	if show and not u.bar then
@@ -604,7 +621,8 @@ function MapView.addUnit(info)
 		load = info.load or 0, -- riders inside a transport
 	}
 	local color = teamColor(info.owner)
-	local s = def.size or 1.5
+	local s = (def.size or 1.5) * Pictures.scale(def.icon)
+	u.size = s
 	u.frame = make("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = span(s, s),
@@ -1008,6 +1026,13 @@ function MapView.shots(list)
 				-- moving shooters have moved on a little: start from where they are drawn now
 				if shooter.path and shooter.frame.Parent then
 					x1, y1 = shooter.x, shooter.y
+				end
+				-- the shot leaves from the end of the barrel, not the middle of the unit
+				local dx, dy = x2 - x1, y2 - y1
+				local d = math.sqrt(dx * dx + dy * dy)
+				local out = math.min((shooter.size or shooter.def.size or 1.5) * 0.45, d * 0.5)
+				if d > 0.01 then
+					x1, y1 = x1 + dx / d * out, y1 + dy / d * out
 				end
 			end
 			Effects.shot(SHOT_LOOK[kind] or "bullet", x1, y1, x2, y2)

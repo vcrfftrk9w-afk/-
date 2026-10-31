@@ -145,22 +145,6 @@ end
 
 ---------------------------------------------------------------- shots
 
-local function tracer(x1: number, y1: number, x2: number, y2: number, color: Color3, px: number, life: number)
-	if #running >= MAX_EFFECTS then
-		return
-	end
-	local f = takeLine(color, Z.shot)
-	local dx, dy = x2 - x1, y2 - y1
-	f.Position = at((x1 + x2) / 2, (y1 + y2) / 2)
-	f.Size = UDim2.new(math.sqrt(dx * dx + dy * dy) / Board.W, 0, 0, px)
-	f.Rotation = math.deg(math.atan2(dy, dx))
-	add(life, function(k)
-		f.BackgroundTransparency = k
-	end, function()
-		release(f, linePool)
-	end)
-end
-
 -- a rocket or shell flying from (x1, y1) to (x2, y2), then onHit; rockets leave smoke
 local function projectile(x1: number, y1: number, x2: number, y2: number, color: Color3, px: number, len: number, travel: number, trail: boolean, onHit)
 	if #running >= MAX_EFFECTS then
@@ -185,13 +169,22 @@ local function projectile(x1: number, y1: number, x2: number, y2: number, color:
 	end)
 end
 
--- the shot of one shooter: look = bullet, cannon, rocket, shell or flak
+-- seconds a fast round takes to fly from (x1, y1) to (x2, y2)
+local function flight(x1: number, y1: number, x2: number, y2: number, speed: number): number
+	return math.clamp(math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2) / speed, 0.04, 0.2)
+end
+
+-- the shot of one shooter: look = bullet, cannon, rocket, shell or flak. Every shot flashes at the
+-- barrel, flies as a short glowing round and hits with a spark or a burst
 function Effects.shot(look: string, x1: number, y1: number, x2: number, y2: number)
 	if look == "cannon" then
-		Effects.fire(x1, y1, 0.7, 0.12)
-		tracer(x1, y1, x2, y2, Color3.fromRGB(255, 205, 100), 3, 0.1)
-		Effects.fire(x2, y2, 1, 0.3)
-		Effects.puff(x2, y2, 0.8, 0.8, SMOKE, Z.smoke, 0.2)
+		Effects.fire(x1, y1, 0.85, 0.1)
+		Effects.puff(x1, y1, 0.7, 0.7, SMOKE, Z.smoke, 0.25)
+		projectile(x1, y1, x2, y2, Color3.fromRGB(255, 214, 120), 3, 0.5, flight(x1, y1, x2, y2, 45), false, function()
+			Effects.fire(x2, y2, 1.1, 0.3)
+			Effects.puff(x2, y2, 0.9, 0.9, SMOKE, Z.smoke, 0.2)
+			Effects.dust(x2, y2, 1)
+		end)
 	elseif look == "rocket" then
 		projectile(x1, y1, x2, y2, Color3.fromRGB(255, 160, 60), 3, 0.55, 0.28, true, function()
 			Effects.fire(x2, y2, 1.1, 0.35)
@@ -206,10 +199,23 @@ function Effects.shot(look: string, x1: number, y1: number, x2: number, y2: numb
 			Effects.dust(x2, y2, 1.6)
 		end)
 	elseif look == "flak" then
-		tracer(x1, y1, x2, y2, Color3.fromRGB(220, 232, 255), 2, 0.08)
-		Effects.puff(x2, y2, 1, 0.7, Color3.fromRGB(40, 40, 44), Z.smoke, 0.1)
+		-- a burst of shells that pop in dark puffs around the aircraft
+		Effects.fire(x1, y1, 0.5, 0.06)
+		for i = 0, 2 do
+			local ox, oy = (math.random() - 0.5) * 1.4, (math.random() - 0.5) * 1.4
+			Effects.later(i * 0.05, function()
+				projectile(x1, y1, x2 + ox, y2 + oy, Color3.fromRGB(230, 238, 255), 2, 0.3, flight(x1, y1, x2, y2, 50), false, function()
+					Effects.fire(x2 + ox, y2 + oy, 0.45, 0.12, Color3.fromRGB(255, 220, 160))
+					Effects.puff(x2 + ox, y2 + oy, 0.7, 0.6, Color3.fromRGB(40, 40, 44), Z.smoke, 0.1)
+				end)
+			end)
+		end
 	else
-		tracer(x1, y1, x2, y2, Color3.fromRGB(255, 240, 170), 2, 0.07)
+		-- bullets: a small flash and a quick bright streak that sparks where it hits
+		Effects.fire(x1, y1, 0.4, 0.05)
+		projectile(x1, y1, x2, y2, Color3.fromRGB(255, 240, 170), 2, 0.35, flight(x1, y1, x2, y2, 60), false, function()
+			Effects.fire(x2, y2, 0.3, 0.07, Color3.fromRGB(255, 230, 150))
+		end)
 	end
 end
 

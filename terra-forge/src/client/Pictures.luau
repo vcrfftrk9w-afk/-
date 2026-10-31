@@ -10,22 +10,30 @@ local BASE: string? = "rbxassetid://96972992380315"
 local TEAM: string? = "rbxassetid://106536867009790"
 local CELL = 256
 
--- name -> first cell; right = the picture faces right (units only, they have a mirror copy)
+-- name -> first cell; right = the picture faces right (units only, they have a mirror copy);
+-- scale = how much bigger than its size in tiles a unit is drawn (a soldier fills little of its
+-- cell, a wide aircraft more)
 local CELLS = {
 	repair = { 0 },
 	power = { 1 },
 	radar = { 2 },
 	lab = { 3 },
-	mlrs = { 4, right = true },
-	sniper = { 6, right = true },
-	engineer = { 8, right = false },
-	transport = { 10, right = false },
-	bomber = { 12, right = false },
-	drone = { 14, right = false },
+	mlrs = { 4, right = true, scale = 1.5 },
+	sniper = { 6, right = true, scale = 2.4 },
+	engineer = { 8, right = false, scale = 2.4 },
+	transport = { 10, right = false, scale = 1.5 },
+	bomber = { 12, right = false, scale = 1.4 },
+	drone = { 14, right = false, scale = 1.8 },
 }
 
 function Pictures.has(name: string): boolean
 	return BASE ~= nil and CELLS[name] ~= nil
+end
+
+-- how much bigger a unit with this picture is drawn than its size in tiles
+function Pictures.scale(name: string): number
+	local c = CELLS[name]
+	return if BASE ~= nil and c and c.scale then c.scale else 1
 end
 
 -- shows a picture in an image and its team layer; left = the unit heads left on the screen

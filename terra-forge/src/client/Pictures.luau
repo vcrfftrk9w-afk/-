@@ -36,11 +36,17 @@ function Pictures.scale(name: string): number
 	return if BASE ~= nil and c and c.scale then c.scale else 1
 end
 
+-- whether a unit heading left (or right) is shown by the mirror copy of its picture
+function Pictures.mirrored(name: string, left: boolean?): boolean
+	local c = CELLS[name]
+	return c ~= nil and c.right ~= nil and (left == true) == c.right
+end
+
 -- shows a picture in an image and its team layer; left = the unit heads left on the screen
 function Pictures.set(base: ImageLabel, team: ImageLabel?, name: string, left: boolean?)
 	local c = CELLS[name]
 	local i = c[1]
-	if c.right ~= nil and (left == true) == c.right then
+	if Pictures.mirrored(name, left) then
 		i += 1
 	end
 	local offset = Vector2.new(i % 4 * CELL, i // 4 * CELL)

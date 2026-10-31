@@ -7066,6 +7066,14 @@ local SHOT_SOUND = {
 }
 -- soldiers walk with a little sway; tracked and wheeled vehicles leave prints on the ground
 local WALKERS = { infantry = true, rocket = true, engineer = true, sniper = true }
+-- where the rotors of painted aircraft are on their picture (facing as drawn): x, y, size as
+-- shares of the picture; a mirrored picture flips x
+local ROTOR_HUBS = {
+	transport = { { 0.25, 0.46, 0.5 }, { 0.75, 0.3, 0.5 } },
+	drone = { { 0.17, 0.5, 0.28 }, { 0.49, 0.31, 0.28 }, { 0.9, 0.47, 0.28 }, { 0.61, 0.67, 0.28 } },
+}
+local FLASH = Color3.fromRGB(255, 150, 130) -- a unit or building just hit
+local WHITE = Color3.new(1, 1, 1)
 -- buildings that puff smoke while they work: kind -> seconds between puffs
 local CHIMNEY = { power = 1.3, fabricator = 1.6, tankf = 2.2, barracks = 3, air = 2.6, extractor = 2.4 }
 local TRACKED = { tank = 0.4, heavy = 0.5, artillery = 0.4, scout = 0.28, mlrs = 0.3, aagun = 0.4 } -- kind -> how dark the prints are
@@ -7436,6 +7444,25 @@ function MapView.addBuilding(info)
 	end
 	if Pictures.has(def.icon) then
 		Pictures.set(rec.base, rec.tint, def.icon)
+		if info.kind == "radar" then
+			-- a scanning beam sweeps round the painted radar
+			rec.sweep = make("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.45),
+				Size = UDim2.fromScale(1.6, 1.6),
+				BackgroundTransparency = 1,
+				ZIndex = 6,
+				Parent = rec.frame,
+			}, {
+				make("Frame", {
+					AnchorPoint = Vector2.new(0.5, 1),
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.new(0, 3, 0.5, 0),
+					BackgroundColor3 = Color3.fromRGB(120, 255, 160),
+					BorderSizePixel = 0,
+				}, { make("UIGradient", { Transparency = NumberSequence.new(0.95, 0.2), Rotation = 90 }) }),
+			})
+		end
 	elseif not Sprites.has(def.icon) then
 		rec.art, rec.parts = Drawn.building(info.kind, rec.clip, color)
 	end
@@ -7530,6 +7557,8 @@ function MapView.setBuildingHp(list)
 		if rec then
 			if list[i + 1] > rec.hp and rec.built >= 1 then
 				healPuff(rec, rec.cx, rec.cy, rec.size * 0.6)
+			elseif list[i + 1] < rec.hp then
+				rec.flashUntil = os.clock() + 0.12
 			end
 			rec.hp = list[i + 1]
 			refreshBuilding(rec)
@@ -7589,6 +7618,15 @@ local function refreshUnit(u)
 		u.bar.Visible = show
 		u.barFill.Size = UDim2.fromScale(k, 1)
 		u.barFill.BackgroundColor3 = hpColor(k)
+	end
+end
+
+-- puts a painted aircraft's rotors over the hubs of the picture it shows (mirrored or not)
+local function placeRotors(u)
+	local flip = Pictures.mirrored(u.def.icon, u.left)
+	for i, r in u.rotors do
+		local h = u.hubs[i]
+		r.Position = UDim2.fromScale(if flip then 1 - h[1] else h[1], h[2])
 	end
 end
 
@@ -7690,11 +7728,37 @@ function MapView.addUnit(info)
 		})
 		Sprites.set(u.rotor, "rotor", "base")
 	end
+	-- painted helicopters and drones get spinning blurred rotors over their hubs
+	local hubs = if picture then ROTOR_HUBS[info.kind] else nil
+	if hubs then
+		u.rotors, u.hubs = {}, hubs
+		for _, h in hubs do
+			local r = make("ImageLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(h[1], h[2]),
+				Size = UDim2.fromScale(h[3], h[3]),
+				BackgroundTransparency = 1,
+				ImageTransparency = 0.3,
+				ZIndex = 6,
+				Parent = u.frame,
+			})
+			Sprites.set(r, "rotor", "base")
+			table.insert(u.rotors, r)
+		end
+		placeRotors(u)
+	end
 	units[u.id] = u
 	local x, y = Motion.position(u, now())
 	u.x, u.y = x, y
 	u.frame.Position = at(x, y)
 	refreshUnit(u)
+	if not MapView.loading then
+		-- a new unit pops out of its factory with a little dust
+		Effects.pop(u.frame, s, s)
+		if not u.air then
+			Effects.dust(x, y, s * 0.8)
+		end
+	end
 	if u.owner == MapView.myId and not MapView.loading then
 		Sfx.play("ready")
 	end
@@ -7716,6 +7780,9 @@ function MapView.setUnitHp(list)
 		if u then
 			if list[i + 1] > u.hp then
 				healPuff(u, u.x, u.y, 0.6)
+			elseif list[i + 1] < u.hp then
+				-- hit: the unit flashes for a moment
+				u.flashUntil = os.clock() + 0.12
 			end
 			u.hp = list[i + 1]
 			refreshUnit(u)
@@ -7894,6 +7961,13 @@ local function updateUnits(dt: number)
 					u.printDist = 0
 					Effects.tracks(x, y, u.heading, size * 0.95, TRACKED[u.kind])
 				end
+				-- exhaust from the engine, behind the vehicle
+				u.smokeDist = (u.smokeDist or 0) + moved
+				if u.smokeDist >= 1.1 and not Effects.busy() then
+					u.smokeDist = 0
+					local back = math.rad(u.heading)
+					Effects.puff(x - math.sin(back) * size * 0.5, y + math.cos(back) * size * 0.5, 0.35, 0.7, Color3.fromRGB(90, 90, 92), Z.smoke, 0.2)
+				end
 				u.dustDist = (u.dustDist or 0) + moved
 				if u.dustDist >= 0.9 then
 					u.dustDist = 0
@@ -7915,6 +7989,13 @@ local function updateUnits(dt: number)
 				local rate = ((u.heading - before + 180) % 360 - 180) / math.max(dt, 1e-3)
 				u.bank = approach(u.bank or 0, math.clamp(math.abs(rate) / 100, 0, 1), dt * 4)
 				sx = 1 - 0.3 * u.bank
+				-- a thin vapour trail behind the plane
+				if clock >= (u.trailAt or 0) and not Effects.busy() then
+					u.trailAt = clock + 0.12
+					local back = math.rad(u.heading)
+					local size = u.size or 1.5
+					Effects.puff(x - math.sin(back) * size * 0.45, y + math.cos(back) * size * 0.45, 0.22, 0.45, Color3.fromRGB(235, 240, 245), Z.smoke, 0)
+				end
 			end
 		end
 		if not u.gun then
@@ -7933,6 +8014,9 @@ local function updateUnits(dt: number)
 				if u.shadow then
 					Pictures.set(u.shadow, u.shadowTint, u.def.icon, left)
 				end
+				if u.hubs then
+					placeRotors(u)
+				end
 			end
 			rot -= u.heading
 			if WALKERS[u.kind] then
@@ -7940,6 +8024,16 @@ local function updateUnits(dt: number)
 			end
 		end
 		pose(u.body, u.bodyTint, rot, ox, oy, sx, sy)
+		-- a hit unit flashes; a selected one's ring breathes
+		local flashing = (u.flashUntil or 0) > clock
+		if flashing ~= (u.flashing == true) and u.body:IsA("ImageLabel") then
+			u.flashing = flashing
+			u.body.ImageColor3 = if flashing then FLASH else WHITE
+		end
+		if u.ring and u.ring.Visible then
+			local k = 0.95 + math.sin(clock * 5) * 0.05
+			u.ring.Size = UDim2.fromScale(k, k)
+		end
 		if u.shadow then
 			pose(u.shadow, u.shadowTint, rot, 0.28, 0.5, sx * 0.8, sy * 0.8)
 		end
@@ -7961,6 +8055,21 @@ local function updateUnits(dt: number)
 			-- everyone sees buildings rise at the building speed; the owner also gets exact progress
 			b.built = math.min(0.99, b.built + dt / b.def.time)
 			refreshBuilding(b)
+		end
+		-- a hit building flashes; the radar's beam turns; extractors pump
+		local flashing = (b.flashUntil or 0) > clock
+		if flashing ~= (b.flashing == true) then
+			b.flashing = flashing
+			b.base.ImageColor3 = if flashing then FLASH else WHITE
+		end
+		if b.sweep then
+			b.sweep.Visible = b.built >= 1 and Fog.powered
+			b.sweep.Rotation = (b.sweep.Rotation + dt * 120) % 360
+		end
+		if b.kind == "extractor" and b.built >= 1 and b.frame.Visible then
+			local k = 1 + math.sin(clock * 4 + b.id) * 0.03
+			b.base.Size = UDim2.fromScale(k, k)
+			b.tint.Size = UDim2.fromScale(k, k)
 		end
 		-- working plants puff smoke from their stacks
 		local every = CHIMNEY[b.kind]
@@ -8840,11 +8949,17 @@ function Pictures.scale(name: string): number
 	return if BASE ~= nil and c and c.scale then c.scale else 1
 end
 
+-- whether a unit heading left (or right) is shown by the mirror copy of its picture
+function Pictures.mirrored(name: string, left: boolean?): boolean
+	local c = CELLS[name]
+	return c ~= nil and c.right ~= nil and (left == true) == c.right
+end
+
 -- shows a picture in an image and its team layer; left = the unit heads left on the screen
 function Pictures.set(base: ImageLabel, team: ImageLabel?, name: string, left: boolean?)
 	local c = CELLS[name]
 	local i = c[1]
-	if c.right ~= nil and (left == true) == c.right then
+	if Pictures.mirrored(name, left) then
 		i += 1
 	end
 	local offset = Vector2.new(i % 4 * CELL, i // 4 * CELL)

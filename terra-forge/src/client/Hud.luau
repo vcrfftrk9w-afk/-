@@ -357,6 +357,38 @@ function Hud.build(context, play: Instance)
 	refs.tipDesc = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = Color3.fromRGB(207, 215, 228), FontFace = font(Enum.FontWeight.SemiBold), LayoutOrder = 2, Parent = tip })
 	refs.tipOut = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = Color3.fromRGB(207, 215, 228), FontFace = font(Enum.FontWeight.SemiBold), LayoutOrder = 3, Parent = tip })
 	refs.tipCost = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, FontFace = font(Enum.FontWeight.ExtraBold), LayoutOrder = 4, Parent = tip })
+	-- on a touch screen a building stands where it was tapped until «Поставить» or «Отмена»
+	local confirm = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -120),
+		Size = UDim2.fromOffset(300, 56),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = play,
+	}, { Theme.list(Enum.FillDirection.Horizontal, 10, Enum.HorizontalAlignment.Center) })
+	local ok = moltenButton("Поставить", confirm, function()
+		if UI.onPlaceConfirm then
+			UI.onPlaceConfirm(true)
+		end
+	end)
+	ok.Size = UDim2.fromOffset(176, 56)
+	local no = make("TextButton", {
+		Text = "Отмена",
+		Size = UDim2.fromOffset(110, 56),
+		AutoButtonColor = true,
+		FontFace = font(Enum.FontWeight.Bold),
+		TextSize = 18,
+		TextColor3 = C.ink,
+		BackgroundColor3 = C.panelHi,
+		Parent = confirm,
+	}, { Theme.corner(14), Theme.stroke() })
+	no.Activated:Connect(function()
+		Sfx.play("click")
+		if UI.onPlaceConfirm then
+			UI.onPlaceConfirm(false)
+		end
+	end)
+	refs.placeConfirm, refs.placeOk = confirm, ok
 	refs.tipHint = Theme.label({ Text = "Нажми на карту рядом со своей базой, чтобы поставить. Нажми на кнопку ещё раз, чтобы отменить.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.moltenHi, FontFace = font(Enum.FontWeight.Bold), LayoutOrder = 5, Parent = tip })
 	refs.tip = tip
 
@@ -605,7 +637,21 @@ function Hud.selectBuild(k: string?)
 	Hud.showTip(k)
 end
 
+-- the «Поставить» / «Отмена» pair for a building waiting on a touch screen; fits = it can stand
+-- there (the orange button fades when it cannot)
+function Hud.setPlaceConfirm(show: boolean, fits: boolean)
+	refs.placeConfirm.Visible = show
+	refs.placeOk.BackgroundTransparency = if fits then 0 else 0.6
+	if show then
+		refs.tip.Visible = false
+	end
+end
+
 function Hud.showTip(k: string?)
+	if refs.placeConfirm and refs.placeConfirm.Visible then
+		refs.tip.Visible = false
+		return
+	end
 	if not k or not refs.hudBottom.Visible or refs.fac.Visible or refs.lab.Visible then
 		refs.tip.Visible = false
 		return

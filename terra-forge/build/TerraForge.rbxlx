@@ -3274,6 +3274,7 @@ local state = {
 	armyFull = false, -- a factory waits because the army limit is reached
 	landing = nil, -- while choosing: { seats = bases offered, seat = the chosen one, ends = os.clock() deadline, sent }
 	commander = Config.COMMANDER_ORDER[1], -- the commander the player chose last
+	pending = nil, -- touch screens: the building waiting for «Поставить»: { kind, x, y }
 }
 
 local function me()
@@ -3665,6 +3666,8 @@ UI.onRally = function(id)
 end
 
 UI.onBuildSelect = function(kind)
+	state.pending = nil
+	UI.setPlaceConfirm(false, false)
 	MapView.setBuild(kind)
 	if kind then
 		table.clear(MapView.selected)
@@ -3973,7 +3976,16 @@ MapView.onTap = function(x, y, sx, sy)
 		return
 	end
 	if UI.buildSel then
-		tryBuild(UI.buildSel, x, y)
+		if viaMouse() then
+			tryBuild(UI.buildSel, x, y)
+		else
+			-- a finger: the outline stands here (another tap moves it) until «Поставить»
+			state.pending = { kind = UI.buildSel, x = x, y = y }
+			MapView.ghostAt(x + 0.5, y + 0.5)
+			local bx = MapView.placeFor(UI.buildSel, x + 0.5, y + 0.5)
+			UI.setPlaceConfirm(true, bx ~= nil)
+			Sfx.play("click")
+		end
 		return
 	end
 	local hasSelection = next(MapView.selected) ~= nil
@@ -4040,6 +4052,17 @@ MapView.onTap = function(x, y, sx, sy)
 	if what == "unit" and id then
 		local u = MapView.unitRecord(id)
 		UI.toast("Враг «" .. ownerName(u.owner) .. "»: " .. Config.UNITS[u.kind].title .. ".")
+	end
+end
+
+UI.onPlaceConfirm = function(yes)
+	local p = state.pending
+	state.pending = nil
+	UI.setPlaceConfirm(false, false)
+	if yes and p then
+		tryBuild(p.kind, p.x, p.y)
+	else
+		UI.selectBuild(nil)
 	end
 end
 
@@ -5996,6 +6019,38 @@ function Hud.build(context, play: Instance)
 	refs.tipDesc = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = Color3.fromRGB(207, 215, 228), FontFace = font(Enum.FontWeight.SemiBold), LayoutOrder = 2, Parent = tip })
 	refs.tipOut = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = Color3.fromRGB(207, 215, 228), FontFace = font(Enum.FontWeight.SemiBold), LayoutOrder = 3, Parent = tip })
 	refs.tipCost = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, FontFace = font(Enum.FontWeight.ExtraBold), LayoutOrder = 4, Parent = tip })
+	-- on a touch screen a building stands where it was tapped until «Поставить» or «Отмена»
+	local confirm = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -120),
+		Size = UDim2.fromOffset(300, 56),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = play,
+	}, { Theme.list(Enum.FillDirection.Horizontal, 10, Enum.HorizontalAlignment.Center) })
+	local ok = moltenButton("Поставить", confirm, function()
+		if UI.onPlaceConfirm then
+			UI.onPlaceConfirm(true)
+		end
+	end)
+	ok.Size = UDim2.fromOffset(176, 56)
+	local no = make("TextButton", {
+		Text = "Отмена",
+		Size = UDim2.fromOffset(110, 56),
+		AutoButtonColor = true,
+		FontFace = font(Enum.FontWeight.Bold),
+		TextSize = 18,
+		TextColor3 = C.ink,
+		BackgroundColor3 = C.panelHi,
+		Parent = confirm,
+	}, { Theme.corner(14), Theme.stroke() })
+	no.Activated:Connect(function()
+		Sfx.play("click")
+		if UI.onPlaceConfirm then
+			UI.onPlaceConfirm(false)
+		end
+	end)
+	refs.placeConfirm, refs.placeOk = confirm, ok
 	refs.tipHint = Theme.label({ Text = "Нажми на карту рядом со своей базой, чтобы поставить. Нажми на кнопку ещё раз, чтобы отменить.", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = C.moltenHi, FontFace = font(Enum.FontWeight.Bold), LayoutOrder = 5, Parent = tip })
 	refs.tip = tip
 
@@ -6244,7 +6299,21 @@ function Hud.selectBuild(k: string?)
 	Hud.showTip(k)
 end
 
+-- the «Поставить» / «Отмена» pair for a building waiting on a touch screen; fits = it can stand
+-- there (the orange button fades when it cannot)
+function Hud.setPlaceConfirm(show: boolean, fits: boolean)
+	refs.placeConfirm.Visible = show
+	refs.placeOk.BackgroundTransparency = if fits then 0 else 0.6
+	if show then
+		refs.tip.Visible = false
+	end
+end
+
 function Hud.showTip(k: string?)
+	if refs.placeConfirm and refs.placeConfirm.Visible then
+		refs.tip.Visible = false
+		return
+	end
 	if not k or not refs.hudBottom.Visible or refs.fac.Visible or refs.lab.Visible then
 		refs.tip.Visible = false
 		return
@@ -7524,15 +7593,19 @@ local function updateUnits(dt: number)
 			u.walk = approach(u.walk or 0, if moving then 1 else 0, dt * 8)
 			u.stride = (u.stride or 0) + moved / 0.4 * math.pi
 			local swing = math.sin(u.stride) * u.walk
-			rot += swing * 9
+			rot += swing * 13
 			local side = math.rad(u.heading)
-			ox, oy = math.cos(side) * swing * 0.03, math.sin(side) * swing * 0.03
-			sx = 1 + math.abs(swing) * 0.05
+			ox, oy = math.cos(side) * swing * 0.045, math.sin(side) * swing * 0.045
+			sx = 1 + math.abs(swing) * 0.08
 			sy = sx
 		elseif TRACKED[u.kind] then
 			if moving then
 				-- the engine shakes the hull a little; tracks and wheels leave prints, and dust on sand
 				ox, oy = (math.random() - 0.5) * 0.012, (math.random() - 0.5) * 0.012
+				-- and the body rocks on the ground as it goes
+				local rock = math.sin(clock * 11 + u.id) * 0.025
+				sx, sy = 1 - rock * 0.5, 1 + rock
+				rot += math.sin(clock * 7 + u.id) * 1.5
 				local size = u.def.size or 1.5
 				u.printDist = (u.printDist or 0) + moved
 				if u.printDist >= size * 0.34 then
@@ -9549,6 +9622,7 @@ UI.onStopResearch = nil -- (research centre id)
 UI.researchId = nil -- the research centre whose panel is open
 UI.onLandingCommander = nil -- a commander card was tapped: (commander id)
 UI.onLand = nil -- «ВЫСАДИТЬСЯ»
+UI.onPlaceConfirm = nil -- (true) «Поставить» or (false) «Отмена» for a building waiting on a touch screen
 UI.buildSel = nil
 UI.GROUPS = Hud.GROUPS
 
@@ -9579,6 +9653,7 @@ UI.hideFactory = Factory.hide
 UI.showResearch = Research.show
 UI.hideResearch = Research.hide
 UI.setCommander = Hud.setCommander
+UI.setPlaceConfirm = Hud.setPlaceConfirm
 UI.setLandingChoice = Landing.setChoice
 UI.setLandingCountdown = Landing.setCountdown
 UI.landingArea = Landing.area

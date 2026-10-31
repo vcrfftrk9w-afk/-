@@ -851,15 +851,19 @@ local function updateUnits(dt: number)
 			u.walk = approach(u.walk or 0, if moving then 1 else 0, dt * 8)
 			u.stride = (u.stride or 0) + moved / 0.4 * math.pi
 			local swing = math.sin(u.stride) * u.walk
-			rot += swing * 9
+			rot += swing * 13
 			local side = math.rad(u.heading)
-			ox, oy = math.cos(side) * swing * 0.03, math.sin(side) * swing * 0.03
-			sx = 1 + math.abs(swing) * 0.05
+			ox, oy = math.cos(side) * swing * 0.045, math.sin(side) * swing * 0.045
+			sx = 1 + math.abs(swing) * 0.08
 			sy = sx
 		elseif TRACKED[u.kind] then
 			if moving then
 				-- the engine shakes the hull a little; tracks and wheels leave prints, and dust on sand
 				ox, oy = (math.random() - 0.5) * 0.012, (math.random() - 0.5) * 0.012
+				-- and the body rocks on the ground as it goes
+				local rock = math.sin(clock * 11 + u.id) * 0.025
+				sx, sy = 1 - rock * 0.5, 1 + rock
+				rot += math.sin(clock * 7 + u.id) * 1.5
 				local size = u.def.size or 1.5
 				u.printDist = (u.printDist or 0) + moved
 				if u.printDist >= size * 0.34 then

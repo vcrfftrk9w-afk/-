@@ -40,6 +40,7 @@ UI.onStopResearch = nil -- (research centre id)
 UI.researchId = nil -- the research centre whose panel is open
 UI.onLandingCommander = nil -- a commander card was tapped: (commander id)
 UI.onLand = nil -- «ВЫСАДИТЬСЯ»
+UI.onPlaceConfirm = nil -- (true) «Поставить» or (false) «Отмена» for a building waiting on a touch screen
 UI.buildSel = nil
 UI.GROUPS = Hud.GROUPS
 
@@ -70,6 +71,7 @@ UI.hideFactory = Factory.hide
 UI.showResearch = Research.show
 UI.hideResearch = Research.hide
 UI.setCommander = Hud.setCommander
+UI.setPlaceConfirm = Hud.setPlaceConfirm
 UI.setLandingChoice = Landing.setChoice
 UI.setLandingCountdown = Landing.setCountdown
 UI.landingArea = Landing.area

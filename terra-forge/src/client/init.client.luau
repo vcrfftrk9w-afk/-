@@ -121,6 +121,7 @@ local state = {
 	armyFull = false, -- a factory waits because the army limit is reached
 	landing = nil, -- while choosing: { seats = bases offered, seat = the chosen one, ends = os.clock() deadline, sent }
 	commander = Config.COMMANDER_ORDER[1], -- the commander the player chose last
+	pending = nil, -- touch screens: the building waiting for «Поставить»: { kind, x, y }
 }
 
 local function me()
@@ -512,6 +513,8 @@ UI.onRally = function(id)
 end
 
 UI.onBuildSelect = function(kind)
+	state.pending = nil
+	UI.setPlaceConfirm(false, false)
 	MapView.setBuild(kind)
 	if kind then
 		table.clear(MapView.selected)
@@ -820,7 +823,16 @@ MapView.onTap = function(x, y, sx, sy)
 		return
 	end
 	if UI.buildSel then
-		tryBuild(UI.buildSel, x, y)
+		if viaMouse() then
+			tryBuild(UI.buildSel, x, y)
+		else
+			-- a finger: the outline stands here (another tap moves it) until «Поставить»
+			state.pending = { kind = UI.buildSel, x = x, y = y }
+			MapView.ghostAt(x + 0.5, y + 0.5)
+			local bx = MapView.placeFor(UI.buildSel, x + 0.5, y + 0.5)
+			UI.setPlaceConfirm(true, bx ~= nil)
+			Sfx.play("click")
+		end
 		return
 	end
 	local hasSelection = next(MapView.selected) ~= nil
@@ -887,6 +899,17 @@ MapView.onTap = function(x, y, sx, sy)
 	if what == "unit" and id then
 		local u = MapView.unitRecord(id)
 		UI.toast("Враг «" .. ownerName(u.owner) .. "»: " .. Config.UNITS[u.kind].title .. ".")
+	end
+end
+
+UI.onPlaceConfirm = function(yes)
+	local p = state.pending
+	state.pending = nil
+	UI.setPlaceConfirm(false, false)
+	if yes and p then
+		tryBuild(p.kind, p.x, p.y)
+	else
+		UI.selectBuild(nil)
 	end
 end
 

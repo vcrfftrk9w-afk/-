@@ -19,6 +19,7 @@ local Input = require(script.Parent.Input)
 local Minimap = require(script.Parent.Minimap)
 local Placement = require(script.Parent.Placement)
 local Sfx = require(script.Parent.Sfx)
+local Pictures = require(script.Parent.Pictures)
 local Sprites = require(script.Parent.Sprites)
 local Strategic = require(script.Parent.Strategic)
 local Theme = require(script.Parent.Theme)
@@ -431,7 +432,9 @@ function MapView.addBuilding(info)
 		img.AnchorPoint = Vector2.new(0.5, 1)
 		img.Position = UDim2.fromScale(0.5, 1)
 	end
-	if not Sprites.has(def.icon) then
+	if Pictures.has(def.icon) then
+		Pictures.set(rec.base, rec.tint, def.icon)
+	elseif not Sprites.has(def.icon) then
 		rec.art, rec.parts = Drawn.building(info.kind, rec.clip, color)
 	end
 	rec.line = make("Frame", {
@@ -609,7 +612,9 @@ function MapView.addUnit(info)
 		ZIndex = if u.air then Z.air else Z.unit,
 		Parent = board,
 	})
-	local drawn = not Sprites.has(def.icon)
+	-- painted pictures stand upright and turn by mirroring; drawings are the fallback
+	local picture = not Sprites.has(def.icon) and Pictures.has(def.icon)
+	local drawn = not Sprites.has(def.icon) and not picture
 	if u.air and drawn then
 		-- the aircraft's shadow on the ground below it: a dark copy of the drawing
 		local shadow = Drawn.unit(info.kind, u.frame, color, true)
@@ -632,6 +637,9 @@ function MapView.addUnit(info)
 		Sprites.set(u.shadow, def.icon, "base")
 		u.shadowTint = make("ImageLabel", props)
 		Sprites.set(u.shadowTint, def.icon, "team")
+		if picture then
+			Pictures.set(u.shadow, u.shadowTint, def.icon, false)
+		end
 	end
 	local art, drawnParts = nil, nil
 	if drawn then
@@ -643,6 +651,10 @@ function MapView.addUnit(info)
 		u.rotors = drawnParts.rotors
 	else
 		u.body, u.bodyTint = spritePair(u.frame, def.icon, color, 2, 1)
+		if picture then
+			u.upright, u.left = true, false
+			Pictures.set(u.body, u.bodyTint, def.icon, false)
+		end
 	end
 	if def.gun and Sprites.has(def.gun) then
 		u.gun, u.gunTint = spritePair(u.frame, def.gun, color, 4, 1)
@@ -881,6 +893,23 @@ local function updateUnits(dt: number)
 			local rx, ry = recoil(u, u.heading, clock, 0.04)
 			ox += rx
 			oy += ry
+		end
+		if u.upright then
+			-- a picture stays upright: it faces left or right by mirroring, keeps only the sway,
+			-- and a walker hops a little with each step
+			local side = math.sin(math.rad(u.heading))
+			local left = if side < -0.15 then true elseif side > 0.15 then false else u.left
+			if left ~= u.left then
+				u.left = left
+				Pictures.set(u.body, u.bodyTint, u.def.icon, left)
+				if u.shadow then
+					Pictures.set(u.shadow, u.shadowTint, u.def.icon, left)
+				end
+			end
+			rot -= u.heading
+			if WALKERS[u.kind] then
+				oy -= math.abs(math.sin(u.stride or 0)) * (u.walk or 0) * 0.08
+			end
 		end
 		pose(u.body, u.bodyTint, rot, ox, oy, sx, sy)
 		if u.shadow then

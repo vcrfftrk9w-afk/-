@@ -241,6 +241,7 @@ function Match:land(player: Player, seatId: number, commander: string)
 		self:sendTo(player, { t = "toast", text = "Все базы заняты. Смотри бой — следующий начнётся после него.", warn = false })
 		return
 	end
+	self:resetBase(n)
 	n.isHuman = true
 	n.player = player
 	n.name = player.DisplayName
@@ -250,6 +251,30 @@ function Match:land(player: Player, seatId: number, commander: string)
 	self:send({ t = "nation", n = nationInfo(n) })
 	self:sendSnapshot(player)
 	self:sendEconomy()
+end
+
+-- a player who lands gets the base as it was at the start: the bot that kept it meanwhile does
+-- not spend the player's metal, start buildings, research or orders for them
+function Match:resetBase(n)
+	for _, b in self.buildings do
+		if b.n == n and b ~= n.cc then
+			self:removeBuilding(b)
+		end
+	end
+	for _, u in self.units do
+		if u.n == n then
+			self:removeUnit(u)
+		end
+	end
+	self:dropPoints(n)
+	n.money = Config.START_MONEY
+	n.tech = {}
+	n.bot = self:newBot()
+	n.cc.hp = n.cc.maxHp
+	self.bhpDirty[n.cc] = true
+	for k, kind in { "infantry", "infantry", "scout" } do
+		self:spawnUnit(n, kind, n.cc.x + 1 - 1.5 + k, n.cc.y + 1 + 3)
+	end
 end
 
 -- a new commander for a base: what is already built and fielded gets the new health bonuses

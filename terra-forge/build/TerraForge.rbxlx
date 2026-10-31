@@ -1849,6 +1849,7 @@ function Match:land(player: Player, seatId: number, commander: string)
 		self:sendTo(player, { t = "toast", text = "Все базы заняты. Смотри бой — следующий начнётся после него.", warn = false })
 		return
 	end
+	self:resetBase(n)
 	n.isHuman = true
 	n.player = player
 	n.name = player.DisplayName
@@ -1858,6 +1859,30 @@ function Match:land(player: Player, seatId: number, commander: string)
 	self:send({ t = "nation", n = nationInfo(n) })
 	self:sendSnapshot(player)
 	self:sendEconomy()
+end
+
+-- a player who lands gets the base as it was at the start: the bot that kept it meanwhile does
+-- not spend the player's metal, start buildings, research or orders for them
+function Match:resetBase(n)
+	for _, b in self.buildings do
+		if b.n == n and b ~= n.cc then
+			self:removeBuilding(b)
+		end
+	end
+	for _, u in self.units do
+		if u.n == n then
+			self:removeUnit(u)
+		end
+	end
+	self:dropPoints(n)
+	n.money = Config.START_MONEY
+	n.tech = {}
+	n.bot = self:newBot()
+	n.cc.hp = n.cc.maxHp
+	self.bhpDirty[n.cc] = true
+	for k, kind in { "infantry", "infantry", "scout" } do
+		self:spawnUnit(n, kind, n.cc.x + 1 - 1.5 + k, n.cc.y + 1 + 3)
+	end
 end
 
 -- a new commander for a base: what is already built and fielded gets the new health bonuses
@@ -3126,7 +3151,7 @@ function Points:tickSupply()
 end
 
 return Points
-]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX0000002C"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX0000002B"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX0000002A"><Properties><string name="Name">TerraForgeClient</string><ProtectedString name="Source"><![CDATA[-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
+]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX0000002D"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX0000002C"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX0000002B"><Properties><string name="Name">TerraForgeClient</string><ProtectedString name="Source"><![CDATA[-- Terra Forge client: shows the menu and the battle, and forwards taps to the server.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -6667,6 +6692,7 @@ local Input = require(script.Parent.Input)
 local Minimap = require(script.Parent.Minimap)
 local Placement = require(script.Parent.Placement)
 local Sfx = require(script.Parent.Sfx)
+local Pictures = require(script.Parent.Pictures)
 local Sprites = require(script.Parent.Sprites)
 local Strategic = require(script.Parent.Strategic)
 local Theme = require(script.Parent.Theme)
@@ -7079,7 +7105,9 @@ function MapView.addBuilding(info)
 		img.AnchorPoint = Vector2.new(0.5, 1)
 		img.Position = UDim2.fromScale(0.5, 1)
 	end
-	if not Sprites.has(def.icon) then
+	if Pictures.has(def.icon) then
+		Pictures.set(rec.base, rec.tint, def.icon)
+	elseif not Sprites.has(def.icon) then
 		rec.art, rec.parts = Drawn.building(info.kind, rec.clip, color)
 	end
 	rec.line = make("Frame", {
@@ -7257,7 +7285,9 @@ function MapView.addUnit(info)
 		ZIndex = if u.air then Z.air else Z.unit,
 		Parent = board,
 	})
-	local drawn = not Sprites.has(def.icon)
+	-- painted pictures stand upright and turn by mirroring; drawings are the fallback
+	local picture = not Sprites.has(def.icon) and Pictures.has(def.icon)
+	local drawn = not Sprites.has(def.icon) and not picture
 	if u.air and drawn then
 		-- the aircraft's shadow on the ground below it: a dark copy of the drawing
 		local shadow = Drawn.unit(info.kind, u.frame, color, true)
@@ -7280,6 +7310,9 @@ function MapView.addUnit(info)
 		Sprites.set(u.shadow, def.icon, "base")
 		u.shadowTint = make("ImageLabel", props)
 		Sprites.set(u.shadowTint, def.icon, "team")
+		if picture then
+			Pictures.set(u.shadow, u.shadowTint, def.icon, false)
+		end
 	end
 	local art, drawnParts = nil, nil
 	if drawn then
@@ -7291,6 +7324,10 @@ function MapView.addUnit(info)
 		u.rotors = drawnParts.rotors
 	else
 		u.body, u.bodyTint = spritePair(u.frame, def.icon, color, 2, 1)
+		if picture then
+			u.upright, u.left = true, false
+			Pictures.set(u.body, u.bodyTint, def.icon, false)
+		end
 	end
 	if def.gun and Sprites.has(def.gun) then
 		u.gun, u.gunTint = spritePair(u.frame, def.gun, color, 4, 1)
@@ -7529,6 +7566,23 @@ local function updateUnits(dt: number)
 			local rx, ry = recoil(u, u.heading, clock, 0.04)
 			ox += rx
 			oy += ry
+		end
+		if u.upright then
+			-- a picture stays upright: it faces left or right by mirroring, keeps only the sway,
+			-- and a walker hops a little with each step
+			local side = math.sin(math.rad(u.heading))
+			local left = if side < -0.15 then true elseif side > 0.15 then false else u.left
+			if left ~= u.left then
+				u.left = left
+				Pictures.set(u.body, u.bodyTint, u.def.icon, left)
+				if u.shadow then
+					Pictures.set(u.shadow, u.shadowTint, u.def.icon, left)
+				end
+			end
+			rot -= u.heading
+			if WALKERS[u.kind] then
+				oy -= math.abs(math.sin(u.stride or 0)) * (u.walk or 0) * 0.08
+			end
 		end
 		pose(u.body, u.bodyTint, rot, ox, oy, sx, sy)
 		if u.shadow then
@@ -8375,7 +8429,56 @@ function Music.setOn(on: boolean)
 end
 
 return Music
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Placement</string><ProtectedString name="Source"><![CDATA[-- Build mode on the map: the server's placement rules, an outline of the chosen building under
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Pictures</string><ProtectedString name="Source"><![CDATA[-- Painted pictures (three-quarter view) of the buildings and units that have no top-down
+-- sprite: two sheets of 4 x 4 cells of 256 pixels, the picture and its team-coloured parts in
+-- grey (art/pictures_base.png, art/pictures_team.png). Units are not turned like sprites: the
+-- map shows the picture or its mirror copy (the next cell), by where the unit is heading.
+local Pictures = {}
+
+local BASE = "rbxassetid://73647469923883"
+local TEAM = "rbxassetid://101931638901895"
+local CELL = 256
+
+-- name -> first cell; right = the picture faces right (units only, they have a mirror copy)
+local CELLS = {
+	repair = { 0 },
+	power = { 1 },
+	radar = { 2 },
+	lab = { 3 },
+	mlrs = { 4, right = true },
+	sniper = { 6, right = true },
+	engineer = { 8, right = false },
+	transport = { 10, right = false },
+	bomber = { 12, right = false },
+	drone = { 14, right = false },
+}
+
+function Pictures.has(name: string): boolean
+	return CELLS[name] ~= nil
+end
+
+-- shows a picture in an image and its team layer; left = the unit heads left on the screen
+function Pictures.set(base: ImageLabel, team: ImageLabel?, name: string, left: boolean?)
+	local c = CELLS[name]
+	local i = c[1]
+	if c.right ~= nil and (left == true) == c.right then
+		i += 1
+	end
+	local offset = Vector2.new(i % 4 * CELL, i // 4 * CELL)
+	for _, label in { base, team } do
+		if label then
+			label.ImageRectOffset = offset
+			label.ImageRectSize = Vector2.new(CELL, CELL)
+		end
+	end
+	base.Image = BASE
+	if team then
+		team.Image = TEAM
+	end
+end
+
+return Pictures
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Placement</string><ProtectedString name="Source"><![CDATA[-- Build mode on the map: the server's placement rules, an outline of the chosen building under
 -- the pointer (green if it fits, red if not), and helpers that show where it can go: rings
 -- around the free pools for extractors, the zones around the base and its supplied strategic
 -- points for the rest.
@@ -8585,7 +8688,7 @@ function Placement.init(boardFrame: Frame, records, pointRecords, mine: () -> nu
 end
 
 return Placement
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Research</string><ProtectedString name="Source"><![CDATA[-- The research panel of a research centre: every technology with what it does and its price,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">Research</string><ProtectedString name="Source"><![CDATA[-- The research panel of a research centre: every technology with what it does and its price,
 -- the one being studied with its progress, and a button to stop it (the metal comes back).
 -- Part of the interface; Ui puts it together.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8779,7 +8882,7 @@ function Research.hide()
 end
 
 return Research
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">Sfx</string><ProtectedString name="Source"><![CDATA[-- Sound effects. All clips are cut from one audio asset (shared/SoundData) with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000025"><Properties><string name="Name">Sfx</string><ProtectedString name="Source"><![CDATA[-- Sound effects. All clips are cut from one audio asset (shared/SoundData) with
 -- Sound.PlaybackRegion. Battle sounds get quieter away from the middle of the screen and are
 -- skipped when far off screen, when the same clip just played, or when many are playing.
 local ContentProvider = game:GetService("ContentProvider")
@@ -8875,13 +8978,14 @@ function Sfx.at(name: string, x: number, y: number)
 end
 
 return Sfx
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000025"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Unit and building pictures come from one sprite sheet (atlas) plus a matching sheet with
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000026"><Properties><string name="Name">Sprites</string><ProtectedString name="Source"><![CDATA[-- Unit and building pictures come from one sprite sheet (atlas) plus a matching sheet with
 -- the team-coloured parts in grey, which is tinted with ImageColor3. One pair of images
 -- serves every team. Other icons are text symbols.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local SpriteData = require(Shared.SpriteData)
 local Art = require(script.Parent.Art)
+local Pictures = require(script.Parent.Pictures)
 
 local Sprites = {}
 
@@ -8972,12 +9076,15 @@ end
 function Sprites.apply(label: GuiObject, name: string, colorHex: string?)
 	local target: any = label
 	local layer: any = label:FindFirstChild("Tint")
-	if Sprites.has(name) then
+	local picture = not Sprites.has(name) and Pictures.has(name)
+	if Sprites.has(name) or picture then
 		local glyph = label:FindFirstChild("Glyph")
 		if glyph then
 			glyph:Destroy()
 		end
-		Sprites.set(target, name, "base")
+		if not picture then
+			Sprites.set(target, name, "base")
+		end
 		if not layer then
 			layer = Instance.new("ImageLabel")
 			layer.Name = "Tint"
@@ -8986,7 +9093,11 @@ function Sprites.apply(label: GuiObject, name: string, colorHex: string?)
 			layer.ZIndex = label.ZIndex
 			layer.Parent = label
 		end
-		Sprites.set(layer, name, "team")
+		if picture then
+			Pictures.set(target, layer, name)
+		else
+			Sprites.set(layer, name, "team")
+		end
 		layer.ImageColor3 = if colorHex then Color3.fromHex(colorHex) else NEUTRAL
 		layer.ImageTransparency = target.ImageTransparency
 		return
@@ -9022,7 +9133,7 @@ function Sprites.setTransparency(label: GuiObject, value: number)
 end
 
 return Sprites
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000026"><Properties><string name="Name">Strategic</string><ProtectedString name="Source"><![CDATA[-- Strategic points on the board: a ring around each point in its owner's colour (light grey
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000027"><Properties><string name="Name">Strategic</string><ProtectedString name="Source"><![CDATA[-- Strategic points on the board: a ring around each point in its owner's colour (light grey
 -- while nobody holds it), a diamond in the middle, its name (hidden when the map is zoomed far
 -- out), a bar while someone is taking it, and the player's supply lines: from the command
 -- centre along the points that are supplied. The server decides everything; this only draws
@@ -9256,7 +9367,7 @@ function Strategic.init(boardFrame: Frame, colors: (number) -> Color3?, mine: ()
 end
 
 return Strategic
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000027"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Colours, fonts and small helpers for building UI in code.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000028"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Colours, fonts and small helpers for building UI in code.
 local Theme = {}
 
 Theme.C = {
@@ -9396,7 +9507,7 @@ function Theme.hex(h: string): Color3
 end
 
 return Theme
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000028"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[-- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000029"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[-- Menu and match HUD, built in code. Designed on a 1000 x 540 canvas and scaled to the screen.
 -- This module is the interface the game script talks to; the parts are built in Menu (main
 -- menu and arsenal), Landing (choosing a base and a commander), Hud (the match screen), Factory
 -- (the factory panel) and Research (the research panel), from Widgets.
@@ -9644,7 +9755,7 @@ function UI.artError()
 end
 
 return UI
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000029"><Properties><string name="Name">Widgets</string><ProtectedString name="Source"><![CDATA[-- Small pieces the menu and the match screen are built from: icons, round icon buttons, the
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000002A"><Properties><string name="Name">Widgets</string><ProtectedString name="Source"><![CDATA[-- Small pieces the menu and the match screen are built from: icons, round icon buttons, the
 -- orange main buttons, avatars, resource chips and prices.
 local TweenService = game:GetService("TweenService")
 

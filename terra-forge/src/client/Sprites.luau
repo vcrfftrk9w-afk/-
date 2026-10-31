@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local SpriteData = require(Shared.SpriteData)
 local Art = require(script.Parent.Art)
+local Pictures = require(script.Parent.Pictures)
 
 local Sprites = {}
 
@@ -95,12 +96,15 @@ end
 function Sprites.apply(label: GuiObject, name: string, colorHex: string?)
 	local target: any = label
 	local layer: any = label:FindFirstChild("Tint")
-	if Sprites.has(name) then
+	local picture = not Sprites.has(name) and Pictures.has(name)
+	if Sprites.has(name) or picture then
 		local glyph = label:FindFirstChild("Glyph")
 		if glyph then
 			glyph:Destroy()
 		end
-		Sprites.set(target, name, "base")
+		if not picture then
+			Sprites.set(target, name, "base")
+		end
 		if not layer then
 			layer = Instance.new("ImageLabel")
 			layer.Name = "Tint"
@@ -109,7 +113,11 @@ function Sprites.apply(label: GuiObject, name: string, colorHex: string?)
 			layer.ZIndex = label.ZIndex
 			layer.Parent = label
 		end
-		Sprites.set(layer, name, "team")
+		if picture then
+			Pictures.set(target, layer, name)
+		else
+			Sprites.set(layer, name, "team")
+		end
 		layer.ImageColor3 = if colorHex then Color3.fromHex(colorHex) else NEUTRAL
 		layer.ImageTransparency = target.ImageTransparency
 		return

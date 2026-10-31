@@ -4,10 +4,10 @@
 -- map shows the picture or its mirror copy (the next cell), by where the unit is heading.
 local Pictures = {}
 
--- the image ids of the two sheets (uploaded as decals); while they are nil the game keeps the
--- drawings and symbols instead
-local BASE: string? = nil
-local TEAM: string? = nil
+-- the image ids of the two sheets (imported with Studio's Asset Manager); while they are nil
+-- the game keeps the drawings and symbols instead
+local BASE: string? = "rbxassetid://96972992380315"
+local TEAM: string? = "rbxassetid://106536867009790"
 local CELL = 256
 
 -- name -> first cell; right = the picture faces right (units only, they have a mirror copy)

@@ -1058,6 +1058,8 @@ function MapView.init(playerGui: PlayerGui)
 		Name = "TerraForgeMap",
 		ResetOnSpawn = false,
 		IgnoreGuiInset = true,
+		-- the map covers the whole screen, the sides of a phone's notch too (no green strips)
+		ScreenInsets = Enum.ScreenInsets.None,
 		DisplayOrder = 0,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	})

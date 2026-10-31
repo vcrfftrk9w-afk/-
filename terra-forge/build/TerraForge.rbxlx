@@ -85,7 +85,10 @@ Config.POINT_VISION = 7
 Config.POINT_SCORE = 400 -- what a held point adds to its owner's strength
 Config.SUPPLY_RANGE = 30
 
--- a player joining a match has this long to choose a free base and a commander
+-- before a battle the players choose bases and commanders in the lobby; the battle starts for
+-- everyone when they all are ready, or after LOBBY_SECONDS. A player joining a battle already
+-- going has LANDING_SECONDS to choose a free base and a commander
+Config.LOBBY_SECONDS = 30
 Config.LANDING_SECONDS = 10
 
 -- commanders: each base has one, which adds its bonuses (shares) for the whole match. income =
@@ -742,6 +745,12 @@ local function onAction(player: Player, kind, a, b, c, d, e)
 		match:queueUnit(player, a, b)
 	elseif kind == "land" and isNumber(a) and typeof(b) == "string" then
 		match:land(player, a, b)
+	elseif kind == "seat" and isNumber(a) then
+		match:moveSeat(player, a)
+	elseif kind == "commander" and typeof(a) == "string" then
+		match:pickCommander(player, a)
+	elseif kind == "ready" and typeof(a) == "boolean" then
+		match:setReady(player, a)
 	elseif kind == "research" and isNumber(a) and typeof(b) == "string" and Config.TECH[b] then
 		match:startResearch(player, a, b)
 	elseif kind == "stopresearch" and isNumber(a) then
@@ -800,7 +809,7 @@ RunService.Heartbeat:Connect(function(dt)
 			{
 				t = "lobby",
 				phase = if match then match.phase else "none",
-				timer = if match then match.timer else 0,
+				timer = if match then (if match.phase == "lobby" then match.lobbyTimer else match.timer) else 0,
 				join = if match then math.max(0, match.joinTimer) else 0,
 				players = #Players:GetPlayers(),
 				inMatch = if match then match:humanCount() else 0,
@@ -1686,7 +1695,9 @@ function Match.new(event: RemoteEvent)
 	local self = setmetatable({}, Match)
 	self.event = event
 	self.rng = Random.new()
-	self.phase = "game"
+	self.phase = "lobby"
+	self.lobbyTimer = Config.LOBBY_SECONDS
+	self.ready = {} -- players in the lobby who pressed «ГОТОВ»: player -> true
 	self.timer = Config.MATCH_SECONDS
 	self.joinTimer = Config.JOIN_SECONDS
 	self.nations = {}
@@ -1789,7 +1800,24 @@ function Match:snapshot(player: Player, choose)
 		points = self:pointsInfo(),
 		pstate = self:pointsState(),
 		choose = choose,
+		lobby = if self.phase == "lobby" then self:lobbyInfo() else nil,
 	}
+end
+
+-- the lobby for everyone: who holds each base, with which commander, who is ready, and the
+-- seconds before the battle starts anyway
+function Match:lobbyInfo()
+	local seats = {}
+	for _, n in self.seats do
+		table.insert(seats, {
+			id = n.id,
+			name = n.name,
+			human = n.isHuman,
+			ready = n.player ~= nil and self.ready[n.player] == true,
+			commander = n.commander,
+		})
+	end
+	return { t = "lobbystate", timer = math.max(0, self.lobbyTimer), seats = seats }
 end
 
 function Match:sendSnapshot(player: Player)
@@ -1809,12 +1837,44 @@ function Match:freeSeats(): { number }
 	return ids
 end
 
--- a player who joins while the match is young chooses a base run by a bot and a commander
--- (Match:land); later, or when every base is taken, they watch
+-- a player takes a base
+function Match:seat(player: Player, n)
+	n.isHuman = true
+	n.player = player
+	n.name = player.DisplayName
+	n.userId = player.UserId
+	self.humans[player] = n
+end
+
+-- the base goes back to its bot
+function Match:unseat(n)
+	if n.player then
+		self.humans[n.player] = nil
+		self.ready[n.player] = nil
+	end
+	n.isHuman = false
+	n.player = nil
+	n.userId = 0
+	n.name = n.botName
+end
+
+-- in the lobby a player takes the first free base; while the battle is young they choose a base
+-- run by a bot and a commander (Match:land); later, or when every base is taken, they watch
 function Match:play(player: Player)
 	if self.humans[player] then
 		self:sendSnapshot(player)
 		return
+	end
+	if self.phase == "lobby" then
+		local free = self:freeSeats()
+		if #free > 0 then
+			local n = self.nations[free[1]]
+			self:seat(player, n)
+			self:send({ t = "nation", n = nationInfo(n) })
+			self:sendSnapshot(player)
+			self:send(self:lobbyInfo())
+			return
+		end
 	end
 	if self.phase == "game" and self.joinTimer > 0 then
 		local free = self:freeSeats()
@@ -1850,11 +1910,7 @@ function Match:land(player: Player, seatId: number, commander: string)
 		return
 	end
 	self:resetBase(n)
-	n.isHuman = true
-	n.player = player
-	n.name = player.DisplayName
-	n.userId = player.UserId
-	self.humans[player] = n
+	self:seat(player, n)
 	self:setCommander(n, if Config.COMMANDERS[commander] then commander else Config.COMMANDER_ORDER[1])
 	self:send({ t = "nation", n = nationInfo(n) })
 	self:sendSnapshot(player)
@@ -1916,12 +1972,56 @@ function Match:leave(player: Player)
 	if not n then
 		return
 	end
-	self.humans[player] = nil
-	n.isHuman = false
-	n.player = nil
-	n.userId = 0
-	n.name = n.botName
+	self:unseat(n)
 	self:send({ t = "nation", n = nationInfo(n) })
+	if self.phase == "lobby" then
+		self:send(self:lobbyInfo())
+	end
+end
+
+-- in the lobby: move to another free base
+function Match:moveSeat(player: Player, seatId: number)
+	local n, to = self.humans[player], self.nations[seatId]
+	if self.phase ~= "lobby" or not n or not to or to.isHuman then
+		return
+	end
+	local commander = n.commander
+	self:unseat(n)
+	self:seat(player, to)
+	self:setCommander(to, commander)
+	self:send({ t = "nation", n = nationInfo(n) })
+	self:send({ t = "nation", n = nationInfo(to) })
+	self:sendSnapshot(player)
+	self:send(self:lobbyInfo())
+end
+
+-- in the lobby: lead the base with another commander
+function Match:pickCommander(player: Player, id: string)
+	local n = self.humans[player]
+	if self.phase ~= "lobby" or not n or not Config.COMMANDERS[id] then
+		return
+	end
+	self:setCommander(n, id)
+	self:send({ t = "nation", n = nationInfo(n) })
+	self:send(self:lobbyInfo())
+end
+
+-- in the lobby: «ГОТОВ» pressed or released
+function Match:setReady(player: Player, on: boolean)
+	if self.phase ~= "lobby" or not self.humans[player] then
+		return
+	end
+	self.ready[player] = if on then true else nil
+	self:send(self:lobbyInfo())
+end
+
+-- everyone is ready, or the lobby time is up: the battle starts for all at once
+function Match:startBattle()
+	self.phase = "game"
+	self.joinTimer = Config.JOIN_SECONDS
+	self.ready = {}
+	self:send({ t = "phase", phase = "game", timer = self.timer })
+	self:sendEconomy()
 end
 
 function Match:humanCount(): number
@@ -2426,7 +2526,25 @@ function Match:flush()
 end
 
 function Match:step(dt: number)
-	if self.phase == "game" then
+	if self.phase == "lobby" then
+		-- nothing moves yet; the clock runs only while someone is in the lobby
+		local humans, ready = 0, 0
+		for player in self.humans do
+			humans += 1
+			if self.ready[player] then
+				ready += 1
+			end
+		end
+		self.lobbyTimer = if humans > 0 then self.lobbyTimer - dt else Config.LOBBY_SECONDS
+		self.secAcc += dt
+		if self.secAcc >= 1 then
+			self.secAcc = 0
+			self:send(self:lobbyInfo())
+		end
+		if humans > 0 and (ready == humans or self.lobbyTimer <= 0) then
+			self:startBattle()
+		end
+	elseif self.phase == "game" then
 		self.timer -= dt
 		self.joinTimer -= dt
 		self.tickAcc += dt
@@ -3284,6 +3402,7 @@ end
 local function goMenu()
 	state.screen = "menu"
 	state.landing = nil
+	state.lobby = nil
 	state.spectator = false
 	state.defeated = false
 	state.rallyFor = nil
@@ -3312,6 +3431,7 @@ local function enterPlay(spectator: boolean)
 	local starting = state.screen ~= "play" or state.spectator
 	state.screen = "play"
 	state.landing = nil
+	state.lobby = nil
 	state.spectator = spectator
 	state.rallyFor = nil
 	state.defeated = false
@@ -3353,6 +3473,29 @@ local function seatName(id: number): string
 	return (if n.cap.y < Map.H / 2 then "Северо" else "Юго") .. "-" .. (if n.cap.x < Map.W / 2 then "запад" else "восток")
 end
 
+-- the bases for the panel: corner, colour, who holds it, commander, ready, free to take; mine =
+-- the player's base (or the one they chose to land at), ready = seat id -> pressed «ГОТОВ»
+local function seatRows(mine: number?, ready: { [number]: boolean }?)
+	local rows = {}
+	for id = 1, Config.SEATS do
+		local n = MapView.nations[id]
+		if n then
+			local you = id == mine
+			table.insert(rows, {
+				id = id,
+				corner = seatName(id),
+				color = n.color3,
+				who = if you then "Ты" elseif n.human then n.name else "Бот · " .. n.name,
+				commander = if you then state.commander else n.commander,
+				ready = ready ~= nil and ready[id] == true,
+				free = n.alive and not n.human,
+				mine = you,
+			})
+		end
+	end
+	return rows
+end
+
 local pickSeat
 
 -- marks the bases that are still free and shows what is chosen; a base taken by another player
@@ -3370,7 +3513,8 @@ local function showChoice()
 		l.seat = free[1]
 	end
 	MapView.setLanding(free, l.seat, pickSeat)
-	UI.setLandingChoice(if l.seat then seatName(l.seat) else nil, state.commander)
+	UI.setLandingSeats(seatRows(l.seat, nil))
+	UI.setLandingChoice(state.commander)
 end
 
 pickSeat = function(id: number)
@@ -3389,10 +3533,47 @@ local function enterLanding(choose)
 	state.defeated = false
 	MapView.spectator = false
 	MapView.setMode("landing")
-	UI.showLanding()
+	UI.showLanding("landing")
 	Music.setMode("battle")
 	showChoice()
-	UI.setLandingCountdown(choose.time, false)
+	UI.setLandingStatus(string.format("Бой уже идёт. Выбери свободную базу — высадка через %d с.", choose.time))
+end
+
+-- the lobby: info = { timer, seats = { id, name, human, ready, commander } } from the server
+local function showLobby(info)
+	state.lobby = info
+	local ready, marks = {}, { MapView.myId }
+	for _, s in info.seats do
+		ready[s.id] = s.ready
+		if s.id == MapView.myId then
+			state.lobbyReady = s.ready
+			state.commander = s.commander or state.commander
+		elseif not s.human then
+			table.insert(marks, s.id)
+		end
+	end
+	MapView.setLanding(marks, MapView.myId, function(id)
+		if id ~= MapView.myId then
+			Sfx.play("click")
+			action:FireServer("seat", id)
+		end
+	end)
+	UI.setLandingSeats(seatRows(MapView.myId, ready))
+	UI.setLandingChoice(state.commander)
+	UI.setLandingReady(state.lobbyReady)
+	UI.setLandingStatus(string.format("Бой начнётся через %d с — или сразу, когда все нажмут «ГОТОВ». Нажми на свободную базу, чтобы занять её.", math.ceil(info.timer)))
+end
+
+local function enterLobby(info)
+	state.screen = "lobby"
+	state.landing = nil
+	state.spectator = false
+	state.defeated = false
+	MapView.spectator = false
+	MapView.setMode("landing")
+	UI.showLanding("lobby")
+	Music.setMode("menu")
+	showLobby(info)
 end
 
 -- the player lands at the chosen base with the chosen commander; the server answers with the
@@ -3403,18 +3584,37 @@ local function land()
 		return
 	end
 	l.sent = true
-	UI.setLandingCountdown(0, true)
+	UI.setLandingStatus("Высаживаемся…")
 	action:FireServer("land", l.seat or 0, state.commander)
 end
 
+-- the big button: «ВЫСАДИТЬСЯ» while landing, «ГОТОВ» (or taking it back) in the lobby
 UI.onLand = function()
-	land()
+	if state.screen == "lobby" then
+		action:FireServer("ready", not state.lobbyReady)
+	else
+		land()
+	end
 end
 
 UI.onLandingCommander = function(id)
-	if state.landing and not state.landing.sent then
+	if state.screen == "lobby" then
+		state.commander = id
+		UI.setLandingChoice(id)
+		action:FireServer("commander", id)
+	elseif state.landing and not state.landing.sent then
 		state.commander = id
 		showChoice()
+	end
+end
+
+UI.onLandingSeat = function(id)
+	if state.screen == "lobby" then
+		if id ~= MapView.myId then
+			action:FireServer("seat", id)
+		end
+	else
+		pickSeat(id)
 	end
 end
 
@@ -3426,7 +3626,9 @@ function handlers.snapshot(msg)
 	state.timer = msg.timer
 	-- the landing was turned down (the bases were taken a moment ago): the player watches
 	local refused = state.screen == "landing" and state.landing ~= nil and state.landing.sent
-	if msg.you ~= 0 then
+	if msg.you ~= 0 and msg.lobby then
+		enterLobby(msg.lobby)
+	elseif msg.you ~= 0 then
 		enterPlay(false)
 	elseif msg.choose then
 		enterLanding(msg.choose)
@@ -3447,6 +3649,14 @@ function handlers.nation(msg)
 	end
 	if state.screen == "landing" and state.landing and not state.landing.sent then
 		showChoice()
+	elseif state.screen == "lobby" and state.lobby then
+		showLobby(state.lobby)
+	end
+end
+
+function handlers.lobbystate(msg)
+	if state.screen == "lobby" then
+		showLobby(msg)
 	end
 end
 
@@ -3464,6 +3674,11 @@ function handlers.phase(msg)
 	state.phase = msg.phase
 	state.timer = msg.timer
 	MapView.setPhase(msg.phase)
+	if msg.phase == "game" and state.screen == "lobby" then
+		-- the lobby is over: the battle starts for everyone at once
+		enterPlay(false)
+		return
+	end
 	if state.screen ~= "play" then
 		return
 	end
@@ -4201,8 +4416,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	if processed or input.UserInputType ~= Enum.UserInputType.Keyboard then
 		return
 	end
-	if state.screen == "landing" and input.KeyCode == Enum.KeyCode.Return then
-		safe("клавиша", land)
+	if (state.screen == "landing" or state.screen == "lobby") and input.KeyCode == Enum.KeyCode.Return then
+		safe("клавиша", UI.onLand)
 	elseif canCommand() then
 		safe("клавиша", onKey, input)
 	end
@@ -4223,15 +4438,19 @@ end
 local hudAcc = 0
 local function frame(dt: number)
 	local l = state.landing
-	if state.screen == "landing" and l then
-		-- the map stays between the landing panels; the player lands when the time is up
+	if state.screen == "landing" or state.screen == "lobby" then
+		-- the map stays right of the choice panel
 		MapView.setLandingArea(UI.landingArea())
-		if not l.sent then
-			local left = math.max(0, math.ceil(l.ends - os.clock()))
-			UI.setLandingCountdown(left, false)
-			if left == 0 then
-				land()
-			end
+	end
+	if state.screen == "landing" and l and not l.sent then
+		-- the player lands when the time is up
+		local left = math.max(0, math.ceil(l.ends - os.clock()))
+		if left ~= l.shown then
+			l.shown = left
+			UI.setLandingStatus(string.format("Бой уже идёт. Выбери свободную базу — высадка через %d с.", left))
+		end
+		if left == 0 then
+			land()
 		end
 	end
 	MapView.update(dt)
@@ -4389,9 +4608,9 @@ Camera.x, Camera.y, Camera.ppt = W / 2, H / 2, 24
 local view, board
 local glide = nil -- the camera moves smoothly to { x, y }
 
--- while the player chooses where to land, the map fits between these screen heights (GUI
--- coordinates): the bottom of the title and the top of the commander panel
-Camera.area = { top = -math.huge, bottom = math.huge }
+-- in the lobby and while landing, the map fits right of the choice panel and between these
+-- screen heights (GUI coordinates)
+Camera.area = { top = -math.huge, bottom = math.huge, left = -math.huge }
 
 function Camera.viewSize(): Vector2
 	local s = view.AbsoluteSize
@@ -4547,8 +4766,9 @@ function Camera.update(dt: number, mode: string, edges: boolean)
 		local o = view.AbsolutePosition
 		local top = math.clamp(Camera.area.top - o.Y, 0, vs.Y * 0.4)
 		local bottom = math.clamp(o.Y + vs.Y - Camera.area.bottom, 0, vs.Y * 0.4)
-		Camera.ppt = math.max(math.min(vs.X / (W + 4), (vs.Y - top - bottom) / (H + 2)), 1)
-		Camera.x, Camera.y = W / 2, H / 2 - (top - bottom) / 2 / Camera.ppt
+		local left = math.clamp(Camera.area.left - o.X, 0, vs.X * 0.6)
+		Camera.ppt = math.max(math.min((vs.X - left) / (W + 4), (vs.Y - top - bottom) / (H + 2)), 1)
+		Camera.x, Camera.y = W / 2 - left / 2 / Camera.ppt, H / 2 - (top - bottom) / 2 / Camera.ppt
 		glide = nil
 		place()
 		return
@@ -5887,7 +6107,7 @@ function Hud.build(context, play: Instance)
 			Text = c[2],
 			AutoButtonColor = true,
 			FontFace = font(Enum.FontWeight.Bold),
-			TextScaled = true,
+			TextSize = 10,
 			TextColor3 = C.ink,
 			BackgroundColor3 = C.panelHi,
 			LayoutOrder = i,
@@ -5895,7 +6115,6 @@ function Hud.build(context, play: Instance)
 		}, {
 			Theme.corner(8),
 			make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
-			make("UITextSizeConstraint", { MaxTextSize = 11 }),
 			Theme.pad(2, 0),
 		})
 		b.Activated:Connect(function()
@@ -5941,14 +6160,14 @@ function Hud.build(context, play: Instance)
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.new(0.5, 0, 0, 43),
 			Size = UDim2.new(1, -4, 0, 24),
-			-- long names shrink to fit narrow buttons
-			TextScaled = true,
+			-- one size for every name, so the bar looks even; long names take two lines
+			TextSize = 10,
 			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextYAlignment = Enum.TextYAlignment.Center,
 			FontFace = font(Enum.FontWeight.Bold),
 			Parent = b,
-		}, { make("UITextSizeConstraint", { MaxTextSize = 11 }) })
+		})
 		local row, costLabel = Widgets.costRow(def.cost, b, 11)
 		row.AnchorPoint = Vector2.new(0.5, 1)
 		row.Position = UDim2.new(0.5, 0, 1, -4)
@@ -6555,15 +6774,16 @@ function Input.init(viewFrame: Frame, handlers)
 end
 
 return Input
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001D"><Properties><string name="Name">Landing</string><ProtectedString name="Source"><![CDATA[-- The landing screen: when the player joins a match they have a few seconds to tap a free base
--- on the map and to choose a commander. A title with the countdown at the top, the commanders
--- and «ВЫСАДИТЬСЯ» at the bottom; the map shows between them. Part of the interface; Ui puts
--- it together.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001D"><Properties><string name="Name">Landing</string><ProtectedString name="Source"><![CDATA[-- Choosing a base and a commander: the lobby before a battle (everyone picks, presses «ГОТОВ»
+-- and the battle starts for all at once) and landing in a battle already going (a free base, in
+-- a few seconds). A panel on the left lists the bases and the commanders; the map shows on the
+-- right with the free bases marked. Part of the interface; Ui puts it together.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("TerraForge")
 local Config = require(Shared.Config)
 local Sfx = require(script.Parent.Sfx)
+local Sprites = require(script.Parent.Sprites)
 local Theme = require(script.Parent.Theme)
 local Widgets = require(script.Parent.Widgets)
 
@@ -6575,99 +6795,82 @@ local Landing = {}
 
 -- ctx: { UI = the interface, refs = shared widget references, color = the player's team colour }
 local ctx, refs
+local rows = {} -- base rows of the panel, in order
 local cards = {} -- commander id -> { button, stroke }
+local mode = "lobby" -- "lobby" or "landing"
 
 local PICKED = Color3.fromRGB(70, 42, 18)
+local READY = Color3.fromRGB(120, 255, 150)
+
+local function baseRow(parent: Instance, order: number)
+	local UI = ctx.UI
+	local b = make("TextButton", {
+		Text = "",
+		AutoButtonColor = true,
+		Size = UDim2.new(1, 0, 0, 36),
+		BackgroundColor3 = C.panelHi,
+		LayoutOrder = order,
+		Parent = parent,
+	}, { Theme.corner(10) })
+	local row = { button = b }
+	row.stroke = make("UIStroke", { Color = C.molten, Thickness = 2, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = b })
+	row.swatch = make("Frame", { Position = UDim2.fromOffset(10, 11), Size = UDim2.fromOffset(14, 14), Parent = b }, { Theme.corner(4) })
+	row.corner = Theme.label({ Text = "", Position = UDim2.fromOffset(32, 2), Size = UDim2.new(1, -110, 0, 17), TextSize = 13, FontFace = font(Enum.FontWeight.Bold), Parent = b })
+	row.who = Theme.label({ Text = "", Position = UDim2.fromOffset(32, 18), Size = UDim2.new(1, -110, 0, 15), TextSize = 11.5, TextColor3 = C.muted, FontFace = font(Enum.FontWeight.SemiBold), TextTruncate = Enum.TextTruncate.AtEnd, Parent = b })
+	row.icon = Widgets.icon("gear", 20, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -74, 0.5, 0), Parent = b })
+	row.ready = Theme.label({
+		Text = "",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -8, 0.5, 0),
+		Size = UDim2.fromOffset(62, 16),
+		TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		FontFace = font(Enum.FontWeight.Heavy),
+		Parent = b,
+	})
+	b.Activated:Connect(function()
+		if row.id and UI.onLandingSeat then
+			Sfx.play("click")
+			UI.onLandingSeat(row.id)
+		end
+	end)
+	return row
+end
 
 function Landing.build(context, root: Instance)
 	ctx, refs = context, context.refs
 	local UI = ctx.UI
 	local screen = make("Frame", { Name = "Landing", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = 15, Parent = root })
-
-	-- the title and the countdown
-	local top = Theme.panel({
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 10),
-		Size = UDim2.fromOffset(560, 64),
+	local panel = Theme.panel({
+		Position = UDim2.fromOffset(16, 12),
+		Size = UDim2.new(0, 320, 1, -24),
 		BackgroundColor3 = Color3.fromRGB(16, 21, 34),
 		BackgroundTransparency = 0.04,
 		Parent = screen,
 	})
-	Theme.pad(18, 10).Parent = top
-	Theme.label({ Text = "ВЫБЕРИ ТОЧКУ ВЫСАДКИ", Size = UDim2.new(1, -64, 0, 24), TextSize = 21, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, Parent = top })
-	refs.landSub = Theme.label({
-		Text = "",
-		Position = UDim2.fromOffset(0, 26),
-		Size = UDim2.new(1, -64, 0, 18),
-		TextSize = 14,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextColor3 = Color3.fromRGB(214, 222, 235),
-		FontFace = font(Enum.FontWeight.SemiBold),
-		Parent = top,
+	Theme.pad(14, 10).Parent = panel
+	Theme.list(Enum.FillDirection.Vertical, 6).Parent = panel
+	refs.landTitle = Theme.label({ Text = "ЛОББИ", Size = UDim2.new(1, 0, 0, 24), TextSize = 21, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.moltenHi, LayoutOrder = 1, Parent = panel })
+	refs.landSub = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 30), TextSize = 12, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = Color3.fromRGB(214, 222, 235), FontFace = font(Enum.FontWeight.SemiBold), LayoutOrder = 2, Parent = panel })
+	Theme.label({ Text = "БАЗЫ", Size = UDim2.new(1, 0, 0, 14), TextSize = 12, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.muted, LayoutOrder = 3, Parent = panel })
+	local list = make("Frame", { Size = UDim2.new(1, 0, 0, Config.SEATS * 40 - 4), BackgroundTransparency = 1, LayoutOrder = 4, Parent = panel }, {
+		Theme.list(Enum.FillDirection.Vertical, 4),
 	})
-	refs.landCount = make("TextLabel", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.fromScale(1, 0.5),
-		Size = UDim2.fromOffset(56, 44),
-		BackgroundTransparency = 1,
-		Text = "",
-		TextScaled = true,
-		TextColor3 = Color3.new(1, 1, 1),
-		FontFace = font(Enum.FontWeight.Heavy),
-		Parent = top,
-	}, { Theme.molten(90) })
-	refs.landTop = top
-
-	-- the commanders, «ВЫСАДИТЬСЯ» and the way back
-	local bottom = Theme.panel({
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -10),
-		Size = UDim2.new(1, -32, 0, 128),
-		BackgroundColor3 = Color3.fromRGB(16, 21, 34),
-		BackgroundTransparency = 0.04,
-		Parent = screen,
+	for i = 1, Config.SEATS do
+		rows[i] = baseRow(list, i)
+	end
+	Theme.label({ Text = "КОМАНДИР", Size = UDim2.new(1, 0, 0, 14), TextSize = 12, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.muted, LayoutOrder = 5, Parent = panel })
+	local grid = make("Frame", { Size = UDim2.new(1, 0, 0, 3 * 30 + 2 * 4), BackgroundTransparency = 1, LayoutOrder = 6, Parent = panel }, {
+		make("UIGridLayout", { CellSize = UDim2.new(0.5, -3, 0, 30), CellPadding = UDim2.fromOffset(6, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
-	make("UISizeConstraint", { MaxSize = Vector2.new(1000, 128) }).Parent = bottom
-	Theme.pad(10, 8).Parent = bottom
-	Theme.label({ Text = "КОМАНДИР", Size = UDim2.new(1, -190, 0, 14), TextSize = 12, FontFace = font(Enum.FontWeight.Heavy), TextColor3 = C.muted, Parent = bottom })
-	local list = make("ScrollingFrame", {
-		Position = UDim2.fromOffset(0, 18),
-		Size = UDim2.new(1, -190, 0, 94),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollingDirection = Enum.ScrollingDirection.X,
-		AutomaticCanvasSize = Enum.AutomaticSize.X,
-		CanvasSize = UDim2.fromOffset(0, 0),
-		ScrollBarThickness = 3,
-		Parent = bottom,
-	}, { Theme.list(Enum.FillDirection.Horizontal, 8) })
 	for i, id in Config.COMMANDER_ORDER do
 		local c = Config.COMMANDERS[id]
-		local b = make("TextButton", {
-			Text = "",
-			AutoButtonColor = true,
-			Size = UDim2.fromOffset(144, 88),
-			BackgroundColor3 = C.panelHi,
-			LayoutOrder = i,
-			Parent = list,
-		}, { Theme.corner(12), Theme.pad(8, 6) })
+		local b = make("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = C.panelHi, LayoutOrder = i, Parent = grid }, { Theme.corner(9) })
 		local stroke = make("UIStroke", { Color = C.molten, Thickness = 2, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = b })
-		Widgets.icon(c.icon, 22, { color = ctx.color, Parent = b })
-		Theme.label({ Text = c.name, Position = UDim2.fromOffset(28, 2), Size = UDim2.new(1, -28, 0, 18), TextScaled = true, FontFace = font(Enum.FontWeight.Heavy), Parent = b }, {
-			make("UITextSizeConstraint", { MaxTextSize = 14 }),
+		Widgets.icon(c.icon, 20, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 6, 0.5, 0), color = ctx.color, Parent = b })
+		Theme.label({ Text = c.name, Position = UDim2.fromOffset(30, 0), Size = UDim2.new(1, -34, 1, 0), TextScaled = true, FontFace = font(Enum.FontWeight.Bold), Parent = b }, {
+			make("UITextSizeConstraint", { MaxTextSize = 13 }),
 		})
-		-- the description shrinks to fit the card
-		Theme.label({
-			Text = c.desc,
-			Position = UDim2.fromOffset(0, 26),
-			Size = UDim2.new(1, 0, 1, -26),
-			TextScaled = true,
-			TextWrapped = true,
-			TextYAlignment = Enum.TextYAlignment.Top,
-			TextColor3 = Color3.fromRGB(198, 207, 221),
-			FontFace = font(Enum.FontWeight.SemiBold),
-			Parent = b,
-		}, { make("UITextSizeConstraint", { MaxTextSize = 12 }) })
 		b.Activated:Connect(function()
 			Sfx.play("click")
 			if UI.onLandingCommander then
@@ -6676,26 +6879,25 @@ function Landing.build(context, root: Instance)
 		end)
 		cards[id] = { button = b, stroke = stroke }
 	end
-	local go = Widgets.moltenButton("ВЫСАДИТЬСЯ", bottom, function()
+	refs.landDesc = Theme.label({ Text = "", Size = UDim2.new(1, 0, 0, 28), TextSize = 11.5, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = Color3.fromRGB(198, 207, 221), FontFace = font(Enum.FontWeight.SemiBold), LayoutOrder = 7, Parent = panel })
+	local go = Widgets.moltenButton("ГОТОВ", panel, function()
 		if UI.onLand then
 			UI.onLand()
 		end
 	end)
-	go.AnchorPoint = Vector2.new(1, 0)
-	go.Position = UDim2.new(1, 0, 0, 18)
-	go.Size = UDim2.fromOffset(180, 56)
+	go.Size = UDim2.new(1, 0, 0, 48)
+	go.LayoutOrder = 8
 	refs.landGo = go
 	local back = make("TextButton", {
 		Text = "Назад в меню",
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.fromScale(1, 1),
-		Size = UDim2.fromOffset(180, 32),
+		Size = UDim2.new(1, 0, 0, 30),
 		AutoButtonColor = true,
 		FontFace = font(Enum.FontWeight.Bold),
 		TextSize = 13,
 		TextColor3 = C.ink,
 		BackgroundColor3 = C.panelHi,
-		Parent = bottom,
+		LayoutOrder = 9,
+		Parent = panel,
 	}, { Theme.corner(10) })
 	back.Activated:Connect(function()
 		Sfx.play("click")
@@ -6703,40 +6905,83 @@ function Landing.build(context, root: Instance)
 			UI.onLeave()
 		end
 	end)
-	refs.landBack = back
-	refs.landBottom = bottom
+	refs.landPanel = panel
 	refs.landing = screen
 end
 
--- what is chosen: base = its name (nil while none), commander = commander id
-function Landing.setChoice(base: string?, commander: string)
-	for id, card in cards do
-		local on = id == commander
-		card.stroke.Transparency = if on then 0 else 1
-		card.button.BackgroundColor3 = if on then PICKED else C.panelHi
+-- the big button's text
+local function goText(text: string)
+	for _, d in refs.landGo:GetDescendants() do
+		if d:IsA("TextLabel") then
+			d.Text = text
+		end
 	end
-	refs.landSub.Text = if base
-		then string.format("База: %s · командир: %s", base, Config.COMMANDERS[commander].name)
-		else "Нажми на свободную базу на карте"
 end
 
--- seconds left; waiting = the choice has been sent and the server is seating the player
-function Landing.setCountdown(seconds: number, waiting: boolean)
-	refs.landCount.Text = if waiting then "…" else tostring(seconds)
-end
-
--- the screen heights between which the map stays in sight (GUI coordinates)
-function Landing.area(): (number, number)
-	local top, bottom = refs.landTop, refs.landBottom
-	return top.AbsolutePosition.Y + top.AbsoluteSize.Y + 8, bottom.AbsolutePosition.Y - 8
-end
-
-function Landing.show()
+-- mode = "lobby" (before the battle) or "landing" (into a battle already going)
+function Landing.show(m: string)
+	mode = m
+	refs.landTitle.Text = if m == "lobby" then "ЛОББИ" else "ВЫСАДКА"
+	goText(if m == "lobby" then "ГОТОВ" else "ВЫСАДИТЬСЯ")
 	refs.landing.Visible = true
 end
 
 function Landing.hide()
 	refs.landing.Visible = false
+end
+
+-- the bases: list of { id, corner, color, who, commander, ready, free, mine }; a free base or
+-- the player's own can be tapped
+function Landing.setSeats(list)
+	for i, row in rows do
+		local s = list[i]
+		row.button.Visible = s ~= nil
+		row.id = if s and (s.free or s.mine) then s.id else nil
+		if s then
+			row.swatch.BackgroundColor3 = s.color
+			row.corner.Text = s.corner
+			row.who.Text = s.who
+			row.stroke.Transparency = if s.mine then 0 else 1
+			row.button.BackgroundColor3 = if s.mine then PICKED else C.panelHi
+			row.button.BackgroundTransparency = if s.free or s.mine then 0 else 0.4
+			local c = Config.COMMANDERS[s.commander or ""]
+			row.icon.Visible = c ~= nil
+			if c then
+				Sprites.apply(row.icon, c.icon, nil)
+			end
+			row.ready.Text = if s.ready then "ГОТОВ" elseif s.free and not s.mine then "свободно" else ""
+			row.ready.TextColor3 = if s.ready then READY else C.muted
+		end
+	end
+end
+
+-- the chosen commander
+function Landing.setChoice(commander: string)
+	for id, card in cards do
+		local on = id == commander
+		card.stroke.Transparency = if on then 0 else 1
+		card.button.BackgroundColor3 = if on then PICKED else C.panelHi
+	end
+	refs.landDesc.Text = Config.COMMANDERS[commander].desc
+end
+
+-- the line under the title: the countdown and what to do
+function Landing.setStatus(text: string)
+	refs.landSub.Text = text
+end
+
+-- in the lobby: the player pressed «ГОТОВ» (pressing again takes it back)
+function Landing.setReady(on: boolean)
+	if mode == "lobby" then
+		goText(if on then "ЖДЁМ ДРУГИХ…" else "ГОТОВ")
+	end
+end
+
+-- where the map may show: top, bottom and left edges (GUI coordinates)
+function Landing.area(): (number, number, number)
+	local panel = refs.landPanel
+	local p, s = panel.AbsolutePosition, panel.AbsoluteSize
+	return p.Y, p.Y + s.Y, p.X + s.X + 12
 end
 
 return Landing
@@ -6929,9 +7174,9 @@ function MapView.setLanding(seats: { number }, selected: number?, onPick: (numbe
 	end
 end
 
--- the map fits between these screen heights while the player chooses (GUI coordinates)
-function MapView.setLandingArea(top: number, bottom: number)
-	Camera.area.top, Camera.area.bottom = top, bottom
+-- while the player chooses, the map fits right of left and between top and bottom (GUI coordinates)
+function MapView.setLandingArea(top: number, bottom: number, left: number)
+	Camera.area.top, Camera.area.bottom, Camera.area.left = top, bottom, left
 end
 
 ---------------------------------------------------------------- sprites
@@ -7593,11 +7838,13 @@ local function updateUnits(dt: number)
 			u.walk = approach(u.walk or 0, if moving then 1 else 0, dt * 8)
 			u.stride = (u.stride or 0) + moved / 0.4 * math.pi
 			local swing = math.sin(u.stride) * u.walk
-			rot += swing * 13
+			-- a step: the body leans a little to each side, stretches forward and narrows as
+			-- the foot goes out, then comes back
+			rot += swing * 5
 			local side = math.rad(u.heading)
-			ox, oy = math.cos(side) * swing * 0.045, math.sin(side) * swing * 0.045
-			sx = 1 + math.abs(swing) * 0.08
-			sy = sx
+			ox, oy = math.cos(side) * swing * 0.02, math.sin(side) * swing * 0.02
+			local step = math.abs(swing)
+			sx, sy = 1 - step * 0.05, 1 + step * 0.1
 		elseif TRACKED[u.kind] then
 			if moving then
 				-- the engine shakes the hull a little; tracks and wheels leave prints, and dust on sand
@@ -8289,6 +8536,8 @@ function Menu.setLobby(info)
 		else
 			status ..= " · можно смотреть"
 		end
+	elseif info.phase == "lobby" then
+		status = string.format("Сбор игроков · бой через %d с · заходи", math.ceil(info.timer))
 	elseif info.phase == "ended" then
 		status = "Бой закончился · начни новый"
 	else
@@ -8508,8 +8757,10 @@ return Music
 -- map shows the picture or its mirror copy (the next cell), by where the unit is heading.
 local Pictures = {}
 
-local BASE = "rbxassetid://73647469923883"
-local TEAM = "rbxassetid://101931638901895"
+-- the image ids of the two sheets (uploaded as decals); while they are nil the game keeps the
+-- drawings and symbols instead
+local BASE: string? = nil
+local TEAM: string? = nil
 local CELL = 256
 
 -- name -> first cell; right = the picture faces right (units only, they have a mirror copy)
@@ -8527,7 +8778,7 @@ local CELLS = {
 }
 
 function Pictures.has(name: string): boolean
-	return CELLS[name] ~= nil
+	return BASE ~= nil and CELLS[name] ~= nil
 end
 
 -- shows a picture in an image and its team layer; left = the unit heads left on the screen
@@ -9110,6 +9361,14 @@ local GLYPHS = {
 	musicOff = { "🔇" },
 }
 
+-- icons that are pictures from the Creator Store (free decals; these are their image ids)
+local IMAGES = {
+	trophy = "rbxassetid://17240711173",
+	music = "rbxassetid://93198344173564",
+	musicOff = "rbxassetid://93198344173564",
+	exit = "rbxassetid://138668025068101",
+}
+
 function Sprites.has(name: string): boolean
 	return SpriteData[ALIASES[name] or name] ~= nil
 end
@@ -9149,6 +9408,17 @@ end
 function Sprites.apply(label: GuiObject, name: string, colorHex: string?)
 	local target: any = label
 	local layer: any = label:FindFirstChild("Tint")
+	local image = IMAGES[name]
+	if image then
+		for _, old in { layer, label:FindFirstChild("Glyph") } do
+			old:Destroy()
+		end
+		target.Image = image
+		target.ImageRectOffset, target.ImageRectSize = Vector2.zero, Vector2.zero
+		-- music switched off: the same note, faded
+		target.ImageTransparency = if name == "musicOff" then 0.65 else 0
+		return
+	end
 	local picture = not Sprites.has(name) and Pictures.has(name)
 	if Sprites.has(name) or picture then
 		local glyph = label:FindFirstChild("Glyph")
@@ -9621,6 +9891,7 @@ UI.onResearch = nil -- (research centre id, tech id)
 UI.onStopResearch = nil -- (research centre id)
 UI.researchId = nil -- the research centre whose panel is open
 UI.onLandingCommander = nil -- a commander card was tapped: (commander id)
+UI.onLandingSeat = nil -- a base row was tapped: (seat id)
 UI.onLand = nil -- «ВЫСАДИТЬСЯ»
 UI.onPlaceConfirm = nil -- (true) «Поставить» or (false) «Отмена» for a building waiting on a touch screen
 UI.buildSel = nil
@@ -9655,7 +9926,9 @@ UI.hideResearch = Research.hide
 UI.setCommander = Hud.setCommander
 UI.setPlaceConfirm = Hud.setPlaceConfirm
 UI.setLandingChoice = Landing.setChoice
-UI.setLandingCountdown = Landing.setCountdown
+UI.setLandingSeats = Landing.setSeats
+UI.setLandingStatus = Landing.setStatus
+UI.setLandingReady = Landing.setReady
 UI.landingArea = Landing.area
 
 -- the music buttons show whether the music plays
@@ -9767,11 +10040,11 @@ function UI.showMenu()
 	UI.hideResearch()
 end
 
--- choosing where to land: only the map and the landing panels
-function UI.showLanding()
+-- choosing a base and a commander: only the map and the panel; mode = "lobby" or "landing"
+function UI.showLanding(mode: string)
 	menu.Visible = false
 	play.Visible = false
-	Landing.show()
+	Landing.show(mode)
 	UI.selectBuild(nil)
 	UI.hideFactory()
 	UI.hideResearch()

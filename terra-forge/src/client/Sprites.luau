@@ -57,6 +57,14 @@ local GLYPHS = {
 	musicOff = { "🔇" },
 }
 
+-- icons that are pictures from the Creator Store (free decals; these are their image ids)
+local IMAGES = {
+	trophy = "rbxassetid://17240711173",
+	music = "rbxassetid://93198344173564",
+	musicOff = "rbxassetid://93198344173564",
+	exit = "rbxassetid://138668025068101",
+}
+
 function Sprites.has(name: string): boolean
 	return SpriteData[ALIASES[name] or name] ~= nil
 end
@@ -96,6 +104,17 @@ end
 function Sprites.apply(label: GuiObject, name: string, colorHex: string?)
 	local target: any = label
 	local layer: any = label:FindFirstChild("Tint")
+	local image = IMAGES[name]
+	if image then
+		for _, old in { layer, label:FindFirstChild("Glyph") } do
+			old:Destroy()
+		end
+		target.Image = image
+		target.ImageRectOffset, target.ImageRectSize = Vector2.zero, Vector2.zero
+		-- music switched off: the same note, faded
+		target.ImageTransparency = if name == "musicOff" then 0.65 else 0
+		return
+	end
 	local picture = not Sprites.has(name) and Pictures.has(name)
 	if Sprites.has(name) or picture then
 		local glyph = label:FindFirstChild("Glyph")

@@ -225,7 +225,7 @@ function Hud.build(context, play: Instance)
 			Text = c[2],
 			AutoButtonColor = true,
 			FontFace = font(Enum.FontWeight.Bold),
-			TextScaled = true,
+			TextSize = 10,
 			TextColor3 = C.ink,
 			BackgroundColor3 = C.panelHi,
 			LayoutOrder = i,
@@ -233,7 +233,6 @@ function Hud.build(context, play: Instance)
 		}, {
 			Theme.corner(8),
 			make("UIStroke", { Color = C.molten, Thickness = 1.5, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
-			make("UITextSizeConstraint", { MaxTextSize = 11 }),
 			Theme.pad(2, 0),
 		})
 		b.Activated:Connect(function()
@@ -279,14 +278,14 @@ function Hud.build(context, play: Instance)
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.new(0.5, 0, 0, 43),
 			Size = UDim2.new(1, -4, 0, 24),
-			-- long names shrink to fit narrow buttons
-			TextScaled = true,
+			-- one size for every name, so the bar looks even; long names take two lines
+			TextSize = 10,
 			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextYAlignment = Enum.TextYAlignment.Center,
 			FontFace = font(Enum.FontWeight.Bold),
 			Parent = b,
-		}, { make("UITextSizeConstraint", { MaxTextSize = 11 }) })
+		})
 		local row, costLabel = Widgets.costRow(def.cost, b, 11)
 		row.AnchorPoint = Vector2.new(0.5, 1)
 		row.Position = UDim2.new(0.5, 0, 1, -4)

@@ -187,9 +187,9 @@ function MapView.setLanding(seats: { number }, selected: number?, onPick: (numbe
 	end
 end
 
--- the map fits between these screen heights while the player chooses (GUI coordinates)
-function MapView.setLandingArea(top: number, bottom: number)
-	Camera.area.top, Camera.area.bottom = top, bottom
+-- while the player chooses, the map fits right of left and between top and bottom (GUI coordinates)
+function MapView.setLandingArea(top: number, bottom: number, left: number)
+	Camera.area.top, Camera.area.bottom, Camera.area.left = top, bottom, left
 end
 
 ---------------------------------------------------------------- sprites
@@ -851,11 +851,13 @@ local function updateUnits(dt: number)
 			u.walk = approach(u.walk or 0, if moving then 1 else 0, dt * 8)
 			u.stride = (u.stride or 0) + moved / 0.4 * math.pi
 			local swing = math.sin(u.stride) * u.walk
-			rot += swing * 13
+			-- a step: the body leans a little to each side, stretches forward and narrows as
+			-- the foot goes out, then comes back
+			rot += swing * 5
 			local side = math.rad(u.heading)
-			ox, oy = math.cos(side) * swing * 0.045, math.sin(side) * swing * 0.045
-			sx = 1 + math.abs(swing) * 0.08
-			sy = sx
+			ox, oy = math.cos(side) * swing * 0.02, math.sin(side) * swing * 0.02
+			local step = math.abs(swing)
+			sx, sy = 1 - step * 0.05, 1 + step * 0.1
 		elseif TRACKED[u.kind] then
 			if moving then
 				-- the engine shakes the hull a little; tracks and wheels leave prints, and dust on sand

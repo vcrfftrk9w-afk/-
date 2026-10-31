@@ -78,7 +78,9 @@ function Match.new(event: RemoteEvent)
 	local self = setmetatable({}, Match)
 	self.event = event
 	self.rng = Random.new()
-	self.phase = "game"
+	self.phase = "lobby"
+	self.lobbyTimer = Config.LOBBY_SECONDS
+	self.ready = {} -- players in the lobby who pressed «ГОТОВ»: player -> true
 	self.timer = Config.MATCH_SECONDS
 	self.joinTimer = Config.JOIN_SECONDS
 	self.nations = {}
@@ -181,7 +183,24 @@ function Match:snapshot(player: Player, choose)
 		points = self:pointsInfo(),
 		pstate = self:pointsState(),
 		choose = choose,
+		lobby = if self.phase == "lobby" then self:lobbyInfo() else nil,
 	}
+end
+
+-- the lobby for everyone: who holds each base, with which commander, who is ready, and the
+-- seconds before the battle starts anyway
+function Match:lobbyInfo()
+	local seats = {}
+	for _, n in self.seats do
+		table.insert(seats, {
+			id = n.id,
+			name = n.name,
+			human = n.isHuman,
+			ready = n.player ~= nil and self.ready[n.player] == true,
+			commander = n.commander,
+		})
+	end
+	return { t = "lobbystate", timer = math.max(0, self.lobbyTimer), seats = seats }
 end
 
 function Match:sendSnapshot(player: Player)
@@ -201,12 +220,44 @@ function Match:freeSeats(): { number }
 	return ids
 end
 
--- a player who joins while the match is young chooses a base run by a bot and a commander
--- (Match:land); later, or when every base is taken, they watch
+-- a player takes a base
+function Match:seat(player: Player, n)
+	n.isHuman = true
+	n.player = player
+	n.name = player.DisplayName
+	n.userId = player.UserId
+	self.humans[player] = n
+end
+
+-- the base goes back to its bot
+function Match:unseat(n)
+	if n.player then
+		self.humans[n.player] = nil
+		self.ready[n.player] = nil
+	end
+	n.isHuman = false
+	n.player = nil
+	n.userId = 0
+	n.name = n.botName
+end
+
+-- in the lobby a player takes the first free base; while the battle is young they choose a base
+-- run by a bot and a commander (Match:land); later, or when every base is taken, they watch
 function Match:play(player: Player)
 	if self.humans[player] then
 		self:sendSnapshot(player)
 		return
+	end
+	if self.phase == "lobby" then
+		local free = self:freeSeats()
+		if #free > 0 then
+			local n = self.nations[free[1]]
+			self:seat(player, n)
+			self:send({ t = "nation", n = nationInfo(n) })
+			self:sendSnapshot(player)
+			self:send(self:lobbyInfo())
+			return
+		end
 	end
 	if self.phase == "game" and self.joinTimer > 0 then
 		local free = self:freeSeats()
@@ -242,11 +293,7 @@ function Match:land(player: Player, seatId: number, commander: string)
 		return
 	end
 	self:resetBase(n)
-	n.isHuman = true
-	n.player = player
-	n.name = player.DisplayName
-	n.userId = player.UserId
-	self.humans[player] = n
+	self:seat(player, n)
 	self:setCommander(n, if Config.COMMANDERS[commander] then commander else Config.COMMANDER_ORDER[1])
 	self:send({ t = "nation", n = nationInfo(n) })
 	self:sendSnapshot(player)
@@ -308,12 +355,56 @@ function Match:leave(player: Player)
 	if not n then
 		return
 	end
-	self.humans[player] = nil
-	n.isHuman = false
-	n.player = nil
-	n.userId = 0
-	n.name = n.botName
+	self:unseat(n)
 	self:send({ t = "nation", n = nationInfo(n) })
+	if self.phase == "lobby" then
+		self:send(self:lobbyInfo())
+	end
+end
+
+-- in the lobby: move to another free base
+function Match:moveSeat(player: Player, seatId: number)
+	local n, to = self.humans[player], self.nations[seatId]
+	if self.phase ~= "lobby" or not n or not to or to.isHuman then
+		return
+	end
+	local commander = n.commander
+	self:unseat(n)
+	self:seat(player, to)
+	self:setCommander(to, commander)
+	self:send({ t = "nation", n = nationInfo(n) })
+	self:send({ t = "nation", n = nationInfo(to) })
+	self:sendSnapshot(player)
+	self:send(self:lobbyInfo())
+end
+
+-- in the lobby: lead the base with another commander
+function Match:pickCommander(player: Player, id: string)
+	local n = self.humans[player]
+	if self.phase ~= "lobby" or not n or not Config.COMMANDERS[id] then
+		return
+	end
+	self:setCommander(n, id)
+	self:send({ t = "nation", n = nationInfo(n) })
+	self:send(self:lobbyInfo())
+end
+
+-- in the lobby: «ГОТОВ» pressed or released
+function Match:setReady(player: Player, on: boolean)
+	if self.phase ~= "lobby" or not self.humans[player] then
+		return
+	end
+	self.ready[player] = if on then true else nil
+	self:send(self:lobbyInfo())
+end
+
+-- everyone is ready, or the lobby time is up: the battle starts for all at once
+function Match:startBattle()
+	self.phase = "game"
+	self.joinTimer = Config.JOIN_SECONDS
+	self.ready = {}
+	self:send({ t = "phase", phase = "game", timer = self.timer })
+	self:sendEconomy()
 end
 
 function Match:humanCount(): number
@@ -818,7 +909,25 @@ function Match:flush()
 end
 
 function Match:step(dt: number)
-	if self.phase == "game" then
+	if self.phase == "lobby" then
+		-- nothing moves yet; the clock runs only while someone is in the lobby
+		local humans, ready = 0, 0
+		for player in self.humans do
+			humans += 1
+			if self.ready[player] then
+				ready += 1
+			end
+		end
+		self.lobbyTimer = if humans > 0 then self.lobbyTimer - dt else Config.LOBBY_SECONDS
+		self.secAcc += dt
+		if self.secAcc >= 1 then
+			self.secAcc = 0
+			self:send(self:lobbyInfo())
+		end
+		if humans > 0 and (ready == humans or self.lobbyTimer <= 0) then
+			self:startBattle()
+		end
+	elseif self.phase == "game" then
 		self.timer -= dt
 		self.joinTimer -= dt
 		self.tickAcc += dt

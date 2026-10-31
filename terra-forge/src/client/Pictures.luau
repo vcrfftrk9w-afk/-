@@ -4,8 +4,10 @@
 -- map shows the picture or its mirror copy (the next cell), by where the unit is heading.
 local Pictures = {}
 
-local BASE = "rbxassetid://73647469923883"
-local TEAM = "rbxassetid://101931638901895"
+-- the image ids of the two sheets (uploaded as decals); while they are nil the game keeps the
+-- drawings and symbols instead
+local BASE: string? = nil
+local TEAM: string? = nil
 local CELL = 256
 
 -- name -> first cell; right = the picture faces right (units only, they have a mirror copy)
@@ -23,7 +25,7 @@ local CELLS = {
 }
 
 function Pictures.has(name: string): boolean
-	return CELLS[name] ~= nil
+	return BASE ~= nil and CELLS[name] ~= nil
 end
 
 -- shows a picture in an image and its team layer; left = the unit heads left on the screen

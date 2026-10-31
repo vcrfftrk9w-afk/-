@@ -131,6 +131,7 @@ end
 local function goMenu()
 	state.screen = "menu"
 	state.landing = nil
+	state.lobby = nil
 	state.spectator = false
 	state.defeated = false
 	state.rallyFor = nil
@@ -159,6 +160,7 @@ local function enterPlay(spectator: boolean)
 	local starting = state.screen ~= "play" or state.spectator
 	state.screen = "play"
 	state.landing = nil
+	state.lobby = nil
 	state.spectator = spectator
 	state.rallyFor = nil
 	state.defeated = false
@@ -200,6 +202,29 @@ local function seatName(id: number): string
 	return (if n.cap.y < Map.H / 2 then "Северо" else "Юго") .. "-" .. (if n.cap.x < Map.W / 2 then "запад" else "восток")
 end
 
+-- the bases for the panel: corner, colour, who holds it, commander, ready, free to take; mine =
+-- the player's base (or the one they chose to land at), ready = seat id -> pressed «ГОТОВ»
+local function seatRows(mine: number?, ready: { [number]: boolean }?)
+	local rows = {}
+	for id = 1, Config.SEATS do
+		local n = MapView.nations[id]
+		if n then
+			local you = id == mine
+			table.insert(rows, {
+				id = id,
+				corner = seatName(id),
+				color = n.color3,
+				who = if you then "Ты" elseif n.human then n.name else "Бот · " .. n.name,
+				commander = if you then state.commander else n.commander,
+				ready = ready ~= nil and ready[id] == true,
+				free = n.alive and not n.human,
+				mine = you,
+			})
+		end
+	end
+	return rows
+end
+
 local pickSeat
 
 -- marks the bases that are still free and shows what is chosen; a base taken by another player
@@ -217,7 +242,8 @@ local function showChoice()
 		l.seat = free[1]
 	end
 	MapView.setLanding(free, l.seat, pickSeat)
-	UI.setLandingChoice(if l.seat then seatName(l.seat) else nil, state.commander)
+	UI.setLandingSeats(seatRows(l.seat, nil))
+	UI.setLandingChoice(state.commander)
 end
 
 pickSeat = function(id: number)
@@ -236,10 +262,47 @@ local function enterLanding(choose)
 	state.defeated = false
 	MapView.spectator = false
 	MapView.setMode("landing")
-	UI.showLanding()
+	UI.showLanding("landing")
 	Music.setMode("battle")
 	showChoice()
-	UI.setLandingCountdown(choose.time, false)
+	UI.setLandingStatus(string.format("Бой уже идёт. Выбери свободную базу — высадка через %d с.", choose.time))
+end
+
+-- the lobby: info = { timer, seats = { id, name, human, ready, commander } } from the server
+local function showLobby(info)
+	state.lobby = info
+	local ready, marks = {}, { MapView.myId }
+	for _, s in info.seats do
+		ready[s.id] = s.ready
+		if s.id == MapView.myId then
+			state.lobbyReady = s.ready
+			state.commander = s.commander or state.commander
+		elseif not s.human then
+			table.insert(marks, s.id)
+		end
+	end
+	MapView.setLanding(marks, MapView.myId, function(id)
+		if id ~= MapView.myId then
+			Sfx.play("click")
+			action:FireServer("seat", id)
+		end
+	end)
+	UI.setLandingSeats(seatRows(MapView.myId, ready))
+	UI.setLandingChoice(state.commander)
+	UI.setLandingReady(state.lobbyReady)
+	UI.setLandingStatus(string.format("Бой начнётся через %d с — или сразу, когда все нажмут «ГОТОВ». Нажми на свободную базу, чтобы занять её.", math.ceil(info.timer)))
+end
+
+local function enterLobby(info)
+	state.screen = "lobby"
+	state.landing = nil
+	state.spectator = false
+	state.defeated = false
+	MapView.spectator = false
+	MapView.setMode("landing")
+	UI.showLanding("lobby")
+	Music.setMode("menu")
+	showLobby(info)
 end
 
 -- the player lands at the chosen base with the chosen commander; the server answers with the
@@ -250,18 +313,37 @@ local function land()
 		return
 	end
 	l.sent = true
-	UI.setLandingCountdown(0, true)
+	UI.setLandingStatus("Высаживаемся…")
 	action:FireServer("land", l.seat or 0, state.commander)
 end
 
+-- the big button: «ВЫСАДИТЬСЯ» while landing, «ГОТОВ» (or taking it back) in the lobby
 UI.onLand = function()
-	land()
+	if state.screen == "lobby" then
+		action:FireServer("ready", not state.lobbyReady)
+	else
+		land()
+	end
 end
 
 UI.onLandingCommander = function(id)
-	if state.landing and not state.landing.sent then
+	if state.screen == "lobby" then
+		state.commander = id
+		UI.setLandingChoice(id)
+		action:FireServer("commander", id)
+	elseif state.landing and not state.landing.sent then
 		state.commander = id
 		showChoice()
+	end
+end
+
+UI.onLandingSeat = function(id)
+	if state.screen == "lobby" then
+		if id ~= MapView.myId then
+			action:FireServer("seat", id)
+		end
+	else
+		pickSeat(id)
 	end
 end
 
@@ -273,7 +355,9 @@ function handlers.snapshot(msg)
 	state.timer = msg.timer
 	-- the landing was turned down (the bases were taken a moment ago): the player watches
 	local refused = state.screen == "landing" and state.landing ~= nil and state.landing.sent
-	if msg.you ~= 0 then
+	if msg.you ~= 0 and msg.lobby then
+		enterLobby(msg.lobby)
+	elseif msg.you ~= 0 then
 		enterPlay(false)
 	elseif msg.choose then
 		enterLanding(msg.choose)
@@ -294,6 +378,14 @@ function handlers.nation(msg)
 	end
 	if state.screen == "landing" and state.landing and not state.landing.sent then
 		showChoice()
+	elseif state.screen == "lobby" and state.lobby then
+		showLobby(state.lobby)
+	end
+end
+
+function handlers.lobbystate(msg)
+	if state.screen == "lobby" then
+		showLobby(msg)
 	end
 end
 
@@ -311,6 +403,11 @@ function handlers.phase(msg)
 	state.phase = msg.phase
 	state.timer = msg.timer
 	MapView.setPhase(msg.phase)
+	if msg.phase == "game" and state.screen == "lobby" then
+		-- the lobby is over: the battle starts for everyone at once
+		enterPlay(false)
+		return
+	end
 	if state.screen ~= "play" then
 		return
 	end
@@ -1048,8 +1145,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	if processed or input.UserInputType ~= Enum.UserInputType.Keyboard then
 		return
 	end
-	if state.screen == "landing" and input.KeyCode == Enum.KeyCode.Return then
-		safe("клавиша", land)
+	if (state.screen == "landing" or state.screen == "lobby") and input.KeyCode == Enum.KeyCode.Return then
+		safe("клавиша", UI.onLand)
 	elseif canCommand() then
 		safe("клавиша", onKey, input)
 	end
@@ -1070,15 +1167,19 @@ end
 local hudAcc = 0
 local function frame(dt: number)
 	local l = state.landing
-	if state.screen == "landing" and l then
-		-- the map stays between the landing panels; the player lands when the time is up
+	if state.screen == "landing" or state.screen == "lobby" then
+		-- the map stays right of the choice panel
 		MapView.setLandingArea(UI.landingArea())
-		if not l.sent then
-			local left = math.max(0, math.ceil(l.ends - os.clock()))
-			UI.setLandingCountdown(left, false)
-			if left == 0 then
-				land()
-			end
+	end
+	if state.screen == "landing" and l and not l.sent then
+		-- the player lands when the time is up
+		local left = math.max(0, math.ceil(l.ends - os.clock()))
+		if left ~= l.shown then
+			l.shown = left
+			UI.setLandingStatus(string.format("Бой уже идёт. Выбери свободную базу — высадка через %d с.", left))
+		end
+		if left == 0 then
+			land()
 		end
 	end
 	MapView.update(dt)

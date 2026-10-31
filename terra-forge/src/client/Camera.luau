@@ -13,9 +13,9 @@ Camera.x, Camera.y, Camera.ppt = W / 2, H / 2, 24
 local view, board
 local glide = nil -- the camera moves smoothly to { x, y }
 
--- while the player chooses where to land, the map fits between these screen heights (GUI
--- coordinates): the bottom of the title and the top of the commander panel
-Camera.area = { top = -math.huge, bottom = math.huge }
+-- in the lobby and while landing, the map fits right of the choice panel and between these
+-- screen heights (GUI coordinates)
+Camera.area = { top = -math.huge, bottom = math.huge, left = -math.huge }
 
 function Camera.viewSize(): Vector2
 	local s = view.AbsoluteSize
@@ -171,8 +171,9 @@ function Camera.update(dt: number, mode: string, edges: boolean)
 		local o = view.AbsolutePosition
 		local top = math.clamp(Camera.area.top - o.Y, 0, vs.Y * 0.4)
 		local bottom = math.clamp(o.Y + vs.Y - Camera.area.bottom, 0, vs.Y * 0.4)
-		Camera.ppt = math.max(math.min(vs.X / (W + 4), (vs.Y - top - bottom) / (H + 2)), 1)
-		Camera.x, Camera.y = W / 2, H / 2 - (top - bottom) / 2 / Camera.ppt
+		local left = math.clamp(Camera.area.left - o.X, 0, vs.X * 0.6)
+		Camera.ppt = math.max(math.min((vs.X - left) / (W + 4), (vs.Y - top - bottom) / (H + 2)), 1)
+		Camera.x, Camera.y = W / 2 - left / 2 / Camera.ppt, H / 2 - (top - bottom) / 2 / Camera.ppt
 		glide = nil
 		place()
 		return

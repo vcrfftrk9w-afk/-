@@ -144,6 +144,12 @@ local function onAction(player: Player, kind, a, b, c, d, e)
 		match:queueUnit(player, a, b)
 	elseif kind == "land" and isNumber(a) and typeof(b) == "string" then
 		match:land(player, a, b)
+	elseif kind == "seat" and isNumber(a) then
+		match:moveSeat(player, a)
+	elseif kind == "commander" and typeof(a) == "string" then
+		match:pickCommander(player, a)
+	elseif kind == "ready" and typeof(a) == "boolean" then
+		match:setReady(player, a)
 	elseif kind == "research" and isNumber(a) and typeof(b) == "string" and Config.TECH[b] then
 		match:startResearch(player, a, b)
 	elseif kind == "stopresearch" and isNumber(a) then
@@ -202,7 +208,7 @@ RunService.Heartbeat:Connect(function(dt)
 			{
 				t = "lobby",
 				phase = if match then match.phase else "none",
-				timer = if match then match.timer else 0,
+				timer = if match then (if match.phase == "lobby" then match.lobbyTimer else match.timer) else 0,
 				join = if match then math.max(0, match.joinTimer) else 0,
 				players = #Players:GetPlayers(),
 				inMatch = if match then match:humanCount() else 0,

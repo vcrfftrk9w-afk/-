@@ -47,7 +47,10 @@ Config.POINT_VISION = 7
 Config.POINT_SCORE = 400 -- what a held point adds to its owner's strength
 Config.SUPPLY_RANGE = 30
 
--- a player joining a match has this long to choose a free base and a commander
+-- before a battle the players choose bases and commanders in the lobby; the battle starts for
+-- everyone when they all are ready, or after LOBBY_SECONDS. A player joining a battle already
+-- going has LANDING_SECONDS to choose a free base and a commander
+Config.LOBBY_SECONDS = 30
 Config.LANDING_SECONDS = 10
 
 -- commanders: each base has one, which adds its bonuses (shares) for the whole match. income =

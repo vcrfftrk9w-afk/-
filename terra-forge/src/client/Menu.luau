@@ -343,6 +343,8 @@ function Menu.setLobby(info)
 		else
 			status ..= " · можно смотреть"
 		end
+	elseif info.phase == "lobby" then
+		status = string.format("Сбор игроков · бой через %d с · заходи", math.ceil(info.timer))
 	elseif info.phase == "ended" then
 		status = "Бой закончился · начни новый"
 	else

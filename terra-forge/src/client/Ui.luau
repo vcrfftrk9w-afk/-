@@ -39,6 +39,7 @@ UI.onResearch = nil -- (research centre id, tech id)
 UI.onStopResearch = nil -- (research centre id)
 UI.researchId = nil -- the research centre whose panel is open
 UI.onLandingCommander = nil -- a commander card was tapped: (commander id)
+UI.onLandingSeat = nil -- a base row was tapped: (seat id)
 UI.onLand = nil -- «ВЫСАДИТЬСЯ»
 UI.onPlaceConfirm = nil -- (true) «Поставить» or (false) «Отмена» for a building waiting on a touch screen
 UI.buildSel = nil
@@ -73,7 +74,9 @@ UI.hideResearch = Research.hide
 UI.setCommander = Hud.setCommander
 UI.setPlaceConfirm = Hud.setPlaceConfirm
 UI.setLandingChoice = Landing.setChoice
-UI.setLandingCountdown = Landing.setCountdown
+UI.setLandingSeats = Landing.setSeats
+UI.setLandingStatus = Landing.setStatus
+UI.setLandingReady = Landing.setReady
 UI.landingArea = Landing.area
 
 -- the music buttons show whether the music plays
@@ -185,11 +188,11 @@ function UI.showMenu()
 	UI.hideResearch()
 end
 
--- choosing where to land: only the map and the landing panels
-function UI.showLanding()
+-- choosing a base and a commander: only the map and the panel; mode = "lobby" or "landing"
+function UI.showLanding(mode: string)
 	menu.Visible = false
 	play.Visible = false
-	Landing.show()
+	Landing.show(mode)
 	UI.selectBuild(nil)
 	UI.hideFactory()
 	UI.hideResearch()

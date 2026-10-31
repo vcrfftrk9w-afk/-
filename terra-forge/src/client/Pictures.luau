@@ -6,8 +6,8 @@ local Pictures = {}
 
 -- the image ids of the two sheets (imported with Studio's Asset Manager); while they are nil
 -- the game keeps the drawings and symbols instead
-local BASE: string? = "rbxassetid://96972992380315"
-local TEAM: string? = "rbxassetid://106536867009790"
+local BASE: string? = "rbxassetid://74368727493087"
+local TEAM: string? = "rbxassetid://93636698072750"
 local CELL = 256
 
 -- name -> first cell; right = the picture faces right (units only, they have a mirror copy);
@@ -18,12 +18,12 @@ local CELLS = {
 	power = { 1 },
 	radar = { 2 },
 	lab = { 3 },
-	mlrs = { 4, right = true, scale = 1.5 },
-	sniper = { 6, right = true, scale = 2.4 },
-	engineer = { 8, right = false, scale = 2.4 },
-	transport = { 10, right = false, scale = 1.5 },
-	bomber = { 12, right = false, scale = 1.4 },
-	drone = { 14, right = false, scale = 1.8 },
+	mlrs = { 4, right = true, scale = 1.3 },
+	sniper = { 6, right = true, scale = 1.4 },
+	engineer = { 8, right = false, scale = 1.4 },
+	transport = { 10, right = false, scale = 1.3 },
+	bomber = { 12, right = false, scale = 1.2 },
+	drone = { 14, right = false, scale = 1.4 },
 }
 
 function Pictures.has(name: string): boolean

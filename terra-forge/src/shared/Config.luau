@@ -90,7 +90,7 @@ Config.BUILD = {
 		size = 3,
 		hp = 2400,
 		dps = 14,
-		range = 5,
+		range = 6,
 		hitsAir = 0.5,
 		vision = 9,
 		energy = 10,
@@ -215,11 +215,11 @@ Config.BUILD = {
 		time = 8,
 		hp = 650,
 		dps = 22,
-		range = 6,
+		range = 7,
 		hitsAir = 0,
-		vision = 8,
+		vision = 9,
 		energy = -3,
-		desc = "Сама стреляет по вражеской пехоте и технике в радиусе 6 клеток.",
+		desc = "Сама стреляет по вражеской пехоте и технике в радиусе 7 клеток.",
 	},
 	aa = {
 		name = "ПВО",
@@ -229,12 +229,12 @@ Config.BUILD = {
 		time = 8,
 		hp = 450,
 		dps = 34,
-		range = 8,
+		range = 9,
 		hitsAir = 1,
 		airOnly = true,
-		vision = 9,
+		vision = 10,
 		energy = -3,
-		desc = "Сбивает вражескую авиацию в радиусе 8 клеток.",
+		desc = "Сбивает вражескую авиацию в радиусе 9 клеток.",
 	},
 }
 
@@ -251,18 +251,18 @@ Config.UNIT_ORDER = {
 Config.UNITS = {
 	infantry = {
 		title = "Пехота", name = "пехота", icon = "infantry", cost = 60, time = 4, size = 1.8, pop = 1, boards = true,
-		hp = 60, dps = 7, range = 2, speed = 1.7, vision = 6, hitsAir = 0.25, power = 0.03,
+		hp = 60, dps = 7, range = 3.5, speed = 1.7, vision = 7, hitsAir = 0.25, power = 0.03,
 		desc = "Дешёвая. Может стрелять по авиации.",
 	},
 	rocket = {
 		title = "Ракетчик", name = "ракетчик", icon = "rocket", cost = 110, time = 6, size = 1.8, pop = 1, boards = true,
-		hp = 55, dps = 9, range = 3, speed = 1.5, vision = 6, hitsAir = 0.8, power = 0.04,
+		hp = 55, dps = 9, range = 4.5, speed = 1.5, vision = 7, hitsAir = 0.8, power = 0.04,
 		desc = "Сильно бьёт по технике и авиации, слаб против пехоты.",
 	},
 	-- the units from here to the drone have no pictures of their own yet: Drawn draws them
 	sniper = {
 		title = "Снайпер", name = "снайпер", icon = "sniper", cost = 150, time = 6, size = 1.4, pop = 1, boards = true,
-		hp = 45, dps = 8, range = 6, speed = 1.5, vision = 9, hitsAir = 0, power = 0.04,
+		hp = 45, dps = 8, range = 8, speed = 1.5, vision = 10, hitsAir = 0, power = 0.04,
 		desc = "Бьёт издалека и выбивает пехоту. Против техники почти бесполезен.",
 	},
 	engineer = {
@@ -272,43 +272,43 @@ Config.UNITS = {
 	},
 	scout = {
 		title = "Броневик", name = "броневик", icon = "scout", gun = "scout_gun", cost = 180, time = 6, size = 1.5, pop = 2,
-		hp = 130, dps = 10, range = 2.5, speed = 3.4, vision = 10, hitsAir = 0.2, power = 0.05,
+		hp = 130, dps = 10, range = 4, speed = 3.4, vision = 11, hitsAir = 0.2, power = 0.05,
 		desc = "Быстрый и зоркий. Хорош для разведки.",
 	},
 	tank = {
 		title = "Танк", name = "танк", icon = "tank", gun = "tank_gun", cost = 320, time = 9, size = 1.7, pop = 3,
-		hp = 260, dps = 18, range = 3, speed = 2.3, vision = 7, hitsAir = 0, power = 0.08,
+		hp = 260, dps = 18, range = 4.5, speed = 2.3, vision = 8, hitsAir = 0, power = 0.08,
 		desc = "Крепкая броня, силён против пехоты. По авиации не стреляет.",
 	},
 	heavy = {
 		-- no picture of its own yet: the tank's, drawn bigger
 		title = "Тяжёлый танк", name = "тяжёлый танк", icon = "tank", gun = "tank_gun", cost = 600, time = 14, size = 2.3, pop = 5,
-		hp = 560, dps = 30, range = 3.5, speed = 1.6, vision = 7, hitsAir = 0, power = 0.12, needs = "heavy",
+		hp = 560, dps = 30, range = 5, speed = 1.6, vision = 8, hitsAir = 0, power = 0.12, needs = "heavy",
 		desc = "Медленный, но очень крепкий и бьёт сильно. Нужно исследование.",
 	},
 	artillery = {
 		title = "Артиллерия", name = "артиллерия", icon = "artillery", gun = "artillery_gun", cost = 380, time = 11, size = 1.7, pop = 3,
-		hp = 110, dps = 22, range = 7, speed = 1.4, vision = 8, hitsAir = 0, power = 0.06, vsBuildings = 1.6,
+		hp = 110, dps = 22, range = 10, speed = 1.4, vision = 9, hitsAir = 0, power = 0.06, vsBuildings = 1.6,
 		desc = "Бьёт издалека, особенно по постройкам. Береги от танков.",
 	},
 	mlrs = {
 		title = "РСЗО", name = "РСЗО", icon = "mlrs", cost = 450, time = 12, size = 1.7, pop = 3,
-		hp = 120, dps = 16, range = 8, speed = 1.6, vision = 8, hitsAir = 0, power = 0.07, vsBuildings = 1.3, splash = 1.6,
+		hp = 120, dps = 16, range = 11, speed = 1.6, vision = 9, hitsAir = 0, power = 0.07, vsBuildings = 1.3, splash = 1.6,
 		desc = "Залп ракет бьёт далеко и задевает всех рядом с целью. Слаба вблизи.",
 	},
 	aagun = {
 		title = "Зенитка", name = "зенитка", icon = "aagun", cost = 300, time = 8, size = 1.6, pop = 2,
-		hp = 170, dps = 26, range = 6, speed = 2.6, vision = 9, hitsAir = 1, hitsGround = false, power = 0.05,
+		hp = 170, dps = 26, range = 7, speed = 2.6, vision = 9, hitsAir = 1, hitsGround = false, power = 0.05,
 		desc = "Подвижная ПВО: сбивает авиацию и прикрывает войска. По земле не стреляет.",
 	},
 	fighter = {
 		title = "Истребитель", name = "истребитель", icon = "fighter", cost = 400, time = 10, size = 1.8, pop = 3,
-		hp = 90, dps = 16, range = 3.5, speed = 6.5, vision = 11, hitsAir = 1, hitsGround = false, air = true, power = 0.04,
+		hp = 90, dps = 16, range = 5, speed = 6.5, vision = 11, hitsAir = 1, hitsGround = false, air = true, power = 0.04,
 		desc = "Охотится только за вражеской авиацией.",
 	},
 	gunship = {
 		title = "Вертолёт", name = "вертолёт", icon = "gunship", cost = 480, time = 12, size = 1.8, pop = 4,
-		hp = 140, dps = 15, range = 3, speed = 4.5, vision = 9, hitsAir = 0, air = true, power = 0.06,
+		hp = 140, dps = 15, range = 4.5, speed = 4.5, vision = 9, hitsAir = 0, air = true, power = 0.06,
 		desc = "Летает где угодно и бьёт по наземным войскам и постройкам.",
 	},
 	bomber = {

@@ -67,6 +67,8 @@ local SHOT_SOUND = {
 }
 -- soldiers walk with a little sway; tracked and wheeled vehicles leave prints on the ground
 local WALKERS = { infantry = true, rocket = true, engineer = true, sniper = true }
+-- buildings that puff smoke while they work: kind -> seconds between puffs
+local CHIMNEY = { power = 1.3, fabricator = 1.6, tankf = 2.2, barracks = 3, air = 2.6, extractor = 2.4 }
 local TRACKED = { tank = 0.4, heavy = 0.5, artillery = 0.4, scout = 0.28, mlrs = 0.3, aagun = 0.4 } -- kind -> how dark the prints are
 
 local gui, view, board
@@ -876,6 +878,9 @@ local function updateUnits(dt: number)
 			ox, oy = math.cos(side) * swing * 0.02, math.sin(side) * swing * 0.02
 			local step = math.abs(swing)
 			sx, sy = 1 - step * 0.05, 1 + step * 0.1
+			-- standing still, a soldier breathes
+			local breath = math.sin(clock * 2.2 + u.id) * 0.02 * (1 - u.walk)
+			sx, sy = sx + breath, sy + breath
 		elseif TRACKED[u.kind] then
 			if moving then
 				-- the engine shakes the hull a little; tracks and wheels leave prints, and dust on sand
@@ -957,6 +962,13 @@ local function updateUnits(dt: number)
 			-- everyone sees buildings rise at the building speed; the owner also gets exact progress
 			b.built = math.min(0.99, b.built + dt / b.def.time)
 			refreshBuilding(b)
+		end
+		-- working plants puff smoke from their stacks
+		local every = CHIMNEY[b.kind]
+		if every and b.built >= 1 and b.frame.Visible and clock >= (b.smokeAt or 0) and Camera.onScreen(b.cx, b.cy, 2) and not Effects.busy() then
+			b.smokeAt = clock + every * (0.8 + math.random() * 0.4)
+			local side = (math.random() - 0.5) * b.size * 0.4
+			Effects.puff(b.cx + side, b.cy - b.size * 0.3, 0.5 + b.size * 0.12, 1.6, Color3.fromRGB(150, 150, 150), Z.smoke, 0.5)
 		end
 		local parts = b.parts
 		if parts and b.built >= 1 then

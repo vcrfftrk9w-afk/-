@@ -20,3 +20,5 @@
 | frontend-design | anthropics/skills@ca45fc4 (см. LICENSE.txt в папке скилла) |
 | web-design-guidelines | vercel-labs/agent-skills@1a2c79d |
 | supabase, supabase-postgres-best-practices | supabase/agent-skills@c9be0e9 (MIT) |
+| context7-mcp + `.mcp.json` (MCP-сервер context7) | upstash/context7@76d68b5 (MIT) |
+| graphify (+ references/) | Graphify-Labs/graphify v0.9.103 @16218bf (Apache-2.0); CLI `graphifyy` скилл ставит сам при первом запуске |

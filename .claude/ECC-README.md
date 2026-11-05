@@ -22,5 +22,6 @@
 | supabase, supabase-postgres-best-practices | supabase/agent-skills@c9be0e9 (MIT) |
 | context7-mcp + `.mcp.json` (MCP-сервер context7) | upstash/context7@76d68b5 (MIT) |
 | graphify (+ references/) | Graphify-Labs/graphify v0.9.103 @16218bf (Apache-2.0); CLI `graphifyy` скилл ставит сам при первом запуске |
+| roblox-* (29 скиллов) | TabooHarmony/roblox-brain @ceee4aa (MIT, см. ROBLOX-BRAIN-LICENSE) |
 | ponytail, ponytail-review, ponytail-audit, ponytail-debt, ponytail-help | DietrichGebert/ponytail v5.3.3 @96608e0 (MIT); только скиллы, без хуков и «band» |
 | incremental-implementation, spec-driven-development, source-driven-development | addyosmani/agent-skills v0.6.15 @301b02b (MIT) |

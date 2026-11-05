@@ -22,5 +22,6 @@
 | supabase, supabase-postgres-best-practices | supabase/agent-skills@c9be0e9 (MIT) |
 | context7-mcp + `.mcp.json` (MCP-сервер context7) | upstash/context7@76d68b5 (MIT) |
 | graphify (+ references/) | Graphify-Labs/graphify v0.9.103 @16218bf (Apache-2.0); CLI `graphifyy` скилл ставит сам при первом запуске |
+| roblox-* (29 скиллов) | TabooHarmony/roblox-brain @ceee4aa (MIT, см. ROBLOX-BRAIN-LICENSE) |
 | claude-automation-recommender | anthropics/claude-plugins-official, плагин claude-code-setup @d189be9 |
 | CLAUDE.md (правила Карпаты) | multica-ai/andrej-karpathy-skills @2c60614 (MIT) |

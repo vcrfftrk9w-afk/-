@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0e1113">
+<title>Стальной рубеж</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=PT+Sans:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="view" aria-label="Поле боя"></canvas>
+
+<div id="hud" hidden>
+  <div id="top">
+    <div class="money"><span class="ico" aria-hidden="true">◆</span><b id="credits">0</b><span id="income">+0/с</span></div>
+    <div class="meta"><span id="units">0/60</span><span id="clock">0:00</span></div>
+    <button id="btn-pause" class="ibtn" aria-label="Пауза">❚❚</button>
+  </div>
+  <canvas id="mini" aria-label="Мини-карта"></canvas>
+  <div id="tools">
+    <button id="t-box" class="ibtn" aria-pressed="false" aria-label="Рамка выделения">▢<small>Рамка</small></button>
+    <button id="t-army" class="ibtn" aria-label="Выбрать всю армию">⚔<small>Армия</small></button>
+    <button id="t-home" class="ibtn" aria-label="К базе">⌂<small>База</small></button>
+    <button id="t-none" class="ibtn" aria-label="Снять выделение">✕<small>Сброс</small></button>
+  </div>
+  <div id="amove-flag" hidden>Атака с движением: нажмите на карту</div>
+  <div id="panel">
+    <div id="info"></div>
+    <div id="acts"></div>
+  </div>
+</div>
+
+<div id="toast" role="status" hidden></div>
+
+<section id="menu" class="screen">
+  <div class="card">
+    <p class="eyebrow">Стратегия в реальном времени</p>
+    <h1>Стальной<br>рубеж</h1>
+    <p class="lead">Добывайте ресурсы, стройте заводы, собирайте армию и снесите штаб противника.</p>
+    <div class="diff" role="group" aria-label="Сложность">
+      <button data-diff="easy" aria-pressed="false">Лёгкий</button>
+      <button data-diff="normal" aria-pressed="true">Обычный</button>
+      <button data-diff="hard" aria-pressed="false">Сложный</button>
+    </div>
+    <button id="play" class="primary">В бой</button>
+    <div class="help">
+      <div><h2>Телефон</h2><p>Палец — двигать карту. Нажатие — выбрать или отправить. Два пальца — масштаб. «Рамка» — выделить группу. Двойное нажатие — все такие же на экране.</p></div>
+      <div><h2>Компьютер</h2><p>Левая кнопка — выбрать, тянуть — рамка. Правая — приказ, тянуть — двигать карту. Колесо — масштаб. WASD — камера, F — атака с движением, Q — армия, пробел — пауза.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="pause" class="screen" hidden>
+  <div class="card small">
+    <h1>Пауза</h1>
+    <button id="resume" class="primary">Продолжить</button>
+    <button id="restart" class="ghost">Начать заново</button>
+    <button id="quit" class="ghost">В меню</button>
+  </div>
+</section>
+
+<section id="end" class="screen" hidden>
+  <div class="card small">
+    <h1 id="end-title">Победа</h1>
+    <p id="end-text" class="lead"></p>
+    <div id="end-stats"></div>
+    <button id="again" class="primary">Ещё бой</button>
+    <button id="to-menu" class="ghost">В меню</button>
+  </div>
+</section>
+
+<script src="js/config.js"></script>
+<script src="js/map.js"></script>
+<script src="js/path.js"></script>
+<script src="js/game.js"></script>
+<script src="js/units.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/input.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

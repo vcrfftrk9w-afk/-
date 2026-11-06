@@ -25,5 +25,6 @@
 | roblox-* (29 скиллов) | TabooHarmony/roblox-brain @ceee4aa (MIT, см. ROBLOX-BRAIN-LICENSE) |
 | ponytail, ponytail-review, ponytail-audit, ponytail-debt, ponytail-help | DietrichGebert/ponytail v5.3.3 @96608e0 (MIT); только скиллы, без хуков и «band» |
 | incremental-implementation, spec-driven-development, source-driven-development | addyosmani/agent-skills v0.6.15 @301b02b (MIT) |
+| meshy-3d-generation, meshy-3d-printing | meshy-dev/meshy-3d-agent @a751ce8 (MIT); нужен `meshy-cli@0.8` (npm) и вход в аккаунт Meshy |
 | claude-automation-recommender | anthropics/claude-plugins-official, плагин claude-code-setup @d189be9 |
 | CLAUDE.md (правила Карпаты) | multica-ai/andrej-karpathy-skills @2c60614 (MIT) |

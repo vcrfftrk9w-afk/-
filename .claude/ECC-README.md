@@ -23,6 +23,7 @@
 | context7-mcp + `.mcp.json` (MCP-сервер context7) | upstash/context7@76d68b5 (MIT) |
 | graphify (+ references/) | Graphify-Labs/graphify v0.9.103 @16218bf (Apache-2.0); CLI `graphifyy` скилл ставит сам при первом запуске |
 | roblox-* (29 скиллов) | TabooHarmony/roblox-brain @ceee4aa (MIT, см. ROBLOX-BRAIN-LICENSE) |
+| create-roblox-game, roblox-build-orchestrator, roblox-code, roblox-ui, roblox-map, roblox-3d-model, roblox-texture-gen, roblox-vfx, roblox-sfx, roblox-animation, roblox-skills-setup + 7 агентов `agents/roblox-asset-*`, `roblox-market-scout` | SyphoDev-yt/roblox-ai-skills @5aad881, автор — YouTube-канал SyphoDev (бесплатная лицензия: нельзя продавать, при распространении ссылаться на SyphoDev; см. SYPHODEV-ROBLOX-LICENSE). Первый запуск — `/roblox-skills-setup` (пишет личные `LOCAL.md`, они в `.gitignore`) |
 | ponytail, ponytail-review, ponytail-audit, ponytail-debt, ponytail-help | DietrichGebert/ponytail v5.3.3 @96608e0 (MIT); только скиллы, без хуков и «band» |
 | incremental-implementation, spec-driven-development, source-driven-development | addyosmani/agent-skills v0.6.15 @301b02b (MIT) |
 | claude-automation-recommender | anthropics/claude-plugins-official, плагин claude-code-setup @d189be9 |

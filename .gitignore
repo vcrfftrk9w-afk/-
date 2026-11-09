@@ -6,3 +6,6 @@ android-sauda/.gradle/
 android-sauda/build/
 android-sauda/app/build/
 dist/
+
+# Personal per-machine config written by /roblox-skills-setup
+.claude/skills/**/LOCAL.md
